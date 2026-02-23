@@ -37,6 +37,24 @@ Cortex Plane is a greenfield TypeScript platform for autonomous agent orchestrat
 - **Qdrant** — vector database for agent memory
 - **Agent pods** — spawned as k8s jobs/pods by the control plane
 
+### Starting Point: noncelogic/boilerplate
+
+The project scaffolds from the existing [noncelogic/boilerplate](https://github.com/noncelogic/boilerplate) ("Concept Car Scaffolding"), which provides a battle-tested monorepo foundation:
+
+- pnpm + Turborepo workspace
+- Prisma in `packages/database`
+- ESLint v9 flat config, Vitest, Husky, lint-staged
+- `apps/` + `packages/` monorepo structure
+- CI workflow, pre-commit hooks
+
+**Pruning required:** The boilerplate includes frontend-heavy packages (forms, feedback, screenshots, state, UI) that aren't needed initially. The initial scaffold strips these down to:
+- `packages/database` (Prisma → repurposed for app schema, coexisting with Graphile Worker)
+- `packages/shared` (types, constants)
+- `packages/control-plane` (the core engine — single process initially)
+- `apps/web` → `apps/dashboard` (Next.js, deferred to M3)
+
+**Why monorepo despite single process today:** The core engine is one process now, but the architecture is designed for extensibility. Channel adapters, execution backends, and skills will be published as npm packages. The monorepo structure supports this evolution without a costly restructure later.
+
 ### Hard Constraints
 
 | Constraint | Implication |
@@ -95,7 +113,7 @@ Cortex Plane is a greenfield TypeScript platform for autonomous agent orchestrat
 
 **Rationale:**
 
-- We are running **Node.js 22** as our runtime, not Bun. Using Bun as a package manager while running Node.js creates a split-brain situation: Bun resolves modules differently than Node.js in edge cases (especially with ESM).
+- We are running **Node.js 24** as our runtime, not Bun. Using Bun as a package manager while running Node.js creates a split-brain situation: Bun resolves modules differently than Node.js in edge cases (especially with ESM).
 - pnpm's strict node_modules structure (no phantom dependencies) catches real bugs that flat `node_modules` hides. This matters when deploying to containers where the dependency tree must be deterministic.
 - pnpm is the default recommendation for Turborepo. The integration is seamless.
 - Bun's binary lockfile cannot be meaningfully reviewed in pull requests. For a "rigorous, explicit" project, readable lockfiles matter.
@@ -110,8 +128,8 @@ Cortex Plane is a greenfield TypeScript platform for autonomous agent orchestrat
 | Criterion | Decision | Rationale |
 |---|---|---|
 | Strict mode | **Yes — `"strict": true`** | Non-negotiable for a new project. Catches nullability bugs, forces explicit types at boundaries. |
-| Module system | **ESM-only (`"module": "nodenext"`)** | Node.js 22 has stable ESM support. CJS is legacy. Graphile Worker supports ESM. |
-| Target | **`"target": "es2023"`** | Node.js 22 supports all ES2023 features natively. No transpilation overhead. |
+| Module system | **ESM-only (`"module": "nodenext"`)** | Node.js 24 has stable ESM support. CJS is legacy. Graphile Worker supports ESM. |
+| Target | **`"target": "es2024"`** | Node.js 24 supports all ES2023 features natively. No transpilation overhead. |
 | Path aliases | **Yes — `@cortex/*` maps to workspace packages** | pnpm workspaces handle resolution; `paths` in tsconfig provides editor support. |
 | Shared base config | **Yes — `tsconfig.base.json` at root** | DRY. Per-package configs extend the base with their own `outDir`, `rootDir`, `references`. |
 | `verbatimModuleSyntax` | **Yes** | Forces `import type` for type-only imports. Prevents runtime import of type-only modules. |
@@ -186,7 +204,7 @@ This decision is driven almost entirely by the Graphile Worker constraint.
 
 **Rationale:**
 
-- **Native Node.js framework.** Hono was designed for edge runtimes (Cloudflare Workers, Deno, Bun) and added Node.js support via an adapter. Fastify was built for Node.js from the ground up. Since we're running Node.js 22 on k3s, Fastify is the natural fit. Hono's Node.js adapter adds an abstraction layer we don't need.
+- **Native Node.js framework.** Hono was designed for edge runtimes (Cloudflare Workers, Deno, Bun) and added Node.js support via an adapter. Fastify was built for Node.js from the ground up. Since we're running Node.js 24 on k3s, Fastify is the natural fit. Hono's Node.js adapter adds an abstraction layer we don't need.
 
 - **Built-in Pino logging.** Fastify instantiates a Pino logger and threads it through every request. We get structured JSON logging (Decision 6) with zero configuration. Hono requires wiring this up manually.
 
@@ -270,7 +288,7 @@ This is the easiest decision in the document. Pino wins on every axis that matte
 
 ### Options Evaluated
 
-| Criterion | `node:22-slim` (Debian bookworm) | `node:22-alpine` (musl libc) |
+| Criterion | `node:24-slim` (Debian bookworm) | `node:24-alpine` (musl libc) |
 |---|---|---|
 | Image size | ~200MB | ~130MB |
 | ARM64 support | Excellent — official multi-arch | Good — but musl edge cases |
@@ -281,15 +299,15 @@ This is the easiest decision in the document. Pino wins on every axis that matte
 | `sharp` / image processing | Works out of the box | Requires `vips-dev` and rebuild |
 | glibc compat | Native | musl — occasional segfaults with native addons |
 
-### Decision: **`node:22-slim`**
+### Decision: **`node:24-slim`**
 
 **Rationale:**
 
 The 70MB image size difference is irrelevant compared to the operational cost of musl libc compatibility issues:
 
-1. **Playwright explicitly does not support Alpine.** If we ever need Playwright for agent browser automation (scraping, testing), Alpine is a dead end. Even if we don't need it today, choosing Alpine today means a base image migration later. `node:22-slim` keeps this option open at no cost.
+1. **Playwright explicitly does not support Alpine.** If we ever need Playwright for agent browser automation (scraping, testing), Alpine is a dead end. Even if we don't need it today, choosing Alpine today means a base image migration later. `node:24-slim` keeps this option open at no cost.
 
-2. **Native npm packages.** Some dependencies use native addons compiled against glibc. On Alpine (musl), these either need to be rebuilt from source (slow, may fail) or require compatibility layers. `node:22-slim` eliminates this entire class of build problems.
+2. **Native npm packages.** Some dependencies use native addons compiled against glibc. On Alpine (musl), these either need to be rebuilt from source (slow, may fail) or require compatibility layers. `node:24-slim` eliminates this entire class of build problems.
 
 3. **ARM64 reliability.** While Alpine supports ARM64, the combination of musl + ARM64 + native addons is the most failure-prone build matrix in the Node.js ecosystem. Debian on ARM64 is the most tested path.
 
@@ -393,7 +411,7 @@ cortex-plane/
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "turbo run build",
@@ -531,10 +549,10 @@ cortex-plane/
 {
   "compilerOptions": {
     // Language & Runtime
-    "target": "es2023",
+    "target": "es2024",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "lib": ["es2023"],
+    "lib": ["es2024"],
 
     // Strictness — non-negotiable
     "strict": true,
@@ -594,7 +612,7 @@ cortex-plane/
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     // Next.js overrides — it has its own module resolution
-    "target": "es2023",
+    "target": "es2024",
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
@@ -636,7 +654,7 @@ cortex-plane/
 # ==============================================================================
 # Stage 1: Install dependencies
 # ==============================================================================
-FROM node:22-slim AS deps
+FROM node:24-slim AS deps
 
 # Enable corepack for pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
@@ -654,7 +672,7 @@ RUN pnpm install --frozen-lockfile --prod
 # ==============================================================================
 # Stage 2: Build
 # ==============================================================================
-FROM node:22-slim AS builder
+FROM node:24-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
@@ -679,7 +697,7 @@ RUN pnpm turbo run build --filter=@cortex/control-plane...
 # ==============================================================================
 # Stage 3: Runtime
 # ==============================================================================
-FROM node:22-slim AS runtime
+FROM node:24-slim AS runtime
 
 # Security: run as non-root
 RUN groupadd -r cortex && useradd -r -g cortex -m cortex
@@ -959,12 +977,12 @@ export default tseslint.config(
 |---|---|---|---|---|
 | 1 | Monorepo tooling | pnpm Workspaces + Turborepo | Bare pnpm workspaces | Turbo adds topological builds + caching at near-zero cost |
 | 2 | Package manager | pnpm | Bun | We run Node.js, not Bun runtime; pnpm's strict resolution catches real bugs |
-| 3 | TypeScript config | Strict, ESM-only, project refs | — | Node.js 22 has stable ESM; strict catches bugs; project refs enable incremental builds |
+| 3 | TypeScript config | Strict, ESM-only, project refs | — | Node.js 24 has stable ESM; strict catches bugs; project refs enable incremental builds |
 | 4 | ORM / Query builder | Kysely | Drizzle | Kysely doesn't conflict with Graphile Worker's schema management; shares pg driver |
 | 5 | HTTP framework | Fastify | Hono | Native Node.js framework; built-in Pino, Ajv, plugin encapsulation |
 | 6 | Logging | Pino | Winston | Fastify-native; 5x faster; structured JSON by default |
 | 7 | Config management | @fastify/env | convict | Fastify-native; JSON Schema validation; fail-fast on startup |
-| 8 | Docker base image | node:22-slim | node:22-alpine | glibc compatibility; Playwright support; ARM64 reliability |
+| 8 | Docker base image | node:24-slim | node:24-alpine | glibc compatibility; Playwright support; ARM64 reliability |
 | — | ESLint | v9 flat config + typescript-eslint strict | — | Modern, no legacy config; strict type-checked rules |
 | — | Prettier | Standard config, double quotes, trailing commas | — | Clean diffs, no ASI bugs, JSON consistency |
 | — | Test runner | Vitest | Jest | ESM-native, fast, TypeScript without transform config |
