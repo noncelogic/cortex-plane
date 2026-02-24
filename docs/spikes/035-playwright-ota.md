@@ -32,7 +32,7 @@
 
 The spec (§14.1) describes a three-phase browser interaction loop: Observe (screenshot + DOM), Think (VLM analysis), Act (Playwright action dispatch). Spikes #33 and #34 define the pod security model and agent lifecycle — the Playwright sidecar runs as a co-located container with 2Gi memory, dropped capabilities, and its own `/dev/shm` emptyDir. Spike #33's OOM handling strategy (§Artifact: OOM Handling Strategy) covers crash recovery for Chromium.
 
-This spike fills the gap: what happens *inside* the OTA loop? How does the agent observe the browser, reason about what it sees, and dispatch precise actions? Every design choice here trades off between three competing concerns:
+This spike fills the gap: what happens _inside_ the OTA loop? How does the agent observe the browser, reason about what it sees, and dispatch precise actions? Every design choice here trades off between three competing concerns:
 
 1. **Accuracy.** The agent must identify the correct element and execute the right action.
 2. **Token cost.** Screenshots are expensive — a single 1280×720 image consumes ~1,300 tokens in Claude's vision API. At $15/MTok for Opus input, each screenshot costs ~$0.02. A 50-iteration task costs $1 in screenshots alone.
@@ -48,14 +48,14 @@ This spike covers the **OTA loop mechanics**: screenshot capture, DOM observatio
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| Playwright sidecar: 2Gi memory, 1 CPU (spike #33) | Single browser context, limited concurrent pages. Heavy SPAs may OOM. |
-| `readOnlyRootFilesystem: true` (spike #33) | Screenshots written to emptyDir `/workspace` or `/tmp`, not container filesystem. |
-| Egress: HTTPS 443 only, private IPs blocked (spike #33) | Playwright can reach public sites. Cannot reach internal homelab services or LAN hosts. |
-| Agent pod is a k8s Job, `restartPolicy: Never` (spike #34) | If the OTA loop crashes, the entire job fails. Recovery via Graphile Worker retry. |
-| Token budget per job (spike #34) | OTA loops must track cumulative token spend. Budget exhaustion stops the loop. |
-| `terminationGracePeriodSeconds: 65` (spike #34) | During drain, in-flight OTA iterations have 45 seconds to complete or abort. |
+| Constraint                                                 | Implication                                                                             |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Playwright sidecar: 2Gi memory, 1 CPU (spike #33)          | Single browser context, limited concurrent pages. Heavy SPAs may OOM.                   |
+| `readOnlyRootFilesystem: true` (spike #33)                 | Screenshots written to emptyDir `/workspace` or `/tmp`, not container filesystem.       |
+| Egress: HTTPS 443 only, private IPs blocked (spike #33)    | Playwright can reach public sites. Cannot reach internal homelab services or LAN hosts. |
+| Agent pod is a k8s Job, `restartPolicy: Never` (spike #34) | If the OTA loop crashes, the entire job fails. Recovery via Graphile Worker retry.      |
+| Token budget per job (spike #34)                           | OTA loops must track cumulative token spend. Budget exhaustion stops the loop.          |
+| `terminationGracePeriodSeconds: 65` (spike #34)            | During drain, in-flight OTA iterations have 45 seconds to complete or abort.            |
 
 ---
 
@@ -67,17 +67,17 @@ This spike covers the **OTA loop mechanics**: screenshot capture, DOM observatio
 
 ### Format Comparison
 
-| Criterion | PNG | JPEG (q80) | WebP (q80) |
-|---|---|---|---|
-| **File size** (1280×720, typical web page) | 800 KB–2 MB | 80–200 KB | 60–150 KB |
-| **Text legibility** | Lossless — perfect | Excellent at q80. Artifacts appear below q60. | Excellent |
-| **Color accuracy** | Exact | Sufficient for UI analysis | Sufficient |
-| **Transparency** | Supported | Not supported | Supported |
-| **VLM token cost** (Claude) | ~1,300 tokens* | ~1,300 tokens* | Not natively supported by all VLMs |
-| **Capture time** (Playwright) | 50–150ms | 20–60ms | 30–80ms |
-| **Bandwidth** (agent → VLM API) | High — 1 MB average | Low — 150 KB average | Lowest |
+| Criterion                                  | PNG                 | JPEG (q80)                                    | WebP (q80)                         |
+| ------------------------------------------ | ------------------- | --------------------------------------------- | ---------------------------------- |
+| **File size** (1280×720, typical web page) | 800 KB–2 MB         | 80–200 KB                                     | 60–150 KB                          |
+| **Text legibility**                        | Lossless — perfect  | Excellent at q80. Artifacts appear below q60. | Excellent                          |
+| **Color accuracy**                         | Exact               | Sufficient for UI analysis                    | Sufficient                         |
+| **Transparency**                           | Supported           | Not supported                                 | Supported                          |
+| **VLM token cost** (Claude)                | ~1,300 tokens\*     | ~1,300 tokens\*                               | Not natively supported by all VLMs |
+| **Capture time** (Playwright)              | 50–150ms            | 20–60ms                                       | 30–80ms                            |
+| **Bandwidth** (agent → VLM API)            | High — 1 MB average | Low — 150 KB average                          | Lowest                             |
 
-*Claude's vision API tokenizes images based on dimensions, not file size. A 1280×720 image is resized to fit within the model's tiling grid and costs approximately 1,300 tokens regardless of format. JPEG's advantage is not fewer tokens — it's faster capture, smaller storage, and faster HTTP upload to the VLM API.
+\*Claude's vision API tokenizes images based on dimensions, not file size. A 1280×720 image is resized to fit within the model's tiling grid and costs approximately 1,300 tokens regardless of format. JPEG's advantage is not fewer tokens — it's faster capture, smaller storage, and faster HTTP upload to the VLM API.
 
 ### Why JPEG, Not PNG
 
@@ -93,12 +93,12 @@ This spike covers the **OTA loop mechanics**: screenshot capture, DOM observatio
 
 ### Resolution: 1280×720
 
-| Resolution | Token Cost (Claude) | UI Detail Level | Recommended Use |
-|---|---|---|---|
-| 640×480 | ~340 tokens | Low — small text illegible, icons blurry | Not recommended |
-| 1024×768 | ~860 tokens | Medium — most UI readable, some small elements unclear | Acceptable fallback |
-| **1280×720** | **~1,300 tokens** | **High — all standard UI text readable, buttons identifiable** | **Default** |
-| 1920×1080 | ~2,600 tokens | Very high — pixel-perfect, but 2× token cost | Only when 1280×720 is insufficient |
+| Resolution   | Token Cost (Claude) | UI Detail Level                                                | Recommended Use                    |
+| ------------ | ------------------- | -------------------------------------------------------------- | ---------------------------------- |
+| 640×480      | ~340 tokens         | Low — small text illegible, icons blurry                       | Not recommended                    |
+| 1024×768     | ~860 tokens         | Medium — most UI readable, some small elements unclear         | Acceptable fallback                |
+| **1280×720** | **~1,300 tokens**   | **High — all standard UI text readable, buttons identifiable** | **Default**                        |
+| 1920×1080    | ~2,600 tokens       | Very high — pixel-perfect, but 2× token cost                   | Only when 1280×720 is insufficient |
 
 Why 1280×720:
 
@@ -111,13 +111,13 @@ Why 1280×720:
 ```typescript
 const SCREENSHOT_CONFIG = {
   viewport: { width: 1280, height: 720 },
-  deviceScaleFactor: 1,    // CSS pixels = device pixels. No HiDPI.
-  format: 'jpeg' as const,
+  deviceScaleFactor: 1, // CSS pixels = device pixels. No HiDPI.
+  format: "jpeg" as const,
   quality: 80,
-  fullPage: false,         // Viewport only, not full scroll height.
+  fullPage: false, // Viewport only, not full scroll height.
   // fullPage screenshots of long pages can be 5000px+ tall,
   // blowing up token cost to 8K+ tokens.
-} as const;
+} as const
 ```
 
 `deviceScaleFactor: 1` is critical. Setting DPR to 2 (Retina) quadruples the pixel count (2560×1440 actual pixels), doubling token cost with no accuracy benefit — VLMs don't gain spatial reasoning from subpixel detail.
@@ -134,12 +134,12 @@ const SCREENSHOT_CONFIG = {
 
 ### Options Evaluated
 
-| Approach | Size (typical page) | Useful Content | Token Cost |
-|---|---|---|---|
-| **Full HTML** (`page.content()`) | 200 KB–2 MB | Low — bloated with CSS classes, SVG paths, tracking scripts, inline styles | 50K–500K tokens — exceeds context window |
-| **Outer HTML of visible elements** | 20–100 KB | Medium — still contains irrelevant attributes | 5K–25K tokens |
-| **Accessibility tree** (`page.accessibility.snapshot()`) | 2–15 KB | High — role, name, value, description, focused state | 500–4,000 tokens |
-| **Custom DOM extraction** | 5–20 KB | High — tailored to agent needs | 1,500–5,000 tokens |
+| Approach                                                 | Size (typical page) | Useful Content                                                             | Token Cost                               |
+| -------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- | ---------------------------------------- |
+| **Full HTML** (`page.content()`)                         | 200 KB–2 MB         | Low — bloated with CSS classes, SVG paths, tracking scripts, inline styles | 50K–500K tokens — exceeds context window |
+| **Outer HTML of visible elements**                       | 20–100 KB           | Medium — still contains irrelevant attributes                              | 5K–25K tokens                            |
+| **Accessibility tree** (`page.accessibility.snapshot()`) | 2–15 KB             | High — role, name, value, description, focused state                       | 500–4,000 tokens                         |
+| **Custom DOM extraction**                                | 5–20 KB             | High — tailored to agent needs                                             | 1,500–5,000 tokens                       |
 
 ### Why Accessibility Tree
 
@@ -167,29 +167,29 @@ Playwright's `page.accessibility.snapshot()` has limitations — it returns a tr
 
 ```typescript
 interface DomSnapshot {
-  url: string;
-  title: string;
+  url: string
+  title: string
   /** Visible interactive elements with bounding boxes. */
-  elements: InteractiveElement[];
+  elements: InteractiveElement[]
   /** Viewport dimensions. */
-  viewport: { width: number; height: number };
+  viewport: { width: number; height: number }
 }
 
 interface InteractiveElement {
   /** Unique index for this element (used in VLM response to identify targets). */
-  index: number;
+  index: number
   /** ARIA role or tag name. */
-  role: string;
+  role: string
   /** Accessible name (visible text, aria-label, or alt text). */
-  name: string;
+  name: string
   /** Current value (for inputs, selects, checkboxes). */
-  value?: string;
+  value?: string
   /** Bounding box in viewport coordinates. */
-  bbox: { x: number; y: number; width: number; height: number };
+  bbox: { x: number; y: number; width: number; height: number }
   /** Whether the element is currently focused. */
-  focused: boolean;
+  focused: boolean
   /** Additional attributes: href for links, type for inputs. */
-  attributes: Record<string, string>;
+  attributes: Record<string, string>
 }
 ```
 
@@ -199,41 +199,57 @@ The extraction function runs in the browser context via `page.evaluate()`:
 async function extractDomSnapshot(page: Page): Promise<DomSnapshot> {
   return page.evaluate(() => {
     const interactiveSelectors = [
-      'a[href]', 'button', 'input', 'select', 'textarea',
-      '[role="button"]', '[role="link"]', '[role="tab"]',
-      '[role="menuitem"]', '[role="checkbox"]', '[role="radio"]',
-      '[role="switch"]', '[role="combobox"]', '[role="listbox"]',
+      "a[href]",
+      "button",
+      "input",
+      "select",
+      "textarea",
+      '[role="button"]',
+      '[role="link"]',
+      '[role="tab"]',
+      '[role="menuitem"]',
+      '[role="checkbox"]',
+      '[role="radio"]',
+      '[role="switch"]',
+      '[role="combobox"]',
+      '[role="listbox"]',
       '[contenteditable="true"]',
-    ];
+    ]
 
-    const elements: InteractiveElement[] = [];
-    let index = 0;
+    const elements: InteractiveElement[] = []
+    let index = 0
 
     for (const selector of interactiveSelectors) {
       for (const el of document.querySelectorAll(selector)) {
-        const rect = el.getBoundingClientRect();
+        const rect = el.getBoundingClientRect()
 
         // Skip elements outside the viewport.
-        if (rect.bottom < 0 || rect.top > window.innerHeight ||
-            rect.right < 0 || rect.left > window.innerWidth ||
-            rect.width === 0 || rect.height === 0) {
-          continue;
+        if (
+          rect.bottom < 0 ||
+          rect.top > window.innerHeight ||
+          rect.right < 0 ||
+          rect.left > window.innerWidth ||
+          rect.width === 0 ||
+          rect.height === 0
+        ) {
+          continue
         }
 
         // Skip hidden elements.
-        const style = window.getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden' ||
-            style.opacity === '0') {
-          continue;
+        const style = window.getComputedStyle(el)
+        if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+          continue
         }
 
         elements.push({
           index: index++,
-          role: el.getAttribute('role') || el.tagName.toLowerCase(),
-          name: (el as HTMLElement).innerText?.slice(0, 100) ||
-                el.getAttribute('aria-label') ||
-                el.getAttribute('alt') ||
-                el.getAttribute('placeholder') || '',
+          role: el.getAttribute("role") || el.tagName.toLowerCase(),
+          name:
+            (el as HTMLElement).innerText?.slice(0, 100) ||
+            el.getAttribute("aria-label") ||
+            el.getAttribute("alt") ||
+            el.getAttribute("placeholder") ||
+            "",
           value: (el as HTMLInputElement).value || undefined,
           bbox: {
             x: Math.round(rect.x),
@@ -243,12 +259,14 @@ async function extractDomSnapshot(page: Page): Promise<DomSnapshot> {
           },
           focused: document.activeElement === el,
           attributes: {
-            ...(el.getAttribute('href') && { href: el.getAttribute('href')! }),
-            ...(el.getAttribute('type') && { type: el.getAttribute('type')! }),
-            ...(el.getAttribute('name') && { name: el.getAttribute('name')! }),
-            ...((el as HTMLElement).dataset.testid && { testid: (el as HTMLElement).dataset.testid! }),
+            ...(el.getAttribute("href") && { href: el.getAttribute("href")! }),
+            ...(el.getAttribute("type") && { type: el.getAttribute("type")! }),
+            ...(el.getAttribute("name") && { name: el.getAttribute("name")! }),
+            ...((el as HTMLElement).dataset.testid && {
+              testid: (el as HTMLElement).dataset.testid!,
+            }),
           },
-        });
+        })
       }
     }
 
@@ -257,8 +275,8 @@ async function extractDomSnapshot(page: Page): Promise<DomSnapshot> {
       title: document.title,
       elements,
       viewport: { width: window.innerWidth, height: window.innerHeight },
-    };
-  });
+    }
+  })
 }
 ```
 
@@ -270,11 +288,11 @@ To help the VLM correlate the DOM snapshot with the screenshot, we inject number
 async function injectElementLabels(page: Page, elements: InteractiveElement[]): Promise<void> {
   await page.evaluate((els) => {
     // Remove previous labels.
-    document.querySelectorAll('[data-ota-label]').forEach(el => el.remove());
+    document.querySelectorAll("[data-ota-label]").forEach((el) => el.remove())
 
     for (const el of els) {
-      const label = document.createElement('div');
-      label.setAttribute('data-ota-label', String(el.index));
+      const label = document.createElement("div")
+      label.setAttribute("data-ota-label", String(el.index))
       label.style.cssText = `
         position: fixed;
         left: ${el.bbox.x - 2}px;
@@ -288,17 +306,17 @@ async function injectElementLabels(page: Page, elements: InteractiveElement[]): 
         z-index: 999999;
         pointer-events: none;
         font-family: monospace;
-      `;
-      label.textContent = String(el.index);
-      document.body.appendChild(label);
+      `
+      label.textContent = String(el.index)
+      document.body.appendChild(label)
     }
-  }, elements);
+  }, elements)
 }
 
 async function removeElementLabels(page: Page): Promise<void> {
   await page.evaluate(() => {
-    document.querySelectorAll('[data-ota-label]').forEach(el => el.remove());
-  });
+    document.querySelectorAll("[data-ota-label]").forEach((el) => el.remove())
+  })
 }
 ```
 
@@ -314,17 +332,17 @@ The VLM sees numbered red badges on the screenshot and a corresponding numbered 
 
 ### Model Comparison for OTA Tasks
 
-| Criterion | Claude Opus 4.6 | Gemini 3.1 Pro |
-|---|---|---|
-| **Image understanding** | Excellent — identifies UI elements, reads text, understands layout | Excellent — strong spatial reasoning, native multimodal |
-| **Structured output** | Reliable JSON output with tool use / system prompt constraints | Reliable JSON output with response schema |
-| **Bounding box accuracy** | Good — can estimate element locations when asked, but not pixel-precise | Good — similar capability, Google has invested in grounding |
-| **Context window** | 200K tokens | 1M tokens |
-| **Vision token cost** | ~1,300 tokens per 1280×720 image | ~1,100 tokens per 1280×720 image (slightly more efficient tiling) |
-| **Input pricing** | $15/MTok (Opus) | $3.50/MTok (Pro) |
-| **Output pricing** | $75/MTok (Opus) | $10.50/MTok (Pro) |
-| **Latency (vision)** | 3–6 seconds for analysis | 2–4 seconds for analysis |
-| **API reliability** | High | High |
+| Criterion                 | Claude Opus 4.6                                                         | Gemini 3.1 Pro                                                    |
+| ------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Image understanding**   | Excellent — identifies UI elements, reads text, understands layout      | Excellent — strong spatial reasoning, native multimodal           |
+| **Structured output**     | Reliable JSON output with tool use / system prompt constraints          | Reliable JSON output with response schema                         |
+| **Bounding box accuracy** | Good — can estimate element locations when asked, but not pixel-precise | Good — similar capability, Google has invested in grounding       |
+| **Context window**        | 200K tokens                                                             | 1M tokens                                                         |
+| **Vision token cost**     | ~1,300 tokens per 1280×720 image                                        | ~1,100 tokens per 1280×720 image (slightly more efficient tiling) |
+| **Input pricing**         | $15/MTok (Opus)                                                         | $3.50/MTok (Pro)                                                  |
+| **Output pricing**        | $75/MTok (Opus)                                                         | $10.50/MTok (Pro)                                                 |
+| **Latency (vision)**      | 3–6 seconds for analysis                                                | 2–4 seconds for analysis                                          |
+| **API reliability**       | High                                                                    | High                                                              |
 
 ### Why Claude Opus Primary, Gemini Fallback
 
@@ -340,33 +358,33 @@ The VLM sees numbered red badges on the screenshot and a corresponding numbered 
 
 ```typescript
 interface VlmProvider {
-  analyze(params: VlmAnalysisParams): Promise<VlmAnalysisResult>;
+  analyze(params: VlmAnalysisParams): Promise<VlmAnalysisResult>
 }
 
 interface VlmAnalysisParams {
-  screenshot: Buffer;       // JPEG bytes
-  domSnapshot: DomSnapshot;
-  objective: string;        // Current task objective
-  history: OtaStep[];       // Previous loop iterations for context
-  systemPrompt: string;
+  screenshot: Buffer // JPEG bytes
+  domSnapshot: DomSnapshot
+  objective: string // Current task objective
+  history: OtaStep[] // Previous loop iterations for context
+  systemPrompt: string
 }
 
 interface VlmAnalysisResult {
-  reasoning: string;        // Chain-of-thought explanation
-  action: BrowserAction;    // Structured action to execute
-  confidence: number;       // 0–1 confidence in the action
-  taskStatus: 'in_progress' | 'completed' | 'stuck' | 'failed';
+  reasoning: string // Chain-of-thought explanation
+  action: BrowserAction // Structured action to execute
+  confidence: number // 0–1 confidence in the action
+  taskStatus: "in_progress" | "completed" | "stuck" | "failed"
 }
 
 type BrowserAction =
-  | { type: 'click'; elementIndex: number }
-  | { type: 'type'; elementIndex: number; text: string }
-  | { type: 'select'; elementIndex: number; value: string }
-  | { type: 'scroll'; direction: 'up' | 'down'; pixels: number }
-  | { type: 'navigate'; url: string }
-  | { type: 'wait'; seconds: number; reason: string }
-  | { type: 'screenshot'; region?: { x: number; y: number; width: number; height: number } }
-  | { type: 'done'; result: string };
+  | { type: "click"; elementIndex: number }
+  | { type: "type"; elementIndex: number; text: string }
+  | { type: "select"; elementIndex: number; value: string }
+  | { type: "scroll"; direction: "up" | "down"; pixels: number }
+  | { type: "navigate"; url: string }
+  | { type: "wait"; seconds: number; reason: string }
+  | { type: "screenshot"; region?: { x: number; y: number; width: number; height: number } }
+  | { type: "done"; result: string }
 ```
 
 The `VlmProvider` interface lets the agent swap between Claude and Gemini without changing the OTA loop logic. The provider translates the common `VlmAnalysisParams` into provider-specific API calls (Claude tool use, Gemini function calling).
@@ -391,16 +409,16 @@ The element index approach converts the spatial reasoning problem into a classif
 
 ### Comparison
 
-| Criterion | Playwright High-Level API | CDP Direct |
-|---|---|---|
-| **Auto-waiting** | Built-in: waits for element to be visible, stable, enabled, not obscured | None — fires immediately, may hit stale/invisible elements |
-| **Retry on failure** | Built-in actionability checks with configurable timeout | Manual retry implementation required |
-| **Element identification** | `getByRole()`, `getByText()`, `getByLabel()` — semantic selectors | `DOM.querySelector()` — CSS selectors only |
-| **Input simulation** | Fires all associated events (focus, keydown, keypress, keyup, input, change) | `Input.dispatchMouseEvent` fires only the specified event — forms may not register input |
-| **Shadow DOM** | Transparent — Playwright pierces shadow roots | Requires `DOM.describeNode` with `pierce: true` |
-| **iframe handling** | `frame.locator()` — seamless cross-frame interaction | Manual `Page.getFrameTree`, `Target.attachToTarget` |
-| **Error messages** | Descriptive: "element is not visible", "element is disabled" | Raw protocol errors: "Could not find node" |
-| **Maintenance** | Stable API — breaking changes are rare and documented | CDP is Chrome-internal — methods change between Chrome versions |
+| Criterion                  | Playwright High-Level API                                                    | CDP Direct                                                                               |
+| -------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Auto-waiting**           | Built-in: waits for element to be visible, stable, enabled, not obscured     | None — fires immediately, may hit stale/invisible elements                               |
+| **Retry on failure**       | Built-in actionability checks with configurable timeout                      | Manual retry implementation required                                                     |
+| **Element identification** | `getByRole()`, `getByText()`, `getByLabel()` — semantic selectors            | `DOM.querySelector()` — CSS selectors only                                               |
+| **Input simulation**       | Fires all associated events (focus, keydown, keypress, keyup, input, change) | `Input.dispatchMouseEvent` fires only the specified event — forms may not register input |
+| **Shadow DOM**             | Transparent — Playwright pierces shadow roots                                | Requires `DOM.describeNode` with `pierce: true`                                          |
+| **iframe handling**        | `frame.locator()` — seamless cross-frame interaction                         | Manual `Page.getFrameTree`, `Target.attachToTarget`                                      |
+| **Error messages**         | Descriptive: "element is not visible", "element is disabled"                 | Raw protocol errors: "Could not find node"                                               |
+| **Maintenance**            | Stable API — breaking changes are rare and documented                        | CDP is Chrome-internal — methods change between Chrome versions                          |
 
 ### Playwright API for Standard Actions
 
@@ -413,54 +431,54 @@ async function executeAction(
   elements: InteractiveElement[],
 ): Promise<ActionResult> {
   // Remove the number overlay labels before executing actions.
-  await removeElementLabels(page);
+  await removeElementLabels(page)
 
   switch (action.type) {
-    case 'click': {
-      const el = elements[action.elementIndex];
-      if (!el) throw new ActionError(`Element [${action.elementIndex}] not found`);
-      const locator = resolveLocator(page, el);
-      await locator.click({ timeout: 10_000 });
-      return { success: true, action: `Clicked element [${action.elementIndex}]: ${el.name}` };
+    case "click": {
+      const el = elements[action.elementIndex]
+      if (!el) throw new ActionError(`Element [${action.elementIndex}] not found`)
+      const locator = resolveLocator(page, el)
+      await locator.click({ timeout: 10_000 })
+      return { success: true, action: `Clicked element [${action.elementIndex}]: ${el.name}` }
     }
 
-    case 'type': {
-      const el = elements[action.elementIndex];
-      if (!el) throw new ActionError(`Element [${action.elementIndex}] not found`);
-      const locator = resolveLocator(page, el);
-      await locator.fill(action.text, { timeout: 10_000 });
-      return { success: true, action: `Typed "${action.text}" into [${action.elementIndex}]` };
+    case "type": {
+      const el = elements[action.elementIndex]
+      if (!el) throw new ActionError(`Element [${action.elementIndex}] not found`)
+      const locator = resolveLocator(page, el)
+      await locator.fill(action.text, { timeout: 10_000 })
+      return { success: true, action: `Typed "${action.text}" into [${action.elementIndex}]` }
     }
 
-    case 'select': {
-      const el = elements[action.elementIndex];
-      if (!el) throw new ActionError(`Element [${action.elementIndex}] not found`);
-      const locator = resolveLocator(page, el);
-      await locator.selectOption(action.value, { timeout: 10_000 });
-      return { success: true, action: `Selected "${action.value}" in [${action.elementIndex}]` };
+    case "select": {
+      const el = elements[action.elementIndex]
+      if (!el) throw new ActionError(`Element [${action.elementIndex}] not found`)
+      const locator = resolveLocator(page, el)
+      await locator.selectOption(action.value, { timeout: 10_000 })
+      return { success: true, action: `Selected "${action.value}" in [${action.elementIndex}]` }
     }
 
-    case 'scroll': {
-      await page.mouse.wheel(0, action.direction === 'down' ? action.pixels : -action.pixels);
-      return { success: true, action: `Scrolled ${action.direction} ${action.pixels}px` };
+    case "scroll": {
+      await page.mouse.wheel(0, action.direction === "down" ? action.pixels : -action.pixels)
+      return { success: true, action: `Scrolled ${action.direction} ${action.pixels}px` }
     }
 
-    case 'navigate': {
-      await page.goto(action.url, { timeout: 30_000, waitUntil: 'domcontentloaded' });
-      return { success: true, action: `Navigated to ${action.url}` };
+    case "navigate": {
+      await page.goto(action.url, { timeout: 30_000, waitUntil: "domcontentloaded" })
+      return { success: true, action: `Navigated to ${action.url}` }
     }
 
-    case 'wait': {
-      await page.waitForTimeout(action.seconds * 1000);
-      return { success: true, action: `Waited ${action.seconds}s: ${action.reason}` };
+    case "wait": {
+      await page.waitForTimeout(action.seconds * 1000)
+      return { success: true, action: `Waited ${action.seconds}s: ${action.reason}` }
     }
 
-    case 'done': {
-      return { success: true, action: `Task completed: ${action.result}`, done: true };
+    case "done": {
+      return { success: true, action: `Task completed: ${action.result}`, done: true }
     }
 
     default:
-      throw new ActionError(`Unknown action type: ${(action as BrowserAction).type}`);
+      throw new ActionError(`Unknown action type: ${(action as BrowserAction).type}`)
   }
 }
 ```
@@ -473,51 +491,50 @@ The element index maps to a Playwright locator using a priority chain:
 function resolveLocator(page: Page, element: InteractiveElement): Locator {
   // Priority 1: data-testid (most stable, if available).
   if (element.attributes.testid) {
-    return page.getByTestId(element.attributes.testid);
+    return page.getByTestId(element.attributes.testid)
   }
 
   // Priority 2: Role + name (semantic, resilient to refactors).
   if (element.role && element.name) {
     const roleMapping: Record<string, string> = {
-      a: 'link', button: 'button', input: 'textbox',
-      select: 'combobox', textarea: 'textbox',
-      checkbox: 'checkbox', radio: 'radio',
-    };
-    const ariaRole = roleMapping[element.role] || element.role;
-    return page.getByRole(ariaRole as any, { name: element.name });
+      a: "link",
+      button: "button",
+      input: "textbox",
+      select: "combobox",
+      textarea: "textbox",
+      checkbox: "checkbox",
+      radio: "radio",
+    }
+    const ariaRole = roleMapping[element.role] || element.role
+    return page.getByRole(ariaRole as any, { name: element.name })
   }
 
   // Priority 3: Bounding box click (last resort).
   // Click the center of the element's bounding box.
-  const centerX = element.bbox.x + element.bbox.width / 2;
-  const centerY = element.bbox.y + element.bbox.height / 2;
-  return page.locator(`xpath=//body`).and(
-    page.locator(`:nth-match(*, 1)`),
-  );
+  const centerX = element.bbox.x + element.bbox.width / 2
+  const centerY = element.bbox.y + element.bbox.height / 2
+  return page.locator(`xpath=//body`).and(page.locator(`:nth-match(*, 1)`))
   // Fallback: coordinate-based click via page.mouse.click().
   // This bypasses Playwright's auto-waiting — use only when locators fail.
 }
 
 /** Fallback: coordinate-based click when locator resolution fails. */
-async function clickByCoordinates(
-  page: Page,
-  element: InteractiveElement,
-): Promise<void> {
-  const centerX = element.bbox.x + element.bbox.width / 2;
-  const centerY = element.bbox.y + element.bbox.height / 2;
-  await page.mouse.click(centerX, centerY);
+async function clickByCoordinates(page: Page, element: InteractiveElement): Promise<void> {
+  const centerX = element.bbox.x + element.bbox.width / 2
+  const centerY = element.bbox.y + element.bbox.height / 2
+  await page.mouse.click(centerX, centerY)
 }
 ```
 
 ### When CDP Is Necessary
 
-| Operation | Why CDP | Playwright Alternative |
-|---|---|---|
-| **Network interception (advanced)** | CDP `Fetch.requestPaused` gives granular control over individual requests | Playwright `page.route()` covers 95% of cases |
-| **Performance tracing** | CDP `Tracing.start/end` | Playwright Trace Viewer (higher-level) |
-| **Console message filtering** | CDP `Runtime.consoleAPICalled` with detail | `page.on('console')` (sufficient) |
-| **Cookie manipulation** | CDP `Network.setCookie` with SameSite control | `context.addCookies()` (sufficient for auth handoff) |
-| **PDF generation with options** | CDP `Page.printToPDF` with header/footer templates | `page.pdf()` (wraps CDP, sufficient) |
+| Operation                           | Why CDP                                                                   | Playwright Alternative                               |
+| ----------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **Network interception (advanced)** | CDP `Fetch.requestPaused` gives granular control over individual requests | Playwright `page.route()` covers 95% of cases        |
+| **Performance tracing**             | CDP `Tracing.start/end`                                                   | Playwright Trace Viewer (higher-level)               |
+| **Console message filtering**       | CDP `Runtime.consoleAPICalled` with detail                                | `page.on('console')` (sufficient)                    |
+| **Cookie manipulation**             | CDP `Network.setCookie` with SameSite control                             | `context.addCookies()` (sufficient for auth handoff) |
+| **PDF generation with options**     | CDP `Page.printToPDF` with header/footer templates                        | `page.pdf()` (wraps CDP, sufficient)                 |
 
 For the OTA loop, **no CDP calls are needed**. All observe-think-act operations use Playwright's high-level API. CDP is reserved for future features (auth handoff, performance profiling) that are out of scope for this spike.
 
@@ -541,60 +558,60 @@ Most browser automation tasks operate on a single page: navigate, interact, extr
 
 ```typescript
 class OtaTabManager {
-  private activePage: Page;
-  private readonly context: BrowserContext;
-  private readonly maxTabs = 3;
+  private activePage: Page
+  private readonly context: BrowserContext
+  private readonly maxTabs = 3
 
   constructor(context: BrowserContext) {
-    this.context = context;
-    this.activePage = context.pages()[0]!;
+    this.context = context
+    this.activePage = context.pages()[0]!
 
     // Listen for new pages (tabs/popups).
-    context.on('page', (newPage) => this.onNewPage(newPage));
+    context.on("page", (newPage) => this.onNewPage(newPage))
   }
 
   private async onNewPage(newPage: Page): Promise<void> {
-    const pages = this.context.pages();
+    const pages = this.context.pages()
 
     // Enforce tab limit — close oldest non-active tab if at max.
     if (pages.length > this.maxTabs) {
-      const oldest = pages.find(p => p !== this.activePage && p !== newPage);
-      if (oldest) await oldest.close();
+      const oldest = pages.find((p) => p !== this.activePage && p !== newPage)
+      if (oldest) await oldest.close()
     }
 
     // Wait for the new page to load before deciding.
     try {
-      await newPage.waitForLoadState('domcontentloaded', { timeout: 10_000 });
+      await newPage.waitForLoadState("domcontentloaded", { timeout: 10_000 })
     } catch {
       // Page failed to load — close it and stay on current tab.
-      await newPage.close();
-      return;
+      await newPage.close()
+      return
     }
 
     // Record the tab event in the OTA history for the VLM to reason about.
     this.tabEvents.push({
-      type: 'new_tab',
+      type: "new_tab",
       url: newPage.url(),
       title: await newPage.title(),
       timestamp: Date.now(),
-    });
+    })
 
     // Auto-follow: switch to the new tab.
     // The VLM will decide whether to stay or go back in the next iteration.
-    this.activePage = newPage;
+    this.activePage = newPage
   }
 
   getActivePage(): Page {
-    return this.activePage;
+    return this.activePage
   }
 
   async switchTo(pageIndex: number): Promise<void> {
-    const pages = this.context.pages();
+    const pages = this.context.pages()
     if (pageIndex < 0 || pageIndex >= pages.length) {
-      throw new Error(`Tab index ${pageIndex} out of range (${pages.length} tabs)`);
+      throw new Error(`Tab index ${pageIndex} out of range (${pages.length} tabs)`)
     }
-    this.activePage = pages[pageIndex]!;
-    await this.activePage.bringToFront();
+    this.activePage = pages[pageIndex]!
+    await this.activePage.bringToFront()
   }
 }
 ```
@@ -605,12 +622,12 @@ When multiple tabs are open, the DOM snapshot includes a tab list:
 
 ```typescript
 interface DomSnapshot {
-  url: string;
-  title: string;
-  elements: InteractiveElement[];
-  viewport: { width: number; height: number };
+  url: string
+  title: string
+  elements: InteractiveElement[]
+  viewport: { width: number; height: number }
   /** All open tabs. Active tab is marked. */
-  tabs: { index: number; url: string; title: string; active: boolean }[];
+  tabs: { index: number; url: string; title: string; active: boolean }[]
 }
 ```
 
@@ -619,7 +636,7 @@ The VLM can issue tab-switching actions:
 ```typescript
 type BrowserAction =
   // ... existing actions ...
-  | { type: 'switch_tab'; tabIndex: number };
+  { type: "switch_tab"; tabIndex: number }
 ```
 
 ### Tab Limit: 3
@@ -640,15 +657,15 @@ Three concurrent tabs is the hard limit. Rationale:
 
 ### Error Classification
 
-| Error | Category | Frequency | Retry Value |
-|---|---|---|---|
-| Element not found / not visible | `ACTION_STALE` | High — dynamic pages change between snapshot and action | High — re-snapshot resolves it |
-| Element intercepted by overlay | `ACTION_OBSCURED` | Medium — cookie banners, modals, tooltips | High — VLM can dismiss the overlay |
-| Navigation timeout | `NAVIGATION_TIMEOUT` | Medium — slow servers, CDN issues | Medium — may resolve on retry |
-| Page crash (`page.on('crash')`) | `PAGE_CRASH` | Low — Chromium renderer crash | Low — usually repeats on same page |
-| `net::ERR_CONNECTION_REFUSED` | `NETWORK_ERROR` | Low — target site is down | None — not our problem |
-| JavaScript error on page | `PAGE_JS_ERROR` | Medium — broken site JS | None — not our problem |
-| Playwright browser disconnected | `BROWSER_DISCONNECT` | Low — OOM kill or Playwright crash | Medium — restart browser (spike #33 OOM strategy) |
+| Error                           | Category             | Frequency                                               | Retry Value                                       |
+| ------------------------------- | -------------------- | ------------------------------------------------------- | ------------------------------------------------- |
+| Element not found / not visible | `ACTION_STALE`       | High — dynamic pages change between snapshot and action | High — re-snapshot resolves it                    |
+| Element intercepted by overlay  | `ACTION_OBSCURED`    | Medium — cookie banners, modals, tooltips               | High — VLM can dismiss the overlay                |
+| Navigation timeout              | `NAVIGATION_TIMEOUT` | Medium — slow servers, CDN issues                       | Medium — may resolve on retry                     |
+| Page crash (`page.on('crash')`) | `PAGE_CRASH`         | Low — Chromium renderer crash                           | Low — usually repeats on same page                |
+| `net::ERR_CONNECTION_REFUSED`   | `NETWORK_ERROR`      | Low — target site is down                               | None — not our problem                            |
+| JavaScript error on page        | `PAGE_JS_ERROR`      | Medium — broken site JS                                 | None — not our problem                            |
+| Playwright browser disconnected | `BROWSER_DISCONNECT` | Low — OOM kill or Playwright crash                      | Medium — restart browser (spike #33 OOM strategy) |
 
 ### Tier 1: Action-Level Retry
 
@@ -663,25 +680,25 @@ async function executeActionWithRetry(
 ): Promise<ActionResult> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await executeAction(page, action, elements);
+      return await executeAction(page, action, elements)
     } catch (error) {
-      if (attempt === maxRetries) throw error;
+      if (attempt === maxRetries) throw error
 
-      const classification = classifyBrowserError(error);
+      const classification = classifyBrowserError(error)
 
-      if (classification === 'ACTION_STALE' || classification === 'ACTION_OBSCURED') {
+      if (classification === "ACTION_STALE" || classification === "ACTION_OBSCURED") {
         // Re-snapshot: elements may have moved or an overlay appeared.
-        await page.waitForTimeout(500);
-        const freshSnapshot = await extractDomSnapshot(page);
-        elements = freshSnapshot.elements;
-        continue;
+        await page.waitForTimeout(500)
+        const freshSnapshot = await extractDomSnapshot(page)
+        elements = freshSnapshot.elements
+        continue
       }
 
       // Non-retryable at this tier.
-      throw error;
+      throw error
     }
   }
-  throw new Error('unreachable');
+  throw new Error("unreachable")
 }
 ```
 
@@ -691,13 +708,13 @@ If the action retry fails, the error is reported back to the VLM in the next OTA
 
 ```typescript
 interface OtaStep {
-  iteration: number;
+  iteration: number
   observation: {
-    screenshot: Buffer;
-    domSnapshot: DomSnapshot;
-  };
-  analysis: VlmAnalysisResult;
-  actionResult: ActionResult | ActionError;
+    screenshot: Buffer
+    domSnapshot: DomSnapshot
+  }
+  analysis: VlmAnalysisResult
+  actionResult: ActionResult | ActionError
 }
 ```
 
@@ -720,8 +737,8 @@ If the same action fails 3 times consecutively, the loop escalates to Tier 3.
 After 3 consecutive failed actions (or a non-recoverable error like page crash or browser disconnect):
 
 ```typescript
-const MAX_CONSECUTIVE_FAILURES = 3;
-const MAX_TOTAL_ITERATIONS = 100;
+const MAX_CONSECUTIVE_FAILURES = 3
+const MAX_TOTAL_ITERATIONS = 100
 
 async function runOtaLoop(
   page: Page,
@@ -729,20 +746,20 @@ async function runOtaLoop(
   vlmProvider: VlmProvider,
   signal: AbortSignal,
 ): Promise<OtaResult> {
-  const history: OtaStep[] = [];
-  let consecutiveFailures = 0;
+  const history: OtaStep[] = []
+  let consecutiveFailures = 0
 
   for (let iteration = 0; iteration < MAX_TOTAL_ITERATIONS; iteration++) {
-    if (signal.aborted) break;
+    if (signal.aborted) break
 
     // === OBSERVE ===
-    const elements = await extractDomSnapshot(page);
-    await injectElementLabels(page, elements.elements);
+    const elements = await extractDomSnapshot(page)
+    await injectElementLabels(page, elements.elements)
     const screenshot = await page.screenshot({
-      type: 'jpeg',
+      type: "jpeg",
       quality: 80,
-    });
-    await removeElementLabels(page);
+    })
+    await removeElementLabels(page)
 
     // === THINK ===
     const analysis = await vlmProvider.analyze({
@@ -751,46 +768,56 @@ async function runOtaLoop(
       objective,
       history: history.slice(-5), // Last 5 steps for context
       systemPrompt: OTA_SYSTEM_PROMPT,
-    });
+    })
 
-    if (analysis.taskStatus === 'completed') {
-      return { success: true, result: analysis.action, iterations: iteration + 1 };
+    if (analysis.taskStatus === "completed") {
+      return { success: true, result: analysis.action, iterations: iteration + 1 }
     }
 
-    if (analysis.taskStatus === 'stuck') {
-      consecutiveFailures++;
+    if (analysis.taskStatus === "stuck") {
+      consecutiveFailures++
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         return {
           success: false,
           error: `Agent stuck after ${MAX_CONSECUTIVE_FAILURES} consecutive failures`,
           iterations: iteration + 1,
-        };
+        }
       }
-      continue;
+      continue
     }
 
     // === ACT ===
     try {
-      const result = await executeActionWithRetry(page, analysis.action, elements.elements);
-      history.push({ iteration, observation: { screenshot, domSnapshot: elements }, analysis, actionResult: result });
-      consecutiveFailures = 0;
+      const result = await executeActionWithRetry(page, analysis.action, elements.elements)
+      history.push({
+        iteration,
+        observation: { screenshot, domSnapshot: elements },
+        analysis,
+        actionResult: result,
+      })
+      consecutiveFailures = 0
 
       if (result.done) {
-        return { success: true, result: analysis.action, iterations: iteration + 1 };
+        return { success: true, result: analysis.action, iterations: iteration + 1 }
       }
 
       // Wait for page to settle after action.
-      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+      await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {})
     } catch (error) {
-      history.push({ iteration, observation: { screenshot, domSnapshot: elements }, analysis, actionResult: error as ActionError });
-      consecutiveFailures++;
+      history.push({
+        iteration,
+        observation: { screenshot, domSnapshot: elements },
+        analysis,
+        actionResult: error as ActionError,
+      })
+      consecutiveFailures++
 
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         return {
           success: false,
           error: `${MAX_CONSECUTIVE_FAILURES} consecutive action failures. Last error: ${(error as Error).message}`,
           iterations: iteration + 1,
-        };
+        }
       }
     }
   }
@@ -799,7 +826,7 @@ async function runOtaLoop(
     success: false,
     error: `Max iterations (${MAX_TOTAL_ITERATIONS}) exceeded`,
     iterations: MAX_TOTAL_ITERATIONS,
-  };
+  }
 }
 ```
 
@@ -809,15 +836,17 @@ When the Playwright browser disconnects (OOM kill, spike #33), the OTA loop cann
 
 ```typescript
 async function handleBrowserDisconnect(error: Error, page: Page): Promise<never> {
-  if (error.message.includes('browser has been closed') ||
-      error.message.includes('Connection closed')) {
+  if (
+    error.message.includes("browser has been closed") ||
+    error.message.includes("Connection closed")
+  ) {
     throw new BrowserCrashError(
-      'Playwright browser disconnected — likely OOM kill. ' +
-      'Job will be retried with reduced browser settings.',
+      "Playwright browser disconnected — likely OOM kill. " +
+        "Job will be retried with reduced browser settings.",
       { cause: error },
-    );
+    )
   }
-  throw error;
+  throw error
 }
 ```
 
@@ -831,42 +860,42 @@ async function handleBrowserDisconnect(error: Error, page: Page): Promise<never>
 
 ### Storage Strategy
 
-| Storage Tier | Location | Retention | Purpose |
-|---|---|---|---|
-| **Hot (ephemeral)** | `/workspace/screenshots/` on emptyDir | Pod lifetime | OTA loop working data. Deleted when pod exits. |
-| **Warm (audit, optional)** | `/data/sessions/{jobId}/screenshots/` on PVC | 7 days | Post-mortem debugging, audit trail. Cleaned by maintenance task. |
+| Storage Tier               | Location                                     | Retention    | Purpose                                                          |
+| -------------------------- | -------------------------------------------- | ------------ | ---------------------------------------------------------------- |
+| **Hot (ephemeral)**        | `/workspace/screenshots/` on emptyDir        | Pod lifetime | OTA loop working data. Deleted when pod exits.                   |
+| **Warm (audit, optional)** | `/data/sessions/{jobId}/screenshots/` on PVC | 7 days       | Post-mortem debugging, audit trail. Cleaned by maintenance task. |
 
 ### Ephemeral Storage (Default)
 
 Screenshots are written to the workspace emptyDir during the OTA loop. The emptyDir has a 500Mi size limit (spike #33). Screenshot management:
 
 ```typescript
-const SCREENSHOT_DIR = '/workspace/screenshots';
+const SCREENSHOT_DIR = "/workspace/screenshots"
 
 class ScreenshotManager {
-  private readonly maxScreenshots = 100;
-  private readonly maxStorageMb = 200;
-  private count = 0;
+  private readonly maxScreenshots = 100
+  private readonly maxStorageMb = 200
+  private count = 0
 
   async save(screenshot: Buffer, iteration: number): Promise<string> {
-    const filename = `${SCREENSHOT_DIR}/ota-${String(iteration).padStart(4, '0')}.jpg`;
-    await fs.writeFile(filename, screenshot);
-    this.count++;
+    const filename = `${SCREENSHOT_DIR}/ota-${String(iteration).padStart(4, "0")}.jpg`
+    await fs.writeFile(filename, screenshot)
+    this.count++
 
     // Evict oldest screenshots if limits reached.
     if (this.count > this.maxScreenshots) {
-      await this.evictOldest(10);
+      await this.evictOldest(10)
     }
 
-    return filename;
+    return filename
   }
 
   private async evictOldest(count: number): Promise<void> {
-    const files = await fs.readdir(SCREENSHOT_DIR);
-    const sorted = files.sort(); // Lexicographic = chronological (zero-padded).
+    const files = await fs.readdir(SCREENSHOT_DIR)
+    const sorted = files.sort() // Lexicographic = chronological (zero-padded).
     for (const file of sorted.slice(0, count)) {
-      await fs.unlink(`${SCREENSHOT_DIR}/${file}`);
-      this.count--;
+      await fs.unlink(`${SCREENSHOT_DIR}/${file}`)
+      this.count--
     }
   }
 }
@@ -879,16 +908,16 @@ At 150 KB per screenshot (JPEG q80, 1280×720), 100 screenshots consume 15 MB �
 For agents that require post-mortem analysis (debugging why an OTA task failed, compliance audits), screenshots are copied to the PVC at the end of each OTA iteration:
 
 ```typescript
-const AUDIT_DIR = `/data/sessions/${jobId}/screenshots`;
+const AUDIT_DIR = `/data/sessions/${jobId}/screenshots`
 
 async function persistForAudit(
   screenshot: Buffer,
   iteration: number,
   metadata: { url: string; action: string },
 ): Promise<void> {
-  const basename = `ota-${String(iteration).padStart(4, '0')}`;
-  await fs.writeFile(`${AUDIT_DIR}/${basename}.jpg`, screenshot);
-  await fs.writeFile(`${AUDIT_DIR}/${basename}.json`, JSON.stringify(metadata));
+  const basename = `ota-${String(iteration).padStart(4, "0")}`
+  await fs.writeFile(`${AUDIT_DIR}/${basename}.jpg`, screenshot)
+  await fs.writeFile(`${AUDIT_DIR}/${basename}.json`, JSON.stringify(metadata))
 }
 ```
 
@@ -903,7 +932,7 @@ metadata:
   name: screenshot-cleanup
   namespace: cortex
 spec:
-  schedule: "0 3 * * *"  # Daily at 3 AM
+  schedule: "0 3 * * *" # Daily at 3 AM
   jobTemplate:
     spec:
       template:
@@ -937,35 +966,35 @@ spec:
 
 ### Loop Timing Breakdown
 
-| Phase | Duration | Notes |
-|---|---|---|
-| **Observe** (screenshot + DOM) | 50–150ms | Playwright screenshot capture + `page.evaluate()` for DOM extraction |
-| **Think** (VLM inference) | 3–8 seconds | API latency + model inference. Dominates the loop. |
-| **Act** (Playwright action) | 100–500ms | Click, type, navigate. `waitForLoadState` adds 0–5 seconds. |
-| **Total per iteration** | **3.5–14 seconds** | Typical: 5–7 seconds |
+| Phase                          | Duration           | Notes                                                                |
+| ------------------------------ | ------------------ | -------------------------------------------------------------------- |
+| **Observe** (screenshot + DOM) | 50–150ms           | Playwright screenshot capture + `page.evaluate()` for DOM extraction |
+| **Think** (VLM inference)      | 3–8 seconds        | API latency + model inference. Dominates the loop.                   |
+| **Act** (Playwright action)    | 100–500ms          | Click, type, navigate. `waitForLoadState` adds 0–5 seconds.          |
+| **Total per iteration**        | **3.5–14 seconds** | Typical: 5–7 seconds                                                 |
 
 The VLM inference (Think phase) is the bottleneck. The loop naturally runs at 8–15 iterations per minute. Artificial throttling (e.g., "wait 2 seconds between iterations") would slow task completion without saving tokens — the VLM call is the expensive part, and it happens exactly once per iteration regardless of pacing.
 
 ### Token Cost Per Iteration
 
-| Component | Input Tokens | Output Tokens | Cost (Opus) | Cost (Gemini Pro) |
-|---|---|---|---|---|
-| Screenshot (1280×720 JPEG) | ~1,300 | — | $0.0195 | $0.0046 |
-| System prompt (OTA template) | ~800 | — | $0.012 | $0.0028 |
-| DOM snapshot (30 elements) | ~600 | — | $0.009 | $0.0021 |
-| History (last 5 steps, compressed) | ~1,500 | — | $0.0225 | $0.0053 |
-| **Input subtotal** | **~4,200** | — | **$0.063** | **$0.0147** |
-| VLM response (reasoning + action) | — | ~300 | $0.0225 | $0.0032 |
-| **Total per iteration** | **~4,200** | **~300** | **$0.0855** | **$0.0179** |
+| Component                          | Input Tokens | Output Tokens | Cost (Opus) | Cost (Gemini Pro) |
+| ---------------------------------- | ------------ | ------------- | ----------- | ----------------- |
+| Screenshot (1280×720 JPEG)         | ~1,300       | —             | $0.0195     | $0.0046           |
+| System prompt (OTA template)       | ~800         | —             | $0.012      | $0.0028           |
+| DOM snapshot (30 elements)         | ~600         | —             | $0.009      | $0.0021           |
+| History (last 5 steps, compressed) | ~1,500       | —             | $0.0225     | $0.0053           |
+| **Input subtotal**                 | **~4,200**   | —             | **$0.063**  | **$0.0147**       |
+| VLM response (reasoning + action)  | —            | ~300          | $0.0225     | $0.0032           |
+| **Total per iteration**            | **~4,200**   | **~300**      | **$0.0855** | **$0.0179**       |
 
 ### Cost Per Task
 
-| Task Complexity | Iterations | Cost (Opus) | Cost (Gemini Pro) |
-|---|---|---|---|
-| Simple (fill a form, 5 fields) | 8–12 | $0.68–$1.03 | $0.14–$0.21 |
-| Medium (navigate dashboard, extract data) | 20–30 | $1.71–$2.57 | $0.36–$0.54 |
-| Complex (multi-page workflow with decisions) | 40–60 | $3.42–$5.13 | $0.72–$1.07 |
-| Maximum (100 iterations, hard limit) | 100 | $8.55 | $1.79 |
+| Task Complexity                              | Iterations | Cost (Opus) | Cost (Gemini Pro) |
+| -------------------------------------------- | ---------- | ----------- | ----------------- |
+| Simple (fill a form, 5 fields)               | 8–12       | $0.68–$1.03 | $0.14–$0.21       |
+| Medium (navigate dashboard, extract data)    | 20–30      | $1.71–$2.57 | $0.36–$0.54       |
+| Complex (multi-page workflow with decisions) | 40–60      | $3.42–$5.13 | $0.72–$1.07       |
+| Maximum (100 iterations, hard limit)         | 100        | $8.55       | $1.79             |
 
 ### Token Budget Integration
 
@@ -981,17 +1010,18 @@ async function otaLoopWithBudget(
   signal: AbortSignal,
 ): Promise<OtaResult> {
   for (let iteration = 0; iteration < MAX_TOTAL_ITERATIONS; iteration++) {
-    if (signal.aborted) break;
+    if (signal.aborted) break
 
     // Check token budget before the expensive VLM call.
-    const consumed = await getTokensConsumed(jobId);
+    const consumed = await getTokensConsumed(jobId)
     if (consumed.cost_usd + ESTIMATED_COST_PER_ITERATION > tokenBudget.maxCostUsdPerJob) {
       return {
         success: false,
-        error: `Token budget would be exceeded. Consumed: $${consumed.cost_usd.toFixed(2)}, ` +
-               `Budget: $${tokenBudget.maxCostUsdPerJob.toFixed(2)}`,
+        error:
+          `Token budget would be exceeded. Consumed: $${consumed.cost_usd.toFixed(2)}, ` +
+          `Budget: $${tokenBudget.maxCostUsdPerJob.toFixed(2)}`,
         iterations: iteration,
-      };
+      }
     }
 
     // ... observe, think, act ...
@@ -1001,11 +1031,11 @@ async function otaLoopWithBudget(
       input: consumed.input + analysisTokens.input,
       output: consumed.output + analysisTokens.output,
       cost_usd: consumed.cost_usd + analysisTokens.cost_usd,
-    });
+    })
   }
 }
 
-const ESTIMATED_COST_PER_ITERATION = 0.09; // $0.09 at Opus rates — slight overestimate for safety
+const ESTIMATED_COST_PER_ITERATION = 0.09 // $0.09 at Opus rates — slight overestimate for safety
 ```
 
 ### Visual Change Detection
@@ -1018,42 +1048,42 @@ async function hasPageChanged(
   previousScreenshot: Buffer | null,
   threshold: number = 0.02, // 2% pixel difference
 ): Promise<boolean> {
-  if (!previousScreenshot) return true;
+  if (!previousScreenshot) return true
 
   // Fast structural comparison: if the JPEG file sizes differ by >10%,
   // the page has changed. No pixel-level comparison needed.
-  const sizeDiff = Math.abs(currentScreenshot.length - previousScreenshot.length);
-  const sizeRatio = sizeDiff / previousScreenshot.length;
-  if (sizeRatio > 0.10) return true;
-  if (sizeRatio < 0.01) return false;
+  const sizeDiff = Math.abs(currentScreenshot.length - previousScreenshot.length)
+  const sizeRatio = sizeDiff / previousScreenshot.length
+  if (sizeRatio > 0.1) return true
+  if (sizeRatio < 0.01) return false
 
   // Medium comparison: compare a hash of the screenshot bytes.
   // Two identical-looking pages produce identical JPEGs (deterministic encoding).
-  const currentHash = createHash('sha256').update(currentScreenshot).digest('hex');
-  const previousHash = createHash('sha256').update(previousScreenshot).digest('hex');
-  return currentHash !== previousHash;
+  const currentHash = createHash("sha256").update(currentScreenshot).digest("hex")
+  const previousHash = createHash("sha256").update(previousScreenshot).digest("hex")
+  return currentHash !== previousHash
 }
 ```
 
 When the page hasn't changed (common after a `wait` action or when waiting for an async operation), the loop skips the VLM call and re-checks after a short delay:
 
 ```typescript
-if (!await hasPageChanged(screenshot, previousScreenshot)) {
+if (!(await hasPageChanged(screenshot, previousScreenshot))) {
   // Page unchanged — no need to call the VLM.
-  await page.waitForTimeout(1_000);
-  unchangedCount++;
+  await page.waitForTimeout(1_000)
+  unchangedCount++
 
   if (unchangedCount >= 5) {
     // Page has been static for 5 seconds. Ask the VLM what to do.
     // (Maybe we need to scroll, or the task is done.)
-    unchangedCount = 0;
+    unchangedCount = 0
     // Fall through to the VLM call.
   } else {
-    continue; // Skip this iteration.
+    continue // Skip this iteration.
   }
 }
-unchangedCount = 0;
-previousScreenshot = screenshot;
+unchangedCount = 0
+previousScreenshot = screenshot
 ```
 
 This optimization eliminates ~30% of VLM calls in typical tasks (form filling where the page doesn't change between typing into different fields).
@@ -1198,7 +1228,7 @@ export const SCREENSHOT_CONFIG = {
    *  - 10× smaller files than PNG (150 KB vs 1.5 MB)
    *  - Identical token cost (VLM tokenizes by dimensions, not format)
    *  - No perceptible quality loss for UI text and buttons */
-  format: 'jpeg' as const,
+  format: "jpeg" as const,
   quality: 80,
 
   /** Capture viewport only, not full scrollable page.
@@ -1214,13 +1244,13 @@ export const SCREENSHOT_CONFIG = {
   maxStorageMb: 200,
 
   /** Directory for ephemeral screenshots. */
-  screenshotDir: '/workspace/screenshots',
+  screenshotDir: "/workspace/screenshots",
 
   /** Visual change detection threshold.
    *  JPEG file size difference ratio below which the page is
    *  considered unchanged. 0.01 = 1% size difference. */
   changeThresholdRatio: 0.01,
-} as const;
+} as const
 
 /**
  * Playwright browser context options for OTA agents.
@@ -1231,14 +1261,15 @@ export const BROWSER_CONTEXT_OPTIONS = {
 
   /** Standard desktop user agent. Avoids mobile-specific layouts
    *  and bot detection that blocks headless Chrome. */
-  userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ' +
-             '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  userAgent:
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 
   /** Accept English content. */
-  locale: 'en-US',
+  locale: "en-US",
 
   /** Standard timezone for consistent date/time rendering. */
-  timezoneId: 'UTC',
+  timezoneId: "UTC",
 
   /** Disable geolocation — agents don't need it. */
   geolocation: undefined,
@@ -1251,7 +1282,7 @@ export const BROWSER_CONTEXT_OPTIONS = {
   /** Ignore HTTPS errors — agents may interact with staging sites
    *  using self-signed certificates. */
   ignoreHTTPSErrors: true,
-} as const;
+} as const
 ```
 
 ---
@@ -1300,60 +1331,61 @@ You must respond with:
 - Some elements may be partially visible or obscured. Note this in your reasoning.
 - Form fields may have validation. If a submit fails, check for error messages.
 - After clicking a link or button, the page may change. Wait for the new page to load before acting.
-`;
+`
 
 /**
  * Build the user message for a single OTA iteration.
  */
 export function buildOtaUserMessage(params: {
-  objective: string;
-  domSnapshot: DomSnapshot;
-  history: OtaStep[];
-  errorContext?: string;
+  objective: string
+  domSnapshot: DomSnapshot
+  history: OtaStep[]
+  errorContext?: string
 }): string {
-  const { objective, domSnapshot, history, errorContext } = params;
+  const { objective, domSnapshot, history, errorContext } = params
 
-  let message = `## Objective\n${objective}\n\n`;
+  let message = `## Objective\n${objective}\n\n`
 
-  message += `## Current Page\n`;
-  message += `URL: ${domSnapshot.url}\n`;
-  message += `Title: ${domSnapshot.title}\n\n`;
+  message += `## Current Page\n`
+  message += `URL: ${domSnapshot.url}\n`
+  message += `Title: ${domSnapshot.title}\n\n`
 
   if (domSnapshot.tabs.length > 1) {
-    message += `## Open Tabs\n`;
+    message += `## Open Tabs\n`
     for (const tab of domSnapshot.tabs) {
-      message += `${tab.active ? '→ ' : '  '}[${tab.index}] ${tab.title} (${tab.url})\n`;
+      message += `${tab.active ? "→ " : "  "}[${tab.index}] ${tab.title} (${tab.url})\n`
     }
-    message += `\n`;
+    message += `\n`
   }
 
-  message += `## Interactive Elements\n`;
+  message += `## Interactive Elements\n`
   for (const el of domSnapshot.elements) {
-    let line = `[${el.index}] ${el.role}`;
-    if (el.name) line += `: "${el.name}"`;
-    if (el.value) line += ` (value: "${el.value}")`;
-    if (el.focused) line += ` [FOCUSED]`;
-    if (el.attributes.href) line += ` → ${el.attributes.href}`;
-    message += `${line}\n`;
+    let line = `[${el.index}] ${el.role}`
+    if (el.name) line += `: "${el.name}"`
+    if (el.value) line += ` (value: "${el.value}")`
+    if (el.focused) line += ` [FOCUSED]`
+    if (el.attributes.href) line += ` → ${el.attributes.href}`
+    message += `${line}\n`
   }
 
   if (history.length > 0) {
-    message += `\n## Recent Actions\n`;
+    message += `\n## Recent Actions\n`
     for (const step of history.slice(-5)) {
-      const result = 'success' in step.actionResult
-        ? `✓ ${step.actionResult.action}`
-        : `✗ ${(step.actionResult as ActionError).message}`;
-      message += `Step ${step.iteration}: ${result}\n`;
+      const result =
+        "success" in step.actionResult
+          ? `✓ ${step.actionResult.action}`
+          : `✗ ${(step.actionResult as ActionError).message}`
+      message += `Step ${step.iteration}: ${result}\n`
     }
   }
 
   if (errorContext) {
-    message += `\n## Error\n${errorContext}\n`;
+    message += `\n## Error\n${errorContext}\n`
   }
 
-  message += `\nWhat action should you take next?`;
+  message += `\nWhat action should you take next?`
 
-  return message;
+  return message
 }
 ```
 
@@ -1361,75 +1393,76 @@ export function buildOtaUserMessage(params: {
 
 ```typescript
 export const OTA_ACTION_TOOL = {
-  name: 'browser_action',
-  description: 'Execute a browser action based on the current page state.',
+  name: "browser_action",
+  description: "Execute a browser action based on the current page state.",
   input_schema: {
-    type: 'object' as const,
+    type: "object" as const,
     properties: {
       reasoning: {
-        type: 'string',
-        description: 'Your step-by-step reasoning about the current state and why you chose this action.',
+        type: "string",
+        description:
+          "Your step-by-step reasoning about the current state and why you chose this action.",
       },
       action: {
-        type: 'object',
+        type: "object",
         properties: {
           type: {
-            type: 'string',
-            enum: ['click', 'type', 'select', 'scroll', 'navigate', 'wait', 'switch_tab', 'done'],
+            type: "string",
+            enum: ["click", "type", "select", "scroll", "navigate", "wait", "switch_tab", "done"],
           },
           elementIndex: {
-            type: 'number',
-            description: 'Index of the target element (for click, type, select).',
+            type: "number",
+            description: "Index of the target element (for click, type, select).",
           },
           text: {
-            type: 'string',
-            description: 'Text to type (for type action).',
+            type: "string",
+            description: "Text to type (for type action).",
           },
           value: {
-            type: 'string',
-            description: 'Value to select (for select action) or result summary (for done action).',
+            type: "string",
+            description: "Value to select (for select action) or result summary (for done action).",
           },
           direction: {
-            type: 'string',
-            enum: ['up', 'down'],
-            description: 'Scroll direction.',
+            type: "string",
+            enum: ["up", "down"],
+            description: "Scroll direction.",
           },
           pixels: {
-            type: 'number',
-            description: 'Pixels to scroll (default 500).',
+            type: "number",
+            description: "Pixels to scroll (default 500).",
           },
           url: {
-            type: 'string',
-            description: 'URL to navigate to.',
+            type: "string",
+            description: "URL to navigate to.",
           },
           seconds: {
-            type: 'number',
-            description: 'Seconds to wait (max 10).',
+            type: "number",
+            description: "Seconds to wait (max 10).",
           },
           tabIndex: {
-            type: 'number',
-            description: 'Tab index to switch to.',
+            type: "number",
+            description: "Tab index to switch to.",
           },
           result: {
-            type: 'string',
-            description: 'Task completion summary (for done action).',
+            type: "string",
+            description: "Task completion summary (for done action).",
           },
         },
-        required: ['type'],
+        required: ["type"],
       },
       confidence: {
-        type: 'number',
-        description: 'Confidence in this action (0.0 to 1.0).',
+        type: "number",
+        description: "Confidence in this action (0.0 to 1.0).",
       },
       taskStatus: {
-        type: 'string',
-        enum: ['in_progress', 'completed', 'stuck', 'failed'],
-        description: 'Current status of the overall task.',
+        type: "string",
+        enum: ["in_progress", "completed", "stuck", "failed"],
+        description: "Current status of the overall task.",
       },
     },
-    required: ['reasoning', 'action', 'confidence', 'taskStatus'],
+    required: ["reasoning", "action", "confidence", "taskStatus"],
   },
-};
+}
 ```
 
 ---
@@ -1488,58 +1521,64 @@ flowchart TD
 
 ```typescript
 type BrowserErrorClass =
-  | 'ACTION_STALE'
-  | 'ACTION_OBSCURED'
-  | 'NAVIGATION_TIMEOUT'
-  | 'PAGE_CRASH'
-  | 'NETWORK_ERROR'
-  | 'BROWSER_DISCONNECT'
-  | 'UNKNOWN';
+  | "ACTION_STALE"
+  | "ACTION_OBSCURED"
+  | "NAVIGATION_TIMEOUT"
+  | "PAGE_CRASH"
+  | "NETWORK_ERROR"
+  | "BROWSER_DISCONNECT"
+  | "UNKNOWN"
 
 function classifyBrowserError(error: unknown): BrowserErrorClass {
-  if (!(error instanceof Error)) return 'UNKNOWN';
+  if (!(error instanceof Error)) return "UNKNOWN"
 
-  const msg = error.message.toLowerCase();
+  const msg = error.message.toLowerCase()
 
   // Element stale or not found.
-  if (msg.includes('element is not attached') ||
-      msg.includes('element is not visible') ||
-      msg.includes('element is outside of the viewport') ||
-      msg.includes('no element matches selector') ||
-      msg.includes('waiting for selector')) {
-    return 'ACTION_STALE';
+  if (
+    msg.includes("element is not attached") ||
+    msg.includes("element is not visible") ||
+    msg.includes("element is outside of the viewport") ||
+    msg.includes("no element matches selector") ||
+    msg.includes("waiting for selector")
+  ) {
+    return "ACTION_STALE"
   }
 
   // Element obscured by another element.
-  if (msg.includes('element is not enabled') ||
-      msg.includes('intercept') ||
-      msg.includes('element receives pointer events')) {
-    return 'ACTION_OBSCURED';
+  if (
+    msg.includes("element is not enabled") ||
+    msg.includes("intercept") ||
+    msg.includes("element receives pointer events")
+  ) {
+    return "ACTION_OBSCURED"
   }
 
   // Navigation timeout.
-  if (msg.includes('timeout') && (msg.includes('goto') || msg.includes('navigation'))) {
-    return 'NAVIGATION_TIMEOUT';
+  if (msg.includes("timeout") && (msg.includes("goto") || msg.includes("navigation"))) {
+    return "NAVIGATION_TIMEOUT"
   }
 
   // Page crash.
-  if (msg.includes('page crashed') || msg.includes('target crashed')) {
-    return 'PAGE_CRASH';
+  if (msg.includes("page crashed") || msg.includes("target crashed")) {
+    return "PAGE_CRASH"
   }
 
   // Network error.
-  if (msg.includes('net::err_') || msg.includes('dns') || msg.includes('connection refused')) {
-    return 'NETWORK_ERROR';
+  if (msg.includes("net::err_") || msg.includes("dns") || msg.includes("connection refused")) {
+    return "NETWORK_ERROR"
   }
 
   // Browser disconnected (OOM or process crash).
-  if (msg.includes('browser has been closed') ||
-      msg.includes('connection closed') ||
-      msg.includes('target page, context or browser has been closed')) {
-    return 'BROWSER_DISCONNECT';
+  if (
+    msg.includes("browser has been closed") ||
+    msg.includes("connection closed") ||
+    msg.includes("target page, context or browser has been closed")
+  ) {
+    return "BROWSER_DISCONNECT"
   }
 
-  return 'UNKNOWN';
+  return "UNKNOWN"
 }
 ```
 
@@ -1588,35 +1627,35 @@ function classifyBrowserError(error: unknown): BrowserErrorClass {
 
 ### Cost Scaling Table
 
-| Iterations | Opus Cost | Gemini Pro Cost | Typical Task |
-|---|---|---|---|
-| 5 | $0.43 | $0.09 | Click a link, read a page |
-| 10 | $0.86 | $0.18 | Fill a short form |
-| 20 | $1.71 | $0.36 | Navigate a dashboard, extract data |
-| 30 | $2.57 | $0.54 | Multi-step form with validation |
-| 50 | $4.28 | $0.90 | Complex multi-page workflow |
-| 100 | $8.55 | $1.79 | Maximum (hard limit) |
+| Iterations | Opus Cost | Gemini Pro Cost | Typical Task                       |
+| ---------- | --------- | --------------- | ---------------------------------- |
+| 5          | $0.43     | $0.09           | Click a link, read a page          |
+| 10         | $0.86     | $0.18           | Fill a short form                  |
+| 20         | $1.71     | $0.36           | Navigate a dashboard, extract data |
+| 30         | $2.57     | $0.54           | Multi-step form with validation    |
+| 50         | $4.28     | $0.90           | Complex multi-page workflow        |
+| 100        | $8.55     | $1.79           | Maximum (hard limit)               |
 
 ### Token Budget Recommendations
 
-| Agent Type | Max Iterations | VLM Provider | Budget Per Job | Rationale |
-|---|---|---|---|---|
-| **Data extraction** | 30 | Gemini Pro | $2.00 | High-volume, low-complexity. Gemini is cost-effective. |
-| **Form filling** | 50 | Gemini Pro | $3.00 | Moderate complexity. Gemini handles well. |
-| **Admin dashboard** | 50 | Claude Opus | $5.00 | Complex decisions, needs stronger reasoning. |
-| **E2E testing** | 100 | Gemini Pro | $5.00 | Many steps, but deterministic — Gemini sufficient. |
-| **General browser agent** | 100 | Claude Opus | $10.00 | Unpredictable tasks, needs best reasoning. |
+| Agent Type                | Max Iterations | VLM Provider | Budget Per Job | Rationale                                              |
+| ------------------------- | -------------- | ------------ | -------------- | ------------------------------------------------------ |
+| **Data extraction**       | 30             | Gemini Pro   | $2.00          | High-volume, low-complexity. Gemini is cost-effective. |
+| **Form filling**          | 50             | Gemini Pro   | $3.00          | Moderate complexity. Gemini handles well.              |
+| **Admin dashboard**       | 50             | Claude Opus  | $5.00          | Complex decisions, needs stronger reasoning.           |
+| **E2E testing**           | 100            | Gemini Pro   | $5.00          | Many steps, but deterministic — Gemini sufficient.     |
+| **General browser agent** | 100            | Claude Opus  | $10.00         | Unpredictable tasks, needs best reasoning.             |
 
 ### Cost Optimization Strategies
 
-| Strategy | Token Savings | Complexity | Recommendation |
-|---|---|---|---|
-| **Visual change detection** (skip VLM if page unchanged) | ~30% | Low | Day 1 — already designed (Question 8) |
-| **History compression** (summarize old steps, not verbatim) | ~15% | Low | Day 1 — summarize steps older than 3 iterations |
-| **Reduced resolution** (1024×768 on retry) | ~35% per image | Trivial | OOM retry only (spike #33) |
-| **Gemini for simple pages** (auto-detect form vs complex UI) | ~75% | Medium | Day 2 — model routing based on DOM complexity |
-| **Cached DOM snapshots** (skip DOM extraction if no navigation) | ~5% | Low | Day 1 — trivial optimization |
-| **Streaming** (process VLM output as it arrives) | 0% tokens, ~1s latency | Medium | Day 2 — start action before full response |
+| Strategy                                                        | Token Savings          | Complexity | Recommendation                                  |
+| --------------------------------------------------------------- | ---------------------- | ---------- | ----------------------------------------------- |
+| **Visual change detection** (skip VLM if page unchanged)        | ~30%                   | Low        | Day 1 — already designed (Question 8)           |
+| **History compression** (summarize old steps, not verbatim)     | ~15%                   | Low        | Day 1 — summarize steps older than 3 iterations |
+| **Reduced resolution** (1024×768 on retry)                      | ~35% per image         | Trivial    | OOM retry only (spike #33)                      |
+| **Gemini for simple pages** (auto-detect form vs complex UI)    | ~75%                   | Medium     | Day 2 — model routing based on DOM complexity   |
+| **Cached DOM snapshots** (skip DOM extraction if no navigation) | ~5%                    | Low        | Day 1 — trivial optimization                    |
+| **Streaming** (process VLM output as it arrives)                | 0% tokens, ~1s latency | Medium     | Day 2 — start action before full response       |
 
 ---
 

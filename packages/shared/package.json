@@ -18,7 +18,15 @@
     "lint:fix": "eslint src/ --fix",
     "clean": "rm -rf dist .tsbuildinfo"
   },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.12.0",
+    "chokidar": "^4.0.0",
+    "uuid": "^11.0.0"
+  },
   "devDependencies": {
-    "@cortex/config": "workspace:*"
+    "@cortex/config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "vitest": "^3.0.0"
   }
 }

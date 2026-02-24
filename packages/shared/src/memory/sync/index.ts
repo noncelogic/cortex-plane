@@ -1,9 +1,4 @@
-export {
-  chunkMarkdown,
-  contentHash,
-  MEMORY_SYNC_NS,
-  normalize,
-} from "./chunker.js"
+export { chunkMarkdown, contentHash, MEMORY_SYNC_NS, normalize } from "./chunker.js"
 export type { MarkdownChunk } from "./chunker.js"
 
 export { applyDiff, diff, loadState, saveState } from "./state.js"

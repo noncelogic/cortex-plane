@@ -170,10 +170,7 @@ export interface SyncOrchestrator {
  * Initialize the full sync system: load state, batch import if first run,
  * then start watching for changes.
  */
-export function initSync(
-  qdrant: QdrantMemoryClient,
-  config: SyncConfig,
-): SyncOrchestrator {
+export function initSync(qdrant: QdrantMemoryClient, config: SyncConfig): SyncOrchestrator {
   let state: SyncState = { entries: {} }
   let watcher: ManagedWatcher | null = null
   let lastAgentWriteTs = 0

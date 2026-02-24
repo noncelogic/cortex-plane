@@ -68,15 +68,15 @@ The job state machine is the **durable** layer — it survives across pods. The 
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| Agent pods are k8s batch/v1 Jobs (spike #33) | `restartPolicy: Never`. k8s does not restart the container. Retries are managed by Graphile Worker. |
-| `terminationGracePeriodSeconds: 65` with 5s preStop (spike #28) | Agent has 60 seconds for graceful drain after SIGTERM. |
-| Heartbeat writes every 30s, zombie threshold 5 minutes (spike #28) | Agent process must emit heartbeats; the reaper handles detection. |
-| PostgreSQL checkpoint is the resume point (spike #26, #31) | Agent reads checkpoint on hydration, writes checkpoint after each completed step. |
-| JSONL buffer is supplementary, not authoritative (spike #31) | Buffer enhances recovery (skip completed tool calls) but is not required for correctness. |
-| Agent pods have no k8s API access (spike #33) | `automountServiceAccountToken: false`. Cannot query pod status, events, or other k8s resources. |
-| Burstable QoS, PriorityClass `agent-workload` (spike #33) | Agents are evictable under memory pressure. Eviction is operationally equivalent to a crash. |
+| Constraint                                                         | Implication                                                                                         |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Agent pods are k8s batch/v1 Jobs (spike #33)                       | `restartPolicy: Never`. k8s does not restart the container. Retries are managed by Graphile Worker. |
+| `terminationGracePeriodSeconds: 65` with 5s preStop (spike #28)    | Agent has 60 seconds for graceful drain after SIGTERM.                                              |
+| Heartbeat writes every 30s, zombie threshold 5 minutes (spike #28) | Agent process must emit heartbeats; the reaper handles detection.                                   |
+| PostgreSQL checkpoint is the resume point (spike #26, #31)         | Agent reads checkpoint on hydration, writes checkpoint after each completed step.                   |
+| JSONL buffer is supplementary, not authoritative (spike #31)       | Buffer enhances recovery (skip completed tool calls) but is not required for correctness.           |
+| Agent pods have no k8s API access (spike #33)                      | `automountServiceAccountToken: false`. Cannot query pod status, events, or other k8s resources.     |
+| Burstable QoS, PriorityClass `agent-workload` (spike #33)          | Agents are evictable under memory pressure. Eviction is operationally equivalent to a crash.        |
 
 ---
 
@@ -88,14 +88,14 @@ The job state machine is the **durable** layer — it survives across pods. The 
 
 ### The Complete Agent Lifecycle States
 
-| State | Description | Duration |
-|---|---|---|
-| `BOOTING` | Container started. Process initializing: loading config, establishing DB connection, parsing environment. | 1–5 seconds |
-| `HYDRATING` | Loading execution context: reading checkpoint from PostgreSQL, fetching Qdrant context, loading JSONL buffer for enhanced recovery. | 2–15 seconds |
-| `READY` | Hydration complete. Agent is ready to execute its assigned job. SSE connection to control plane established. Readiness probe passes. | Instantaneous (transition state) |
-| `EXECUTING` | Agent is actively processing its job: LLM calls, tool execution, checkpoint writes. Heartbeats emitted every 30s. | Seconds to hours |
-| `DRAINING` | SIGTERM received (or job completed). Agent is flushing state: writing final checkpoint, closing connections, flushing JSONL buffer. No new steps started. | 1–60 seconds |
-| `TERMINATED` | Process has exited. Exit code indicates outcome: 0 = clean completion, 1 = error, 137 = OOM kill, 143 = SIGTERM. | Terminal |
+| State        | Description                                                                                                                                               | Duration                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `BOOTING`    | Container started. Process initializing: loading config, establishing DB connection, parsing environment.                                                 | 1–5 seconds                      |
+| `HYDRATING`  | Loading execution context: reading checkpoint from PostgreSQL, fetching Qdrant context, loading JSONL buffer for enhanced recovery.                       | 2–15 seconds                     |
+| `READY`      | Hydration complete. Agent is ready to execute its assigned job. SSE connection to control plane established. Readiness probe passes.                      | Instantaneous (transition state) |
+| `EXECUTING`  | Agent is actively processing its job: LLM calls, tool execution, checkpoint writes. Heartbeats emitted every 30s.                                         | Seconds to hours                 |
+| `DRAINING`   | SIGTERM received (or job completed). Agent is flushing state: writing final checkpoint, closing connections, flushing JSONL buffer. No new steps started. | 1–60 seconds                     |
+| `TERMINATED` | Process has exited. Exit code indicates outcome: 0 = clean completion, 1 = error, 137 = OOM kill, 143 = SIGTERM.                                          | Terminal                         |
 
 ### Why NOT Paused or Suspended
 
@@ -105,7 +105,7 @@ The job state machine is the **durable** layer — it survives across pods. The 
 2. The agent process continues running — it's still alive, still emitting heartbeats — but it has no work to do. It's in `EXECUTING` state with no active step.
 3. When the job is un-paused, the agent resumes from its checkpoint.
 
-The agent process doesn't need a "Paused" state because pausing is about stopping the *work*, not the *process*. The process stays alive, healthy, and ready. If we killed the process on pause, we'd need to cold-start it on unpause, which is wasteful.
+The agent process doesn't need a "Paused" state because pausing is about stopping the _work_, not the _process_. The process stays alive, healthy, and ready. If we killed the process on pause, we'd need to cold-start it on unpause, which is wasteful.
 
 **Exception: Long pauses.** If a job is paused for hours (waiting for human approval overnight), keeping the pod alive burns cluster resources. The control plane should implement an **idle timeout**: if a job remains in `WAITING_FOR_APPROVAL` for longer than `agent.resource_limits.idle_timeout_seconds` (default: 1800 = 30 minutes), the control plane terminates the pod. When the job is un-paused, a new pod is cold-started and hydrates from the checkpoint. This is the scale-to-zero pattern (see Question 8).
 
@@ -135,6 +135,7 @@ DRAINING    → TERMINATED             (drain timeout — SIGKILL from k8s)
 Agent lifecycle state is **not persisted to PostgreSQL**. It's ephemeral — it exists only in the agent process's memory and is reflected in health probes and SSE heartbeats. If the pod crashes, the state is lost; the job's persisted state in PostgreSQL is what matters for recovery.
 
 The control plane observes agent state through:
+
 1. **SSE heartbeats** — the agent reports its current lifecycle state in each heartbeat payload.
 2. **k8s pod status** — `Running`, `Succeeded`, `Failed`, `Unknown`.
 3. **Job heartbeat_at** in PostgreSQL — the zombie detection mechanism (spike #28).
@@ -151,9 +152,9 @@ The control plane observes agent state through:
 
 The system has two independent heartbeat mechanisms:
 
-| Heartbeat | Medium | Interval | Threshold | Purpose |
-|---|---|---|---|---|
-| **Job heartbeat** (spike #28) | PostgreSQL `heartbeat_at` UPDATE | 30 seconds | 5 minutes (zombie) | Detect abandoned **jobs** — the job is stuck in RUNNING with no worker processing it. |
+| Heartbeat                        | Medium                            | Interval   | Threshold              | Purpose                                                                                                 |
+| -------------------------------- | --------------------------------- | ---------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Job heartbeat** (spike #28)    | PostgreSQL `heartbeat_at` UPDATE  | 30 seconds | 5 minutes (zombie)     | Detect abandoned **jobs** — the job is stuck in RUNNING with no worker processing it.                   |
 | **Agent heartbeat** (this spike) | SSE event stream to control plane | 15 seconds | 45 seconds (unhealthy) | Detect unhealthy **pods** — the agent process is alive but unresponsive, or the network path is broken. |
 
 The job heartbeat is coarse-grained (5-minute detection) and writes to PostgreSQL. The agent heartbeat is fine-grained (45-second detection) and uses an in-memory SSE connection. They serve different purposes:
@@ -165,29 +166,29 @@ The job heartbeat is coarse-grained (5-minute detection) and writes to PostgreSQ
 
 ```typescript
 interface AgentHeartbeat {
-  type: 'heartbeat';
-  timestamp: string;           // ISO 8601
-  agentId: string;
-  jobId: string;
-  podName: string;             // From HOSTNAME env var
-  lifecycleState: AgentLifecycleState;
-  currentStep: number | null;  // Step in the agent loop, null if not executing
+  type: "heartbeat"
+  timestamp: string // ISO 8601
+  agentId: string
+  jobId: string
+  podName: string // From HOSTNAME env var
+  lifecycleState: AgentLifecycleState
+  currentStep: number | null // Step in the agent loop, null if not executing
   metrics: {
-    heapUsedMb: number;        // process.memoryUsage().heapUsed / 1MB
-    uptimeSeconds: number;     // process.uptime()
-    stepsCompleted: number;
-    llmCallsTotal: number;
-    toolCallsTotal: number;
-  };
+    heapUsedMb: number // process.memoryUsage().heapUsed / 1MB
+    uptimeSeconds: number // process.uptime()
+    stepsCompleted: number
+    llmCallsTotal: number
+    toolCallsTotal: number
+  }
 }
 
 type AgentLifecycleState =
-  | 'BOOTING'
-  | 'HYDRATING'
-  | 'READY'
-  | 'EXECUTING'
-  | 'DRAINING'
-  | 'TERMINATED';
+  | "BOOTING"
+  | "HYDRATING"
+  | "READY"
+  | "EXECUTING"
+  | "DRAINING"
+  | "TERMINATED"
 ```
 
 ### Why 15 Seconds, Not 30
@@ -238,14 +239,14 @@ The control plane does not kill unhealthy pods proactively. Killing a pod that's
 
 A simple "is it stuck?" check based on elapsed time fails for LLM workloads:
 
-| Scenario | Wall Clock | Stuck? |
-|---|---|---|
-| Network I/O to a dead host | 120s | Yes — nothing is happening |
-| Claude Opus thinking about a complex problem | 90s | No — tokens will arrive soon |
-| Claude streaming a long response | 120s total | No — tokens arriving every second |
-| Claude streaming, stalled mid-response | 65s since last token | Yes — stream is dead |
-| Tool call to kubectl on a large cluster | 45s | No — kubectl is working |
-| Tool call to a hung webhook | 120s | Yes — no response will come |
+| Scenario                                     | Wall Clock           | Stuck?                            |
+| -------------------------------------------- | -------------------- | --------------------------------- |
+| Network I/O to a dead host                   | 120s                 | Yes — nothing is happening        |
+| Claude Opus thinking about a complex problem | 90s                  | No — tokens will arrive soon      |
+| Claude streaming a long response             | 120s total           | No — tokens arriving every second |
+| Claude streaming, stalled mid-response       | 65s since last token | Yes — stream is dead              |
+| Tool call to kubectl on a large cluster      | 45s                  | No — kubectl is working           |
+| Tool call to a hung webhook                  | 120s                 | Yes — no response will come       |
 
 The distinction is not how long something takes, but **whether progress is being made**.
 
@@ -283,46 +284,46 @@ This is where the LLM vs network distinction matters. Each external call type us
 #### Network I/O (HTTP, Webhooks)
 
 ```typescript
-const controller = new AbortController();
+const controller = new AbortController()
 
 // Connect timeout: 30s — if TCP handshake doesn't complete, fail fast.
-const connectTimer = setTimeout(() => controller.abort('CONNECT_TIMEOUT'), 30_000);
+const connectTimer = setTimeout(() => controller.abort("CONNECT_TIMEOUT"), 30_000)
 
 // Response timeout: 120s total wall clock. Network I/O should complete
 // within this window. No partial progress tracking needed — HTTP responses
 // arrive atomically (or stream with chunked transfer, handled below).
-const responseTimer = setTimeout(() => controller.abort('RESPONSE_TIMEOUT'), 120_000);
+const responseTimer = setTimeout(() => controller.abort("RESPONSE_TIMEOUT"), 120_000)
 ```
 
 #### LLM Calls (Streaming)
 
 ```typescript
-const controller = new AbortController();
+const controller = new AbortController()
 
 // Connect timeout: 30s — same as network I/O.
-const connectTimer = setTimeout(() => controller.abort('CONNECT_TIMEOUT'), 30_000);
+const connectTimer = setTimeout(() => controller.abort("CONNECT_TIMEOUT"), 30_000)
 
 // Total timeout: 300s (5 minutes). The absolute maximum wall clock for any
 // LLM call, regardless of progress.
-const totalTimer = setTimeout(() => controller.abort('TOTAL_TIMEOUT'), 300_000);
+const totalTimer = setTimeout(() => controller.abort("TOTAL_TIMEOUT"), 300_000)
 
 // Inter-chunk timeout: 60s. This is the key differentiator.
 // Reset every time a chunk (token) arrives. If 60 seconds pass with no new
 // token, the stream is dead — the API is connected but not sending data.
-let chunkTimer: NodeJS.Timeout;
+let chunkTimer: NodeJS.Timeout
 
 function resetChunkTimer(): void {
-  clearTimeout(chunkTimer);
-  chunkTimer = setTimeout(() => controller.abort('CHUNK_TIMEOUT'), 60_000);
+  clearTimeout(chunkTimer)
+  chunkTimer = setTimeout(() => controller.abort("CHUNK_TIMEOUT"), 60_000)
 }
 
 // Start the chunk timer when the first byte arrives (not at request time,
 // because the model may "think" for 60–90 seconds before the first token).
-stream.on('data', (chunk) => {
-  clearTimeout(connectTimer);  // Connection established
-  resetChunkTimer();
+stream.on("data", (chunk) => {
+  clearTimeout(connectTimer) // Connection established
+  resetChunkTimer()
   // ... process chunk
-});
+})
 ```
 
 #### Why 60 Seconds Inter-Chunk, Not 30?
@@ -339,29 +340,25 @@ Tools use per-tool timeouts registered at startup:
 
 ```typescript
 const TOOL_TIMEOUTS: Record<string, number> = {
-  kubectl_apply:       30_000,
-  kubectl_get:         15_000,
-  file_read:           10_000,
-  file_write:          10_000,
-  browser_navigate:   120_000,
-  browser_screenshot:  30_000,
-  http_request:       120_000,
-  git_clone:          300_000,
-  git_push:            60_000,
-};
+  kubectl_apply: 30_000,
+  kubectl_get: 15_000,
+  file_read: 10_000,
+  file_write: 10_000,
+  browser_navigate: 120_000,
+  browser_screenshot: 30_000,
+  http_request: 120_000,
+  git_clone: 300_000,
+  git_push: 60_000,
+}
 
-async function executeTool(
-  name: string,
-  args: unknown,
-  signal: AbortSignal,
-): Promise<ToolResult> {
-  const timeout = TOOL_TIMEOUTS[name] ?? 60_000; // Default: 60s
-  const toolController = AbortController.withTimeout(timeout);
+async function executeTool(name: string, args: unknown, signal: AbortSignal): Promise<ToolResult> {
+  const timeout = TOOL_TIMEOUTS[name] ?? 60_000 // Default: 60s
+  const toolController = AbortController.withTimeout(timeout)
 
   // Link to parent abort signal (shutdown).
-  signal.addEventListener('abort', () => toolController.abort());
+  signal.addEventListener("abort", () => toolController.abort())
 
-  return runToolWithSignal(name, args, toolController.signal);
+  return runToolWithSignal(name, args, toolController.signal)
 }
 ```
 
@@ -379,16 +376,19 @@ Agent is executing step 4
 ```
 
 If the Node.js event loop freezes (catastrophic GC, deadlock):
+
 - Layer 1: SSE heartbeats stop → control plane marks unhealthy at T+45s
 - Layer 2: All timers stop (they're on the same event loop)
 - Layer 3: PostgreSQL heartbeat writes stop → zombie reaper detects at T+5min
 
 If the LLM API connection dies mid-stream:
+
 - Layer 1: SSE heartbeats continue ✓ (agent process is alive)
 - Layer 2: Inter-chunk timer fires at T+60s → aborts the call → retry
 - Layer 3: Job heartbeats continue ✓ (heartbeat runs independent of call)
 
 If the pod is OOM-killed:
+
 - Layer 1: SSE connection drops → control plane detects immediately
 - Layer 2: N/A (process is dead)
 - Layer 3: Job heartbeat writes stop → zombie reaper detects at T+5min
@@ -467,6 +467,7 @@ T+60s   SIGKILL from k8s (not reached)
 ```
 
 The 5-second buffer between process exit (T+55s) and SIGKILL (T+60s) handles:
+
 - Slow `pool.end()` (waiting for in-flight queries to complete)
 - OS-level cleanup (file descriptor release, socket TIME_WAIT)
 - Any unexpected delay in `process.exit()`
@@ -475,53 +476,53 @@ The 5-second buffer between process exit (T+55s) and SIGKILL (T+60s) handles:
 
 ```typescript
 class AgentProcess {
-  private state: AgentLifecycleState = 'BOOTING';
-  private drainController = new AbortController();
-  private readonly DRAIN_DEADLINE_MS = 45_000;
+  private state: AgentLifecycleState = "BOOTING"
+  private drainController = new AbortController()
+  private readonly DRAIN_DEADLINE_MS = 45_000
 
   constructor() {
-    process.on('SIGTERM', () => this.drain());
+    process.on("SIGTERM", () => this.drain())
   }
 
   private async drain(): Promise<void> {
-    if (this.state === 'DRAINING' || this.state === 'TERMINATED') return;
+    if (this.state === "DRAINING" || this.state === "TERMINATED") return
 
-    this.state = 'DRAINING';
-    this.sseClient.send({ type: 'lifecycle', state: 'DRAINING' });
+    this.state = "DRAINING"
+    this.sseClient.send({ type: "lifecycle", state: "DRAINING" })
 
     // Set the drain deadline.
     const drainTimer = setTimeout(() => {
-      this.drainController.abort();
-    }, this.DRAIN_DEADLINE_MS);
+      this.drainController.abort()
+    }, this.DRAIN_DEADLINE_MS)
 
     try {
       // Phase 2: Wait for current step to complete or abort.
-      await this.currentStepPromise;
+      await this.currentStepPromise
     } catch {
       // Step was aborted — expected during drain.
     } finally {
-      clearTimeout(drainTimer);
+      clearTimeout(drainTimer)
     }
 
     // Phase 3: Cleanup.
-    await this.cleanup();
+    await this.cleanup()
 
     // Phase 4: Exit.
-    this.state = 'TERMINATED';
-    process.exit(0);
+    this.state = "TERMINATED"
+    process.exit(0)
   }
 }
 ```
 
 ### Drain vs Crash: What Happens to the Job
 
-| Scenario | Job State After | Resume Point |
-|---|---|---|
-| Clean drain (step completed before deadline) | `RUNNING` with fresh checkpoint | Next step after checkpoint |
-| Drain with aborted LLM call | `RUNNING` with last good checkpoint | Re-issue the LLM call |
-| Drain with aborted tool call | `RUNNING` with pending side-effect record | Verify side-effect, then continue |
-| Crash (OOM, SIGKILL, unhandled exception) | `RUNNING` with last good checkpoint | Same as drain-with-abort |
-| Clean completion during drain | `COMPLETED` | N/A — job is done |
+| Scenario                                     | Job State After                           | Resume Point                      |
+| -------------------------------------------- | ----------------------------------------- | --------------------------------- |
+| Clean drain (step completed before deadline) | `RUNNING` with fresh checkpoint           | Next step after checkpoint        |
+| Drain with aborted LLM call                  | `RUNNING` with last good checkpoint       | Re-issue the LLM call             |
+| Drain with aborted tool call                 | `RUNNING` with pending side-effect record | Verify side-effect, then continue |
+| Crash (OOM, SIGKILL, unhandled exception)    | `RUNNING` with last good checkpoint       | Same as drain-with-abort          |
+| Clean completion during drain                | `COMPLETED`                               | N/A — job is done                 |
 
 In all cases, the zombie reaper (spike #28) eventually detects the stale job heartbeat and transitions it to RETRY. The new pod reads the checkpoint and resumes.
 
@@ -539,7 +540,7 @@ Parallel hydration would fetch PostgreSQL checkpoint, JSONL buffer, and Qdrant c
 
 1. **The JSONL buffer scan depends on the PostgreSQL checkpoint.** The buffer contains events from the last session. To identify which events occurred after the last checkpoint (and thus which tool calls can be skipped on resume), the agent must first know what the checkpoint says. Fetching both in parallel means the agent can't interpret the buffer until the checkpoint arrives anyway.
 
-2. **Qdrant context depends on job payload.** The agent needs to know *what* it's working on (from the job's payload or checkpoint) before it can construct a meaningful Qdrant query. Fetching "all recent memories" without a query context retrieves noise.
+2. **Qdrant context depends on job payload.** The agent needs to know _what_ it's working on (from the job's payload or checkpoint) before it can construct a meaningful Qdrant query. Fetching "all recent memories" without a query context retrieves noise.
 
 3. **Failure modes differ.** PostgreSQL is mandatory — if the checkpoint can't be loaded, the agent cannot start. JSONL buffer is optional — if it's missing or corrupt, Phase 1 recovery (checkpoint-only) is still correct. Qdrant is optional — if it's unavailable, the agent can execute without long-term memory context. Sequential hydration lets the agent fail fast on the mandatory step and gracefully degrade on the optional steps.
 
@@ -591,7 +592,7 @@ HYDRATING state entered
 
 ### Why Not Qdrant First?
 
-The spec (§12.1) says "queries Qdrant for immediate context, loads the last checkpoint from PostgreSQL." This ordering is wrong. The checkpoint tells the agent *where it is* in the job execution. Without the checkpoint, the agent doesn't know what step it's on, what context has already been assembled, or what memories are relevant. Qdrant context is a refinement that enhances the LLM prompt — it's useless without the execution context that the checkpoint provides.
+The spec (§12.1) says "queries Qdrant for immediate context, loads the last checkpoint from PostgreSQL." This ordering is wrong. The checkpoint tells the agent _where it is_ in the job execution. Without the checkpoint, the agent doesn't know what step it's on, what context has already been assembled, or what memories are relevant. Qdrant context is a refinement that enhances the LLM prompt — it's useless without the execution context that the checkpoint provides.
 
 **Corrected order:** Checkpoint → Buffer → Qdrant. This is the order of decreasing criticality and increasing optionality.
 
@@ -605,11 +606,11 @@ The spec (§12.1) says "queries Qdrant for immediate context, loads the last che
 
 ### Probe Specification
 
-| Probe | Endpoint | Checks | Failure Means |
-|---|---|---|---|
-| **Liveness** | `GET /healthz` | Process is alive, event loop is responsive, DB connection pool has ≥1 available connection | k8s kills the container (but `restartPolicy: Never` means it stays dead) |
-| **Readiness** | `GET /readyz` | Process has completed hydration, SSE connection to control plane is established | k8s removes pod from Service endpoints (agents don't serve traffic, so this is primarily informational) |
-| **Startup** | `GET /healthz` | Same as liveness | k8s waits longer before beginning liveness checks |
+| Probe         | Endpoint       | Checks                                                                                     | Failure Means                                                                                           |
+| ------------- | -------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| **Liveness**  | `GET /healthz` | Process is alive, event loop is responsive, DB connection pool has ≥1 available connection | k8s kills the container (but `restartPolicy: Never` means it stays dead)                                |
+| **Readiness** | `GET /readyz`  | Process has completed hydration, SSE connection to control plane is established            | k8s removes pod from Service endpoints (agents don't serve traffic, so this is primarily informational) |
+| **Startup**   | `GET /healthz` | Same as liveness                                                                           | k8s waits longer before beginning liveness checks                                                       |
 
 ### Why Agents Need Probes Even Without Inbound Traffic
 
@@ -626,38 +627,34 @@ Agent pods don't serve HTTP traffic — they're consumers, not servers. But prob
 ```typescript
 // Minimal HTTP server for health probes — separate from any application HTTP server.
 // Runs on port 8086 (unprivileged, not exposed via Service).
-import { createServer } from 'node:http';
+import { createServer } from "node:http"
 
 function startHealthServer(agent: AgentProcess): void {
   const server = createServer((req, res) => {
-    if (req.url === '/healthz') {
+    if (req.url === "/healthz") {
       // Liveness: is the process functioning?
       const isAlive =
-        agent.state !== 'TERMINATED' &&
-        agent.dbPool.availableCount > 0 &&
-        !agent.eventLoopBlocked;
+        agent.state !== "TERMINATED" && agent.dbPool.availableCount > 0 && !agent.eventLoopBlocked
 
-      res.writeHead(isAlive ? 200 : 503);
-      res.end(isAlive ? 'ok' : 'unhealthy');
-      return;
+      res.writeHead(isAlive ? 200 : 503)
+      res.end(isAlive ? "ok" : "unhealthy")
+      return
     }
 
-    if (req.url === '/readyz') {
+    if (req.url === "/readyz") {
       // Readiness: is the agent executing or ready to execute?
-      const isReady =
-        agent.state === 'READY' ||
-        agent.state === 'EXECUTING';
+      const isReady = agent.state === "READY" || agent.state === "EXECUTING"
 
-      res.writeHead(isReady ? 200 : 503);
-      res.end(isReady ? 'ok' : 'not ready');
-      return;
+      res.writeHead(isReady ? 200 : 503)
+      res.end(isReady ? "ok" : "not ready")
+      return
     }
 
-    res.writeHead(404);
-    res.end('not found');
-  });
+    res.writeHead(404)
+    res.end("not found")
+  })
 
-  server.listen(8086);
+  server.listen(8086)
 }
 ```
 
@@ -667,21 +664,21 @@ The liveness probe must detect a blocked event loop — the most insidious failu
 
 ```typescript
 class EventLoopMonitor {
-  private lastCheck = Date.now();
-  private _isBlocked = false;
-  private readonly THRESHOLD_MS = 5_000; // 5 seconds
+  private lastCheck = Date.now()
+  private _isBlocked = false
+  private readonly THRESHOLD_MS = 5_000 // 5 seconds
 
   constructor() {
     setInterval(() => {
-      const now = Date.now();
-      const drift = now - this.lastCheck - 1_000; // Expected interval: 1s
-      this._isBlocked = drift > this.THRESHOLD_MS;
-      this.lastCheck = now;
-    }, 1_000);
+      const now = Date.now()
+      const drift = now - this.lastCheck - 1_000 // Expected interval: 1s
+      this._isBlocked = drift > this.THRESHOLD_MS
+      this.lastCheck = now
+    }, 1_000)
   }
 
   get isBlocked(): boolean {
-    return this._isBlocked;
+    return this._isBlocked
   }
 }
 ```
@@ -699,30 +696,30 @@ containers:
         port: 8086
       periodSeconds: 10
       timeoutSeconds: 5
-      failureThreshold: 3     # 3 failures × 10s = 30s before kill
+      failureThreshold: 3 # 3 failures × 10s = 30s before kill
     readinessProbe:
       httpGet:
         path: /readyz
         port: 8086
       periodSeconds: 5
       timeoutSeconds: 3
-      failureThreshold: 2     # 2 failures × 5s = 10s before marking unready
+      failureThreshold: 2 # 2 failures × 5s = 10s before marking unready
     startupProbe:
       httpGet:
         path: /healthz
         port: 8086
       periodSeconds: 5
       timeoutSeconds: 5
-      failureThreshold: 12    # 12 failures × 5s = 60s max startup time
+      failureThreshold: 12 # 12 failures × 5s = 60s max startup time
 ```
 
 ### Probe Timing Rationale
 
-| Probe | Period | Timeout | Failures | Max Detection Time |
-|---|---|---|---|---|
-| **Startup** | 5s | 5s | 12 | 60 seconds — generous startup window for slow hydration |
-| **Liveness** | 10s | 5s | 3 | 30 seconds — detect dead processes quickly |
-| **Readiness** | 5s | 3s | 2 | 10 seconds — fast lifecycle visibility updates |
+| Probe         | Period | Timeout | Failures | Max Detection Time                                      |
+| ------------- | ------ | ------- | -------- | ------------------------------------------------------- |
+| **Startup**   | 5s     | 5s      | 12       | 60 seconds — generous startup window for slow hydration |
+| **Liveness**  | 10s    | 5s      | 3        | 30 seconds — detect dead processes quickly              |
+| **Readiness** | 5s     | 3s      | 2        | 10 seconds — fast lifecycle visibility updates          |
 
 **Liveness failure action with `restartPolicy: Never`:** When the liveness probe fails, k8s kills the container. But because agent pods use `restartPolicy: Never` (spike #33), k8s does NOT restart the container. The pod enters `Failed` state. The job's heartbeat goes stale, the zombie reaper detects it, and the job transitions to RETRY with a new pod. This is intentional — we don't want k8s blindly restarting a process that can't pass liveness checks (it would crash loop, burning tokens).
 
@@ -785,24 +782,24 @@ Before each LLM call, the agent checks:
 
 ```typescript
 async function checkTokenBudget(jobId: string, agent: Agent): Promise<boolean> {
-  const job = await db.selectFrom('job')
-    .select('tokens_consumed')
-    .where('id', '=', jobId)
-    .executeTakeFirst();
+  const job = await db
+    .selectFrom("job")
+    .select("tokens_consumed")
+    .where("id", "=", jobId)
+    .executeTakeFirst()
 
-  const consumed = job?.tokens_consumed as TokensConsumed;
-  const budget = agent.token_budget as TokenBudget;
+  const consumed = job?.tokens_consumed as TokensConsumed
+  const budget = agent.token_budget as TokenBudget
 
   if (budget.max_cost_usd_per_job && consumed.cost_usd >= budget.max_cost_usd_per_job) {
-    return false; // Budget exhausted
+    return false // Budget exhausted
   }
 
-  if (budget.max_input_tokens_per_job &&
-      consumed.input >= budget.max_input_tokens_per_job) {
-    return false;
+  if (budget.max_input_tokens_per_job && consumed.input >= budget.max_input_tokens_per_job) {
+    return false
   }
 
-  return true;
+  return true
 }
 ```
 
@@ -818,13 +815,13 @@ Manual intervention required.
 
 When a job fails due to a crash (not a classified error), the retry delay increases aggressively:
 
-| Attempt | Delay | Rationale |
-|---|---|---|
-| 1 | 5 seconds | Quick retry — crash may be transient (OOM on a heavy page, network blip) |
-| 2 | 60 seconds | Something is persistently wrong. Give the system time to recover. |
-| 3 | 300 seconds (5 min) | Likely a bug. Delay to prevent rapid token burn. |
-| 4 | 1800 seconds (30 min) | Almost certainly a bug or persistent resource issue. |
-| 5 | Job transitions to `DEAD_LETTER` | Human must investigate. |
+| Attempt | Delay                            | Rationale                                                                |
+| ------- | -------------------------------- | ------------------------------------------------------------------------ |
+| 1       | 5 seconds                        | Quick retry — crash may be transient (OOM on a heavy page, network blip) |
+| 2       | 60 seconds                       | Something is persistently wrong. Give the system time to recover.        |
+| 3       | 300 seconds (5 min)              | Likely a bug. Delay to prevent rapid token burn.                         |
+| 4       | 1800 seconds (30 min)            | Almost certainly a bug or persistent resource issue.                     |
+| 5       | Job transitions to `DEAD_LETTER` | Human must investigate.                                                  |
 
 This is more aggressive than the standard backoff (spike #28) because crash retries are more likely to be caused by deterministic bugs (same input → same crash) than transient errors.
 
@@ -832,12 +829,12 @@ This is more aggressive than the standard backoff (spike #28) because crash retr
 
 On the new pod, the agent checks the previous pod's exit code and adjusts behavior:
 
-| Exit Code | Meaning | Action |
-|---|---|---|
-| 0 | Clean exit (should not be retrying) | Bug — log and proceed |
-| 1 | Unhandled exception | Retry with full context from checkpoint |
-| 137 | OOM kill (SIGKILL = 128+9) | Retry with reduced resource usage (smaller context, disabled tools) |
-| 143 | SIGTERM (128+15) | Clean drain — job should be resumable, not retried |
+| Exit Code | Meaning                             | Action                                                              |
+| --------- | ----------------------------------- | ------------------------------------------------------------------- |
+| 0         | Clean exit (should not be retrying) | Bug — log and proceed                                               |
+| 1         | Unhandled exception                 | Retry with full context from checkpoint                             |
+| 137       | OOM kill (SIGKILL = 128+9)          | Retry with reduced resource usage (smaller context, disabled tools) |
+| 143       | SIGTERM (128+15)                    | Clean drain — job should be resumable, not retried                  |
 
 For OOM retries specifically:
 
@@ -847,9 +844,9 @@ if (previousExitCode === 137) {
   // 1. Limit context window to 50K tokens (instead of 100K).
   // 2. Disable Playwright sidecar (if present).
   // 3. Reduce step parallelism to 1 concurrent tool call.
-  agentConfig.maxContextTokens = 50_000;
-  agentConfig.browserEnabled = false;
-  agentConfig.maxConcurrentTools = 1;
+  agentConfig.maxContextTokens = 50_000
+  agentConfig.browserEnabled = false
+  agentConfig.maxConcurrentTools = 1
 }
 ```
 
@@ -881,12 +878,12 @@ Between jobs, an agent consumes zero cluster resources. This is scale-to-zero by
 
 The cost of scale-to-zero is cold-start latency. When a new job arrives for an agent that has no running pod:
 
-| Phase | Duration | What Happens |
-|---|---|---|
-| **k8s scheduling** | 1–3 seconds | Scheduler finds a node, pulls image (if cached), starts container |
-| **Process boot** | 1–3 seconds | Node.js startup, module loading, config parsing, DB connection |
-| **Hydration** | 2–15 seconds | PostgreSQL checkpoint, JSONL buffer scan, Qdrant context |
-| **Total cold start** | **4–21 seconds** | Typical: ~8 seconds |
+| Phase                | Duration         | What Happens                                                      |
+| -------------------- | ---------------- | ----------------------------------------------------------------- |
+| **k8s scheduling**   | 1–3 seconds      | Scheduler finds a node, pulls image (if cached), starts container |
+| **Process boot**     | 1–3 seconds      | Node.js startup, module loading, config parsing, DB connection    |
+| **Hydration**        | 2–15 seconds     | PostgreSQL checkpoint, JSONL buffer scan, Qdrant context          |
+| **Total cold start** | **4–21 seconds** | Typical: ~8 seconds                                               |
 
 For most agent workloads, 8 seconds of cold-start latency is acceptable:
 
@@ -918,6 +915,7 @@ For interactive agents where cold-start latency is user-visible, a warm pool kee
 This converts the execution model from "Job → Pod" to "Pod → Jobs (plural)". The warm pool is a day-two optimization — the cold-start model is correct and sufficient for day one.
 
 **Why not day one:** A warm pool complicates the lifecycle significantly:
+
 - Pods must handle multiple sequential jobs.
 - State isolation between jobs must be enforced (clear working memory, reset context).
 - Idle pods consume resources even when not working.
@@ -930,31 +928,32 @@ Day one ships with the simple Job-per-pod model. If interactive latency becomes 
 When a job is paused (`WAITING_FOR_APPROVAL`), the pod stays alive but idle. To prevent long-paused pods from consuming resources:
 
 ```typescript
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
 
 async function waitForApproval(jobId: string, signal: AbortSignal): Promise<void> {
   const idleTimer = setTimeout(() => {
-    logger.info({ jobId }, 'Idle timeout — terminating pod for paused job');
+    logger.info({ jobId }, "Idle timeout — terminating pod for paused job")
     // Write checkpoint before exit.
-    writeCheckpoint(jobId, currentStep, currentState);
-    process.exit(0);
-  }, IDLE_TIMEOUT_MS);
+    writeCheckpoint(jobId, currentStep, currentState)
+    process.exit(0)
+  }, IDLE_TIMEOUT_MS)
 
-  signal.addEventListener('abort', () => clearTimeout(idleTimer));
+  signal.addEventListener("abort", () => clearTimeout(idleTimer))
 
   // Poll for approval decision.
   while (!signal.aborted) {
-    const decision = await pollApproval(jobId);
+    const decision = await pollApproval(jobId)
     if (decision) {
-      clearTimeout(idleTimer);
-      return; // Resume execution.
+      clearTimeout(idleTimer)
+      return // Resume execution.
     }
-    await sleep(5_000);
+    await sleep(5_000)
   }
 }
 ```
 
 When the approval arrives after the pod has been terminated:
+
 1. Graphile Worker sees the job status change from `WAITING_FOR_APPROVAL` to `RUNNING`.
 2. Worker dispatches a new pod.
 3. New pod hydrates from the checkpoint.
@@ -1021,17 +1020,17 @@ stateDiagram-v2
 
 ### State Transition Matrix
 
-| From | To | Trigger | Side Effects |
-|---|---|---|---|
-| `BOOTING` | `HYDRATING` | Config parsed, DB pool created, env validated | Start health probe server on :8086 |
-| `BOOTING` | `TERMINATED` | Missing required env var, DB connection refused after 3 retries | Exit code 1, log error |
-| `HYDRATING` | `READY` | Checkpoint loaded (or fresh job), optional Qdrant context fetched | Readiness probe starts returning 200 |
-| `HYDRATING` | `TERMINATED` | Checkpoint CRC mismatch with no fallback, or unrecoverable error | Exit code 1, job stays RUNNING for zombie reaper |
-| `READY` | `EXECUTING` | Agent loop starts processing first step | SSE event: `{ state: 'EXECUTING' }` |
-| `READY` | `DRAINING` | SIGTERM received during READY state | Write minimal checkpoint, exit cleanly |
-| `EXECUTING` | `DRAINING` | SIGTERM received, job completed, or job failed | Begin drain protocol |
-| `EXECUTING` | `TERMINATED` | Unhandled exception, OOM kill, SIGKILL | No cleanup — job relies on zombie reaper |
-| `DRAINING` | `TERMINATED` | Cleanup complete, or drain timeout reached | Exit code 0 (clean) or forced exit |
+| From        | To           | Trigger                                                           | Side Effects                                     |
+| ----------- | ------------ | ----------------------------------------------------------------- | ------------------------------------------------ |
+| `BOOTING`   | `HYDRATING`  | Config parsed, DB pool created, env validated                     | Start health probe server on :8086               |
+| `BOOTING`   | `TERMINATED` | Missing required env var, DB connection refused after 3 retries   | Exit code 1, log error                           |
+| `HYDRATING` | `READY`      | Checkpoint loaded (or fresh job), optional Qdrant context fetched | Readiness probe starts returning 200             |
+| `HYDRATING` | `TERMINATED` | Checkpoint CRC mismatch with no fallback, or unrecoverable error  | Exit code 1, job stays RUNNING for zombie reaper |
+| `READY`     | `EXECUTING`  | Agent loop starts processing first step                           | SSE event: `{ state: 'EXECUTING' }`              |
+| `READY`     | `DRAINING`   | SIGTERM received during READY state                               | Write minimal checkpoint, exit cleanly           |
+| `EXECUTING` | `DRAINING`   | SIGTERM received, job completed, or job failed                    | Begin drain protocol                             |
+| `EXECUTING` | `TERMINATED` | Unhandled exception, OOM kill, SIGKILL                            | No cleanup — job relies on zombie reaper         |
+| `DRAINING`  | `TERMINATED` | Cleanup complete, or drain timeout reached                        | Exit code 0 (clean) or forced exit               |
 
 ---
 
@@ -1039,30 +1038,30 @@ stateDiagram-v2
 
 ### Probe Summary
 
-| Probe | Protocol | Endpoint | Port | Period | Timeout | Failure Threshold | Success Threshold |
-|---|---|---|---|---|---|---|---|
-| **Startup** | HTTP GET | `/healthz` | 8086 | 5s | 5s | 12 (60s max) | 1 |
-| **Liveness** | HTTP GET | `/healthz` | 8086 | 10s | 5s | 3 (30s max) | 1 |
-| **Readiness** | HTTP GET | `/readyz` | 8086 | 5s | 3s | 2 (10s max) | 1 |
+| Probe         | Protocol | Endpoint   | Port | Period | Timeout | Failure Threshold | Success Threshold |
+| ------------- | -------- | ---------- | ---- | ------ | ------- | ----------------- | ----------------- |
+| **Startup**   | HTTP GET | `/healthz` | 8086 | 5s     | 5s      | 12 (60s max)      | 1                 |
+| **Liveness**  | HTTP GET | `/healthz` | 8086 | 10s    | 5s      | 3 (30s max)       | 1                 |
+| **Readiness** | HTTP GET | `/readyz`  | 8086 | 5s     | 3s      | 2 (10s max)       | 1                 |
 
 ### Heartbeat Summary
 
-| Heartbeat | Medium | Interval | Unhealthy Threshold | Purpose |
-|---|---|---|---|---|
-| **SSE Agent Heartbeat** | SSE event to control plane | 15 seconds | 45 seconds (3 missed) | Pod health visibility, dashboard updates, early warning |
-| **PostgreSQL Job Heartbeat** | `UPDATE job SET heartbeat_at` | 30 seconds | 5 minutes (10 missed) | Zombie job detection, authoritative timeout |
+| Heartbeat                    | Medium                        | Interval   | Unhealthy Threshold   | Purpose                                                 |
+| ---------------------------- | ----------------------------- | ---------- | --------------------- | ------------------------------------------------------- |
+| **SSE Agent Heartbeat**      | SSE event to control plane    | 15 seconds | 45 seconds (3 missed) | Pod health visibility, dashboard updates, early warning |
+| **PostgreSQL Job Heartbeat** | `UPDATE job SET heartbeat_at` | 30 seconds | 5 minutes (10 missed) | Zombie job detection, authoritative timeout             |
 
 ### Health Check Decision Matrix
 
-| Condition | `/healthz` | `/readyz` | SSE Heartbeat | Action |
-|---|---|---|---|---|
-| Process alive, hydrating | 200 | 503 | Sending | Normal — startup in progress |
-| Process alive, executing | 200 | 200 | Sending | Normal — healthy and working |
-| Process alive, draining | 200 | 503 | Sending (state=DRAINING) | Normal — graceful shutdown |
-| Event loop blocked >5s | 503 | 503 | Stalled | Liveness failure → k8s kills container |
-| DB pool exhausted | 503 | 503 | Sending (no DB) | Liveness failure → k8s kills container |
-| SSE connection dropped | 200 | 200 | Not receiving | Control plane marks WARNING at +15s, UNHEALTHY at +45s |
-| Process crashed | N/A | N/A | Dropped | k8s detects container exit, zombie reaper handles job |
+| Condition                | `/healthz` | `/readyz` | SSE Heartbeat            | Action                                                 |
+| ------------------------ | ---------- | --------- | ------------------------ | ------------------------------------------------------ |
+| Process alive, hydrating | 200        | 503       | Sending                  | Normal — startup in progress                           |
+| Process alive, executing | 200        | 200       | Sending                  | Normal — healthy and working                           |
+| Process alive, draining  | 200        | 503       | Sending (state=DRAINING) | Normal — graceful shutdown                             |
+| Event loop blocked >5s   | 503        | 503       | Stalled                  | Liveness failure → k8s kills container                 |
+| DB pool exhausted        | 503        | 503       | Sending (no DB)          | Liveness failure → k8s kills container                 |
+| SSE connection dropped   | 200        | 200       | Not receiving            | Control plane marks WARNING at +15s, UNHEALTHY at +45s |
+| Process crashed          | N/A        | N/A       | Dropped                  | k8s detects container exit, zombie reaper handles job  |
 
 ### Prometheus Metrics
 
@@ -1070,23 +1069,23 @@ stateDiagram-v2
 // Emitted by the agent process for Prometheus scraping.
 const METRICS = {
   // Counters
-  cortex_agent_heartbeat_total:          'Total SSE heartbeats sent',
-  cortex_agent_heartbeat_pg_total:       'Total PostgreSQL heartbeat writes',
-  cortex_agent_steps_completed_total:    'Total job steps completed',
-  cortex_agent_llm_calls_total:          'Total LLM API calls',
-  cortex_agent_tool_calls_total:         'Total tool executions',
-  cortex_agent_drain_total:              'Total drain events (SIGTERM received)',
+  cortex_agent_heartbeat_total: "Total SSE heartbeats sent",
+  cortex_agent_heartbeat_pg_total: "Total PostgreSQL heartbeat writes",
+  cortex_agent_steps_completed_total: "Total job steps completed",
+  cortex_agent_llm_calls_total: "Total LLM API calls",
+  cortex_agent_tool_calls_total: "Total tool executions",
+  cortex_agent_drain_total: "Total drain events (SIGTERM received)",
 
   // Gauges
-  cortex_agent_lifecycle_state:          'Current lifecycle state (label: state)',
-  cortex_agent_heap_used_bytes:          'V8 heap used bytes',
-  cortex_agent_event_loop_lag_seconds:   'Event loop lag in seconds',
+  cortex_agent_lifecycle_state: "Current lifecycle state (label: state)",
+  cortex_agent_heap_used_bytes: "V8 heap used bytes",
+  cortex_agent_event_loop_lag_seconds: "Event loop lag in seconds",
 
   // Histograms
-  cortex_agent_hydration_duration_seconds:  'Hydration phase duration',
-  cortex_agent_step_duration_seconds:       'Per-step execution duration',
-  cortex_agent_drain_duration_seconds:      'Drain phase duration',
-};
+  cortex_agent_hydration_duration_seconds: "Hydration phase duration",
+  cortex_agent_step_duration_seconds: "Per-step execution duration",
+  cortex_agent_drain_duration_seconds: "Drain phase duration",
+}
 ```
 
 ---
@@ -1152,13 +1151,13 @@ sequenceDiagram
 
 ### Recovery Time Breakdown
 
-| Phase | Duration | Notes |
-|---|---|---|
-| Crash to zombie detection | ~5 minutes | Zombie reaper runs every 60s, threshold is 5 minutes |
-| Retry scheduling | <1 second | Graphile Worker processes RETRY → SCHEDULED transition |
-| Pod creation and scheduling | 1–3 seconds | k8s schedules pod, pulls image (cached) |
-| Boot + Hydration | 3–15 seconds | Config → checkpoint → buffer → Qdrant |
-| Total recovery time | **~5.5 minutes** | Dominated by zombie detection threshold |
+| Phase                       | Duration         | Notes                                                  |
+| --------------------------- | ---------------- | ------------------------------------------------------ |
+| Crash to zombie detection   | ~5 minutes       | Zombie reaper runs every 60s, threshold is 5 minutes   |
+| Retry scheduling            | <1 second        | Graphile Worker processes RETRY → SCHEDULED transition |
+| Pod creation and scheduling | 1–3 seconds      | k8s schedules pod, pulls image (cached)                |
+| Boot + Hydration            | 3–15 seconds     | Config → checkpoint → buffer → Qdrant                  |
+| Total recovery time         | **~5.5 minutes** | Dominated by zombie detection threshold                |
 
 ### Recovery Correctness Guarantees
 
@@ -1260,7 +1259,7 @@ export const DRAIN_CONSTANTS = {
   // Invariant: PRE_STOP + STEP_DEADLINE/1000 + CLEANUP_BUDGET/1000
   //            + SIGKILL_BUFFER ≤ TERMINATION_GRACE_SECONDS
   // 5 + 45 + 10 + 5 = 65 ✓
-} as const;
+} as const
 ```
 
 ---
@@ -1270,6 +1269,7 @@ export const DRAIN_CONSTANTS = {
 ### Problem Statement
 
 A "crash loop" at the application level occurs when:
+
 1. Graphile Worker dispatches a job.
 2. Agent pod starts, hydrates, begins execution.
 3. Agent crashes (bug, OOM, external dependency failure).
@@ -1317,9 +1317,9 @@ Per-agent token budgets (see Question 7):
 ```typescript
 interface TokenBudget {
   /** Maximum input tokens consumed across all attempts of a single job. */
-  maxInputTokensPerJob: number;   // Default: 500_000 (500K tokens ≈ $1.50 at Opus)
+  maxInputTokensPerJob: number // Default: 500_000 (500K tokens ≈ $1.50 at Opus)
   /** Maximum USD cost across all attempts of a single job. */
-  maxCostUsdPerJob: number;       // Default: 5.00
+  maxCostUsdPerJob: number // Default: 5.00
 }
 ```
 
@@ -1331,14 +1331,14 @@ The agent records crash context in the job's `error` JSONB field:
 
 ```typescript
 interface CrashContext {
-  exitCode: number;
-  errorMessage: string;
-  errorStack?: string;
-  attempt: number;
-  tokensConsumedThisAttempt: { input: number; output: number };
-  lifecycleStateAtCrash: AgentLifecycleState;
-  stepAtCrash: number | null;
-  lastToolCall?: string;
+  exitCode: number
+  errorMessage: string
+  errorStack?: string
+  attempt: number
+  tokensConsumedThisAttempt: { input: number; output: number }
+  lifecycleStateAtCrash: AgentLifecycleState
+  stepAtCrash: number | null
+  lastToolCall?: string
 }
 ```
 
@@ -1352,29 +1352,30 @@ function shouldRetryAfterCrash(
 ): RetryDecision {
   // 1. Token budget exhausted?
   if (tokensConsumed.cost_usd >= tokenBudget.maxCostUsdPerJob) {
-    return { retry: false, reason: 'token_budget_exhausted' };
+    return { retry: false, reason: "token_budget_exhausted" }
   }
 
   // 2. Same error message on 3+ consecutive attempts?
-  const lastThree = crashHistory.slice(-3);
-  if (lastThree.length === 3 &&
-      lastThree.every(c => c.errorMessage === lastThree[0]!.errorMessage)) {
-    return { retry: false, reason: 'deterministic_crash' };
+  const lastThree = crashHistory.slice(-3)
+  if (
+    lastThree.length === 3 &&
+    lastThree.every((c) => c.errorMessage === lastThree[0]!.errorMessage)
+  ) {
+    return { retry: false, reason: "deterministic_crash" }
   }
 
   // 3. OOM on all previous attempts?
-  if (crashHistory.length >= 2 &&
-      crashHistory.every(c => c.exitCode === 137)) {
-    return { retry: false, reason: 'persistent_oom' };
+  if (crashHistory.length >= 2 && crashHistory.every((c) => c.exitCode === 137)) {
+    return { retry: false, reason: "persistent_oom" }
   }
 
   // 4. Retry with appropriate strategy.
-  const lastCrash = crashHistory[crashHistory.length - 1]!;
+  const lastCrash = crashHistory[crashHistory.length - 1]!
   if (lastCrash.exitCode === 137) {
-    return { retry: true, strategy: 'reduced_footprint' };
+    return { retry: true, strategy: "reduced_footprint" }
   }
 
-  return { retry: true, strategy: 'escalating_backoff' };
+  return { retry: true, strategy: "escalating_backoff" }
 }
 ```
 
@@ -1390,10 +1391,11 @@ const CIRCUIT_BREAKER = {
   windowMs: 15 * 60 * 1000, // 15 minutes
   /** Cooldown before allowing new jobs. */
   cooldownMs: 30 * 60 * 1000, // 30 minutes
-};
+}
 ```
 
 When the circuit breaker trips:
+
 1. New jobs for that agent are rejected with `FAILED: Agent circuit breaker open`.
 2. A notification is sent to the operator (via Telegram/dashboard).
 3. After the cooldown, one "canary" job is allowed through. If it succeeds, the circuit breaker resets. If it fails, the cooldown restarts.

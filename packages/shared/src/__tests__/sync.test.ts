@@ -46,13 +46,9 @@ describe("syncFile", () => {
       "## Preferences\n\nAlways use TypeScript strict mode in all projects.\n\n## Deployment\n\nUse k3s on ARM64 nodes for production workloads.\n",
     )
 
-    const { state, result } = await syncFile(
-      "MEMORY.md",
-      tempDir,
-      qdrant,
-      mockEmbeddingFn,
-      { entries: {} },
-    )
+    const { state, result } = await syncFile("MEMORY.md", tempDir, qdrant, mockEmbeddingFn, {
+      entries: {},
+    })
 
     expect(result.created).toBe(2)
     expect(result.updated).toBe(0)

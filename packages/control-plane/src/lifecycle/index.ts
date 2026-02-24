@@ -39,14 +39,6 @@ export {
   hydrateAgent,
 } from "./hydration.js"
 
-export {
-  DEFAULT_IDLE_TIMEOUT_MS,
-  type IdleDetectorOptions,
-  IdleDetector,
-} from "./idle-detector.js"
+export { DEFAULT_IDLE_TIMEOUT_MS, type IdleDetectorOptions, IdleDetector } from "./idle-detector.js"
 
-export {
-  type LifecycleManagerDeps,
-  type AgentContext,
-  AgentLifecycleManager,
-} from "./manager.js"
+export { type LifecycleManagerDeps, type AgentContext, AgentLifecycleManager } from "./manager.js"

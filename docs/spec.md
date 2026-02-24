@@ -913,19 +913,19 @@ CRITICAL INSTRUCTIONS:
 
 ```typescript
 interface MemoryRecord {
-  id: string;                    // UUIDv7 (agent-created) or UUIDv5 (markdown-synced)
-  type: 'fact' | 'preference' | 'event' | 'system_rule';
-  content: string;               // Atomic, self-contained statement
-  tags: string[];
-  people: string[];
-  projects: string[];
-  importance: 1 | 2 | 3 | 4 | 5;
-  supersedesId?: string;         // UUID of conflicting legacy memory
-  confidence: number;            // 0.0-1.0 extraction certainty
-  source: string;                // 'session_45', 'MEMORY.md', 'markdown_sync'
-  createdAt: number;
-  accessCount: number;
-  lastAccessedAt: number;
+  id: string // UUIDv7 (agent-created) or UUIDv5 (markdown-synced)
+  type: "fact" | "preference" | "event" | "system_rule"
+  content: string // Atomic, self-contained statement
+  tags: string[]
+  people: string[]
+  projects: string[]
+  importance: 1 | 2 | 3 | 4 | 5
+  supersedesId?: string // UUID of conflicting legacy memory
+  confidence: number // 0.0-1.0 extraction certainty
+  source: string // 'session_45', 'MEMORY.md', 'markdown_sync'
+  createdAt: number
+  accessCount: number
+  lastAccessedAt: number
 }
 ```
 
@@ -951,10 +951,10 @@ Rationale for starting single-node: CloudNativePG + MinIO for WAL archiving is s
 
 ### 18.3 Resource Sizing
 
-| Component | CPU Request | CPU Limit | RAM Request | RAM Limit | Storage |
-|---|---|---|---|---|---|
-| PostgreSQL (single) | 500m | 1000m | 1Gi | 2Gi | 10Gi |
-| PostgreSQL (CNPG, per instance) | 1000m | 1000m | 2Gi | 2Gi | 10Gi |
+| Component                       | CPU Request | CPU Limit | RAM Request | RAM Limit | Storage |
+| ------------------------------- | ----------- | --------- | ----------- | --------- | ------- |
+| PostgreSQL (single)             | 500m        | 1000m     | 1Gi         | 2Gi       | 10Gi    |
+| PostgreSQL (CNPG, per instance) | 1000m       | 1000m     | 2Gi         | 2Gi       | 10Gi    |
 
 Matching requests = limits forces **Guaranteed QoS** — CNPG adjusts OOM killer scores to protect the postmaster.
 
@@ -979,6 +979,7 @@ migrations/
 ### 18.6 Monitoring
 
 Expose via `prometheus-community/postgres_exporter`:
+
 - `pg_stat_activity` — active connections, long-running queries
 - `pg_stat_statements` — query performance
 - Dead tuple count / autovacuum status — critical for Graphile Worker (rapid row churn causes table bloat)
@@ -1006,7 +1007,7 @@ spec:
     size: 10Gi
   resources:
     requests: { memory: "2Gi", cpu: "1" }
-    limits:   { memory: "2Gi", cpu: "1" }
+    limits: { memory: "2Gi", cpu: "1" }
   bootstrap:
     initdb:
       database: cortex
@@ -1036,13 +1037,13 @@ spec:
 
 **Pino structured logging + Grafana stack.** No Langfuse (tested previously — doesn't work reliably with native OpenTelemetry despite claiming OTLP support).
 
-| Layer | Tool | Purpose |
-|---|---|---|
+| Layer               | Tool               | Purpose                                   |
+| ------------------- | ------------------ | ----------------------------------------- |
 | Application logging | Pino (via Fastify) | Structured JSON logs with correlation IDs |
-| Log aggregation | Grafana Loki | Search, filter, alert on logs |
-| Distributed tracing | Grafana Tempo | Trace correlation across services |
-| Metrics | Prometheus | System + PostgreSQL + Qdrant metrics |
-| Dashboards | Grafana | Single pane of glass |
+| Log aggregation     | Grafana Loki       | Search, filter, alert on logs             |
+| Distributed tracing | Grafana Tempo      | Trace correlation across services         |
+| Metrics             | Prometheus         | System + PostgreSQL + Qdrant metrics      |
+| Dashboards          | Grafana            | Single pane of glass                      |
 
 ### 19.2 MVP (Phase 1): Correlation IDs
 
@@ -1051,12 +1052,13 @@ Before deploying full OTel infrastructure, start with **Pino structured logging 
 ```typescript
 const logger = pino({
   mixin() {
-    return { traceId: asyncLocalStorage.getStore()?.traceId };
-  }
-});
+    return { traceId: asyncLocalStorage.getStore()?.traceId }
+  },
+})
 ```
 
 Every log line carries a `traceId` that links:
+
 - User's Telegram message → channel adapter → job creation → agent execution → tool calls
 
 Searchable in Loki with `{app="cortex-plane"} | json | traceId="abc123"`.
@@ -1071,6 +1073,7 @@ Searchable in Loki with `{app="cortex-plane"} | json | traceId="abc123"`.
 ### 19.4 Minimum Viable Telemetry
 
 Instrument from day 1:
+
 - Every LLM inference call (model, tokens in/out, latency, cost)
 - Every tool invocation (tool name, duration, success/failure)
 - Every Graphile state transition (job_id, old_state → new_state)
@@ -1078,13 +1081,13 @@ Instrument from day 1:
 
 ### 19.5 Alerting Thresholds
 
-| Condition | Severity | Action |
-|---|---|---|
-| Agent stuck on single job >10 min | Warning | Telegram notification |
-| Provider error rate >50% over 5 min | Critical | Page operator |
-| Memory extraction repeated failure | Warning | Telegram notification |
-| PostgreSQL connection pool >80% | Warning | Grafana alert |
-| Dead tuple ratio >20% | Warning | Trigger manual vacuum |
+| Condition                           | Severity | Action                |
+| ----------------------------------- | -------- | --------------------- |
+| Agent stuck on single job >10 min   | Warning  | Telegram notification |
+| Provider error rate >50% over 5 min | Critical | Page operator         |
+| Memory extraction repeated failure  | Warning  | Telegram notification |
+| PostgreSQL connection pool >80%     | Warning  | Grafana alert         |
+| Dead tuple ratio >20%               | Warning  | Trigger manual vacuum |
 
 ### 19.6 Insights Agent (Phase 3)
 
@@ -1111,12 +1114,12 @@ For the initial deployment, a simple retry mechanism with exponential backoff is
 ```typescript
 const retryConfig = {
   retryableCodes: [429, 500, 502, 503, 529],
-  fatalCodes: [401, 403],       // Page human immediately
+  fatalCodes: [401, 403], // Page human immediately
   maxRetries: 3,
   baseDelay: 1000,
   maxDelay: 30000,
   backoffMultiplier: 2,
-};
+}
 ```
 
 **401/403 errors halt the job and notify the operator** — these indicate credential issues, not transient outages.
@@ -1133,11 +1136,11 @@ Sliding-window circuit breaker pattern:
 
 Failovers only move **horizontally or up** — never downgrade to a less capable model:
 
-| Tier | Use Case | Primary | Fallbacks |
-|---|---|---|---|
-| **Tier 1** | Complex reasoning, code generation | Claude Opus | GPT-4o, Gemini Pro |
-| **Tier 2** | Standard tool execution | GPT-4o-mini | Claude Haiku, Gemini Flash |
-| **Tier 3** | Memory extraction, parsing | Claude Haiku | GPT-4o-mini |
+| Tier       | Use Case                           | Primary      | Fallbacks                  |
+| ---------- | ---------------------------------- | ------------ | -------------------------- |
+| **Tier 1** | Complex reasoning, code generation | Claude Opus  | GPT-4o, Gemini Pro         |
+| **Tier 2** | Standard tool execution            | GPT-4o-mini  | Claude Haiku, Gemini Flash |
+| **Tier 3** | Memory extraction, parsing         | Claude Haiku | GPT-4o-mini                |
 
 `allow_downgrade: false` for Tier 1 — never fall back to Tier 2 for complex reasoning tasks.
 
@@ -1161,7 +1164,7 @@ Skills are delivered via **PVC subPath mounts**, not baked into container images
 volumeMounts:
   - name: agent-workspace
     mountPath: /workspace/skills
-    subPath: dynamic-skills    # Read-write for skill generation
+    subPath: dynamic-skills # Read-write for skill generation
 ```
 
 The container root filesystem remains **read-only**. Only `/workspace/skills` is writable. This preserves security (dropped ALL capabilities, no privilege escalation) while enabling the Skill Creator meta-skill.
@@ -1172,7 +1175,7 @@ When a skill file is written or updated, the agent invalidates `require.cache` f
 
 ```typescript
 function hotReloadSkill(skillPath: string): void {
-  delete require.cache[require.resolve(skillPath)];
+  delete require.cache[require.resolve(skillPath)]
 }
 ```
 
@@ -1237,12 +1240,18 @@ When the single-operator Telegram interface becomes insufficient:
 
 ```typescript
 interface DashboardEvent {
-  type: 'tool_execution' | 'state_transition' | 'approval_request'
-      | 'error' | 'log' | 'screenshot' | 'metric';
-  traceId: string;
-  agentId: string;
-  timestamp: string;
-  data: Record<string, unknown>;
+  type:
+    | "tool_execution"
+    | "state_transition"
+    | "approval_request"
+    | "error"
+    | "log"
+    | "screenshot"
+    | "metric"
+  traceId: string
+  agentId: string
+  timestamp: string
+  data: Record<string, unknown>
 }
 ```
 

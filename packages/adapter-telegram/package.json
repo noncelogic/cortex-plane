@@ -22,6 +22,8 @@
     "@cortex/shared": "workspace:*"
   },
   "devDependencies": {
-    "@cortex/config": "workspace:*"
+    "@cortex/config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.0.0"
   }
 }
