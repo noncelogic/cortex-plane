@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  # Dev: lower resources for core-agent and remove Playwright sidecar
+  - target:
+      kind: PodTemplate
+      name: agent-pod-template
+    patch: |
+      apiVersion: v1
+      kind: PodTemplate
+      metadata:
+        name: agent-pod-template
+      template:
+        spec:
+          containers:
+            - name: core-agent
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+            # Remove Playwright sidecar in dev
+            - $patch: delete
+              name: playwright
+          volumes:
+            # Remove Playwright-specific volumes in dev
+            - $patch: delete
+              name: dshm
+            - $patch: delete
+              name: tmp-playwright
+  # Dev: smaller PVC
+  - target:
+      kind: PersistentVolumeClaim
+      name: agent-workspace
+    patch: |
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: agent-workspace
+      spec:
+        resources:
+          requests:
+            storage: 5Gi

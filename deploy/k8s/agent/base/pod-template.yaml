@@ -1,0 +1,150 @@
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: agent-pod-template
+  labels:
+    app: cortex-agent
+    app.kubernetes.io/name: cortex-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: cortex-plane
+template:
+  metadata:
+    labels:
+      app: cortex-agent
+      app.kubernetes.io/name: cortex-agent
+      app.kubernetes.io/component: agent
+      app.kubernetes.io/part-of: cortex-plane
+  spec:
+    serviceAccountName: agent-sa
+    automountServiceAccountToken: false
+    terminationGracePeriodSeconds: 65
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 2000
+      seccompProfile:
+        type: RuntimeDefault
+    initContainers:
+      - name: hydrate
+        image: noncelogic/cortex-agent-init:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Pulling identity files from control plane..."
+            wget -q -O /workspace/IDENTITY.md "${CONTROL_PLANE_URL}/agents/${AGENT_NAME}/identity" || true
+            wget -q -O /workspace/SKILL.md "${CONTROL_PLANE_URL}/agents/${AGENT_NAME}/skills" || true
+            echo "Hydration complete."
+        env:
+          - name: CONTROL_PLANE_URL
+            value: "http://cortex-control-plane.cortex-plane.svc.cluster.local:4000"
+          - name: AGENT_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['cortex.plane/agent-name']
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: tmp
+            mountPath: /tmp
+    containers:
+      - name: core-agent
+        image: noncelogic/cortex-agent:latest
+        ports:
+          - name: health
+            containerPort: 4001
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 4001
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 4001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 4001
+          periodSeconds: 5
+          failureThreshold: 12
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+            subPath: agent-default
+          - name: tmp
+            mountPath: /tmp
+      - name: playwright
+        image: mcr.microsoft.com/playwright:latest
+        ports:
+          - name: cdp
+            containerPort: 9222
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+            subPath: agent-default
+          - name: dshm
+            mountPath: /dev/shm
+          - name: tmp-playwright
+            mountPath: /tmp
+    volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: agent-workspace
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 256Mi
+      - name: tmp-playwright
+        emptyDir:
+          sizeLimit: 500Mi
