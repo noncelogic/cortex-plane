@@ -46,7 +46,7 @@ This spike resolves those open questions. It defines:
 
 An agent pod running on k3s can be killed at any moment — OOM, node drain, preemption, network partition. When k8s replaces the pod, the new instance must resume the agent's work from the last checkpoint, not from the beginning.
 
-This is the defining constraint. Every design decision flows from: *the checkpoint must contain enough state to resume an interrupted agent workflow from exactly the point where it stopped, and the checkpoint must be durable (in PostgreSQL) before the agent proceeds to the next step.*
+This is the defining constraint. Every design decision flows from: _the checkpoint must contain enough state to resume an interrupted agent workflow from exactly the point where it stopped, and the checkpoint must be durable (in PostgreSQL) before the agent proceeds to the next step._
 
 ### The Problem: Human-in-the-Loop
 
@@ -58,15 +58,15 @@ Some agent actions require human approval — deploying to production, executing
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| Spike #24: `job.checkpoint JSONB` exists | We must either use this column or migrate away from it with clear rationale |
-| Spike #24: `job.approval_token TEXT` exists | We build on this; add expiry and validation semantics |
-| Stateless control plane | Any control plane instance can process any approval callback |
-| PostgreSQL is the single source of truth | Checkpoints must be durable in PostgreSQL before proceeding |
-| k3s pod replacement | New pod reads checkpoint from DB; no local disk state survives |
-| Kysely for queries | Types match DDL 1:1 |
-| UUIDv7 for primary keys | Consistent with spikes #24 and #25 |
+| Constraint                                  | Implication                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| Spike #24: `job.checkpoint JSONB` exists    | We must either use this column or migrate away from it with clear rationale |
+| Spike #24: `job.approval_token TEXT` exists | We build on this; add expiry and validation semantics                       |
+| Stateless control plane                     | Any control plane instance can process any approval callback                |
+| PostgreSQL is the single source of truth    | Checkpoints must be durable in PostgreSQL before proceeding                 |
+| k3s pod replacement                         | New pod reads checkpoint from DB; no local disk state survives              |
+| Kysely for queries                          | Types match DDL 1:1                                                         |
+| UUIDv7 for primary keys                     | Consistent with spikes #24 and #25                                          |
 
 ---
 
@@ -99,7 +99,7 @@ Some agent actions require human approval — deploying to production, executing
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight:** The checkpoint write is the commit point. Everything before it is speculative work that may be lost to a crash. Everything after it is durable and resumable. The agent must never perform a side effect (send a message, call an external API) *after* a checkpoint write without first checkpointing that the side effect was initiated. Otherwise, a crash-then-resume would re-execute the side effect.
+**Key insight:** The checkpoint write is the commit point. Everything before it is speculative work that may be lost to a crash. Everything after it is durable and resumable. The agent must never perform a side effect (send a message, call an external API) _after_ a checkpoint write without first checkpointing that the side effect was initiated. Otherwise, a crash-then-resume would re-execute the side effect.
 
 ---
 
@@ -107,19 +107,19 @@ Some agent actions require human approval — deploying to production, executing
 
 A checkpoint needs the following fields:
 
-| Field | Type | Purpose |
-|---|---|---|
-| `checkpoint_id` | `string` (UUIDv7) | Uniquely identifies this checkpoint snapshot. Enables deduplication and corruption detection. |
-| `schema_version` | `number` | Integer version of the checkpoint schema. Enables forward-compatible schema evolution. |
-| `agent_id` | `string` (UUID) | Which agent definition produced this checkpoint. Guards against checkpoint/agent mismatch on resume. |
-| `created_at` | `string` (ISO 8601) | When this checkpoint was written. For debugging and audit. |
-| `step_index` | `number` | The index of the step that was just completed (0-based). The agent resumes from `step_index + 1`. |
-| `step_id` | `string` | A human-readable identifier for the current step (e.g., `"deploy-staging"`, `"run-tests"`). For logging and dashboard display. |
-| `status` | `enum` | Checkpoint-level status: `"in_progress"`, `"awaiting_approval"`, `"completed"`, `"failed"`. |
-| `active_tools` | `array` | List of tools currently in use or whose results are pending. Each entry includes tool name, invocation ID, and status. |
-| `memory_context` | `object` | Agent's working memory: accumulated facts, conversation snippets, intermediate results. Opaque to the control plane; interpreted by the agent. |
-| `execution_log` | `array` | Ordered list of completed step summaries. Each entry: `{ step_index, step_id, started_at, finished_at, result_summary }`. |
-| `crc32` | `number` | CRC-32 checksum of the serialized state (all fields except `crc32` itself). Corruption detection. |
+| Field            | Type                | Purpose                                                                                                                                        |
+| ---------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checkpoint_id`  | `string` (UUIDv7)   | Uniquely identifies this checkpoint snapshot. Enables deduplication and corruption detection.                                                  |
+| `schema_version` | `number`            | Integer version of the checkpoint schema. Enables forward-compatible schema evolution.                                                         |
+| `agent_id`       | `string` (UUID)     | Which agent definition produced this checkpoint. Guards against checkpoint/agent mismatch on resume.                                           |
+| `created_at`     | `string` (ISO 8601) | When this checkpoint was written. For debugging and audit.                                                                                     |
+| `step_index`     | `number`            | The index of the step that was just completed (0-based). The agent resumes from `step_index + 1`.                                              |
+| `step_id`        | `string`            | A human-readable identifier for the current step (e.g., `"deploy-staging"`, `"run-tests"`). For logging and dashboard display.                 |
+| `status`         | `enum`              | Checkpoint-level status: `"in_progress"`, `"awaiting_approval"`, `"completed"`, `"failed"`.                                                    |
+| `active_tools`   | `array`             | List of tools currently in use or whose results are pending. Each entry includes tool name, invocation ID, and status.                         |
+| `memory_context` | `object`            | Agent's working memory: accumulated facts, conversation snippets, intermediate results. Opaque to the control plane; interpreted by the agent. |
+| `execution_log`  | `array`             | Ordered list of completed step summaries. Each entry: `{ step_index, step_id, started_at, finished_at, result_summary }`.                      |
+| `crc32`          | `number`            | CRC-32 checksum of the serialized state (all fields except `crc32` itself). Corruption detection.                                              |
 
 **Rationale for each field:**
 
@@ -135,7 +135,7 @@ A checkpoint needs the following fields:
 
 - **`memory_context`**: The agent's working memory. This is the hardest field to define rigidly because different agents accumulate different kinds of context. We define it as a structured object with known optional fields (see [Question 2](#question-2-state-blob-structure)), but allow agents to extend it.
 
-- **`execution_log`**: An in-checkpoint audit trail. Unlike `job_history` (which logs state *transitions*), this logs step *completions*. It's useful for the dashboard ("step 3 of 7 completed") and for debugging ("the agent completed steps 1-4 before crashing, so step 5 is the resume point").
+- **`execution_log`**: An in-checkpoint audit trail. Unlike `job_history` (which logs state _transitions_), this logs step _completions_. It's useful for the dashboard ("step 3 of 7 completed") and for debugging ("the agent completed steps 1-4 before crashing, so step 5 is the resume point").
 
 - **`crc32`**: A simple integrity check. Not cryptographic — not a security measure. Its purpose is detecting partial writes and data corruption. See [Question 6](#question-6-corruption-handling).
 
@@ -240,7 +240,7 @@ This would enable checkpoint history (one row per checkpoint write) and reduce j
 
 2. **Read amplification.** On resume, the agent reads the job row and its checkpoint. With a JSONB column, that's one `SELECT`. With a separate table, it's a `JOIN` or a second query. The resume path is latency-sensitive (the agent pod just started and is waiting to work), so one query is better than two.
 
-3. **Checkpoint history is not needed.** We need the *latest* checkpoint, not the history. If we need to debug "what did the checkpoint look like 3 steps ago," the `execution_log` inside the checkpoint already captures step summaries. Full checkpoint history would be write-heavy (one INSERT per step) and never queried in production.
+3. **Checkpoint history is not needed.** We need the _latest_ checkpoint, not the history. If we need to debug "what did the checkpoint look like 3 steps ago," the `execution_log` inside the checkpoint already captures step summaries. Full checkpoint history would be write-heavy (one INSERT per step) and never queried in production.
 
 4. **Size is manageable.** Spike #24 flagged checkpoint size as an open question, noting the 1GB JSONB limit. In practice, checkpoints will be 10KB-100KB. The `memory_context.conversation_summary` is the largest field, and it's explicitly compressed (summarized, not raw). If an agent's checkpoint exceeds 1MB, the agent is doing something wrong — storing raw file contents instead of references, or accumulating unbounded data. The right fix is to fix the agent, not to accommodate unbounded checkpoints with a separate table.
 
@@ -285,11 +285,11 @@ Agent Loop:
 
 ### Three Levels of Checkpoint Granularity
 
-| Level | When | Trade-off |
-|---|---|---|
-| **Per-step** (default) | After all tool calls in an LLM response are resolved | Good balance: ~1 checkpoint per LLM turn. 5-20 checkpoints per job. Acceptable DB write overhead. |
-| **Per-tool-call** | After each individual tool call completes | Finer recovery: if step has 5 tool calls and crashes after tool 3, recovery resumes from tool 4 instead of re-doing all 5. More DB writes. |
-| **Per-LLM-response** | After each LLM API response, before tool execution | Captures LLM output before expensive tool calls. Useful if tool calls have side effects (deploy, send message). |
+| Level                  | When                                                 | Trade-off                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Per-step** (default) | After all tool calls in an LLM response are resolved | Good balance: ~1 checkpoint per LLM turn. 5-20 checkpoints per job. Acceptable DB write overhead.                                          |
+| **Per-tool-call**      | After each individual tool call completes            | Finer recovery: if step has 5 tool calls and crashes after tool 3, recovery resumes from tool 4 instead of re-doing all 5. More DB writes. |
+| **Per-LLM-response**   | After each LLM API response, before tool execution   | Captures LLM output before expensive tool calls. Useful if tool calls have side effects (deploy, send message).                            |
 
 **Default: per-step.** This is the right default because:
 
@@ -297,7 +297,7 @@ Agent Loop:
 - Tool calls are idempotent or have their own idempotency mechanisms (k8s apply is idempotent, HTTP PUT is idempotent).
 - Fewer DB writes means lower load on PostgreSQL and lower transaction contention on the job row.
 
-**Exception: side-effecting tool calls.** For tools that produce irreversible side effects (sending a message, creating a DNS record, executing a payment), the agent should checkpoint *before* the tool call (marking it `pending`) and *after* (marking it `completed`). This is per-tool-call granularity for those specific tools. The checkpoint protocol (next section) defines this.
+**Exception: side-effecting tool calls.** For tools that produce irreversible side effects (sending a message, creating a DNS record, executing a payment), the agent should checkpoint _before_ the tool call (marking it `pending`) and _after_ (marking it `completed`). This is per-tool-call granularity for those specific tools. The checkpoint protocol (next section) defines this.
 
 **Configurable via agent definition.** The `agent.skill_config` JSONB can include a `checkpoint_granularity` field:
 
@@ -321,7 +321,7 @@ Tools listed in `side_effect_tools` always get per-tool-call checkpointing regar
 The `schema_version` field is an integer that starts at `1` and increments whenever the checkpoint structure changes in a way that affects recovery logic.
 
 ```typescript
-const CURRENT_CHECKPOINT_SCHEMA_VERSION = 1;
+const CURRENT_CHECKPOINT_SCHEMA_VERSION = 1
 ```
 
 When the agent code is updated (new deployment), the new code may expect a different checkpoint structure. On resume, the agent:
@@ -335,7 +335,7 @@ When the agent code is updated (new deployment), the new code may expect a diffe
 ### Migration Functions
 
 ```typescript
-type CheckpointMigration = (old: unknown) => CheckpointStateBlob;
+type CheckpointMigration = (old: unknown) => CheckpointStateBlob
 
 /**
  * Registry of forward migrations. Key is the source version;
@@ -353,38 +353,38 @@ const CHECKPOINT_MIGRATIONS: Record<number, CheckpointMigration> = {
   //     token_usage: { prompt_tokens: 0, completion_tokens: 0 },
   //   },
   // }),
-};
+}
 
 function migrateCheckpoint(raw: unknown): CheckpointStateBlob {
-  let checkpoint = raw as Record<string, unknown>;
-  let version = checkpoint.schema_version as number;
+  let checkpoint = raw as Record<string, unknown>
+  let version = checkpoint.schema_version as number
 
   while (version < CURRENT_CHECKPOINT_SCHEMA_VERSION) {
-    const migrate = CHECKPOINT_MIGRATIONS[version];
+    const migrate = CHECKPOINT_MIGRATIONS[version]
     if (!migrate) {
       throw new Error(
         `No migration from checkpoint schema version ${version} to ${version + 1}. ` +
-        `Cannot resume job. Mark as FAILED and re-submit.`
-      );
+          `Cannot resume job. Mark as FAILED and re-submit.`,
+      )
     }
-    checkpoint = migrate(checkpoint) as Record<string, unknown>;
-    version = checkpoint.schema_version as number;
+    checkpoint = migrate(checkpoint) as Record<string, unknown>
+    version = checkpoint.schema_version as number
   }
 
-  return checkpoint as unknown as CheckpointStateBlob;
+  return checkpoint as unknown as CheckpointStateBlob
 }
 ```
 
 ### What Counts as a Version Bump?
 
-| Change | Version Bump? | Rationale |
-|---|---|---|
-| Adding a new optional field to `memory_context` | **No** | Old checkpoints simply don't have the field. Agent code handles `undefined`. |
-| Adding a new required field | **Yes** | Old checkpoints would fail validation. Migration must supply a default. |
-| Removing a field | **No** | Old checkpoints have an extra field. Ignored on deserialization. |
-| Renaming a field | **Yes** | Old checkpoints use the old name. Migration renames it. |
-| Changing a field's type | **Yes** | Old checkpoints have the old type. Migration converts it. |
-| Changing `active_tools` status enum values | **Yes** | Old checkpoints may have status values the new code doesn't recognize. |
+| Change                                          | Version Bump? | Rationale                                                                    |
+| ----------------------------------------------- | ------------- | ---------------------------------------------------------------------------- |
+| Adding a new optional field to `memory_context` | **No**        | Old checkpoints simply don't have the field. Agent code handles `undefined`. |
+| Adding a new required field                     | **Yes**       | Old checkpoints would fail validation. Migration must supply a default.      |
+| Removing a field                                | **No**        | Old checkpoints have an extra field. Ignored on deserialization.             |
+| Renaming a field                                | **Yes**       | Old checkpoints use the old name. Migration renames it.                      |
+| Changing a field's type                         | **Yes**       | Old checkpoints have the old type. Migration converts it.                    |
+| Changing `active_tools` status enum values      | **Yes**       | Old checkpoints may have status values the new code doesn't recognize.       |
 
 ### Why Not Semver?
 
@@ -406,15 +406,15 @@ Semver implies backward compatibility guarantees (minor versions are compatible)
 ### Detection Algorithm
 
 ```typescript
-import { crc32 } from "@node-rs/crc32"; // or buffer-crc32
+import { crc32 } from "@node-rs/crc32" // or buffer-crc32
 
 /**
  * Compute CRC-32 of the checkpoint state, excluding the crc32 field itself.
  * The checkpoint is serialized with sorted keys to ensure deterministic output.
  */
 function computeCheckpointCrc(checkpoint: Omit<CheckpointStateBlob, "crc32">): number {
-  const serialized = JSON.stringify(checkpoint, Object.keys(checkpoint).sort());
-  return crc32(Buffer.from(serialized, "utf-8"));
+  const serialized = JSON.stringify(checkpoint, Object.keys(checkpoint).sort())
+  return crc32(Buffer.from(serialized, "utf-8"))
 }
 
 /**
@@ -424,42 +424,46 @@ function computeCheckpointCrc(checkpoint: Omit<CheckpointStateBlob, "crc32">): n
 function validateCheckpoint(raw: unknown): CheckpointStateBlob {
   // 1. Type check: is it an object?
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new CheckpointCorruptionError("Checkpoint is not a JSON object", raw);
+    throw new CheckpointCorruptionError("Checkpoint is not a JSON object", raw)
   }
 
-  const checkpoint = raw as Record<string, unknown>;
+  const checkpoint = raw as Record<string, unknown>
 
   // 2. Required fields present?
   const required = [
-    "checkpoint_id", "schema_version", "agent_id", "created_at",
-    "step_index", "step_id", "status", "active_tools",
-    "memory_context", "execution_log", "crc32"
-  ];
+    "checkpoint_id",
+    "schema_version",
+    "agent_id",
+    "created_at",
+    "step_index",
+    "step_id",
+    "status",
+    "active_tools",
+    "memory_context",
+    "execution_log",
+    "crc32",
+  ]
   for (const field of required) {
     if (!(field in checkpoint)) {
-      throw new CheckpointCorruptionError(
-        `Missing required field: ${field}`, raw
-      );
+      throw new CheckpointCorruptionError(`Missing required field: ${field}`, raw)
     }
   }
 
   // 3. CRC verification.
-  const storedCrc = checkpoint.crc32 as number;
-  const { crc32: _, ...withoutCrc } = checkpoint;
-  const computedCrc = computeCheckpointCrc(
-    withoutCrc as Omit<CheckpointStateBlob, "crc32">
-  );
+  const storedCrc = checkpoint.crc32 as number
+  const { crc32: _, ...withoutCrc } = checkpoint
+  const computedCrc = computeCheckpointCrc(withoutCrc as Omit<CheckpointStateBlob, "crc32">)
 
   if (storedCrc !== computedCrc) {
     throw new CheckpointCorruptionError(
       `CRC mismatch: stored=${storedCrc}, computed=${computedCrc}. ` +
-      `Checkpoint data has been modified or partially written.`,
-      raw
-    );
+        `Checkpoint data has been modified or partially written.`,
+      raw,
+    )
   }
 
   // 4. Schema version migration (may transform the checkpoint).
-  return migrateCheckpoint(checkpoint);
+  return migrateCheckpoint(checkpoint)
 }
 ```
 
@@ -493,6 +497,7 @@ cortex_apr_1_<43 characters of URL-safe base64>
 ```
 
 Breakdown:
+
 - `cortex_apr` — prefix for greppability. "apr" = approval. If this token appears in a log, a search, or a leak, it's immediately identifiable.
 - `1` — token format version. If the token format changes (e.g., different encoding, different length), the version lets the validator detect and handle old tokens.
 - `<43 chars>` — 256 bits of `crypto.getRandomValues()` output, base64url-encoded (RFC 4648 §5, no padding).
@@ -657,7 +662,7 @@ Spike #24 defined:
 checkpoint JSONB,
 ```
 
-with the comment: *"Incremental agent progress. Updated after each step. Structure is agent-defined."*
+with the comment: _"Incremental agent progress. Updated after each step. Structure is agent-defined."_
 
 This spike removes the "agent-defined" ambiguity. The checkpoint structure is **platform-defined** with agent-extensible fields. Specifically:
 
@@ -809,7 +814,14 @@ For approvals, we add one new table (`approval_request`) and one new column on `
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["step_index", "step_id", "started_at", "finished_at", "result_summary", "tool_calls"],
+        "required": [
+          "step_index",
+          "step_id",
+          "started_at",
+          "finished_at",
+          "result_summary",
+          "tool_calls"
+        ],
         "additionalProperties": false,
         "properties": {
           "step_index": {
@@ -855,7 +867,7 @@ The checkpoint write protocol defines exactly how and when checkpoints are persi
 
 ### Protocol Rules
 
-1. **Write-ahead principle.** The checkpoint must be durable in PostgreSQL *before* the agent proceeds to the next step. The agent never moves forward until the UPDATE commits.
+1. **Write-ahead principle.** The checkpoint must be durable in PostgreSQL _before_ the agent proceeds to the next step. The agent never moves forward until the UPDATE commits.
 
 2. **Full snapshot, not delta.** Each checkpoint is a complete state snapshot, not a diff from the previous checkpoint. This eliminates the need to replay a chain of deltas on recovery and avoids the complexity of delta corruption cascading.
 
@@ -1078,23 +1090,23 @@ sequenceDiagram
 ### Generation
 
 ```typescript
-import { randomBytes } from "node:crypto";
-import { createHash } from "node:crypto";
+import { randomBytes } from "node:crypto"
+import { createHash } from "node:crypto"
 
-const TOKEN_PREFIX = "cortex_apr";
-const TOKEN_VERSION = 1;
-const TOKEN_ENTROPY_BYTES = 32; // 256 bits
+const TOKEN_PREFIX = "cortex_apr"
+const TOKEN_VERSION = 1
+const TOKEN_ENTROPY_BYTES = 32 // 256 bits
 
 /**
  * Generate a new approval token.
  * Returns both the plaintext (for the notification) and the hash (for storage).
  */
 function generateApprovalToken(): { plaintext: string; hash: string } {
-  const entropy = randomBytes(TOKEN_ENTROPY_BYTES);
-  const encoded = entropy.toString("base64url"); // RFC 4648 §5, no padding
-  const plaintext = `${TOKEN_PREFIX}_${TOKEN_VERSION}_${encoded}`;
-  const hash = createHash("sha256").update(plaintext).digest("hex");
-  return { plaintext, hash };
+  const entropy = randomBytes(TOKEN_ENTROPY_BYTES)
+  const encoded = entropy.toString("base64url") // RFC 4648 §5, no padding
+  const plaintext = `${TOKEN_PREFIX}_${TOKEN_VERSION}_${encoded}`
+  const hash = createHash("sha256").update(plaintext).digest("hex")
+  return { plaintext, hash }
 }
 
 /**
@@ -1102,7 +1114,7 @@ function generateApprovalToken(): { plaintext: string; hash: string } {
  * Used when validating an incoming approval/deny request.
  */
 function hashApprovalToken(plaintext: string): string {
-  return createHash("sha256").update(plaintext).digest("hex");
+  return createHash("sha256").update(plaintext).digest("hex")
 }
 ```
 
@@ -1110,9 +1122,9 @@ function hashApprovalToken(plaintext: string): string {
 
 ```typescript
 interface ApprovalValidationResult {
-  valid: boolean;
-  error?: string;
-  approvalRequest?: ApprovalRequest;
+  valid: boolean
+  error?: string
+  approvalRequest?: ApprovalRequest
 }
 
 async function validateApprovalToken(
@@ -1120,37 +1132,37 @@ async function validateApprovalToken(
   plaintext: string,
 ): Promise<ApprovalValidationResult> {
   // 1. Parse token format.
-  const parts = plaintext.split("_");
+  const parts = plaintext.split("_")
   if (parts.length !== 4 || parts[0] !== "cortex" || parts[1] !== "apr") {
-    return { valid: false, error: "Invalid token format" };
+    return { valid: false, error: "Invalid token format" }
   }
 
-  const version = parseInt(parts[2]!, 10);
+  const version = parseInt(parts[2]!, 10)
   if (version !== TOKEN_VERSION) {
-    return { valid: false, error: `Unsupported token version: ${version}` };
+    return { valid: false, error: `Unsupported token version: ${version}` }
   }
 
   // 2. Hash and look up.
-  const hash = hashApprovalToken(plaintext);
+  const hash = hashApprovalToken(plaintext)
 
   const request = await db
     .selectFrom("approval_request")
     .selectAll()
     .where("token_hash", "=", hash)
-    .executeTakeFirst();
+    .executeTakeFirst()
 
   if (!request) {
-    return { valid: false, error: "Token not found" };
+    return { valid: false, error: "Token not found" }
   }
 
   // 3. Check expiry.
   if (request.expires_at < new Date()) {
-    return { valid: false, error: "Token expired" };
+    return { valid: false, error: "Token expired" }
   }
 
   // 4. Check single-use.
   if (request.used_at !== null) {
-    return { valid: false, error: "Token already used" };
+    return { valid: false, error: "Token already used" }
   }
 
   // 5. Check job state.
@@ -1158,13 +1170,13 @@ async function validateApprovalToken(
     .selectFrom("job")
     .select(["id", "status"])
     .where("id", "=", request.job_id)
-    .executeTakeFirst();
+    .executeTakeFirst()
 
   if (!job || job.status !== "WAITING_FOR_APPROVAL") {
-    return { valid: false, error: "Job is not waiting for approval" };
+    return { valid: false, error: "Job is not waiting for approval" }
   }
 
-  return { valid: true, approvalRequest: request };
+  return { valid: true, approvalRequest: request }
 }
 ```
 
@@ -1192,10 +1204,10 @@ async function executeApproval(
       })
       .where("id", "=", approvalRequestId)
       .where("used_at", "is", null) // Single-use guard
-      .executeTakeFirst();
+      .executeTakeFirst()
 
     if (!updated.numUpdatedRows || updated.numUpdatedRows === 0n) {
-      throw new Error("Approval request already used (concurrent approval)");
+      throw new Error("Approval request already used (concurrent approval)")
     }
 
     // 2. Update the job.
@@ -1208,7 +1220,7 @@ async function executeApproval(
           approval_expires_at: null,
         })
         .where("id", "=", jobId)
-        .execute();
+        .execute()
 
       // 3. Re-enqueue to Graphile Worker for resume.
       // Worker.addJob is called outside the transaction to avoid
@@ -1216,7 +1228,7 @@ async function executeApproval(
     } else {
       const errorMessage = reason
         ? `Approval denied by ${decidedBy}: ${reason}`
-        : `Approval denied by ${decidedBy}`;
+        : `Approval denied by ${decidedBy}`
 
       await tx
         .updateTable("job")
@@ -1227,13 +1239,13 @@ async function executeApproval(
           error_message: errorMessage,
         })
         .where("id", "=", jobId)
-        .execute();
+        .execute()
     }
-  });
+  })
 
   // Enqueue resume job outside the transaction.
   if (decision === "approved") {
-    await worker.addJob("run_agent", { jobId });
+    await worker.addJob("run_agent", { jobId })
   }
 }
 ```
@@ -1415,10 +1427,9 @@ export const CHECKPOINT_STATUS = {
   COMPLETED: "completed",
   /** Agent encountered an unrecoverable error. */
   FAILED: "failed",
-} as const;
+} as const
 
-export type CheckpointStatus =
-  (typeof CHECKPOINT_STATUS)[keyof typeof CHECKPOINT_STATUS];
+export type CheckpointStatus = (typeof CHECKPOINT_STATUS)[keyof typeof CHECKPOINT_STATUS]
 
 /**
  * Status of an individual tool invocation within a checkpoint.
@@ -1432,33 +1443,33 @@ export const TOOL_INVOCATION_STATUS = {
   COMPLETED: "completed",
   /** Tool call failed. */
   FAILED: "failed",
-} as const;
+} as const
 
 export type ToolInvocationStatus =
-  (typeof TOOL_INVOCATION_STATUS)[keyof typeof TOOL_INVOCATION_STATUS];
+  (typeof TOOL_INVOCATION_STATUS)[keyof typeof TOOL_INVOCATION_STATUS]
 
 /**
  * A tracked tool invocation within a checkpoint.
  */
 export interface ToolInvocation {
   /** Name of the tool being called. */
-  tool_name: string;
+  tool_name: string
   /** UUIDv7 for this specific invocation. Used for idempotency on recovery. */
-  invocation_id: string;
+  invocation_id: string
   /** Lifecycle status of this tool call. */
-  status: ToolInvocationStatus;
+  status: ToolInvocationStatus
   /** SHA-256 hash of the tool call input. For recovery verification. */
-  input_hash: string;
+  input_hash: string
   /** The tool's return value. Null if not yet completed. */
-  result: unknown | null;
+  result: unknown | null
 }
 
 /**
  * Token usage tracking within a checkpoint.
  */
 export interface TokenUsage {
-  prompt_tokens: number;
-  completion_tokens: number;
+  prompt_tokens: number
+  completion_tokens: number
 }
 
 /**
@@ -1467,15 +1478,15 @@ export interface TokenUsage {
  */
 export interface MemoryContext {
   /** SHA-256 hash of the system prompt. Detects prompt changes between resume. */
-  system_prompt_hash: string;
+  system_prompt_hash: string
   /** Compressed conversation summary. Null if full conversation fits in context. */
-  conversation_summary: string | null;
+  conversation_summary: string | null
   /** Key facts extracted during execution. Survives context compression. */
-  accumulated_facts: string[];
+  accumulated_facts: string[]
   /** Agent-defined scratchpad. Opaque to the control plane. */
-  working_data: Record<string, unknown>;
+  working_data: Record<string, unknown>
   /** Cumulative token usage for the entire job. */
-  token_usage: TokenUsage;
+  token_usage: TokenUsage
 }
 
 /**
@@ -1483,17 +1494,17 @@ export interface MemoryContext {
  */
 export interface ExecutionLogEntry {
   /** Zero-based step index. */
-  step_index: number;
+  step_index: number
   /** Human-readable step identifier. */
-  step_id: string;
+  step_id: string
   /** When the step started (ISO 8601). */
-  started_at: string;
+  started_at: string
   /** When the step completed (ISO 8601). */
-  finished_at: string;
+  finished_at: string
   /** One-line summary of the step result. */
-  result_summary: string;
+  result_summary: string
   /** Number of tool calls made during this step. */
-  tool_calls: number;
+  tool_calls: number
 }
 
 /**
@@ -1504,31 +1515,31 @@ export interface ExecutionLogEntry {
  */
 export interface CheckpointStateBlob {
   /** UUIDv7 uniquely identifying this checkpoint snapshot. */
-  checkpoint_id: string;
+  checkpoint_id: string
   /** Integer version of the checkpoint schema. Current: 1. */
-  schema_version: number;
+  schema_version: number
   /** The agent definition that produced this checkpoint. */
-  agent_id: string;
+  agent_id: string
   /** ISO 8601 timestamp of when this checkpoint was written. */
-  created_at: string;
+  created_at: string
   /** Zero-based index of the last completed step. Resume from step_index + 1. */
-  step_index: number;
+  step_index: number
   /** Human-readable identifier for the current step. */
-  step_id: string;
+  step_id: string
   /** Checkpoint-level status. */
-  status: CheckpointStatus;
+  status: CheckpointStatus
   /** Tools currently in use or whose results are pending. */
-  active_tools: ToolInvocation[];
+  active_tools: ToolInvocation[]
   /** Agent's working memory context. */
-  memory_context: MemoryContext;
+  memory_context: MemoryContext
   /** Ordered list of completed step summaries. */
-  execution_log: ExecutionLogEntry[];
+  execution_log: ExecutionLogEntry[]
   /** CRC-32 checksum of the serialized checkpoint (excluding this field). */
-  crc32: number;
+  crc32: number
 }
 
 /** Current checkpoint schema version. */
-export const CURRENT_CHECKPOINT_SCHEMA_VERSION = 1;
+export const CURRENT_CHECKPOINT_SCHEMA_VERSION = 1
 ```
 
 ### Approval Types
@@ -1541,43 +1552,42 @@ export const APPROVAL_DECISION = {
   APPROVED: "approved",
   DENIED: "denied",
   EXPIRED: "expired",
-} as const;
+} as const
 
-export type ApprovalDecision =
-  (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+export type ApprovalDecision = (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION]
 
 /**
  * An approval request record.
  */
 export interface ApprovalRequest {
   /** UUIDv7 primary key. */
-  id: string;
+  id: string
   /** The job this approval is for. */
-  job_id: string;
+  job_id: string
   /** SHA-256 hash of the plaintext token. */
-  token_hash: string;
+  token_hash: string
   /** The agent that triggered this approval gate. */
-  requested_by_agent_id: string;
+  requested_by_agent_id: string
   /** Designated approver. Null means any authorized user. */
-  approver_user_account_id: string | null;
+  approver_user_account_id: string | null
   /** Channels where notifications were sent. */
-  notification_channels: ApprovalNotificationChannel[];
+  notification_channels: ApprovalNotificationChannel[]
   /** One-line description of the requested action. */
-  action_summary: string;
+  action_summary: string
   /** Structured details about the action. */
-  action_details: Record<string, unknown>;
+  action_details: Record<string, unknown>
   /** Approval outcome. Null while pending. */
-  decision: ApprovalDecision | null;
+  decision: ApprovalDecision | null
   /** Who approved/denied. Null for expiry. */
-  decided_by: string | null;
+  decided_by: string | null
   /** Reason for denial. */
-  reason: string | null;
+  reason: string | null
   /** When the token was consumed. Null while pending. */
-  used_at: Date | null;
+  used_at: Date | null
   /** When this request expires. */
-  expires_at: Date;
+  expires_at: Date
   /** When the request was created. */
-  created_at: Date;
+  created_at: Date
 }
 
 /**
@@ -1585,13 +1595,13 @@ export interface ApprovalRequest {
  */
 export interface ApprovalNotificationChannel {
   /** Platform type (telegram, discord, etc.). */
-  channel_type: string;
+  channel_type: string
   /** Platform-specific user/chat ID. */
-  channel_user_id: string;
+  channel_user_id: string
   /** When the notification was sent. */
-  notification_sent_at: string;
+  notification_sent_at: string
   /** Platform-specific message ID. For updating the notification after decision. */
-  message_id: string | null;
+  message_id: string | null
 }
 
 /**
@@ -1599,46 +1609,46 @@ export interface ApprovalNotificationChannel {
  */
 export interface ApprovalConfig {
   /** Token validity duration in seconds. Default: 86400 (24h). */
-  token_ttl_seconds: number;
+  token_ttl_seconds: number
   /** Maximum allowed TTL in seconds. Default: 604800 (7d). */
-  max_ttl_seconds: number;
+  max_ttl_seconds: number
 }
 
 export const DEFAULT_APPROVAL_CONFIG: ApprovalConfig = {
   token_ttl_seconds: 86_400,
   max_ttl_seconds: 604_800,
-};
+}
 ```
 
 ### Kysely Type Definitions
 
 ```typescript
-import type { Generated, Insertable, Selectable, Updateable } from "kysely";
-import type { ApprovalDecision } from "@cortex/shared";
+import type { Generated, Insertable, Selectable, Updateable } from "kysely"
+import type { ApprovalDecision } from "@cortex/shared"
 
 // ---------------------------------------------------------------------------
 // Table: approval_request
 // ---------------------------------------------------------------------------
 export interface ApprovalRequestTable {
-  id: Generated<string>;
-  job_id: string;
-  token_hash: string;
-  requested_by_agent_id: string;
-  approver_user_account_id: string | null;
-  notification_channels: Generated<Record<string, unknown>[]>;
-  action_summary: string;
-  action_details: Generated<Record<string, unknown>>;
-  decision: ApprovalDecision | null;
-  decided_by: string | null;
-  reason: string | null;
-  used_at: Date | null;
-  expires_at: Date;
-  created_at: Generated<Date>;
+  id: Generated<string>
+  job_id: string
+  token_hash: string
+  requested_by_agent_id: string
+  approver_user_account_id: string | null
+  notification_channels: Generated<Record<string, unknown>[]>
+  action_summary: string
+  action_details: Generated<Record<string, unknown>>
+  decision: ApprovalDecision | null
+  decided_by: string | null
+  reason: string | null
+  used_at: Date | null
+  expires_at: Date
+  created_at: Generated<Date>
 }
 
-export type ApprovalRequestRow = Selectable<ApprovalRequestTable>;
-export type NewApprovalRequest = Insertable<ApprovalRequestTable>;
-export type ApprovalRequestUpdate = Updateable<ApprovalRequestTable>;
+export type ApprovalRequestRow = Selectable<ApprovalRequestTable>
+export type NewApprovalRequest = Insertable<ApprovalRequestTable>
+export type ApprovalRequestUpdate = Updateable<ApprovalRequestTable>
 
 // ---------------------------------------------------------------------------
 // Updated JobTable — add approval_expires_at
@@ -1660,7 +1670,7 @@ export type ApprovalRequestUpdate = Updateable<ApprovalRequestTable>;
 Complete algorithm for detecting and handling checkpoint corruption:
 
 ```typescript
-import { crc32 } from "@node-rs/crc32";
+import { crc32 } from "@node-rs/crc32"
 
 /**
  * Error thrown when checkpoint corruption is detected.
@@ -1672,8 +1682,8 @@ export class CheckpointCorruptionError extends Error {
     public readonly rawCheckpoint: unknown,
     public readonly jobId?: string,
   ) {
-    super(message);
-    this.name = "CheckpointCorruptionError";
+    super(message)
+    this.name = "CheckpointCorruptionError"
   }
 }
 
@@ -1684,23 +1694,21 @@ export class CheckpointCorruptionError extends Error {
  * The same checkpoint data always produces the same CRC
  * regardless of property insertion order.
  */
-export function computeCheckpointCrc(
-  checkpoint: Omit<CheckpointStateBlob, "crc32">,
-): number {
+export function computeCheckpointCrc(checkpoint: Omit<CheckpointStateBlob, "crc32">): number {
   // Deep-sort the object for deterministic serialization.
   const serialized = JSON.stringify(checkpoint, (_, value) => {
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {
       return Object.keys(value)
         .sort()
         .reduce<Record<string, unknown>>((sorted, key) => {
-          sorted[key] = (value as Record<string, unknown>)[key];
-          return sorted;
-        }, {});
+          sorted[key] = (value as Record<string, unknown>)[key]
+          return sorted
+        }, {})
     }
-    return value as unknown;
-  });
+    return value as unknown
+  })
 
-  return crc32(Buffer.from(serialized, "utf-8"));
+  return crc32(Buffer.from(serialized, "utf-8"))
 }
 
 /**
@@ -1710,8 +1718,8 @@ export function computeCheckpointCrc(
 export function finalizeCheckpoint(
   checkpoint: Omit<CheckpointStateBlob, "crc32">,
 ): CheckpointStateBlob {
-  const crcValue = computeCheckpointCrc(checkpoint);
-  return { ...checkpoint, crc32: crcValue };
+  const crcValue = computeCheckpointCrc(checkpoint)
+  return { ...checkpoint, crc32: crcValue }
 }
 
 /**
@@ -1733,82 +1741,78 @@ export function validateCheckpoint(
   // --- Step 1: Structural validation ---
 
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new CheckpointCorruptionError(
-      "Checkpoint is not a JSON object",
-      raw,
-      jobId,
-    );
+    throw new CheckpointCorruptionError("Checkpoint is not a JSON object", raw, jobId)
   }
 
-  const obj = raw as Record<string, unknown>;
+  const obj = raw as Record<string, unknown>
 
   const requiredFields = [
-    "checkpoint_id", "schema_version", "agent_id", "created_at",
-    "step_index", "step_id", "status", "active_tools",
-    "memory_context", "execution_log", "crc32",
-  ] as const;
+    "checkpoint_id",
+    "schema_version",
+    "agent_id",
+    "created_at",
+    "step_index",
+    "step_id",
+    "status",
+    "active_tools",
+    "memory_context",
+    "execution_log",
+    "crc32",
+  ] as const
 
   for (const field of requiredFields) {
     if (!(field in obj)) {
-      throw new CheckpointCorruptionError(
-        `Missing required field: ${field}`,
-        raw,
-        jobId,
-      );
+      throw new CheckpointCorruptionError(`Missing required field: ${field}`, raw, jobId)
     }
   }
 
   // --- Step 2: CRC integrity check ---
 
-  const storedCrc = obj.crc32;
+  const storedCrc = obj.crc32
   if (typeof storedCrc !== "number") {
     throw new CheckpointCorruptionError(
       `crc32 field is not a number: ${typeof storedCrc}`,
       raw,
       jobId,
-    );
+    )
   }
 
-  const { crc32: _, ...withoutCrc } = obj;
+  const { crc32: _, ...withoutCrc } = obj
   const computedCrc = computeCheckpointCrc(
     withoutCrc as unknown as Omit<CheckpointStateBlob, "crc32">,
-  );
+  )
 
   if (storedCrc !== computedCrc) {
     throw new CheckpointCorruptionError(
       `CRC mismatch: stored=${storedCrc}, computed=${computedCrc}. ` +
-      `Checkpoint data has been modified or partially written.`,
+        `Checkpoint data has been modified or partially written.`,
       raw,
       jobId,
-    );
+    )
   }
 
   // --- Step 3: Schema version check and migration ---
 
-  const version = obj.schema_version;
+  const version = obj.schema_version
   if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
-    throw new CheckpointCorruptionError(
-      `Invalid schema_version: ${String(version)}`,
-      raw,
-      jobId,
-    );
+    throw new CheckpointCorruptionError(`Invalid schema_version: ${String(version)}`, raw, jobId)
   }
 
   if (version > CURRENT_CHECKPOINT_SCHEMA_VERSION) {
     throw new CheckpointCorruptionError(
       `Checkpoint schema version ${version} is newer than current ` +
-      `version ${CURRENT_CHECKPOINT_SCHEMA_VERSION}. Cannot downgrade. ` +
-      `Was a deployment rolled back?`,
+        `version ${CURRENT_CHECKPOINT_SCHEMA_VERSION}. Cannot downgrade. ` +
+        `Was a deployment rolled back?`,
       raw,
       jobId,
-    );
+    )
   }
 
-  let checkpoint: CheckpointStateBlob;
+  let checkpoint: CheckpointStateBlob
   if (version < CURRENT_CHECKPOINT_SCHEMA_VERSION) {
-    checkpoint = migrateCheckpoint(obj);
+    checkpoint = migrateCheckpoint(obj)
   } else {
-    checkpoint = obj as unknown as CheckpointStateBlob;
+    checkpoint = obj as unknown as CheckpointStateBlob
   }
 
   // --- Step 4: Agent ID verification ---
@@ -1816,13 +1820,13 @@ export function validateCheckpoint(
   if (checkpoint.agent_id !== expectedAgentId) {
     throw new CheckpointCorruptionError(
       `Agent ID mismatch: checkpoint has ${checkpoint.agent_id}, ` +
-      `expected ${expectedAgentId}. Wrong agent processing this job?`,
+        `expected ${expectedAgentId}. Wrong agent processing this job?`,
       raw,
       jobId,
-    );
+    )
   }
 
-  return checkpoint;
+  return checkpoint
 }
 ```
 
@@ -1859,7 +1863,7 @@ export function validateCheckpoint(
 
 **Rationale:**
 
-- **Audit trail.** A job might go through multiple approval gates in its lifetime (approve deploy, then approve DNS change, then approve certificate rotation). Each gate produces a separate approval_request. Columns on the job table can only represent the *current* approval.
+- **Audit trail.** A job might go through multiple approval gates in its lifetime (approve deploy, then approve DNS change, then approve certificate rotation). Each gate produces a separate approval_request. Columns on the job table can only represent the _current_ approval.
 - **Separation of concerns.** The job table tracks job state. The approval_request table tracks approval state. They have different lifecycles: a job persists forever; an approval request is consumed and becomes historical.
 - **Clean queries.** "Show me all pending approvals for user X" is a simple query on approval_request. Adding this to the job table would require filtering by status + approval columns.
 

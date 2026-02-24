@@ -125,19 +125,19 @@ The platform must achieve:
 
 ### 4.2 Technology Stack
 
-| Layer | Technology | Rationale |
-|---|---|---|
-| **Infrastructure** | k3s on Proxmox | Per-agent container isolation. Portability layer for future cloud scaling (EKS/GKE). |
-| **Runtime** | Node.js 24 LTS (Krypton), TypeScript, ESM-only | Native async/await, ecosystem compatibility, strict typing. |
-| **HTTP Framework** | Fastify | Native Node.js, Pino logging, plugin encapsulation. |
-| **Orchestration** | PostgreSQL + Graphile Worker | Durable workflows, automatic retries, checkpointing. Replaces JSON state files. |
-| **ORM** | Kysely | Type-safe SQL builder. No conflict with Graphile Worker's self-managed schema. |
-| **Active Memory** | Session JSONL Buffer | Durable event log for diagnostics and crash recovery. Supplementary to PostgreSQL. |
-| **Long-Term Memory** | Qdrant | Unbounded JSON metadata payloads, per-type decay half-lives, scalar quantization. |
-| **Browser** | Playwright (k8s sidecar) | Containerized headless browser for visual DOM observation. |
-| **Build** | pnpm Workspaces + Turborepo | Monorepo with package isolation. |
-| **Test** | Vitest | Fast, ESM-native, watch mode. |
-| **Docker Base** | node:24-slim | glibc compat, Playwright support, ARM64. |
+| Layer                | Technology                                     | Rationale                                                                            |
+| -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Infrastructure**   | k3s on Proxmox                                 | Per-agent container isolation. Portability layer for future cloud scaling (EKS/GKE). |
+| **Runtime**          | Node.js 24 LTS (Krypton), TypeScript, ESM-only | Native async/await, ecosystem compatibility, strict typing.                          |
+| **HTTP Framework**   | Fastify                                        | Native Node.js, Pino logging, plugin encapsulation.                                  |
+| **Orchestration**    | PostgreSQL + Graphile Worker                   | Durable workflows, automatic retries, checkpointing. Replaces JSON state files.      |
+| **ORM**              | Kysely                                         | Type-safe SQL builder. No conflict with Graphile Worker's self-managed schema.       |
+| **Active Memory**    | Session JSONL Buffer                           | Durable event log for diagnostics and crash recovery. Supplementary to PostgreSQL.   |
+| **Long-Term Memory** | Qdrant                                         | Unbounded JSON metadata payloads, per-type decay half-lives, scalar quantization.    |
+| **Browser**          | Playwright (k8s sidecar)                       | Containerized headless browser for visual DOM observation.                           |
+| **Build**            | pnpm Workspaces + Turborepo                    | Monorepo with package isolation.                                                     |
+| **Test**             | Vitest                                         | Fast, ESM-native, watch mode.                                                        |
+| **Docker Base**      | node:24-slim                                   | glibc compat, Playwright support, ARM64.                                             |
 
 ### 4.3 Monorepo Structure
 
@@ -236,17 +236,17 @@ PENDING → SCHEDULED → RUNNING → WAITING_FOR_APPROVAL → COMPLETED
                    DEAD_LETTER
 ```
 
-| State | Description |
-|---|---|
-| `PENDING` | Job created, not yet eligible for scheduling. |
-| `SCHEDULED` | Eligible for pickup by Graphile Worker. |
-| `RUNNING` | Agent is actively executing. |
-| `WAITING_FOR_APPROVAL` | Paused at a human approval gate. |
-| `COMPLETED` | Successfully finished. |
-| `FAILED` | Execution failed; may be retried. |
-| `TIMED_OUT` | Exceeded maximum execution duration. |
-| `RETRYING` | Failed, queued for retry with backoff. |
-| `DEAD_LETTER` | Exhausted all retries; requires manual intervention. |
+| State                  | Description                                          |
+| ---------------------- | ---------------------------------------------------- |
+| `PENDING`              | Job created, not yet eligible for scheduling.        |
+| `SCHEDULED`            | Eligible for pickup by Graphile Worker.              |
+| `RUNNING`              | Agent is actively executing.                         |
+| `WAITING_FOR_APPROVAL` | Paused at a human approval gate.                     |
+| `COMPLETED`            | Successfully finished.                               |
+| `FAILED`               | Execution failed; may be retried.                    |
+| `TIMED_OUT`            | Exceeded maximum execution duration.                 |
+| `RETRYING`             | Failed, queued for retry with backoff.               |
+| `DEAD_LETTER`          | Exhausted all retries; requires manual intervention. |
 
 ### 6.2 Database Schema
 
@@ -378,11 +378,11 @@ The memory system is the core differentiator. It implements a three-tiered archi
 
 ### 8.1 Three Tiers
 
-| Tier | Store | Purpose | Durability |
-|---|---|---|---|
-| **1 — Working Memory** | LLM context window | Active reasoning | Ephemeral (lost on compaction) |
-| **2 — Session Buffer** | JSONL files on PVC | Crash recovery, diagnostics | Durable (survives pod restart) |
-| **3 — Long-Term Memory** | Qdrant | Persistent knowledge, semantic search | Persistent (survives everything) |
+| Tier                     | Store              | Purpose                               | Durability                       |
+| ------------------------ | ------------------ | ------------------------------------- | -------------------------------- |
+| **1 — Working Memory**   | LLM context window | Active reasoning                      | Ephemeral (lost on compaction)   |
+| **2 — Session Buffer**   | JSONL files on PVC | Crash recovery, diagnostics           | Durable (survives pod restart)   |
+| **3 — Long-Term Memory** | Qdrant             | Persistent knowledge, semantic search | Persistent (survives everything) |
 
 ### 8.2 Qdrant Schema
 
@@ -394,20 +394,20 @@ The memory system is the core differentiator. It implements a three-tiered archi
 
 ```typescript
 interface MemoryRecord {
-  id: string;                    // UUIDv7 (agent-created) or UUIDv5 (markdown-synced)
-  vector: number[];              // 1536-dim embedding
+  id: string // UUIDv7 (agent-created) or UUIDv5 (markdown-synced)
+  vector: number[] // 1536-dim embedding
   payload: {
-    type: 'fact' | 'task' | 'emotional' | 'episodic';
-    content: string;
-    source: string;              // 'session_45', 'MEMORY.md', 'markdown_sync'
-    createdAt: number;
-    accessCount: number;
-    lastAccessedAt: number;
-    tags: string[];
-    people: string[];
-    projects: string[];
-    supersedesId?: string;       // Memory evolution chain
-  };
+    type: "fact" | "task" | "emotional" | "episodic"
+    content: string
+    source: string // 'session_45', 'MEMORY.md', 'markdown_sync'
+    createdAt: number
+    accessCount: number
+    lastAccessedAt: number
+    tags: string[]
+    people: string[]
+    projects: string[]
+    supersedesId?: string // Memory evolution chain
+  }
 }
 ```
 
@@ -415,16 +415,17 @@ interface MemoryRecord {
 
 ```typescript
 function calculateDecayScore(record: MemoryRecord, similarity: number): number {
-  const halfLives = { fact: 365, task: 30, emotional: 60, episodic: 14 };
-  const daysOld = (Date.now() - record.payload.createdAt) / 86400000;
-  const recencyScore = Math.pow(2, -(daysOld / halfLives[record.payload.type]));
-  const utilityScore = Math.log10(record.payload.accessCount + 1);
+  const halfLives = { fact: 365, task: 30, emotional: 60, episodic: 14 }
+  const daysOld = (Date.now() - record.payload.createdAt) / 86400000
+  const recencyScore = Math.pow(2, -(daysOld / halfLives[record.payload.type]))
+  const utilityScore = Math.log10(record.payload.accessCount + 1)
 
-  return (0.5 * similarity) + (0.3 * recencyScore) + (0.2 * utilityScore);
+  return 0.5 * similarity + 0.3 * recencyScore + 0.2 * utilityScore
 }
 ```
 
 **Key decisions:**
+
 - Cosine distance (not dot product) — works correctly even with non-normalized vectors.
 - Scalar int8 quantization from day one — 4× memory reduction, negligible accuracy loss at 100K scale.
 - UUIDv7 point IDs for agent-created memories (time-ordered); UUIDv5 for markdown-synced memories (idempotent).
@@ -437,6 +438,7 @@ function calculateDecayScore(record: MemoryRecord, similarity: number): number {
 **Topology:** Single-node, no clustering. 100K vectors at 1536 dimensions with int8 quantization = ~210 MB total. Clustering is unnecessary complexity at this scale.
 
 **Resources:**
+
 - Requests: 500m CPU, 1Gi RAM
 - Limits: 1000m CPU, 2Gi RAM
 - PVC: 10Gi (local-path provisioner), `ReadWriteOnce`
@@ -535,17 +537,26 @@ The buffer stores **events** (things that happened), not snapshots (state at a p
 
 ```typescript
 interface BufferEvent {
-  version: '1.0';
-  timestamp: string;          // ISO 8601
-  jobId: string;
-  sessionId: string;
-  agentId: string;
-  sequence: number;           // Monotonic within session
-  type: 'LLM_REQUEST' | 'LLM_RESPONSE' | 'TOOL_CALL' | 'TOOL_RESULT'
-      | 'CHECKPOINT' | 'ERROR' | 'STEERING' | 'APPROVAL_REQUEST'
-      | 'APPROVAL_DECISION' | 'SESSION_START' | 'SESSION_END';
-  data: Record<string, unknown>;
-  crc32?: number;             // Optional integrity check
+  version: "1.0"
+  timestamp: string // ISO 8601
+  jobId: string
+  sessionId: string
+  agentId: string
+  sequence: number // Monotonic within session
+  type:
+    | "LLM_REQUEST"
+    | "LLM_RESPONSE"
+    | "TOOL_CALL"
+    | "TOOL_RESULT"
+    | "CHECKPOINT"
+    | "ERROR"
+    | "STEERING"
+    | "APPROVAL_REQUEST"
+    | "APPROVAL_DECISION"
+    | "SESSION_START"
+    | "SESSION_END"
+  data: Record<string, unknown>
+  crc32?: number // Optional integrity check
 }
 ```
 
@@ -578,32 +589,32 @@ One directory per job, one file per session attempt. Rotation by session, not by
 
 All errors from all sources (HTTP, Node.js, LLM SDK, tool outputs) are classified into five categories:
 
-| Classification | Action | Example |
-|---|---|---|
-| `TRANSIENT` | Retry with exponential backoff | HTTP 429, 502, 503; ECONNRESET |
-| `PERMANENT` | Fail immediately, no retry | HTTP 400, 401, 404; schema validation failure |
-| `TIMEOUT` | Retry with increased timeout | LLM call exceeds 120s |
-| `RESOURCE` | Retry after cooldown | OOM, disk full, rate limit |
-| `UNKNOWN` | Retry once, then fail | Unclassified errors |
+| Classification | Action                         | Example                                       |
+| -------------- | ------------------------------ | --------------------------------------------- |
+| `TRANSIENT`    | Retry with exponential backoff | HTTP 429, 502, 503; ECONNRESET                |
+| `PERMANENT`    | Fail immediately, no retry     | HTTP 400, 401, 404; schema validation failure |
+| `TIMEOUT`      | Retry with increased timeout   | LLM call exceeds 120s                         |
+| `RESOURCE`     | Retry after cooldown           | OOM, disk full, rate limit                    |
+| `UNKNOWN`      | Retry once, then fail          | Unclassified errors                           |
 
 ### 11.2 Retry Strategy
 
 ```typescript
 const retryConfig = {
   maxAttempts: 3,
-  baseDelay: 1000,        // 1 second
-  maxDelay: 300000,        // 5 minutes
+  baseDelay: 1000, // 1 second
+  maxDelay: 300000, // 5 minutes
   backoffMultiplier: 2,
-  jitter: true,            // ±25% randomization
-};
+  jitter: true, // ±25% randomization
+}
 
 function calculateDelay(attempt: number): number {
   const delay = Math.min(
     retryConfig.baseDelay * Math.pow(retryConfig.backoffMultiplier, attempt),
-    retryConfig.maxDelay
-  );
-  const jitter = delay * 0.25 * (Math.random() * 2 - 1);
-  return delay + jitter;
+    retryConfig.maxDelay,
+  )
+  const jitter = delay * 0.25 * (Math.random() * 2 - 1)
+  return delay + jitter
 }
 ```
 
@@ -661,7 +672,7 @@ spec:
       image: cortex-plane/agent:latest
       resources:
         requests: { cpu: 500m, memory: 512Mi }
-        limits:   { cpu: 1000m, memory: 1Gi }
+        limits: { cpu: 1000m, memory: 1Gi }
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true
@@ -670,19 +681,19 @@ spec:
       volumeMounts:
         - name: workspace
           mountPath: /workspace
-          subPath: agent-devops-01    # Isolation
+          subPath: agent-devops-01 # Isolation
     - name: playwright
       image: mcr.microsoft.com/playwright:latest
       resources:
         requests: { cpu: 1000m, memory: 1Gi }
-        limits:   { cpu: 2000m, memory: 2Gi }
+        limits: { cpu: 2000m, memory: 2Gi }
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true
         capabilities:
           drop: [ALL]
       ports:
-        - containerPort: 9222         # CDP
+        - containerPort: 9222 # CDP
   volumes:
     - name: workspace
       persistentVolumeClaim:
@@ -750,11 +761,11 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: qdrant
-    - to:                              # External API access
+    - to: # External API access
         - ipBlock:
             cidr: 0.0.0.0/0
             except:
-              - 10.0.0.0/8            # Block cluster-internal
+              - 10.0.0.0/8 # Block cluster-internal
               - 172.16.0.0/12
               - 192.168.0.0/16
       ports:
@@ -815,16 +826,16 @@ The control plane injects synthetic heartbeats into each channel adapter. If a h
 
 ```typescript
 interface ChannelAdapter {
-  readonly channelType: string;
+  readonly channelType: string
 
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  healthCheck(): Promise<boolean>;
+  start(): Promise<void>
+  stop(): Promise<void>
+  healthCheck(): Promise<boolean>
 
-  sendMessage(userId: string, content: MessageContent): Promise<void>;
-  sendApprovalRequest(userId: string, request: ApprovalRequest): Promise<void>;
+  sendMessage(userId: string, content: MessageContent): Promise<void>
+  sendApprovalRequest(userId: string, request: ApprovalRequest): Promise<void>
 
-  onMessage(handler: (msg: InboundMessage) => Promise<void>): void;
+  onMessage(handler: (msg: InboundMessage) => Promise<void>): void
 }
 ```
 
@@ -849,21 +860,21 @@ Adapters are npm packages (`@cortex-plane/adapter-telegram`, `@cortex-plane/adap
 
 k3s cluster on Proxmox VE, running across homelab hardware:
 
-| Host | Hardware | Role |
-|---|---|---|
-| lnx-aquila | Ryzen 9 3900XT | k3s worker, development |
-| lnx-orion | Ryzen 9 3950X | k3s worker |
+| Host        | Hardware          | Role                                     |
+| ----------- | ----------------- | ---------------------------------------- |
+| lnx-aquila  | Ryzen 9 3900XT    | k3s worker, development                  |
+| lnx-orion   | Ryzen 9 3950X     | k3s worker                               |
 | lnx-pegasus | Proxmox VE server | VM hosting (Qdrant VM, future k3s nodes) |
 
 ### 17.2 Resource Budget
 
-| Component | CPU | RAM | Storage |
-|---|---|---|---|
-| k3s Control Plane | 2 vCPU | 4 GB | — |
-| PostgreSQL | 2 vCPU | 4 GB | 20 GB |
-| Qdrant | 500m–1000m | 1–2 GB | 10 GB PVC |
-| Per-Agent Pod (core) | 500m–1000m | 512 Mi–1 Gi | — |
-| Per-Agent Pod (Playwright) | 1000m–2000m | 1–2 Gi | — |
+| Component                  | CPU         | RAM         | Storage   |
+| -------------------------- | ----------- | ----------- | --------- |
+| k3s Control Plane          | 2 vCPU      | 4 GB        | —         |
+| PostgreSQL                 | 2 vCPU      | 4 GB        | 20 GB     |
+| Qdrant                     | 500m–1000m  | 1–2 GB      | 10 GB PVC |
+| Per-Agent Pod (core)       | 500m–1000m  | 512 Mi–1 Gi | —         |
+| Per-Agent Pod (Playwright) | 1000m–2000m | 1–2 Gi      | —         |
 
 At 1536 dimensions with int8 quantization, 100K vectors consume ~210 MB of RAM in Qdrant. The 2 GB limit provides massive headroom.
 
@@ -871,11 +882,11 @@ At 1536 dimensions with int8 quantization, 100K vectors consume ~210 MB of RAM i
 
 Infrastructure is self-hosted (zero cloud compute cost). Operational costs shift to API usage:
 
-| Service | Cost | Usage |
-|---|---|---|
-| LLM extraction (memory compaction) | ~$0.25/1M input tokens | ~1-2 compactions/day |
-| Embeddings (text-embedding-3-small) | $0.02/1M tokens | Daily markdown sync |
-| LLM inference (Claude Opus, Gemini) | Variable | Per-job execution |
+| Service                             | Cost                   | Usage                |
+| ----------------------------------- | ---------------------- | -------------------- |
+| LLM extraction (memory compaction)  | ~$0.25/1M input tokens | ~1-2 compactions/day |
+| Embeddings (text-embedding-3-small) | $0.02/1M tokens        | Daily markdown sync  |
+| LLM inference (Claude Opus, Gemini) | Variable               | Per-job execution    |
 
 ---
 
@@ -903,15 +914,15 @@ Infrastructure is self-hosted (zero cloud compute cost). Operational costs shift
 
 ## 19. Risk Assessment
 
-| Risk | Impact | Probability | Mitigation |
-|---|---|---|---|
-| **Vector indexing latency** | High — stalls agent execution | Low | Extraction/indexing runs asynchronously via background workers. Agents never wait for Qdrant writes. |
-| **Playwright OOM** | Medium — kills pod | Medium | Strict k8s limits (2Gi). Agent catches connection drops and restarts DOM observation. |
-| **Compaction loop relapse** | High — infinite token burn | Low | Hard limit of 3 retries on file-creation failures. Agent falls back to `ask: always` requiring human intervention. |
-| **PostgreSQL failure** | Critical — all state lost | Very Low | WAL archiving, daily pg_dump, PVC snapshots. |
-| **Qdrant data loss** | Medium — memory degradation | Low | Daily snapshot backups, 7-day retention. Markdown files are authoritative source. |
-| **Channel adapter silent death** | Medium — user disconnect | Medium | Per-channel synthetic heartbeats with automatic adapter restart. |
-| **LLM API outage** | High — all agents stall | Low | Multi-provider failover (Claude → Gemini → GPT). Graceful degradation to `WAITING_FOR_APPROVAL`. |
+| Risk                             | Impact                        | Probability | Mitigation                                                                                                         |
+| -------------------------------- | ----------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Vector indexing latency**      | High — stalls agent execution | Low         | Extraction/indexing runs asynchronously via background workers. Agents never wait for Qdrant writes.               |
+| **Playwright OOM**               | Medium — kills pod            | Medium      | Strict k8s limits (2Gi). Agent catches connection drops and restarts DOM observation.                              |
+| **Compaction loop relapse**      | High — infinite token burn    | Low         | Hard limit of 3 retries on file-creation failures. Agent falls back to `ask: always` requiring human intervention. |
+| **PostgreSQL failure**           | Critical — all state lost     | Very Low    | WAL archiving, daily pg_dump, PVC snapshots.                                                                       |
+| **Qdrant data loss**             | Medium — memory degradation   | Low         | Daily snapshot backups, 7-day retention. Markdown files are authoritative source.                                  |
+| **Channel adapter silent death** | Medium — user disconnect      | Medium      | Per-channel synthetic heartbeats with automatic adapter restart.                                                   |
+| **LLM API outage**               | High — all agents stall       | Low         | Multi-provider failover (Claude → Gemini → GPT). Graceful degradation to `WAITING_FOR_APPROVAL`.                   |
 
 ---
 
@@ -919,22 +930,22 @@ Infrastructure is self-hosted (zero cloud compute cost). Operational costs shift
 
 ### A. Spike Index
 
-| # | Title | Status | Spike Document |
-|---|---|---|---|
-| 24 | Job State Machine Schema | ✅ Merged | [024-job-state-machine.md](spikes/024-job-state-machine.md) |
-| 25 | Agent Registry & Session Mapping | ✅ Merged | [025-agent-registry-session-mapping.md](spikes/025-agent-registry-session-mapping.md) |
-| 26 | Checkpoint & Approval Schema | ✅ Merged | [026-checkpoint-approval-schema.md](spikes/026-checkpoint-approval-schema.md) |
-| 27 | Project Structure & Tooling | ✅ Merged | [027-project-structure.md](spikes/027-project-structure.md) |
-| 28 | Graphile Retry, Timeout & Shutdown | ✅ Merged | [028-graphile-patterns.md](spikes/028-graphile-patterns.md) |
-| 29 | Qdrant Collection Schema & Decay | ✅ Merged | [029-qdrant-schema.md](spikes/029-qdrant-schema.md) |
-| 30 | Qdrant Deployment Topology | ✅ Merged | [030-qdrant-deployment.md](spikes/030-qdrant-deployment.md) |
-| 31 | JSONL Session Buffer & Recovery | ✅ Merged | [031-jsonl-buffer.md](spikes/031-jsonl-buffer.md) |
-| 32 | Memory Sync: Markdown Chunking | ✅ Merged | [032-memory-sync.md](spikes/032-memory-sync.md) |
-| 33 | Agent Pods: Security Model | 🔄 In Progress | — |
-| 34 | Agent Lifecycle State Machine | Pending | — |
-| 35 | Playwright Observe-Think-Act Loop | Pending | — |
-| 36 | Approval Gates UX & Integration | Pending | — |
-| 37 | Execution Backends Adapter Interface | Pending | — |
+| #   | Title                                | Status         | Spike Document                                                                        |
+| --- | ------------------------------------ | -------------- | ------------------------------------------------------------------------------------- |
+| 24  | Job State Machine Schema             | ✅ Merged      | [024-job-state-machine.md](spikes/024-job-state-machine.md)                           |
+| 25  | Agent Registry & Session Mapping     | ✅ Merged      | [025-agent-registry-session-mapping.md](spikes/025-agent-registry-session-mapping.md) |
+| 26  | Checkpoint & Approval Schema         | ✅ Merged      | [026-checkpoint-approval-schema.md](spikes/026-checkpoint-approval-schema.md)         |
+| 27  | Project Structure & Tooling          | ✅ Merged      | [027-project-structure.md](spikes/027-project-structure.md)                           |
+| 28  | Graphile Retry, Timeout & Shutdown   | ✅ Merged      | [028-graphile-patterns.md](spikes/028-graphile-patterns.md)                           |
+| 29  | Qdrant Collection Schema & Decay     | ✅ Merged      | [029-qdrant-schema.md](spikes/029-qdrant-schema.md)                                   |
+| 30  | Qdrant Deployment Topology           | ✅ Merged      | [030-qdrant-deployment.md](spikes/030-qdrant-deployment.md)                           |
+| 31  | JSONL Session Buffer & Recovery      | ✅ Merged      | [031-jsonl-buffer.md](spikes/031-jsonl-buffer.md)                                     |
+| 32  | Memory Sync: Markdown Chunking       | ✅ Merged      | [032-memory-sync.md](spikes/032-memory-sync.md)                                       |
+| 33  | Agent Pods: Security Model           | 🔄 In Progress | —                                                                                     |
+| 34  | Agent Lifecycle State Machine        | Pending        | —                                                                                     |
+| 35  | Playwright Observe-Think-Act Loop    | Pending        | —                                                                                     |
+| 36  | Approval Gates UX & Integration      | Pending        | —                                                                                     |
+| 37  | Execution Backends Adapter Interface | Pending        | —                                                                                     |
 
 ### B. References
 
@@ -948,12 +959,12 @@ Infrastructure is self-hosted (zero cloud compute cost). Operational costs shift
 
 ### C. Glossary
 
-| Term | Definition |
-|---|---|
-| **Control Plane** | The stateless orchestrator that manages jobs, agents, and channels. |
-| **Data Plane** | The agent pods that execute work. |
+| Term                  | Definition                                                                               |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| **Control Plane**     | The stateless orchestrator that manages jobs, agents, and channels.                      |
+| **Data Plane**        | The agent pods that execute work.                                                        |
 | **Execution Backend** | A pluggable coding model (Claude Code, Codex) that the control plane dispatches work to. |
-| **Approval Gate** | A checkpoint where execution pauses for human review. |
-| **Decay Score** | A composite score combining semantic similarity, recency, and utility to rank memories. |
-| **Session Buffer** | The JSONL event log that supplements PostgreSQL checkpoints. |
-| **Strangler Fig** | Migration pattern where the new system gradually replaces the old one. |
+| **Approval Gate**     | A checkpoint where execution pauses for human review.                                    |
+| **Decay Score**       | A composite score combining semantic similarity, recency, and utility to rank memories.  |
+| **Session Buffer**    | The JSONL event log that supplements PostgreSQL checkpoints.                             |
+| **Strangler Fig**     | Migration pattern where the new system gradually replaces the old one.                   |

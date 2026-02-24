@@ -37,22 +37,22 @@ This spike defines the security posture for agent pods: what they can do, what t
 
 ### Container Types
 
-| Container Type | Purpose | Image Base | Trust Level |
-|---|---|---|---|
-| **Core agent** | LLM calls, tool orchestration, MCP server interaction | `node:24-slim` | Semi-trusted — executes LLM-directed tool calls |
-| **Playwright** | Browser automation (scraping, form filling, testing) | `mcr.microsoft.com/playwright:v1.50.0-noble` | Low trust — navigates arbitrary web pages, executes page JS |
-| **Sidecar (future)** | Logging, metrics, proxy | TBD | Trusted — platform-controlled |
+| Container Type       | Purpose                                               | Image Base                                   | Trust Level                                                 |
+| -------------------- | ----------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------- |
+| **Core agent**       | LLM calls, tool orchestration, MCP server interaction | `node:24-slim`                               | Semi-trusted — executes LLM-directed tool calls             |
+| **Playwright**       | Browser automation (scraping, form filling, testing)  | `mcr.microsoft.com/playwright:v1.50.0-noble` | Low trust — navigates arbitrary web pages, executes page JS |
+| **Sidecar (future)** | Logging, metrics, proxy                               | TBD                                          | Trusted — platform-controlled                               |
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| k3s on ARM64 + x64 | Security policies must work on both architectures. k3s uses containerd, not Docker. |
-| Homelab — limited RAM (32–64 GB total cluster) | Agent pods cannot over-allocate. Hard limits are mandatory. |
-| Agent pods are ephemeral Jobs | Pods run to completion and are garbage-collected. No long-lived state in the pod. |
-| Control plane spawns pods via k8s API | The control plane's ServiceAccount needs pod/job creation rights; agent ServiceAccounts need almost nothing. |
-| `resource_limits` JSONB in agent table (spike #25) | Per-agent limits are stored in PostgreSQL and applied when the Job manifest is generated. |
-| Graphile Worker timeout hierarchy (spike #28) | Job-level timeouts enforce an outer bound; pod `activeDeadlineSeconds` is the last-resort kill. |
+| Constraint                                         | Implication                                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| k3s on ARM64 + x64                                 | Security policies must work on both architectures. k3s uses containerd, not Docker.                          |
+| Homelab — limited RAM (32–64 GB total cluster)     | Agent pods cannot over-allocate. Hard limits are mandatory.                                                  |
+| Agent pods are ephemeral Jobs                      | Pods run to completion and are garbage-collected. No long-lived state in the pod.                            |
+| Control plane spawns pods via k8s API              | The control plane's ServiceAccount needs pod/job creation rights; agent ServiceAccounts need almost nothing. |
+| `resource_limits` JSONB in agent table (spike #25) | Per-agent limits are stored in PostgreSQL and applied when the Job manifest is generated.                    |
+| Graphile Worker timeout hierarchy (spike #28)      | Job-level timeouts enforce an outer bound; pod `activeDeadlineSeconds` is the last-resort kill.              |
 
 ### Threat Model Summary
 
@@ -75,18 +75,19 @@ The security model assumes agent pods **will** be compromised and designs contai
 
 ### Options Evaluated
 
-| Capability | Need? | Rationale |
-|---|---|---|
-| `NET_BIND_SERVICE` | **No** | Agent pods don't bind to privileged ports (<1024). They make outbound HTTP requests; they don't listen. |
-| `NET_RAW` | **No** | No need for raw sockets, ICMP, or packet sniffing. |
-| `SYS_PTRACE` | **No** | No debugging of other processes. Playwright uses its own IPC, not ptrace. |
-| `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID` | **No** | Pods run as non-root with a fixed UID/GID. No file ownership changes needed. |
-| `SYS_ADMIN` | **Absolutely not** | This is the "do anything" capability. Dropping it prevents mount namespace manipulation, cgroup escape, BPF loading, and most container escape vectors. |
-| `MKNOD` | **No** | No device file creation. |
+| Capability                                            | Need?              | Rationale                                                                                                                                               |
+| ----------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NET_BIND_SERVICE`                                    | **No**             | Agent pods don't bind to privileged ports (<1024). They make outbound HTTP requests; they don't listen.                                                 |
+| `NET_RAW`                                             | **No**             | No need for raw sockets, ICMP, or packet sniffing.                                                                                                      |
+| `SYS_PTRACE`                                          | **No**             | No debugging of other processes. Playwright uses its own IPC, not ptrace.                                                                               |
+| `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID` | **No**             | Pods run as non-root with a fixed UID/GID. No file ownership changes needed.                                                                            |
+| `SYS_ADMIN`                                           | **Absolutely not** | This is the "do anything" capability. Dropping it prevents mount namespace manipulation, cgroup escape, BPF loading, and most container escape vectors. |
+| `MKNOD`                                               | **No**             | No device file creation.                                                                                                                                |
 
 ### Rationale
 
 Agent pods are ephemeral compute units. They:
+
 - Make outbound HTTPS requests to LLM APIs and MCP servers.
 - Read/write to a single mounted volume (workspace subpath).
 - Execute Node.js code and (optionally) Playwright browsers.
@@ -118,24 +119,24 @@ This is applied at the container level in every agent pod template.
 
 Kubernetes defines three Pod Security Standards levels:
 
-| Level | What It Enforces |
-|---|---|
-| **Privileged** | Nothing. Anything goes. |
-| **Baseline** | Blocks known privilege escalations: hostNetwork, hostPID, privileged containers, hostPath volumes. Allows most capabilities. |
+| Level          | What It Enforces                                                                                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Privileged** | Nothing. Anything goes.                                                                                                                                                                |
+| **Baseline**   | Blocks known privilege escalations: hostNetwork, hostPID, privileged containers, hostPath volumes. Allows most capabilities.                                                           |
 | **Restricted** | Everything in baseline, plus: must run as non-root, must drop ALL capabilities, read-only root filesystem, no privilege escalation, seccomp profile required, restricted volume types. |
 
 ### Options Evaluated
 
-| Criterion | Baseline | Restricted |
-|---|---|---|
-| Protection against known escalation | Yes | Yes |
-| Enforces non-root | No | Yes |
-| Enforces capability drop | No | Yes |
-| Enforces seccomp | No | Yes |
-| Enforces read-only root filesystem | No | Yes |
-| Compatibility with core agent | Full | Full — already designed for this |
-| Compatibility with Playwright | Full | **Needs /tmp writable** — use emptyDir mount |
-| Operational overhead | Low | Low — one-time pod spec adjustments |
+| Criterion                           | Baseline | Restricted                                   |
+| ----------------------------------- | -------- | -------------------------------------------- |
+| Protection against known escalation | Yes      | Yes                                          |
+| Enforces non-root                   | No       | Yes                                          |
+| Enforces capability drop            | No       | Yes                                          |
+| Enforces seccomp                    | No       | Yes                                          |
+| Enforces read-only root filesystem  | No       | Yes                                          |
+| Compatibility with core agent       | Full     | Full — already designed for this             |
+| Compatibility with Playwright       | Full     | **Needs /tmp writable** — use emptyDir mount |
+| Operational overhead                | Low      | Low — one-time pod spec adjustments          |
 
 ### Rationale
 
@@ -161,6 +162,7 @@ metadata:
 ```
 
 All three modes (`enforce`, `audit`, `warn`) are set to `restricted`. This means:
+
 - **enforce:** Pods that violate `restricted` are rejected at admission.
 - **audit:** Violations are logged to the API server audit log.
 - **warn:** kubectl users see warnings when creating non-compliant pods.
@@ -179,15 +181,16 @@ No version pinning — we use `latest` (the default) so that enforcement tracks 
 
 Per-agent ServiceAccounts (one per agent definition in the registry) was considered but rejected:
 
-| Criterion | Per-Agent SA | Shared SA |
-|---|---|---|
-| RBAC granularity | Each agent gets its own Role | All agents share one Role |
-| Operational overhead | Create/delete SA on agent CRUD | One SA, managed once |
-| Token rotation | N tokens to rotate | 1 token to rotate |
-| Audit trail | API audit log shows which agent's SA made a call | API audit log shows `agent-runner` (agent identity tracked in control plane logs, not k8s audit) |
-| Blast radius | Compromised SA only affects that agent's permissions | Compromised SA affects all agents — but SA has zero permissions anyway |
+| Criterion            | Per-Agent SA                                         | Shared SA                                                                                        |
+| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| RBAC granularity     | Each agent gets its own Role                         | All agents share one Role                                                                        |
+| Operational overhead | Create/delete SA on agent CRUD                       | One SA, managed once                                                                             |
+| Token rotation       | N tokens to rotate                                   | 1 token to rotate                                                                                |
+| Audit trail          | API audit log shows which agent's SA made a call     | API audit log shows `agent-runner` (agent identity tracked in control plane logs, not k8s audit) |
+| Blast radius         | Compromised SA only affects that agent's permissions | Compromised SA affects all agents — but SA has zero permissions anyway                           |
 
 **The key insight: agent pods don't need Kubernetes API access.** They don't list pods, read secrets, create configmaps, or interact with the k8s API at all. They:
+
 - Call external APIs (LLM providers, MCP servers) via HTTPS.
 - Read/write their workspace volume.
 - Connect to PostgreSQL and Qdrant via TCP.
@@ -251,7 +254,7 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get"]
-    resourceNames: []  # Populated per-agent; see Design Decision #3
+    resourceNames: [] # Populated per-agent; see Design Decision #3
 ```
 
 The `secrets` rule uses `resourceNames` to restrict which secrets the control plane can read. Each agent's secrets are named predictably (e.g., `agent-devops-agent-secrets`) and the Role is updated when agents are registered. This prevents the control plane from reading arbitrary secrets in the namespace.
@@ -295,17 +298,18 @@ Agent pods need a writable workspace for temporary files: downloaded documents, 
 
 ### Defense-in-Depth Strategy
 
-| Layer | Mechanism | Protects Against |
-|---|---|---|
-| **1. subPath mount** | Kubernetes mounts only the specified subdirectory into the pod. The pod cannot see the parent directory. | Direct `../` traversal via filesystem paths. |
-| **2. Non-root user** | Pod runs as UID 10000, GID 10000. Cannot `chown` or override file permissions. | Privilege escalation to access other users' files. |
-| **3. fsGroup** | All files on the PVC are owned by GID 10000. Agent processes run with this GID. No other GID is available. | Cross-agent file access (all agents use the same GID, but subPath prevents cross-directory access). |
-| **4. Read-only root filesystem** | The only writable locations are the workspace subpath mount and emptyDir volumes (`/tmp`). | Writing to arbitrary container filesystem locations. |
-| **5. No `CAP_DAC_OVERRIDE`** | Capability is dropped. Process cannot bypass file permission checks. | Ignoring file permissions to read/write protected files. |
+| Layer                            | Mechanism                                                                                                  | Protects Against                                                                                    |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **1. subPath mount**             | Kubernetes mounts only the specified subdirectory into the pod. The pod cannot see the parent directory.   | Direct `../` traversal via filesystem paths.                                                        |
+| **2. Non-root user**             | Pod runs as UID 10000, GID 10000. Cannot `chown` or override file permissions.                             | Privilege escalation to access other users' files.                                                  |
+| **3. fsGroup**                   | All files on the PVC are owned by GID 10000. Agent processes run with this GID. No other GID is available. | Cross-agent file access (all agents use the same GID, but subPath prevents cross-directory access). |
+| **4. Read-only root filesystem** | The only writable locations are the workspace subpath mount and emptyDir volumes (`/tmp`).                 | Writing to arbitrary container filesystem locations.                                                |
+| **5. No `CAP_DAC_OVERRIDE`**     | Capability is dropped. Process cannot bypass file permission checks.                                       | Ignoring file permissions to read/write protected files.                                            |
 
 ### SubPath Naming Convention
 
 The subpath directory name is derived from the Job ID (UUIDv7), not the agent slug. This ensures:
+
 - **Uniqueness:** Each job gets its own directory. No two jobs share a workspace.
 - **No name collision:** UUIDs cannot collide. Agent slugs could theoretically conflict with directory traversal patterns.
 - **Automatic cleanup:** When the Job is deleted (TTL or explicit cleanup), the workspace directory can be garbage-collected by a maintenance task.
@@ -314,18 +318,19 @@ The subpath directory name is derived from the Job ID (UUIDv7), not the agent sl
 volumeMounts:
   - name: agent-workspace
     mountPath: /workspace
-    subPath: "jobs/019508a7-1c2e-7000-8000-000000000001"  # Job UUIDv7
+    subPath: "jobs/019508a7-1c2e-7000-8000-000000000001" # Job UUIDv7
     readOnly: false
 ```
 
 ### Symlink Escape Mitigation
 
 Kubernetes v1.25+ (and k3s) resolves `subPath` values against the volume root at mount time, not at runtime. This means:
+
 - If the `subPath` value contains `..`, the kubelet rejects the mount.
 - If the subPath target is a symlink, the kubelet resolves it before mounting and verifies it stays within the volume.
 - The `subPathExpr` variant (which interpolates pod fields) is equally safe — the kubelet validates the resolved path.
 
-**However:** The pod process could create a symlink *inside* the mounted subpath pointing to `../../other-job/`. Since the mount is already scoped to the subpath, this symlink would resolve to a path *outside the mount*, which doesn't exist from the pod's perspective. The kernel enforces that paths within a mount namespace cannot escape the mount point.
+**However:** The pod process could create a symlink _inside_ the mounted subpath pointing to `../../other-job/`. Since the mount is already scoped to the subpath, this symlink would resolve to a path _outside the mount_, which doesn't exist from the pod's perspective. The kernel enforces that paths within a mount namespace cannot escape the mount point.
 
 ### Volume Specification
 
@@ -361,12 +366,13 @@ volumes:
 
 ### GID Selection
 
-| GID | Used By | Notes |
-|---|---|---|
-| `3000` | Qdrant (spike #30) | Qdrant's fsGroup in its StatefulSet. |
-| `10000` | **Agent pods** | Chosen to avoid conflicts with system GIDs (0–999), common application GIDs (1000–9999), and Qdrant. |
+| GID     | Used By            | Notes                                                                                                |
+| ------- | ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `3000`  | Qdrant (spike #30) | Qdrant's fsGroup in its StatefulSet.                                                                 |
+| `10000` | **Agent pods**     | Chosen to avoid conflicts with system GIDs (0–999), common application GIDs (1000–9999), and Qdrant. |
 
 Using a high GID (10000) avoids:
+
 - Collision with the `cortex` user created in the Dockerfile (spike #27), which uses a system-assigned GID.
 - Collision with any Qdrant, PostgreSQL, or monitoring pod GIDs.
 - Collision with the host system's groups.
@@ -390,7 +396,7 @@ spec:
     runAsGroup: 10000
     fsGroup: 10000
     runAsNonRoot: true
-    fsGroupChangePolicy: OnRootMismatch  # Only re-chown if needed; faster pod startup
+    fsGroupChangePolicy: OnRootMismatch # Only re-chown if needed; faster pod startup
   containers:
     - name: agent
       securityContext:
@@ -409,11 +415,11 @@ spec:
 
 ### Enforcement Across Pod Types
 
-| Pod Type | UID | GID | fsGroup | Notes |
-|---|---|---|---|---|
-| Core agent | 10000 | 10000 | 10000 | Standard agent user |
-| Playwright | 10000 | 10000 | 10000 | Playwright image supports arbitrary UID |
-| Sidecar (future) | 10000 | 10000 | 10000 | Same user for volume sharing |
+| Pod Type         | UID   | GID   | fsGroup | Notes                                   |
+| ---------------- | ----- | ----- | ------- | --------------------------------------- |
+| Core agent       | 10000 | 10000 | 10000   | Standard agent user                     |
+| Playwright       | 10000 | 10000 | 10000   | Playwright image supports arbitrary UID |
+| Sidecar (future) | 10000 | 10000 | 10000   | Same user for volume sharing            |
 
 Using the same UID/GID/fsGroup across all container types within a pod ensures that init containers, main containers, and sidecars can all access shared volumes without permission issues.
 
@@ -427,14 +433,14 @@ Using the same UID/GID/fsGroup across all container types within a pod ensures t
 
 ### Options Evaluated
 
-| Criterion | RuntimeDefault | Custom Profile |
-|---|---|---|
-| Blocked syscalls | ~50 dangerous syscalls (varies by runtime) | Any subset of ~300+ syscalls |
-| Maintenance | Zero — maintained by containerd/CRI-O | Must be written, tested, deployed to every node, and updated |
-| Compatibility | Works with all container images | Must be tested against every image; one missing syscall = crash |
-| Security value | Blocks known escalation syscalls (mount, reboot, kexec, bpf, etc.) | Can additionally block syscalls unused by your specific workload |
-| Pod Security Standards compliance | ✅ Satisfies `restricted` level | ✅ Also satisfies `restricted` level |
-| ARM64 + x64 | Works on both — runtime provides arch-specific profile | Custom profiles may need arch-specific syscall numbers |
+| Criterion                         | RuntimeDefault                                                     | Custom Profile                                                   |
+| --------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Blocked syscalls                  | ~50 dangerous syscalls (varies by runtime)                         | Any subset of ~300+ syscalls                                     |
+| Maintenance                       | Zero — maintained by containerd/CRI-O                              | Must be written, tested, deployed to every node, and updated     |
+| Compatibility                     | Works with all container images                                    | Must be tested against every image; one missing syscall = crash  |
+| Security value                    | Blocks known escalation syscalls (mount, reboot, kexec, bpf, etc.) | Can additionally block syscalls unused by your specific workload |
+| Pod Security Standards compliance | ✅ Satisfies `restricted` level                                    | ✅ Also satisfies `restricted` level                             |
+| ARM64 + x64                       | Works on both — runtime provides arch-specific profile             | Custom profiles may need arch-specific syscall numbers           |
 
 ### Rationale
 
@@ -459,6 +465,7 @@ This is set at the pod level and inherited by all containers.
 ### Future: When to Consider Custom Profiles
 
 Custom seccomp profiles become worthwhile when:
+
 - Running in a multi-tenant cluster where defense-in-depth against novel syscall-based exploits matters.
 - Compliance requirements mandate explicit syscall allowlisting (e.g., PCI DSS, SOC 2).
 - Threat modeling identifies a specific syscall-based attack vector not covered by RuntimeDefault.
@@ -475,10 +482,10 @@ None of these apply to a homelab k3s cluster today.
 
 **Decision:** Request 250m/256Mi, limit 500m/1Gi. Sufficient for LLM streaming and tool orchestration.
 
-| Resource | Request | Limit | Rationale |
-|---|---|---|---|
-| CPU | 250m | 500m | Agent work is I/O-bound (waiting for LLM API responses). CPU spikes during JSON parsing and tool output processing are short. 500m limit prevents a runaway process from consuming a full core. |
-| Memory | 256Mi | 1Gi | Node.js base footprint is ~50MB. Agent context (conversation history, tool results) lives in PostgreSQL, not in-memory. 1Gi limit handles large context assembly (100K-token conversations produce ~400KB of JSON) with headroom for dependency overhead. |
+| Resource | Request | Limit | Rationale                                                                                                                                                                                                                                                 |
+| -------- | ------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CPU      | 250m    | 500m  | Agent work is I/O-bound (waiting for LLM API responses). CPU spikes during JSON parsing and tool output processing are short. 500m limit prevents a runaway process from consuming a full core.                                                           |
+| Memory   | 256Mi   | 1Gi   | Node.js base footprint is ~50MB. Agent context (conversation history, tool results) lives in PostgreSQL, not in-memory. 1Gi limit handles large context assembly (100K-token conversations produce ~400KB of JSON) with headroom for dependency overhead. |
 
 **Why 1Gi is enough for large context processing:**
 
@@ -503,10 +510,10 @@ This gives V8 768MB for the heap, leaving ~256MB for the stack, native code, and
 
 **Decision:** Request 512Mi/500m, limit 2Gi/1000m. Chromium is memory-hungry; OOM must be handled gracefully.
 
-| Resource | Request | Limit | Rationale |
-|---|---|---|---|
-| CPU | 500m | 1000m | Chromium's rendering engine uses significant CPU for page layout, JS execution, and compositing. 1 core limit is sufficient for single-page interactions (our use case). |
-| Memory | 512Mi | 2Gi | Chromium + page content + rendered DOM. A typical page with moderate JS uses 200–500MB. Complex SPAs can hit 1GB+. 2Gi is the ceiling — OOM beyond this indicates a page that's too heavy. |
+| Resource | Request | Limit | Rationale                                                                                                                                                                                  |
+| -------- | ------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CPU      | 500m    | 1000m | Chromium's rendering engine uses significant CPU for page layout, JS execution, and compositing. 1 core limit is sufficient for single-page interactions (our use case).                   |
+| Memory   | 512Mi   | 2Gi   | Chromium + page content + rendered DOM. A typical page with moderate JS uses 200–500MB. Complex SPAs can hit 1GB+. 2Gi is the ceiling — OOM beyond this indicates a page that's too heavy. |
 
 **Why 2Gi, not more:**
 
@@ -536,11 +543,11 @@ The `medium: Memory` makes this a tmpfs mount (RAM-backed), which is what Chromi
 
 ### Resource Limit Matrix (Summary)
 
-| Container | CPU Request | CPU Limit | Mem Request | Mem Limit | Workspace Volume |
-|---|---|---|---|---|---|
-| Core agent | 250m | 500m | 256Mi | 1Gi | emptyDir 500Mi |
-| Playwright | 500m | 1000m | 512Mi | 2Gi | emptyDir 500Mi + /dev/shm 256Mi + /tmp emptyDir |
-| Sidecar (future) | 50m | 100m | 64Mi | 128Mi | — |
+| Container        | CPU Request | CPU Limit | Mem Request | Mem Limit | Workspace Volume                                |
+| ---------------- | ----------- | --------- | ----------- | --------- | ----------------------------------------------- |
+| Core agent       | 250m        | 500m      | 256Mi       | 1Gi       | emptyDir 500Mi                                  |
+| Playwright       | 500m        | 1000m     | 512Mi       | 2Gi       | emptyDir 500Mi + /dev/shm 256Mi + /tmp emptyDir |
+| Sidecar (future) | 50m         | 100m      | 64Mi        | 128Mi     | —                                               |
 
 ---
 
@@ -552,21 +559,21 @@ The `medium: Memory` makes this a tmpfs mount (RAM-backed), which is what Chromi
 
 ### QoS Classes in Kubernetes
 
-| QoS Class | Definition | Eviction Priority |
-|---|---|---|
-| **Guaranteed** | requests == limits for every container in the pod | Last to be evicted |
-| **Burstable** | At least one container has requests < limits | Evicted after BestEffort |
-| **BestEffort** | No requests or limits set | First to be evicted |
+| QoS Class      | Definition                                        | Eviction Priority        |
+| -------------- | ------------------------------------------------- | ------------------------ |
+| **Guaranteed** | requests == limits for every container in the pod | Last to be evicted       |
+| **Burstable**  | At least one container has requests < limits      | Evicted after BestEffort |
+| **BestEffort** | No requests or limits set                         | First to be evicted      |
 
 ### Options Evaluated
 
-| Criterion | Guaranteed | Burstable |
-|---|---|---|
-| Resource efficiency | Poor — reserves peak resources even when idle | Good — reserves baseline, bursts when available |
-| Eviction resistance | Highest — evicted last under memory pressure | Medium — evicted after BestEffort pods |
-| Cluster utilization | Low — 500m CPU is reserved even during I/O waits | High — 250m reserved, can burst to 500m |
-| Agent pod lifecycle | Agent pods are ephemeral (seconds to minutes) | Same |
-| Our pod mix | Agents + Qdrant + PostgreSQL + control plane | Same |
+| Criterion           | Guaranteed                                       | Burstable                                       |
+| ------------------- | ------------------------------------------------ | ----------------------------------------------- |
+| Resource efficiency | Poor — reserves peak resources even when idle    | Good — reserves baseline, bursts when available |
+| Eviction resistance | Highest — evicted last under memory pressure     | Medium — evicted after BestEffort pods          |
+| Cluster utilization | Low — 500m CPU is reserved even during I/O waits | High — 250m reserved, can burst to 500m         |
+| Agent pod lifecycle | Agent pods are ephemeral (seconds to minutes)    | Same                                            |
+| Our pod mix         | Agents + Qdrant + PostgreSQL + control plane     | Same                                            |
 
 ### Rationale
 
@@ -639,9 +646,9 @@ metadata:
     cortex.plane/agent-slug: ${AGENT_SLUG}
     cortex.plane/job-id: ${JOB_ID}
 spec:
-  backoffLimit: 0  # No k8s-level retries; retries managed by Graphile Worker (spike #28)
-  activeDeadlineSeconds: ${TIMEOUT_SECONDS}  # From agent.resource_limits.timeout_seconds
-  ttlSecondsAfterFinished: 300  # Cleanup completed Job after 5 minutes
+  backoffLimit: 0 # No k8s-level retries; retries managed by Graphile Worker (spike #28)
+  activeDeadlineSeconds: ${TIMEOUT_SECONDS} # From agent.resource_limits.timeout_seconds
+  ttlSecondsAfterFinished: 300 # Cleanup completed Job after 5 minutes
   template:
     metadata:
       labels:
@@ -901,40 +908,40 @@ description: "Ephemeral agent pods. Evicted before system components."
 
 ### Per-Container Sizing
 
-| Container | CPU Request | CPU Limit | Mem Request | Mem Limit | QoS Class | Notes |
-|---|---|---|---|---|---|---|
-| Core agent | 250m | 500m | 256Mi | 1Gi | Burstable | I/O-bound; V8 heap capped at 768MB |
-| Playwright sidecar | 500m | 1000m | 512Mi | 2Gi | Burstable | Chromium rendering; /dev/shm 256Mi |
-| Sidecar (future) | 50m | 100m | 64Mi | 128Mi | Burstable | Logging/metrics forwarder |
+| Container          | CPU Request | CPU Limit | Mem Request | Mem Limit | QoS Class | Notes                              |
+| ------------------ | ----------- | --------- | ----------- | --------- | --------- | ---------------------------------- |
+| Core agent         | 250m        | 500m      | 256Mi       | 1Gi       | Burstable | I/O-bound; V8 heap capped at 768MB |
+| Playwright sidecar | 500m        | 1000m     | 512Mi       | 2Gi       | Burstable | Chromium rendering; /dev/shm 256Mi |
+| Sidecar (future)   | 50m         | 100m      | 64Mi        | 128Mi     | Burstable | Logging/metrics forwarder          |
 
 ### Per-Pod Totals (Worst Case)
 
-| Pod Type | Total CPU Request | Total CPU Limit | Total Mem Request | Total Mem Limit |
-|---|---|---|---|---|
-| Core agent (no Playwright) | 250m | 500m | 256Mi | 1Gi |
-| Agent + Playwright | 750m | 1500m | 768Mi | 3Gi |
-| Agent + Playwright + sidecar | 800m | 1600m | 832Mi | 3.125Gi |
+| Pod Type                     | Total CPU Request | Total CPU Limit | Total Mem Request | Total Mem Limit |
+| ---------------------------- | ----------------- | --------------- | ----------------- | --------------- |
+| Core agent (no Playwright)   | 250m              | 500m            | 256Mi             | 1Gi             |
+| Agent + Playwright           | 750m              | 1500m           | 768Mi             | 3Gi             |
+| Agent + Playwright + sidecar | 800m              | 1600m           | 832Mi             | 3.125Gi         |
 
 ### Cluster Capacity Planning
 
 Assuming a homelab cluster with 2 nodes, each with 4 CPU cores and 16GB RAM (32GB total):
 
-| Scenario | Max Concurrent Core Agents | Max Concurrent Playwright Pods |
-|---|---|---|
-| **Available for agents** (after system pods) | ~6 CPU, ~24 GB | ~6 CPU, ~24 GB |
-| **Scheduled by requests** | 24 (6000m / 250m) | 8 (6000m / 750m) |
-| **Memory-limited** | 93 (24Gi / 256Mi) | 31 (24Gi / 768Mi) |
-| **Practical concurrency** | **~10–15** (mixed workload) | **~4–6** (with core agents) |
+| Scenario                                     | Max Concurrent Core Agents  | Max Concurrent Playwright Pods |
+| -------------------------------------------- | --------------------------- | ------------------------------ |
+| **Available for agents** (after system pods) | ~6 CPU, ~24 GB              | ~6 CPU, ~24 GB                 |
+| **Scheduled by requests**                    | 24 (6000m / 250m)           | 8 (6000m / 750m)               |
+| **Memory-limited**                           | 93 (24Gi / 256Mi)           | 31 (24Gi / 768Mi)              |
+| **Practical concurrency**                    | **~10–15** (mixed workload) | **~4–6** (with core agents)    |
 
 The practical limit is CPU, not memory. This is appropriate — agent pods are ephemeral and cycle quickly.
 
 ### Growth Thresholds
 
-| Scale | Agents/Day | Concurrent Peak | Action |
-|---|---|---|---|
-| **Day 1** | <50 jobs | 2–3 agents | Default limits. Monitor via Prometheus. |
-| **Growing** | 50–200 jobs | 5–8 agents | Consider adding a node. Watch eviction events. |
-| **Busy** | 200+ jobs | 10+ agents | Add dedicated agent node. Consider node affinity for Playwright. |
+| Scale       | Agents/Day  | Concurrent Peak | Action                                                           |
+| ----------- | ----------- | --------------- | ---------------------------------------------------------------- |
+| **Day 1**   | <50 jobs    | 2–3 agents      | Default limits. Monitor via Prometheus.                          |
+| **Growing** | 50–200 jobs | 5–8 agents      | Consider adding a node. Watch eviction events.                   |
+| **Busy**    | 200+ jobs   | 10+ agents      | Add dedicated agent node. Consider node affinity for Playwright. |
 
 ---
 
@@ -943,6 +950,7 @@ The practical limit is CPU, not memory. This is appropriate — agent pods are e
 ### Agent Pod Egress
 
 Agent pods can reach:
+
 - LLM API endpoints (HTTPS, port 443)
 - MCP servers (configurable ports)
 - PostgreSQL (port 5432, within cluster)
@@ -950,6 +958,7 @@ Agent pods can reach:
 - DNS (port 53, kube-dns)
 
 Agent pods **cannot** reach:
+
 - Other agent pods (no agent-to-agent communication)
 - The Kubernetes API server (no SA token mounted, but belt-and-suspenders via NetworkPolicy)
 - Host network services (NodePort, host ports)
@@ -972,7 +981,7 @@ spec:
       app: cortex-agent
   policyTypes:
     - Ingress
-  ingress: []  # No inbound traffic to agent pods — they don't serve requests
+  ingress: [] # No inbound traffic to agent pods — they don't serve requests
 ---
 # Policy 2: Agent egress — strict allowlist
 apiVersion: networking.k8s.io/v1
@@ -1023,9 +1032,9 @@ spec:
         - ipBlock:
             cidr: 0.0.0.0/0
             except:
-              - 10.0.0.0/8       # Block private ranges (cluster network)
-              - 172.16.0.0/12    # Block private ranges
-              - 192.168.0.0/16   # Block private ranges (homelab LAN)
+              - 10.0.0.0/8 # Block private ranges (cluster network)
+              - 172.16.0.0/12 # Block private ranges
+              - 192.168.0.0/16 # Block private ranges (homelab LAN)
       ports:
         - port: 443
           protocol: TCP
@@ -1109,7 +1118,7 @@ spec:
     # Kubernetes API server (for Job management)
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0  # API server IP varies; allow all, scoped by RBAC
+            cidr: 0.0.0.0/0 # API server IP varies; allow all, scoped by RBAC
       ports:
         - port: 6443
           protocol: TCP
@@ -1136,15 +1145,15 @@ spec:
 
 **Mitigations:**
 
-| Layer | Control | Effect |
-|---|---|---|
-| Application | Tool call allowlist — only approved tools execute | Blocks unknown commands |
-| Application | Tool argument validation — shell metacharacter filtering | Blocks injection in approved tools |
-| Container | Non-root (UID 10000) | Cannot read `/etc/shadow` |
-| Container | Read-only root filesystem | Cannot write to container filesystem |
-| Container | Capabilities dropped (ALL) | Cannot elevate privileges |
-| Network | Egress NetworkPolicy — only HTTPS 443 to external | Blocks `curl attacker.com` on non-443 ports |
-| Network | Private IP block in egress | Blocks LAN scanning |
+| Layer       | Control                                                  | Effect                                      |
+| ----------- | -------------------------------------------------------- | ------------------------------------------- |
+| Application | Tool call allowlist — only approved tools execute        | Blocks unknown commands                     |
+| Application | Tool argument validation — shell metacharacter filtering | Blocks injection in approved tools          |
+| Container   | Non-root (UID 10000)                                     | Cannot read `/etc/shadow`                   |
+| Container   | Read-only root filesystem                                | Cannot write to container filesystem        |
+| Container   | Capabilities dropped (ALL)                               | Cannot elevate privileges                   |
+| Network     | Egress NetworkPolicy — only HTTPS 443 to external        | Blocks `curl attacker.com` on non-443 ports |
+| Network     | Private IP block in egress                               | Blocks LAN scanning                         |
 
 **Residual risk:** If the tool allowlist includes a shell-like tool (e.g., `execute_code`), the LLM can run arbitrary code within the container. The blast radius is limited to: (a) data visible in the container's environment variables, (b) data on the workspace volume, (c) exfiltration over HTTPS to external hosts. Mitigation: scope the `execute_code` tool to a further-sandboxed environment (e.g., a child process with rlimits, or a separate container).
 
@@ -1154,13 +1163,13 @@ spec:
 
 **Mitigations:**
 
-| Layer | Control | Effect |
-|---|---|---|
-| Seccomp | RuntimeDefault profile | Blocks many syscalls used in kernel exploits (`unshare`, `userfaultfd`, `bpf`, `mount`) |
-| Capabilities | Drop ALL | Blocks `CAP_SYS_ADMIN` required by most escape exploits |
-| User namespace | Non-root (UID 10000) | Not root inside the container; many exploits require in-container root |
-| Pod Security | `allowPrivilegeEscalation: false` | Prevents setuid binaries and capability escalation |
-| Kernel | Keep k3s and kernel updated | Patch known CVEs promptly |
+| Layer          | Control                           | Effect                                                                                  |
+| -------------- | --------------------------------- | --------------------------------------------------------------------------------------- |
+| Seccomp        | RuntimeDefault profile            | Blocks many syscalls used in kernel exploits (`unshare`, `userfaultfd`, `bpf`, `mount`) |
+| Capabilities   | Drop ALL                          | Blocks `CAP_SYS_ADMIN` required by most escape exploits                                 |
+| User namespace | Non-root (UID 10000)              | Not root inside the container; many exploits require in-container root                  |
+| Pod Security   | `allowPrivilegeEscalation: false` | Prevents setuid binaries and capability escalation                                      |
+| Kernel         | Keep k3s and kernel updated       | Patch known CVEs promptly                                                               |
 
 **Residual risk:** A zero-day kernel exploit that doesn't require any dropped capability or blocked syscall. This is the hardest threat to mitigate at the container level. Mitigations: (a) keep the kernel updated, (b) consider gVisor or Kata Containers for stronger isolation (see Open Questions), (c) accept the risk for a homelab environment.
 
@@ -1170,11 +1179,11 @@ spec:
 
 **Mitigations:**
 
-| Layer | Control | Effect |
-|---|---|---|
-| ServiceAccount | `automountServiceAccountToken: false` | Token is not mounted. The file doesn't exist. |
-| RBAC | `agent-runner` SA has zero permissions | Even if a token were obtained, it can't do anything. |
-| NetworkPolicy | Agent egress to API server port 6443 is blocked (private IP exclusion) | Can't reach the API server over the network. |
+| Layer          | Control                                                                | Effect                                               |
+| -------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| ServiceAccount | `automountServiceAccountToken: false`                                  | Token is not mounted. The file doesn't exist.        |
+| RBAC           | `agent-runner` SA has zero permissions                                 | Even if a token were obtained, it can't do anything. |
+| NetworkPolicy  | Agent egress to API server port 6443 is blocked (private IP exclusion) | Can't reach the API server over the network.         |
 
 **Residual risk:** Near zero. Three independent controls must all fail simultaneously.
 
@@ -1184,13 +1193,13 @@ spec:
 
 **Mitigations:**
 
-| Layer | Control | Effect |
-|---|---|---|
-| Chromium | Browser sandbox (process-per-site, seccomp within Chromium) | Renderer RCE is contained to the renderer process |
-| Container | Non-root, read-only filesystem, capabilities dropped | Even if the Chromium sandbox is bypassed, the attacker is in a restricted container |
-| Network | Egress limited to HTTPS 443 | Exfiltration limited to HTTPS; no raw socket, no non-standard ports |
-| Application | URL allowlist/blocklist in agent config | Prevents navigation to known-malicious domains |
-| Resource | Memory limit 2Gi, CPU limit 1 core | Prevents crypto mining or DoS from a malicious page consuming cluster resources |
+| Layer       | Control                                                     | Effect                                                                              |
+| ----------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Chromium    | Browser sandbox (process-per-site, seccomp within Chromium) | Renderer RCE is contained to the renderer process                                   |
+| Container   | Non-root, read-only filesystem, capabilities dropped        | Even if the Chromium sandbox is bypassed, the attacker is in a restricted container |
+| Network     | Egress limited to HTTPS 443                                 | Exfiltration limited to HTTPS; no raw socket, no non-standard ports                 |
+| Application | URL allowlist/blocklist in agent config                     | Prevents navigation to known-malicious domains                                      |
+| Resource    | Memory limit 2Gi, CPU limit 1 core                          | Prevents crypto mining or DoS from a malicious page consuming cluster resources     |
 
 **Residual risk:** Chromium zero-day + container escape chain. Theoretical but real — Chromium has had sandbox bypass CVEs. The container-level controls (seccomp, capabilities, non-root) act as a second sandbox. For higher assurance, run Playwright pods on a dedicated node with node taints.
 
@@ -1200,22 +1209,22 @@ spec:
 
 **Mitigations:**
 
-| Layer | Control | Effect |
-|---|---|---|
-| NetworkPolicy | DNS egress only to kube-system (CoreDNS) | DNS queries go through CoreDNS, not directly to external resolvers |
-| CoreDNS | CoreDNS resolves via upstream DNS; the query content is visible to CoreDNS logging | Detection — log DNS queries and alert on anomalous patterns |
+| Layer         | Control                                                                            | Effect                                                             |
+| ------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| NetworkPolicy | DNS egress only to kube-system (CoreDNS)                                           | DNS queries go through CoreDNS, not directly to external resolvers |
+| CoreDNS       | CoreDNS resolves via upstream DNS; the query content is visible to CoreDNS logging | Detection — log DNS queries and alert on anomalous patterns        |
 
 **Residual risk:** DNS tunneling through CoreDNS is still possible — CoreDNS forwards queries to upstream resolvers, and the query content reaches the internet. Mitigation: CoreDNS request logging + anomaly detection (long query names, high query volume from a single pod). For a homelab, this risk is accepted.
 
 ### Threat Matrix Summary
 
-| Scenario | Likelihood | Impact | Mitigations | Residual Risk |
-|---|---|---|---|---|
-| LLM command injection | **High** | Medium | Tool allowlist, validation, non-root, read-only FS, NetworkPolicy | Moderate — depends on tool surface area |
-| Kernel exploit escape | Low | **Critical** | Seccomp, capabilities, non-root, patching | Low — requires zero-day |
-| SA token theft | Low | High | Token not mounted, zero RBAC, NetworkPolicy | **Near zero** |
-| Playwright page exploit | Medium | Medium | Chromium sandbox, container sandbox, NetworkPolicy | Low — requires double sandbox bypass |
-| DNS exfiltration | Low | Medium | CoreDNS-only DNS, logging | Low — detection-based |
+| Scenario                | Likelihood | Impact       | Mitigations                                                       | Residual Risk                           |
+| ----------------------- | ---------- | ------------ | ----------------------------------------------------------------- | --------------------------------------- |
+| LLM command injection   | **High**   | Medium       | Tool allowlist, validation, non-root, read-only FS, NetworkPolicy | Moderate — depends on tool surface area |
+| Kernel exploit escape   | Low        | **Critical** | Seccomp, capabilities, non-root, patching                         | Low — requires zero-day                 |
+| SA token theft          | Low        | High         | Token not mounted, zero RBAC, NetworkPolicy                       | **Near zero**                           |
+| Playwright page exploit | Medium     | Medium       | Chromium sandbox, container sandbox, NetworkPolicy                | Low — requires double sandbox bypass    |
+| DNS exfiltration        | Low        | Medium       | CoreDNS-only DNS, logging                                         | Low — detection-based                   |
 
 ---
 
@@ -1226,6 +1235,7 @@ spec:
 Chromium is memory-unpredictable. A page with a large DOM, heavy JavaScript, or a memory leak can push Chromium past the 2Gi container limit. When this happens, the OOM killer sends SIGKILL to the container — no cleanup, no graceful shutdown, no error message.
 
 The agent process (in the core agent container) sees the Playwright sidecar die and needs to:
+
 1. Detect the OOM kill.
 2. Report a meaningful error (not "connection refused" or "socket closed").
 3. Decide whether to retry.
@@ -1248,6 +1258,7 @@ When the Playwright container is OOM-killed, the pod's container status shows:
 Exit code 137 = 128 + 9 (SIGKILL). The `reason: OOMKilled` is set by the kubelet.
 
 **In the agent process**, the Playwright connection (via WebSocket to the browser) drops abruptly. The agent detects this as:
+
 - `playwright.chromium.connect()` throws `Error: browserType.connect: Target page, context or browser has been closed`.
 - Any in-flight page operation rejects with a connection error.
 
@@ -1296,11 +1307,11 @@ volumeMounts:
 
 ### Retry Strategy for OOM
 
-| Attempt | Strategy | Rationale |
-|---|---|---|
-| 1st OOM | Retry with `--disable-javascript` | Many OOM cases are caused by heavy JS frameworks. Disabling JS reduces memory by 50–80%. |
-| 2nd OOM | Retry with reduced viewport (800x600) | Smaller viewport = smaller render tree = less memory. |
-| 3rd OOM | Fail permanently with `RESOURCE_EXHAUSTION` | The page is inherently too heavy for the 2Gi limit. |
+| Attempt | Strategy                                    | Rationale                                                                                |
+| ------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1st OOM | Retry with `--disable-javascript`           | Many OOM cases are caused by heavy JS frameworks. Disabling JS reduces memory by 50–80%. |
+| 2nd OOM | Retry with reduced viewport (800x600)       | Smaller viewport = smaller render tree = less memory.                                    |
+| 3rd OOM | Fail permanently with `RESOURCE_EXHAUSTION` | The page is inherently too heavy for the 2Gi limit.                                      |
 
 The retry strategy is implemented in the agent's Playwright tool handler, not in Graphile Worker. Worker retries are for infrastructure failures; OOM retries are domain-specific:
 
@@ -1311,35 +1322,41 @@ async function browseWithOomRetry(
   maxAttempts = 3,
 ): Promise<BrowseResult> {
   const strategies: BrowseOptions[] = [
-    options,                                          // attempt 1: normal
-    { ...options, javaScriptEnabled: false },          // attempt 2: no JS
-    { ...options, javaScriptEnabled: false,            // attempt 3: no JS + small viewport
-      viewport: { width: 800, height: 600 } },
-  ];
+    options, // attempt 1: normal
+    { ...options, javaScriptEnabled: false }, // attempt 2: no JS
+    {
+      ...options,
+      javaScriptEnabled: false, // attempt 3: no JS + small viewport
+      viewport: { width: 800, height: 600 },
+    },
+  ]
 
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      return await browse(url, strategies[i]!);
+      return await browse(url, strategies[i]!)
     } catch (error) {
       if (isOomError(error) && i < maxAttempts - 1) {
-        logger.warn({ url, attempt: i + 1, strategy: strategies[i + 1] },
-          "Playwright OOM, retrying with reduced resources");
-        continue;
+        logger.warn(
+          { url, attempt: i + 1, strategy: strategies[i + 1] },
+          "Playwright OOM, retrying with reduced resources",
+        )
+        continue
       }
-      throw error;
+      throw error
     }
   }
-  throw new Error("unreachable");
+  throw new Error("unreachable")
 }
 
 function isOomError(error: unknown): boolean {
   // Playwright connection drops abruptly on OOM — no clean error code.
   // Heuristic: connection error + no prior page.close() call.
-  return error instanceof Error && (
-    error.message.includes("Target page, context or browser has been closed") ||
-    error.message.includes("browser has been closed") ||
-    error.message.includes("Connection closed")
-  );
+  return (
+    error instanceof Error &&
+    (error.message.includes("Target page, context or browser has been closed") ||
+      error.message.includes("browser has been closed") ||
+      error.message.includes("Connection closed"))
+  )
 }
 ```
 

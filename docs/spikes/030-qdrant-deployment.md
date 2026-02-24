@@ -33,26 +33,26 @@ Spike #29 defined the Qdrant collection schema, memory types, decay model, and s
 
 The target environment is a homelab k3s cluster. The projected scale (spike #29) is:
 
-| Metric | Projection |
-|---|---|
-| Total vectors (1 year) | ~100K across all agents |
-| Collections | <20 (one per agent) |
-| Vector dimensions | 1536 (text-embedding-3-small) |
-| Quantization | Scalar int8 (enabled from day one) |
+| Metric                         | Projection                                 |
+| ------------------------------ | ------------------------------------------ |
+| Total vectors (1 year)         | ~100K across all agents                    |
+| Collections                    | <20 (one per agent)                        |
+| Vector dimensions              | 1536 (text-embedding-3-small)              |
+| Quantization                   | Scalar int8 (enabled from day one)         |
 | Per-vector storage (quantized) | ~2.1 KB (vector + payload + HNSW overhead) |
-| Total data size (quantized) | ~210 MB |
+| Total data size (quantized)    | ~210 MB                                    |
 
 This is a small deployment. Every decision in this spike optimizes for simplicity and operability on constrained hardware, not for enterprise scale. When a simple option exists, we take it.
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| k3s on ARM64 + x64 | `qdrant/qdrant` official images support both architectures. |
-| Homelab — limited RAM | Total cluster memory is finite. Qdrant cannot consume unbounded RAM. |
+| Constraint                | Implication                                                                |
+| ------------------------- | -------------------------------------------------------------------------- |
+| k3s on ARM64 + x64        | `qdrant/qdrant` official images support both architectures.                |
+| Homelab — limited RAM     | Total cluster memory is finite. Qdrant cannot consume unbounded RAM.       |
 | Homelab — limited storage | No cloud-provisioned SSDs. Local NVMe or SSD via `local-path` provisioner. |
-| Stateless control plane | Control plane connects to Qdrant via REST/gRPC as an external service. |
-| `qdrant/qdrant:v1.13.2` | Pinned version from spike #27's docker-compose.yml. |
+| Stateless control plane   | Control plane connects to Qdrant via REST/gRPC as an external service.     |
+| `qdrant/qdrant:v1.13.2`   | Pinned version from spike #27's docker-compose.yml.                        |
 
 ---
 
@@ -64,14 +64,14 @@ This is a small deployment. Every decision in this spike optimizes for simplicit
 
 ### Options Evaluated
 
-| Criterion | Single Node | Replicated (2–3 nodes) |
-|---|---|---|
-| Operational complexity | StatefulSet with 1 replica. Done. | Raft consensus, shard replication, peer discovery. |
-| RAM cost | 1× | 2–3× (each replica holds the full dataset) |
-| Availability | Pod restart = brief downtime (~5–10s) | Survives single-node failure. |
-| Data durability | PVC survives pod restart. Node failure = restore from backup. | Replicated across nodes. |
-| Homelab fit | Excellent — minimal resources. | Poor — wastes scarce RAM on redundancy. |
-| Qdrant cluster mode | Disabled. No P2P port needed. | Required. Adds complexity. |
+| Criterion              | Single Node                                                   | Replicated (2–3 nodes)                             |
+| ---------------------- | ------------------------------------------------------------- | -------------------------------------------------- |
+| Operational complexity | StatefulSet with 1 replica. Done.                             | Raft consensus, shard replication, peer discovery. |
+| RAM cost               | 1×                                                            | 2–3× (each replica holds the full dataset)         |
+| Availability           | Pod restart = brief downtime (~5–10s)                         | Survives single-node failure.                      |
+| Data durability        | PVC survives pod restart. Node failure = restore from backup. | Replicated across nodes.                           |
+| Homelab fit            | Excellent — minimal resources.                                | Poor — wastes scarce RAM on redundancy.            |
+| Qdrant cluster mode    | Disabled. No P2P port needed.                                 | Required. Adds complexity.                         |
 
 ### Rationale
 
@@ -95,16 +95,16 @@ This is a small deployment. Every decision in this spike optimizes for simplicit
 
 ### Size Calculation
 
-| Component | Size at 100K vectors | Notes |
-|---|---|---|
-| Quantized vectors (int8) | ~150 MB | 100K × 1536 bytes |
-| Original vectors (float32, on-disk for rescoring) | ~600 MB | 100K × 6,144 bytes |
-| Payloads | ~50 MB | 100K × ~500 bytes avg |
-| HNSW index | ~13 MB | 100K × ~128 bytes (m=16) |
-| WAL segments | ~32 MB | Default WAL segment capacity |
-| Snapshots (1 latest) | ~850 MB | Approximate full collection snapshot |
-| **Subtotal** | **~1.7 GB** | |
-| **With 5× headroom** | **~8.5 GB** | Room for growth, optimization scratch space, temporary segments |
+| Component                                         | Size at 100K vectors | Notes                                                           |
+| ------------------------------------------------- | -------------------- | --------------------------------------------------------------- |
+| Quantized vectors (int8)                          | ~150 MB              | 100K × 1536 bytes                                               |
+| Original vectors (float32, on-disk for rescoring) | ~600 MB              | 100K × 6,144 bytes                                              |
+| Payloads                                          | ~50 MB               | 100K × ~500 bytes avg                                           |
+| HNSW index                                        | ~13 MB               | 100K × ~128 bytes (m=16)                                        |
+| WAL segments                                      | ~32 MB               | Default WAL segment capacity                                    |
+| Snapshots (1 latest)                              | ~850 MB              | Approximate full collection snapshot                            |
+| **Subtotal**                                      | **~1.7 GB**          |                                                                 |
+| **With 5× headroom**                              | **~8.5 GB**          | Room for growth, optimization scratch space, temporary segments |
 
 **10 GiB** provides comfortable headroom beyond the 5× projection. Qdrant's optimizer creates temporary segments during merges that briefly double the segment storage — the headroom accounts for this.
 
@@ -112,18 +112,19 @@ This is a small deployment. Every decision in this spike optimizes for simplicit
 
 **Decision:** `local-path` (k3s default provisioner) on an SSD-backed node.
 
-| Option | Fit |
-|---|---|
-| `local-path` (SSD node) | **Best.** Local NVMe/SSD provides the IOPS that HNSW indexing and WAL writes need. Zero network hops. |
-| `local-path` (HDD node) | Acceptable for cold data. Not recommended — HNSW index traversal is random I/O, which HDDs handle poorly. |
-| NFS / network storage | **Not compatible.** Qdrant requires POSIX-compliant block storage. NFS has known issues with mmap and file locking that Qdrant relies on. |
-| Longhorn (replicated storage) | Overkill. Adds network latency to every I/O. The data is reconstructable — we don't need storage-level replication. |
+| Option                        | Fit                                                                                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `local-path` (SSD node)       | **Best.** Local NVMe/SSD provides the IOPS that HNSW indexing and WAL writes need. Zero network hops.                                     |
+| `local-path` (HDD node)       | Acceptable for cold data. Not recommended — HNSW index traversal is random I/O, which HDDs handle poorly.                                 |
+| NFS / network storage         | **Not compatible.** Qdrant requires POSIX-compliant block storage. NFS has known issues with mmap and file locking that Qdrant relies on. |
+| Longhorn (replicated storage) | Overkill. Adds network latency to every I/O. The data is reconstructable — we don't need storage-level replication.                       |
 
 **SSD vs HDD matters.** Qdrant's HNSW graph traversal performs random reads across the index. On HDD, each random read incurs a 5–10ms seek. On SSD, it's <0.1ms. For a graph traversal touching 100–200 nodes per query, that's the difference between 1ms and 1000ms. SSD is required for acceptable query latency.
 
 ### PVC Resize
 
 If 10 GiB becomes insufficient:
+
 - k3s `local-path` provisioner does **not** support volume expansion.
 - Resize requires: snapshot → delete PVC → create larger PVC → restore snapshot.
 - The backup runbook (Artifact 3) covers this procedure.
@@ -138,15 +139,15 @@ If 10 GiB becomes insufficient:
 
 ### Memory Breakdown at 100K Vectors (Quantized)
 
-| Component | RAM Usage | Notes |
-|---|---|---|
-| Quantized vectors (int8, always_ram) | ~150 MB | `always_ram: true` in quantization config |
-| HNSW graph (in-memory) | ~13 MB | m=16, 128 bytes per point |
-| Payload indexes (keyword, integer) | ~30 MB | 6 indexed fields |
-| Payload data (in-memory, `on_disk_payload: false`) | ~50 MB | All payloads in RAM for fast filtered retrieval |
-| Qdrant process overhead | ~100 MB | Runtime, gRPC/HTTP servers, connection pools |
-| Optimizer scratch space | ~100 MB | Temporary buffers during segment merges |
-| **Total at 100K** | **~443 MB** | |
+| Component                                          | RAM Usage   | Notes                                           |
+| -------------------------------------------------- | ----------- | ----------------------------------------------- |
+| Quantized vectors (int8, always_ram)               | ~150 MB     | `always_ram: true` in quantization config       |
+| HNSW graph (in-memory)                             | ~13 MB      | m=16, 128 bytes per point                       |
+| Payload indexes (keyword, integer)                 | ~30 MB      | 6 indexed fields                                |
+| Payload data (in-memory, `on_disk_payload: false`) | ~50 MB      | All payloads in RAM for fast filtered retrieval |
+| Qdrant process overhead                            | ~100 MB     | Runtime, gRPC/HTTP servers, connection pools    |
+| Optimizer scratch space                            | ~100 MB     | Temporary buffers during segment merges         |
+| **Total at 100K**                                  | **~443 MB** |                                                 |
 
 Original float32 vectors are stored on disk (not in RAM) thanks to scalar quantization with `always_ram: true` — only the compressed int8 copies live in memory. Rescoring (if needed) reads from disk, which is acceptable at our query volume.
 
@@ -156,10 +157,10 @@ At 100K quantized vectors, Qdrant uses ~450 MB. Allocating 8 GB wastes 7.5 GB of
 
 ### Recommended Allocation
 
-| Parameter | Value | Rationale |
-|---|---|---|
-| `requests.memory` | `1Gi` | Covers current usage (~450 MB) with room for burst. Scheduler can place the pod on any node with 1 GB free. |
-| `limits.memory` | `2Gi` | Hard ceiling. If Qdrant somehow exceeds 2 GB (runaway segment optimization, memory leak), the OOM killer terminates it. Pod restarts cleanly via StatefulSet. |
+| Parameter         | Value | Rationale                                                                                                                                                     |
+| ----------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requests.memory` | `1Gi` | Covers current usage (~450 MB) with room for burst. Scheduler can place the pod on any node with 1 GB free.                                                   |
+| `limits.memory`   | `2Gi` | Hard ceiling. If Qdrant somehow exceeds 2 GB (runaway segment optimization, memory leak), the OOM killer terminates it. Pod restarts cleanly via StatefulSet. |
 
 At 2 GiB limit, Qdrant can comfortably handle up to ~400K quantized vectors before approaching the ceiling. That's 4× our 1-year projection — years of headroom.
 
@@ -178,12 +179,12 @@ At 2 GiB limit, Qdrant can comfortably handle up to ~400K quantized vectors befo
 
 ### Workload Profile
 
-| Operation | CPU Pattern | Frequency |
-|---|---|---|
-| **Serving (ANN search)** | Short bursts, single-threaded per query | Every agent turn — ~10–50 queries/day |
-| **Indexing (HNSW build)** | CPU-intensive, multi-threaded | On memory writes — ~50–200 writes/day |
-| **Optimization (segment merge)** | Background, CPU-intensive | Periodic — triggered by segment count threshold |
-| **Idle** | Near zero | Most of the time |
+| Operation                        | CPU Pattern                             | Frequency                                       |
+| -------------------------------- | --------------------------------------- | ----------------------------------------------- |
+| **Serving (ANN search)**         | Short bursts, single-threaded per query | Every agent turn — ~10–50 queries/day           |
+| **Indexing (HNSW build)**        | CPU-intensive, multi-threaded           | On memory writes — ~50–200 writes/day           |
+| **Optimization (segment merge)** | Background, CPU-intensive               | Periodic — triggered by segment count threshold |
+| **Idle**                         | Near zero                               | Most of the time                                |
 
 At homelab scale, Qdrant is idle most of the time. Agent conversations happen in bursts. The CPU requirement is dominated by occasional indexing operations, not sustained query load.
 
@@ -199,10 +200,10 @@ With a 2-core limit, this means: 1 core for indexing, 1 core for serving. This i
 
 ### Recommended Allocation
 
-| Parameter | Value | Rationale |
-|---|---|---|
-| `requests.cpu` | `250m` | Qdrant is mostly idle. 250m guarantees scheduling without hoarding CPU from other pods. |
-| `limits.cpu` | `2` | Allows indexing bursts to use 2 full cores. Prevents runaway optimization from starving the cluster. |
+| Parameter      | Value  | Rationale                                                                                            |
+| -------------- | ------ | ---------------------------------------------------------------------------------------------------- |
+| `requests.cpu` | `250m` | Qdrant is mostly idle. 250m guarantees scheduling without hoarding CPU from other pods.              |
+| `limits.cpu`   | `2`    | Allows indexing bursts to use 2 full cores. Prevents runaway optimization from starving the cluster. |
 
 ### Why Not More?
 
@@ -229,12 +230,13 @@ Qdrant's indexing is fast at small scale. Building an HNSW index for 10K vectors
 
 ### Why Qdrant-Native Snapshots (Not PVC Snapshots)
 
-| Approach | Pros | Cons |
-|---|---|---|
-| **Qdrant snapshot API** | Application-consistent. Qdrant ensures the snapshot is a valid point-in-time image. Portable — can restore to any Qdrant instance. | Requires API call per collection. Snapshot sits in Qdrant's storage directory. |
-| **PVC/volume snapshot** | Infrastructure-level. No application awareness needed. | Not application-consistent — can capture mid-write state. Requires CSI driver with snapshot support (k3s `local-path` doesn't have this). Tied to the storage backend. |
+| Approach                | Pros                                                                                                                               | Cons                                                                                                                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Qdrant snapshot API** | Application-consistent. Qdrant ensures the snapshot is a valid point-in-time image. Portable — can restore to any Qdrant instance. | Requires API call per collection. Snapshot sits in Qdrant's storage directory.                                                                                         |
+| **PVC/volume snapshot** | Infrastructure-level. No application awareness needed.                                                                             | Not application-consistent — can capture mid-write state. Requires CSI driver with snapshot support (k3s `local-path` doesn't have this). Tied to the storage backend. |
 
 Qdrant's snapshot API wins because:
+
 1. It's **application-consistent** — the snapshot is always a valid state.
 2. k3s `local-path` doesn't support CSI volume snapshots.
 3. The snapshot tar files are portable — restore to any Qdrant instance, any cloud.
@@ -263,21 +265,21 @@ The backup runbook (Artifact 3) provides step-by-step procedures.
 
 ### Service Configuration
 
-| Port | Protocol | Purpose |
-|---|---|---|
-| 6333 | HTTP | REST API — used by `@qdrant/js-client-rest`, health checks, metrics |
-| 6334 | gRPC | gRPC API — higher throughput for batch operations |
+| Port | Protocol | Purpose                                                             |
+| ---- | -------- | ------------------------------------------------------------------- |
+| 6333 | HTTP     | REST API — used by `@qdrant/js-client-rest`, health checks, metrics |
+| 6334 | gRPC     | gRPC API — higher throughput for batch operations                   |
 
 **No port 6335.** The P2P/gossip port is only needed for Qdrant cluster mode (Raft consensus, shard sync). Single-node deployment doesn't use it.
 
 ### Why ClusterIP (Not Headless)
 
-| Option | Use Case | Our Need |
-|---|---|---|
-| **ClusterIP** | Stable DNS name, load-balanced (irrelevant with 1 pod). | Yes — control plane connects to `qdrant.cortex.svc.cluster.local:6333`. Simple. |
-| **Headless** | Direct pod DNS (`qdrant-0.qdrant.cortex.svc.cluster.local`). Needed for peer discovery in clustered mode. | No — single node doesn't need peer discovery. |
-| **NodePort** | External access from outside the cluster. | No — Qdrant is internal-only. |
-| **LoadBalancer** | External access with cloud LB. | No — homelab, no cloud LB. |
+| Option           | Use Case                                                                                                  | Our Need                                                                        |
+| ---------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **ClusterIP**    | Stable DNS name, load-balanced (irrelevant with 1 pod).                                                   | Yes — control plane connects to `qdrant.cortex.svc.cluster.local:6333`. Simple. |
+| **Headless**     | Direct pod DNS (`qdrant-0.qdrant.cortex.svc.cluster.local`). Needed for peer discovery in clustered mode. | No — single node doesn't need peer discovery.                                   |
+| **NodePort**     | External access from outside the cluster.                                                                 | No — Qdrant is internal-only.                                                   |
+| **LoadBalancer** | External access with cloud LB.                                                                            | No — homelab, no cloud LB.                                                      |
 
 ClusterIP is the simplest option. The control plane's `QDRANT_URL` environment variable points to `http://qdrant.cortex.svc.cluster.local:6333`.
 
@@ -302,14 +304,14 @@ This prevents accidental or malicious access from other workloads in the cluster
 
 ### Options Evaluated
 
-| Criterion | TLS | No TLS + NetworkPolicy |
-|---|---|---|
-| Encryption in transit | Yes — all traffic encrypted. | No — traffic is plaintext within the cluster network. |
-| Authentication | mTLS provides identity verification. | NetworkPolicy restricts by pod label — no cryptographic identity. |
-| Complexity | Certificate management: generation, rotation, distribution. | One NetworkPolicy manifest. |
-| Performance | TLS handshake + encryption overhead (~5–10% latency increase). | Zero overhead. |
-| Threat model | Protects against traffic sniffing within the cluster. | Protects against unauthorized connections. |
-| Homelab reality | Who is sniffing traffic on your home cluster? | Network segmentation is sufficient. |
+| Criterion             | TLS                                                            | No TLS + NetworkPolicy                                            |
+| --------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Encryption in transit | Yes — all traffic encrypted.                                   | No — traffic is plaintext within the cluster network.             |
+| Authentication        | mTLS provides identity verification.                           | NetworkPolicy restricts by pod label — no cryptographic identity. |
+| Complexity            | Certificate management: generation, rotation, distribution.    | One NetworkPolicy manifest.                                       |
+| Performance           | TLS handshake + encryption overhead (~5–10% latency increase). | Zero overhead.                                                    |
+| Threat model          | Protects against traffic sniffing within the cluster.          | Protects against unauthorized connections.                        |
+| Homelab reality       | Who is sniffing traffic on your home cluster?                  | Network segmentation is sufficient.                               |
 
 ### Rationale
 
@@ -331,10 +333,11 @@ tls:
   cert: /tls/cert.pem
   key: /tls/key.pem
   ca_cert: /tls/ca.pem
-  cert_ttl: 3600  # Auto-reload interval in seconds
+  cert_ttl: 3600 # Auto-reload interval in seconds
 ```
 
 When TLS is needed:
+
 1. Deploy cert-manager to the cluster.
 2. Create a Certificate resource for `qdrant.cortex.svc.cluster.local`.
 3. Mount the TLS secret into the Qdrant pod.
@@ -355,16 +358,17 @@ This is a straightforward change that doesn't require manifest restructuring.
 
 Qdrant exposes Prometheus-compatible metrics at `GET /metrics` on the HTTP port (6333). Key metrics:
 
-| Metric | What It Tells You |
-|---|---|
-| `collections_total` | Number of collections. Should match agent count. |
-| `collections_vector_total` | Total vectors across all collections. Primary growth indicator. |
-| `rest_responses_*` | REST API request counts and latencies by endpoint. |
-| `grpc_responses_*` | gRPC request counts and latencies. |
-| `app_info` | Qdrant version, build info. |
-| `cluster_*` | Cluster status (irrelevant for single node, but confirms standalone mode). |
+| Metric                     | What It Tells You                                                          |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `collections_total`        | Number of collections. Should match agent count.                           |
+| `collections_vector_total` | Total vectors across all collections. Primary growth indicator.            |
+| `rest_responses_*`         | REST API request counts and latencies by endpoint.                         |
+| `grpc_responses_*`         | gRPC request counts and latencies.                                         |
+| `app_info`                 | Qdrant version, build info.                                                |
+| `cluster_*`                | Cluster status (irrelevant for single node, but confirms standalone mode). |
 
 The metrics endpoint:
+
 - Requires **no authentication** (excluded from API key checks by design).
 - Has **no request logging overhead** (excluded from Qdrant's access log).
 - Returns standard Prometheus text format.
@@ -390,12 +394,12 @@ Both approaches are provided in the monitoring configuration artifact. Use which
 
 ### Alerts (Recommended)
 
-| Alert | Condition | Severity |
-|---|---|---|
-| QdrantDown | `up{job="qdrant"} == 0` for >2m | Critical |
-| QdrantHighMemory | Container memory > 80% of limit for >5m | Warning |
-| QdrantHighDisk | PVC usage > 80% for >10m | Warning |
-| QdrantSlowQueries | p99 REST response time > 200ms for >5m | Warning |
+| Alert             | Condition                               | Severity |
+| ----------------- | --------------------------------------- | -------- |
+| QdrantDown        | `up{job="qdrant"} == 0` for >2m         | Critical |
+| QdrantHighMemory  | Container memory > 80% of limit for >5m | Warning  |
+| QdrantHighDisk    | PVC usage > 80% for >10m                | Warning  |
+| QdrantSlowQueries | p99 REST response time > 200ms for >5m  | Warning  |
 
 These are starting points. Tune thresholds after observing baseline behavior.
 
@@ -500,7 +504,7 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
-            failureThreshold: 12  # 60s max startup time
+            failureThreshold: 12 # 60s max startup time
           volumeMounts:
             - name: qdrant-data
               mountPath: /qdrant/storage
@@ -625,24 +629,25 @@ kubectl apply -k deploy/qdrant/
 
 ### Sizing Table
 
-| Resource | Request | Limit | Rationale |
-|---|---|---|---|
-| **CPU** | 250m | 2 | Mostly idle. 250m guarantees scheduling. 2-core limit allows indexing bursts without starving the cluster. |
-| **Memory** | 1Gi | 2Gi | ~450 MB actual usage at 100K vectors. 1Gi request ensures scheduling. 2Gi limit prevents runaway growth. |
-| **Storage (PVC)** | 10Gi | — | ~1.7 GB actual at 100K vectors including snapshots. 10Gi provides 5× headroom for growth and optimizer scratch space. |
+| Resource          | Request | Limit | Rationale                                                                                                             |
+| ----------------- | ------- | ----- | --------------------------------------------------------------------------------------------------------------------- |
+| **CPU**           | 250m    | 2     | Mostly idle. 250m guarantees scheduling. 2-core limit allows indexing bursts without starving the cluster.            |
+| **Memory**        | 1Gi     | 2Gi   | ~450 MB actual usage at 100K vectors. 1Gi request ensures scheduling. 2Gi limit prevents runaway growth.              |
+| **Storage (PVC)** | 10Gi    | —     | ~1.7 GB actual at 100K vectors including snapshots. 10Gi provides 5× headroom for growth and optimizer scratch space. |
 
 ### Growth Thresholds
 
-| Scale | Vectors | Actual RAM | Recommended Limit | Action |
-|---|---|---|---|---|
-| **Current** | <100K | ~450 MB | 2Gi | Default configuration. |
-| **Growing** | 100K–200K | ~900 MB | 2Gi | Monitor. Still within limits. |
-| **Large** | 200K–500K | ~1.8 GB | 4Gi | Increase memory limit. Consider dedicated node. |
-| **Enterprise** | >500K | >2.5 GB | 8Gi | Dedicated node. Evaluate Qdrant cluster mode. |
+| Scale          | Vectors   | Actual RAM | Recommended Limit | Action                                          |
+| -------------- | --------- | ---------- | ----------------- | ----------------------------------------------- |
+| **Current**    | <100K     | ~450 MB    | 2Gi               | Default configuration.                          |
+| **Growing**    | 100K–200K | ~900 MB    | 2Gi               | Monitor. Still within limits.                   |
+| **Large**      | 200K–500K | ~1.8 GB    | 4Gi               | Increase memory limit. Consider dedicated node. |
+| **Enterprise** | >500K     | >2.5 GB    | 8Gi               | Dedicated node. Evaluate Qdrant cluster mode.   |
 
 ### Quality-of-Service Class
 
 With `requests < limits`, the pod gets **Burstable** QoS. This means:
+
 - The pod is guaranteed 250m CPU and 1Gi memory.
 - It can burst up to 2 CPU and 2Gi memory when available.
 - Under cluster memory pressure, Burstable pods are evicted after BestEffort pods but before Guaranteed pods.
@@ -835,28 +840,25 @@ The daily backup task is registered as a Graphile Worker cron. It runs Procedure
 // Registered in Graphile Worker task list
 // Cron: "0 3 * * *" (daily at 03:00 UTC)
 
-async function backupQdrant(
-  client: QdrantClient,
-  logger: Logger,
-): Promise<void> {
-  const { collections } = await client.getCollections();
+async function backupQdrant(client: QdrantClient, logger: Logger): Promise<void> {
+  const { collections } = await client.getCollections()
 
   for (const { name } of collections) {
-    const snapshot = await client.createSnapshot(name);
-    logger.info({ collection: name, snapshot: snapshot.name }, "snapshot created");
+    const snapshot = await client.createSnapshot(name)
+    logger.info({ collection: name, snapshot: snapshot.name }, "snapshot created")
   }
 
   // Retention: delete snapshots older than 7 days
   for (const { name } of collections) {
-    const snapshots = await client.listSnapshots(name);
-    const cutoff = Date.now() - 7 * 86_400_000;
+    const snapshots = await client.listSnapshots(name)
+    const cutoff = Date.now() - 7 * 86_400_000
 
     for (const snap of snapshots) {
       // Snapshot names contain timestamps — parse and compare
-      const created = parseSnapshotTimestamp(snap.name);
+      const created = parseSnapshotTimestamp(snap.name)
       if (created < cutoff) {
-        await client.deleteSnapshot(name, snap.name);
-        logger.info({ collection: name, snapshot: snap.name }, "old snapshot deleted");
+        await client.deleteSnapshot(name, snap.name)
+        logger.info({ collection: name, snapshot: snap.name }, "old snapshot deleted")
       }
     }
   }
@@ -867,11 +869,11 @@ async function backupQdrant(
 
 ### Snapshot Retention
 
-| Retention | Snapshots Kept | Approximate Storage |
-|---|---|---|
-| 7 days | 7 per collection | ~6 GB (7 × ~850 MB at 100K vectors) |
-| 3 days | 3 per collection | ~2.5 GB |
-| 1 day | 1 per collection | ~850 MB |
+| Retention | Snapshots Kept   | Approximate Storage                 |
+| --------- | ---------------- | ----------------------------------- |
+| 7 days    | 7 per collection | ~6 GB (7 × ~850 MB at 100K vectors) |
+| 3 days    | 3 per collection | ~2.5 GB                             |
+| 1 day     | 1 per collection | ~850 MB                             |
 
 The 10Gi PVC accommodates live data (~1.7 GB) plus 7 daily snapshots (~6 GB) with headroom. If PVC space is tight, reduce retention to 3 days.
 

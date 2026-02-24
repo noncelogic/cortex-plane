@@ -29,7 +29,7 @@
 
 ## Context
 
-Cortex Plane agents need long-term memory that outlives individual sessions. Spike #25 established `session.context` (JSONB in PostgreSQL) for conversation state within a single session, and spike #26 established `job.checkpoint` for crash recovery within a single job. Neither addresses the cross-session question: *what does an agent remember about a user from last week?*
+Cortex Plane agents need long-term memory that outlives individual sessions. Spike #25 established `session.context` (JSONB in PostgreSQL) for conversation state within a single session, and spike #26 established `job.checkpoint` for crash recovery within a single job. Neither addresses the cross-session question: _what does an agent remember about a user from last week?_
 
 This spike defines the vector memory layer — the schema, storage, retrieval, and lifecycle of agent memories stored in Qdrant. The design must answer:
 
@@ -43,25 +43,25 @@ This spike defines the vector memory layer — the schema, storage, retrieval, a
 
 Session context (`session.context` JSONB) and vector memory serve different purposes:
 
-| Concern | Session Context (PostgreSQL) | Vector Memory (Qdrant) |
-|---|---|---|
-| Scope | Single session | Cross-session, cross-time |
-| Lifespan | Dies with session termination | Persists indefinitely (subject to decay) |
-| Access pattern | Direct key lookup | Similarity search + scoring |
-| Data shape | Structured JSON (agent-defined) | Embeddings + metadata |
-| Size | Bounded (session duration) | Unbounded (grows over agent lifetime) |
+| Concern        | Session Context (PostgreSQL)    | Vector Memory (Qdrant)                   |
+| -------------- | ------------------------------- | ---------------------------------------- |
+| Scope          | Single session                  | Cross-session, cross-time                |
+| Lifespan       | Dies with session termination   | Persists indefinitely (subject to decay) |
+| Access pattern | Direct key lookup               | Similarity search + scoring              |
+| Data shape     | Structured JSON (agent-defined) | Embeddings + metadata                    |
+| Size           | Bounded (session duration)      | Unbounded (grows over agent lifetime)    |
 
 When a session terminates, relevant context should be distilled into memory records and stored in Qdrant. This is the bridge between ephemeral session state and durable long-term memory.
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| Qdrant v1.13.x (spike #27) | Must use features available in this version. |
-| `@qdrant/js-client-rest` ^1.12 | TypeScript client for all Qdrant operations. |
-| Stateless control plane | Memory service is a thin client; no in-memory caches of vector data. |
-| Agent isolation required | Agent A must not read Agent B's memories for a given user. |
-| ARM64 + x64 | Qdrant official images support both architectures. |
+| Constraint                     | Implication                                                          |
+| ------------------------------ | -------------------------------------------------------------------- |
+| Qdrant v1.13.x (spike #27)     | Must use features available in this version.                         |
+| `@qdrant/js-client-rest` ^1.12 | TypeScript client for all Qdrant operations.                         |
+| Stateless control plane        | Memory service is a thin client; no in-memory caches of vector data. |
+| Agent isolation required       | Agent A must not read Agent B's memories for a given user.           |
+| ARM64 + x64                    | Qdrant official images support both architectures.                   |
 
 ---
 
@@ -73,29 +73,29 @@ When a session terminates, relevant context should be distilled into memory reco
 
 ### Required Fields
 
-| Field | Type | Purpose |
-|---|---|---|
-| `id` | `string` (UUIDv7) | Point ID in Qdrant. Time-ordered for chronological queries. |
-| `agentId` | `string` (UUID) | Which agent owns this memory. Used for collection routing or filtering. |
-| `userId` | `string` (UUID) | Which user_account this memory pertains to. References `user_account.id` from spike #25. |
-| `sessionId` | `string` (UUID) | Which session produced this memory. References `session.id` from spike #25. |
-| `type` | `MemoryType` | Taxonomy classification (see Question 2). |
-| `content` | `string` | Human-readable text of the memory. This is what gets embedded. |
-| `createdAt` | `number` (Unix ms) | When the memory was created. Used in decay calculation. |
-| `accessCount` | `number` | How many times this memory has been retrieved. Feeds utility scoring. |
-| `lastAccessedAt` | `number` (Unix ms) | When this memory was last retrieved. Feeds recency scoring. |
-| `importance` | `number` (0–1) | Agent-assessed importance at creation time. Feeds utility scoring. |
+| Field            | Type               | Purpose                                                                                  |
+| ---------------- | ------------------ | ---------------------------------------------------------------------------------------- |
+| `id`             | `string` (UUIDv7)  | Point ID in Qdrant. Time-ordered for chronological queries.                              |
+| `agentId`        | `string` (UUID)    | Which agent owns this memory. Used for collection routing or filtering.                  |
+| `userId`         | `string` (UUID)    | Which user_account this memory pertains to. References `user_account.id` from spike #25. |
+| `sessionId`      | `string` (UUID)    | Which session produced this memory. References `session.id` from spike #25.              |
+| `type`           | `MemoryType`       | Taxonomy classification (see Question 2).                                                |
+| `content`        | `string`           | Human-readable text of the memory. This is what gets embedded.                           |
+| `createdAt`      | `number` (Unix ms) | When the memory was created. Used in decay calculation.                                  |
+| `accessCount`    | `number`           | How many times this memory has been retrieved. Feeds utility scoring.                    |
+| `lastAccessedAt` | `number` (Unix ms) | When this memory was last retrieved. Feeds recency scoring.                              |
+| `importance`     | `number` (0–1)     | Agent-assessed importance at creation time. Feeds utility scoring.                       |
 
 ### Optional Fields
 
-| Field | Type | Purpose |
-|---|---|---|
-| `supersedesId` | `string \| null` | Points to the older memory this one replaces (see Question 5). |
-| `supersededById` | `string \| null` | Back-pointer: which newer memory replaced this one. |
-| `source` | `string \| null` | Origin context: `"conversation"`, `"tool_result"`, `"reflection"`, `"distillation"`. |
-| `tags` | `string[]` | Free-form tags for categorical filtering. E.g., `["k8s", "deployment", "staging"]`. |
-| `confidence` | `number \| null` (0–1) | How confident the agent is in this memory's accuracy. |
-| `expiresAt` | `number \| null` (Unix ms) | Hard expiry. Memory is deleted after this time regardless of decay score. For time-bound tasks. |
+| Field            | Type                       | Purpose                                                                                         |
+| ---------------- | -------------------------- | ----------------------------------------------------------------------------------------------- |
+| `supersedesId`   | `string \| null`           | Points to the older memory this one replaces (see Question 5).                                  |
+| `supersededById` | `string \| null`           | Back-pointer: which newer memory replaced this one.                                             |
+| `source`         | `string \| null`           | Origin context: `"conversation"`, `"tool_result"`, `"reflection"`, `"distillation"`.            |
+| `tags`           | `string[]`                 | Free-form tags for categorical filtering. E.g., `["k8s", "deployment", "staging"]`.             |
+| `confidence`     | `number \| null` (0–1)     | How confident the agent is in this memory's accuracy.                                           |
+| `expiresAt`      | `number \| null` (Unix ms) | Hard expiry. Memory is deleted after this time regardless of decay score. For time-bound tasks. |
 
 ### Why These Fields
 
@@ -121,25 +121,25 @@ When a session terminates, relevant context should be distilled into memory reco
 
 ### Category 1: Core Knowledge
 
-| Type | Description | Example |
-|---|---|---|
-| `fact` | Stable, declarative knowledge about the user or their environment. | "User's k8s cluster runs on ARM64 nodes." |
-| `preference` | User preferences and working style. | "User prefers Terraform over Pulumi." |
-| `person` | Information about people the user mentions. | "Alice is the user's team lead. She approves production deployments." |
-| `project` | Project-specific knowledge: names, repos, stack, deadlines. | "Project Atlas uses Next.js 15, deploys to Vercel, deadline March 1." |
+| Type         | Description                                                        | Example                                                               |
+| ------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `fact`       | Stable, declarative knowledge about the user or their environment. | "User's k8s cluster runs on ARM64 nodes."                             |
+| `preference` | User preferences and working style.                                | "User prefers Terraform over Pulumi."                                 |
+| `person`     | Information about people the user mentions.                        | "Alice is the user's team lead. She approves production deployments." |
+| `project`    | Project-specific knowledge: names, repos, stack, deadlines.        | "Project Atlas uses Next.js 15, deploys to Vercel, deadline March 1." |
 
 ### Category 2: Temporal
 
-| Type | Description | Example |
-|---|---|---|
-| `task` | Active or completed tasks and their outcomes. | "Deployed v2.3.1 to staging on Feb 20. Smoke tests passed." |
+| Type       | Description                                                 | Example                                                                |
+| ---------- | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `task`     | Active or completed tasks and their outcomes.               | "Deployed v2.3.1 to staging on Feb 20. Smoke tests passed."            |
 | `episodic` | What happened in a specific interaction. Events, not facts. | "In our Feb 18 session, we debugged a memory leak in the worker pool." |
 
 ### Category 3: Meta-cognitive
 
-| Type | Description | Example |
-|---|---|---|
-| `decision` | Decisions made and their rationale. | "Chose Kysely over Drizzle because Graphile Worker manages its own schema." |
+| Type         | Description                                      | Example                                                                                      |
+| ------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `decision`   | Decisions made and their rationale.              | "Chose Kysely over Drizzle because Graphile Worker manages its own schema."                  |
 | `correction` | Things the agent got wrong and was corrected on. | "I suggested using Alpine — user corrected: node:24-slim is required for Playwright compat." |
 
 ### Why Not More Types?
@@ -147,7 +147,7 @@ When a session terminates, relevant context should be distilled into memory reco
 **Rejected types:**
 
 - **`emotional`** → Absorbed into `preference` and `episodic`. An emotion is either a preference ("user gets frustrated with verbose output") or an episode ("user was stressed about the deadline in our Feb 18 session"). A separate type adds a category that's hard to distinguish from these two and doesn't change retrieval behavior.
-- **`summary`** → Not a memory type. Summaries are an *operation* on memories (distillation), not a category of memory. A distilled memory is typed by its content: a summary of project facts is type `project`; a summary of task history is type `task`.
+- **`summary`** → Not a memory type. Summaries are an _operation_ on memories (distillation), not a category of memory. A distilled memory is typed by its content: a summary of project facts is type `project`; a summary of task history is type `task`.
 - **`skill`** → Absorbed into `fact`. "The user knows Go and Rust" is a fact about the user.
 - **`context`** → Too vague. Everything is context. Rejected.
 
@@ -165,16 +165,16 @@ The `MemoryType` enum is extensible — adding a type requires a code change but
 
 **Decision:** Half-lives are calibrated to how quickly each type of knowledge becomes stale in the context of an autonomous agent assisting a human user.
 
-| Type | Half-Life | Rationale |
-|---|---|---|
-| `fact` | 365 days | Stable knowledge. A user's tech stack doesn't change weekly. |
-| `preference` | 180 days | Preferences evolve but slowly. Revisit twice a year. |
-| `person` | 365 days | People and roles are stable. Org changes are infrequent. |
-| `project` | 90 days | Projects evolve. Deadlines pass, stacks change. |
-| `task` | 30 days | Completed tasks lose relevance quickly. Outcomes matter more than details. |
-| `episodic` | 14 days | Specific interaction details fade fast. Only exceptional episodes persist. |
-| `decision` | 180 days | Decisions are important but context shifts. Revisit semi-annually. |
-| `correction` | 365 days | Corrections are critical. The agent must remember its mistakes for a long time. |
+| Type         | Half-Life | Rationale                                                                       |
+| ------------ | --------- | ------------------------------------------------------------------------------- |
+| `fact`       | 365 days  | Stable knowledge. A user's tech stack doesn't change weekly.                    |
+| `preference` | 180 days  | Preferences evolve but slowly. Revisit twice a year.                            |
+| `person`     | 365 days  | People and roles are stable. Org changes are infrequent.                        |
+| `project`    | 90 days   | Projects evolve. Deadlines pass, stacks change.                                 |
+| `task`       | 30 days   | Completed tasks lose relevance quickly. Outcomes matter more than details.      |
+| `episodic`   | 14 days   | Specific interaction details fade fast. Only exceptional episodes persist.      |
+| `decision`   | 180 days  | Decisions are important but context shifts. Revisit semi-annually.              |
+| `correction` | 365 days  | Corrections are critical. The agent must remember its mistakes for a long time. |
 
 ### Decay Function
 
@@ -185,6 +185,7 @@ decay(t) = 0.5 ^ (age / halfLife)
 ```
 
 Where:
+
 - `age` = `now - createdAt` (in milliseconds, converted to days)
 - `halfLife` = type-specific half-life (in days)
 - Result is in range (0, 1], where 1.0 = just created, approaching 0 = very old.
@@ -193,16 +194,16 @@ At one half-life, decay = 0.5. At two half-lives, decay = 0.25. At three half-li
 
 ### Practical Implications
 
-| Type | After 1 month | After 3 months | After 6 months | After 1 year |
-|---|---|---|---|---|
-| `fact` (365d) | 0.98 | 0.94 | 0.88 | 0.50 |
-| `preference` (180d) | 0.96 | 0.89 | 0.50 | 0.25 |
-| `person` (365d) | 0.98 | 0.94 | 0.88 | 0.50 |
-| `project` (90d) | 0.79 | 0.50 | 0.25 | 0.06 |
-| `task` (30d) | 0.50 | 0.13 | 0.02 | ~0 |
-| `episodic` (14d) | 0.23 | 0.01 | ~0 | ~0 |
-| `decision` (180d) | 0.96 | 0.89 | 0.50 | 0.25 |
-| `correction` (365d) | 0.98 | 0.94 | 0.88 | 0.50 |
+| Type                | After 1 month | After 3 months | After 6 months | After 1 year |
+| ------------------- | ------------- | -------------- | -------------- | ------------ |
+| `fact` (365d)       | 0.98          | 0.94           | 0.88           | 0.50         |
+| `preference` (180d) | 0.96          | 0.89           | 0.50           | 0.25         |
+| `person` (365d)     | 0.98          | 0.94           | 0.88           | 0.50         |
+| `project` (90d)     | 0.79          | 0.50           | 0.25           | 0.06         |
+| `task` (30d)        | 0.50          | 0.13           | 0.02           | ~0           |
+| `episodic` (14d)    | 0.23          | 0.01           | ~0             | ~0           |
+| `decision` (180d)   | 0.96          | 0.89           | 0.50           | 0.25         |
+| `correction` (365d) | 0.98          | 0.94           | 0.88           | 0.50         |
 
 A task memory is at half-strength after 30 days. An episodic memory is nearly gone after 3 months. A fact is still at 88% after 6 months. This matches intuition: you remember what your colleague's tech stack is far longer than you remember the specifics of last Tuesday's debugging session.
 
@@ -219,17 +220,18 @@ score = (wSim × similarity) + (wRec × recency) + (wUtil × utility)
 ```
 
 Where:
+
 - `similarity` ∈ [0, 1] — cosine similarity from Qdrant's ANN search, normalized.
 - `recency` ∈ (0, 1] — the decay function output: `0.5 ^ (ageDays / halfLifeDays)`.
 - `utility` ∈ [0, 1] — derived from `importance` and `accessCount`.
 
 ### Weight Analysis
 
-| Weight | Signal | Value | Rationale |
-|---|---|---|---|
-| `wSim` | Similarity | 0.50 | Semantic relevance is the primary signal. A memory that doesn't match the query context is useless regardless of recency or utility. |
-| `wRec` | Recency | 0.30 | Recent memories are more likely to be relevant. The decay function already encodes type-specific aging, so this weight amplifies fresh memories. |
-| `wUtil` | Utility | 0.20 | Frequently accessed, high-importance memories get a boost. This is a secondary signal — useful for breaking ties between similarly relevant, similarly recent memories. |
+| Weight  | Signal     | Value | Rationale                                                                                                                                                               |
+| ------- | ---------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wSim`  | Similarity | 0.50  | Semantic relevance is the primary signal. A memory that doesn't match the query context is useless regardless of recency or utility.                                    |
+| `wRec`  | Recency    | 0.30  | Recent memories are more likely to be relevant. The decay function already encodes type-specific aging, so this weight amplifies fresh memories.                        |
+| `wUtil` | Utility    | 0.20  | Frequently accessed, high-importance memories get a boost. This is a secondary signal — useful for breaking ties between similarly relevant, similarly recent memories. |
 
 ### Why 50/30/20?
 
@@ -244,6 +246,7 @@ utility = importance × (1 + log10(1 + accessCount)) / maxUtilityNorm
 ```
 
 Where `maxUtilityNorm` is a normalization constant to keep utility in [0, 1]. In practice:
+
 - `accessCount = 0, importance = 1.0` → utility ≈ 0.5
 - `accessCount = 9, importance = 1.0` → utility ≈ 1.0
 - `accessCount = 0, importance = 0.3` → utility ≈ 0.15
@@ -315,9 +318,7 @@ All retrieval queries include:
 
 ```typescript
 filter: {
-  must: [
-    { key: "supersededById", match: { value: null } }
-  ]
+  must: [{ key: "supersededById", match: { value: null } }]
 }
 ```
 
@@ -333,16 +334,16 @@ This is a Qdrant payload filter applied at query time. It has near-zero cost bec
 
 ### Options Evaluated
 
-| Criterion | Per-Agent Collection | Shared + Metadata Filter |
-|---|---|---|
-| Isolation guarantee | **Physical.** Collections are independent. | Logical. Bugs in filter construction leak data. |
-| Query performance | Smaller index per collection → faster ANN search. | Larger index → more distance calculations. |
-| HNSW tuning | Tuned per agent's memory profile (a research agent has different distributions than a devops agent). | One-size-fits-all HNSW params. |
-| Operational complexity | More collections to manage. | One collection, simpler ops. |
-| Collection count limit | Qdrant handles hundreds of collections efficiently. We'll have <20 agents. | N/A. |
-| Backup/restore | Per-agent snapshots. Can restore one agent's memory without affecting others. | All-or-nothing backup. |
-| Deletion semantics | Drop collection = nuke all memories for an agent. Clean. | Delete by filter = potential partial deletes. |
-| Cross-agent search | Not possible without multi-collection query. | Possible with filter change — feature or bug? |
+| Criterion              | Per-Agent Collection                                                                                 | Shared + Metadata Filter                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Isolation guarantee    | **Physical.** Collections are independent.                                                           | Logical. Bugs in filter construction leak data. |
+| Query performance      | Smaller index per collection → faster ANN search.                                                    | Larger index → more distance calculations.      |
+| HNSW tuning            | Tuned per agent's memory profile (a research agent has different distributions than a devops agent). | One-size-fits-all HNSW params.                  |
+| Operational complexity | More collections to manage.                                                                          | One collection, simpler ops.                    |
+| Collection count limit | Qdrant handles hundreds of collections efficiently. We'll have <20 agents.                           | N/A.                                            |
+| Backup/restore         | Per-agent snapshots. Can restore one agent's memory without affecting others.                        | All-or-nothing backup.                          |
+| Deletion semantics     | Drop collection = nuke all memories for an agent. Clean.                                             | Delete by filter = potential partial deletes.   |
+| Cross-agent search     | Not possible without multi-collection query.                                                         | Possible with filter change — feature or bug?   |
 
 ### Decision: Per-Agent Collections
 
@@ -363,6 +364,7 @@ agent_memory_{agentSlug}
 ```
 
 Examples:
+
 - `agent_memory_devops-agent`
 - `agent_memory_research-assistant`
 - `agent_memory_janitor`
@@ -377,7 +379,7 @@ Within a single agent's collection, memories are scoped to individual users via 
 filter: {
   must: [
     { key: "userId", match: { value: userId } },
-    { key: "supersededById", match: { value: null } }
+    { key: "supersededById", match: { value: null } },
   ]
 }
 ```
@@ -394,15 +396,15 @@ This is logical isolation, but within a single agent's domain it's acceptable: t
 
 ### Options Evaluated
 
-| Criterion | text-embedding-3-small (1536d) | text-embedding-3-large (3072d) |
-|---|---|---|
-| Dimensions | 1536 | 3072 |
-| MTEB score | 62.3 | 64.6 |
-| Cost per 1M tokens | ~$0.02 | ~$0.13 |
-| Latency | ~20ms per request | ~35ms per request |
-| Storage per vector | 6 KB (float32) / 1.5 KB (int8) | 12 KB (float32) / 3 KB (int8) |
-| Quality for short texts | Excellent — memory records are typically 1–3 sentences | Marginally better |
-| Matryoshka support | Yes — can truncate to 512d, 256d | Yes — can truncate to 1024d, 512d, 256d |
+| Criterion               | text-embedding-3-small (1536d)                         | text-embedding-3-large (3072d)          |
+| ----------------------- | ------------------------------------------------------ | --------------------------------------- |
+| Dimensions              | 1536                                                   | 3072                                    |
+| MTEB score              | 62.3                                                   | 64.6                                    |
+| Cost per 1M tokens      | ~$0.02                                                 | ~$0.13                                  |
+| Latency                 | ~20ms per request                                      | ~35ms per request                       |
+| Storage per vector      | 6 KB (float32) / 1.5 KB (int8)                         | 12 KB (float32) / 3 KB (int8)           |
+| Quality for short texts | Excellent — memory records are typically 1–3 sentences | Marginally better                       |
+| Matryoshka support      | Yes — can truncate to 512d, 256d                       | Yes — can truncate to 1024d, 512d, 256d |
 
 ### Decision: text-embedding-3-small at 1536d
 
@@ -455,9 +457,9 @@ export const MEMORY_TYPE = {
   DECISION: "decision",
   /** Agent mistakes that were corrected by the user. */
   CORRECTION: "correction",
-} as const;
+} as const
 
-export type MemoryType = (typeof MEMORY_TYPE)[keyof typeof MEMORY_TYPE];
+export type MemoryType = (typeof MEMORY_TYPE)[keyof typeof MEMORY_TYPE]
 
 /**
  * Decay half-lives per memory type, in days.
@@ -472,7 +474,7 @@ export const MEMORY_HALF_LIFE_DAYS: Record<MemoryType, number> = {
   episodic: 14,
   decision: 180,
   correction: 365,
-};
+}
 
 /**
  * Source of a memory — how was this knowledge acquired?
@@ -486,9 +488,9 @@ export const MEMORY_SOURCE = {
   REFLECTION: "reflection",
   /** Distilled from session context at session end. */
   DISTILLATION: "distillation",
-} as const;
+} as const
 
-export type MemorySource = (typeof MEMORY_SOURCE)[keyof typeof MEMORY_SOURCE];
+export type MemorySource = (typeof MEMORY_SOURCE)[keyof typeof MEMORY_SOURCE]
 
 /**
  * A single memory record stored in Qdrant.
@@ -501,49 +503,49 @@ export interface MemoryRecord {
   // --- Identity ---
 
   /** UUIDv7 point ID. Time-ordered for chronological queries. */
-  id: string;
+  id: string
   /** Agent that owns this memory. Maps to agent.id (spike #25). */
-  agentId: string;
+  agentId: string
   /** User this memory pertains to. Maps to user_account.id (spike #25). */
-  userId: string;
+  userId: string
   /** Session that produced this memory. Maps to session.id (spike #25). */
-  sessionId: string;
+  sessionId: string
 
   // --- Content ---
 
   /** Memory type classification. Determines decay half-life. */
-  type: MemoryType;
+  type: MemoryType
   /** Human-readable text of the memory. This is what gets embedded. */
-  content: string;
+  content: string
 
   // --- Scoring Inputs ---
 
   /** When this memory was created. Unix milliseconds. */
-  createdAt: number;
+  createdAt: number
   /** How many times this memory has been retrieved. Updated on each access. */
-  accessCount: number;
+  accessCount: number
   /** When this memory was last retrieved. Unix milliseconds. */
-  lastAccessedAt: number;
+  lastAccessedAt: number
   /** Agent-assessed importance at creation time. Range: [0, 1]. */
-  importance: number;
+  importance: number
 
   // --- Evolution ---
 
   /** ID of the older memory this one replaces. Null if original. */
-  supersedesId: string | null;
+  supersedesId: string | null
   /** ID of the newer memory that replaced this one. Null if current head. */
-  supersededById: string | null;
+  supersededById: string | null
 
   // --- Optional Metadata ---
 
   /** How this memory was acquired. */
-  source: MemorySource | null;
+  source: MemorySource | null
   /** Free-form tags for categorical filtering. */
-  tags: string[];
+  tags: string[]
   /** Agent's confidence in this memory's accuracy. Range: [0, 1]. */
-  confidence: number | null;
+  confidence: number | null
   /** Hard expiry timestamp. Memory is deleted after this time. Unix ms. */
-  expiresAt: number | null;
+  expiresAt: number | null
 }
 
 /**
@@ -554,16 +556,16 @@ export const DEFAULT_MEMORY_WEIGHTS = {
   similarity: 0.5,
   recency: 0.3,
   utility: 0.2,
-} as const;
+} as const
 
 /**
  * Scoring weights for memory retrieval.
  * Must sum to 1.0.
  */
 export interface MemoryWeights {
-  similarity: number;
-  recency: number;
-  utility: number;
+  similarity: number
+  recency: number
+  utility: number
 }
 ```
 
@@ -576,19 +578,16 @@ export interface MemoryWeights {
 Each agent gets its own collection, created when the agent is first provisioned (or lazily on first memory write).
 
 ```typescript
-import { QdrantClient } from "@qdrant/js-client-rest";
+import { QdrantClient } from "@qdrant/js-client-rest"
 
-const VECTOR_SIZE = 1536; // text-embedding-3-small
+const VECTOR_SIZE = 1536 // text-embedding-3-small
 
 /**
  * Creates a Qdrant collection for an agent's memory store.
  * Called once per agent during provisioning.
  */
-async function createAgentMemoryCollection(
-  client: QdrantClient,
-  agentSlug: string,
-): Promise<void> {
-  const collectionName = `agent_memory_${agentSlug}`;
+async function createAgentMemoryCollection(client: QdrantClient, agentSlug: string): Promise<void> {
+  const collectionName = `agent_memory_${agentSlug}`
 
   await client.createCollection(collectionName, {
     vectors: {
@@ -615,7 +614,7 @@ async function createAgentMemoryCollection(
       },
     },
     on_disk_payload: false,
-  });
+  })
 
   // Create payload indexes for filtered search
   await Promise.all([
@@ -643,33 +642,33 @@ async function createAgentMemoryCollection(
       field_name: "expiresAt",
       field_schema: "integer",
     }),
-  ]);
+  ])
 }
 ```
 
 ### Configuration Rationale
 
-| Parameter | Value | Rationale |
-|---|---|---|
-| **Distance metric** | Cosine | Standard for text embeddings. OpenAI embeddings are normalized, so Cosine ≡ Dot product, but Cosine is more readable in intent. |
-| **`m` (HNSW)** | 16 | Default. Each node connects to 16 neighbors. Higher values improve recall at the cost of memory and index build time. 16 is the standard for collections under 1M points. |
-| **`ef_construct`** | 128 | Index build quality. Higher = better recall but slower indexing. 128 is the recommended value for quality-focused workloads. We index infrequently (memory writes are sparse) so the build cost is acceptable. |
-| **`full_scan_threshold`** | 10000 | Collections with fewer than 10K points use brute-force search (faster than HNSW overhead for small sets). Most per-user memory sets will be under 10K. |
-| **Quantization** | Scalar int8 | Reduces vector storage by 4× (float32 → int8) with <1% recall loss. `quantile: 0.99` clips outliers. `always_ram: true` keeps quantized vectors in RAM for fast search; original vectors on disk for rescoring. |
-| **`on_disk` (vectors)** | false | Keep vectors in RAM. At our projected scale (10K–100K per agent), RAM fits comfortably. See sizing projections. |
-| **`on_disk_payload`** | false | Payloads are small (metadata). Keep in RAM for fast filtered retrieval. |
-| **`default_segment_number`** | 2 | Two segments allows one to be optimized while the other serves queries. More than 2 adds overhead without benefit at our scale. |
+| Parameter                    | Value       | Rationale                                                                                                                                                                                                       |
+| ---------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Distance metric**          | Cosine      | Standard for text embeddings. OpenAI embeddings are normalized, so Cosine ≡ Dot product, but Cosine is more readable in intent.                                                                                 |
+| **`m` (HNSW)**               | 16          | Default. Each node connects to 16 neighbors. Higher values improve recall at the cost of memory and index build time. 16 is the standard for collections under 1M points.                                       |
+| **`ef_construct`**           | 128         | Index build quality. Higher = better recall but slower indexing. 128 is the recommended value for quality-focused workloads. We index infrequently (memory writes are sparse) so the build cost is acceptable.  |
+| **`full_scan_threshold`**    | 10000       | Collections with fewer than 10K points use brute-force search (faster than HNSW overhead for small sets). Most per-user memory sets will be under 10K.                                                          |
+| **Quantization**             | Scalar int8 | Reduces vector storage by 4× (float32 → int8) with <1% recall loss. `quantile: 0.99` clips outliers. `always_ram: true` keeps quantized vectors in RAM for fast search; original vectors on disk for rescoring. |
+| **`on_disk` (vectors)**      | false       | Keep vectors in RAM. At our projected scale (10K–100K per agent), RAM fits comfortably. See sizing projections.                                                                                                 |
+| **`on_disk_payload`**        | false       | Payloads are small (metadata). Keep in RAM for fast filtered retrieval.                                                                                                                                         |
+| **`default_segment_number`** | 2           | Two segments allows one to be optimized while the other serves queries. More than 2 adds overhead without benefit at our scale.                                                                                 |
 
 ### Payload Indexes
 
-| Field | Index Type | Purpose |
-|---|---|---|
-| `userId` | keyword | Every query filters by user. This is the hottest filter path. |
-| `type` | keyword | Filter by memory type (e.g., "only facts and preferences"). |
-| `supersededById` | keyword | Filter out superseded memories (active head only). |
-| `tags` | keyword | Categorical filtering ("show me k8s-related memories"). |
-| `createdAt` | integer | Time-range queries and decay calculation ordering. |
-| `expiresAt` | integer | Cleanup job: find and delete expired memories. |
+| Field            | Index Type | Purpose                                                       |
+| ---------------- | ---------- | ------------------------------------------------------------- |
+| `userId`         | keyword    | Every query filters by user. This is the hottest filter path. |
+| `type`           | keyword    | Filter by memory type (e.g., "only facts and preferences").   |
+| `supersededById` | keyword    | Filter out superseded memories (active head only).            |
+| `tags`           | keyword    | Categorical filtering ("show me k8s-related memories").       |
+| `createdAt`      | integer    | Time-range queries and decay calculation ordering.            |
+| `expiresAt`      | integer    | Cleanup job: find and delete expired memories.                |
 
 ---
 
@@ -678,15 +677,12 @@ async function createAgentMemoryCollection(
 This function lives in `packages/control-plane/src/services/memory.ts`.
 
 ```typescript
-import type { MemoryRecord, MemoryType, MemoryWeights } from "@cortex/shared";
-import {
-  DEFAULT_MEMORY_WEIGHTS,
-  MEMORY_HALF_LIFE_DAYS,
-} from "@cortex/shared";
+import type { MemoryRecord, MemoryType, MemoryWeights } from "@cortex/shared"
+import { DEFAULT_MEMORY_WEIGHTS, MEMORY_HALF_LIFE_DAYS } from "@cortex/shared"
 
-const MS_PER_DAY = 86_400_000;
-const LN_HALF = Math.log(0.5); // -0.693...
-const MAX_UTILITY_NORM = 3.0; // log10(1 + 999) ≈ 3, practical ceiling
+const MS_PER_DAY = 86_400_000
+const LN_HALF = Math.log(0.5) // -0.693...
+const MAX_UTILITY_NORM = 3.0 // log10(1 + 999) ≈ 3, practical ceiling
 
 /**
  * Calculates the exponential decay factor for a memory based on its age
@@ -699,12 +695,12 @@ export function calculateDecay(
   type: MemoryType,
   now: number = Date.now(),
 ): number {
-  const ageDays = (now - createdAt) / MS_PER_DAY;
-  if (ageDays <= 0) return 1.0;
+  const ageDays = (now - createdAt) / MS_PER_DAY
+  if (ageDays <= 0) return 1.0
 
-  const halfLifeDays = MEMORY_HALF_LIFE_DAYS[type];
+  const halfLifeDays = MEMORY_HALF_LIFE_DAYS[type]
   // 0.5 ^ (age / halfLife) = e ^ (ln(0.5) * age / halfLife)
-  return Math.exp((LN_HALF * ageDays) / halfLifeDays);
+  return Math.exp((LN_HALF * ageDays) / halfLifeDays)
 }
 
 /**
@@ -713,14 +709,11 @@ export function calculateDecay(
  *
  * Returns a value in [0, 1].
  */
-export function calculateUtility(
-  importance: number,
-  accessCount: number,
-): number {
+export function calculateUtility(importance: number, accessCount: number): number {
   // log10(1 + accessCount) compresses access frequency.
   // importance scales the result.
-  const raw = importance * (1 + Math.log10(1 + accessCount));
-  return Math.min(raw / MAX_UTILITY_NORM, 1.0);
+  const raw = importance * (1 + Math.log10(1 + accessCount))
+  return Math.min(raw / MAX_UTILITY_NORM, 1.0)
 }
 
 /**
@@ -739,14 +732,10 @@ export function scoreMemory(
   weights: MemoryWeights = DEFAULT_MEMORY_WEIGHTS,
   now: number = Date.now(),
 ): number {
-  const recency = calculateDecay(memory.createdAt, memory.type, now);
-  const utility = calculateUtility(memory.importance, memory.accessCount);
+  const recency = calculateDecay(memory.createdAt, memory.type, now)
+  const utility = calculateUtility(memory.importance, memory.accessCount)
 
-  return (
-    weights.similarity * similarity +
-    weights.recency * recency +
-    weights.utility * utility
-  );
+  return weights.similarity * similarity + weights.recency * recency + weights.utility * utility
 }
 
 /**
@@ -757,11 +746,11 @@ export function scoreMemory(
  * 3. Returns results sorted by combined score.
  */
 export interface ScoredMemory {
-  memory: MemoryRecord;
-  similarity: number;
-  recency: number;
-  utility: number;
-  score: number;
+  memory: MemoryRecord
+  similarity: number
+  recency: number
+  utility: number
+  score: number
 }
 
 export async function retrieveMemories(
@@ -770,11 +759,11 @@ export async function retrieveMemories(
   queryVector: number[],
   userId: string,
   options: {
-    limit?: number;
-    scoreThreshold?: number;
-    typeFilter?: MemoryType[];
-    tagFilter?: string[];
-    weights?: MemoryWeights;
+    limit?: number
+    scoreThreshold?: number
+    typeFilter?: MemoryType[]
+    tagFilter?: string[]
+    weights?: MemoryWeights
   } = {},
 ): Promise<ScoredMemory[]> {
   const {
@@ -783,25 +772,25 @@ export async function retrieveMemories(
     typeFilter,
     tagFilter,
     weights = DEFAULT_MEMORY_WEIGHTS,
-  } = options;
+  } = options
 
   // Build Qdrant filter: active memories for this user
   const must: Array<Record<string, unknown>> = [
     { key: "userId", match: { value: userId } },
     { key: "supersededById", match: { value: null } },
-  ];
+  ]
 
   if (typeFilter && typeFilter.length > 0) {
-    must.push({ key: "type", match: { any: typeFilter } });
+    must.push({ key: "type", match: { any: typeFilter } })
   }
 
   if (tagFilter && tagFilter.length > 0) {
-    must.push({ key: "tags", match: { any: tagFilter } });
+    must.push({ key: "tags", match: { any: tagFilter } })
   }
 
   // Over-fetch from Qdrant (3× limit) to allow re-ranking to surface
   // memories that are semantically close but boosted by recency/utility.
-  const searchLimit = Math.min(limit * 3, 100);
+  const searchLimit = Math.min(limit * 3, 100)
 
   const results = await client.search(collectionName, {
     vector: queryVector,
@@ -809,28 +798,26 @@ export async function retrieveMemories(
     filter: { must },
     with_payload: true,
     score_threshold: 0.1, // Low threshold — let the re-ranker decide
-  });
+  })
 
-  const now = Date.now();
+  const now = Date.now()
 
   const scored: ScoredMemory[] = results
     .map((result) => {
-      const memory = result.payload as unknown as MemoryRecord;
-      const similarity = result.score;
-      const recency = calculateDecay(memory.createdAt, memory.type, now);
-      const utility = calculateUtility(memory.importance, memory.accessCount);
+      const memory = result.payload as unknown as MemoryRecord
+      const similarity = result.score
+      const recency = calculateDecay(memory.createdAt, memory.type, now)
+      const utility = calculateUtility(memory.importance, memory.accessCount)
       const score =
-        weights.similarity * similarity +
-        weights.recency * recency +
-        weights.utility * utility;
+        weights.similarity * similarity + weights.recency * recency + weights.utility * utility
 
-      return { memory, similarity, recency, utility, score };
+      return { memory, similarity, recency, utility, score }
     })
     .filter((s) => s.score >= scoreThreshold)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+    .slice(0, limit)
 
-  return scored;
+  return scored
 }
 ```
 
@@ -882,16 +869,16 @@ The over-fetch ratio (3× limit) is important. Qdrant's ANN search ranks by pure
 
 When an agent creates a memory, it must classify the type. These guidelines help:
 
-| Signal in Content | Assign Type | Example |
-|---|---|---|
-| "User uses X", "User's Y is Z" | `fact` | "User's primary language is TypeScript." |
-| "User prefers X over Y" | `preference` | "User prefers explicit error handling over try/catch." |
-| "X is a person who..." | `person` | "Bob is the SRE on call this week." |
-| "Project X uses Y, deadline Z" | `project` | "Project Cortex uses Fastify, Kysely, and Graphile Worker." |
-| "Deployed X", "Fixed Y", "Ran Z" | `task` | "Migrated database from v16 to v17 on Feb 20." |
-| "In our session on X, we Y" | `episodic` | "In our Feb 18 session, the user was debugging OOM kills." |
-| "We decided to X because Y" | `decision` | "Decided to use per-agent Qdrant collections for isolation." |
-| "I was wrong about X, correct answer is Y" | `correction` | "I suggested port 8080 — correct port is 4000." |
+| Signal in Content                          | Assign Type  | Example                                                      |
+| ------------------------------------------ | ------------ | ------------------------------------------------------------ |
+| "User uses X", "User's Y is Z"             | `fact`       | "User's primary language is TypeScript."                     |
+| "User prefers X over Y"                    | `preference` | "User prefers explicit error handling over try/catch."       |
+| "X is a person who..."                     | `person`     | "Bob is the SRE on call this week."                          |
+| "Project X uses Y, deadline Z"             | `project`    | "Project Cortex uses Fastify, Kysely, and Graphile Worker."  |
+| "Deployed X", "Fixed Y", "Ran Z"           | `task`       | "Migrated database from v16 to v17 on Feb 20."               |
+| "In our session on X, we Y"                | `episodic`   | "In our Feb 18 session, the user was debugging OOM kills."   |
+| "We decided to X because Y"                | `decision`   | "Decided to use per-agent Qdrant collections for isolation." |
+| "I was wrong about X, correct answer is Y" | `correction` | "I suggested port 8080 — correct port is 4000."              |
 
 ---
 
@@ -899,20 +886,20 @@ When an agent creates a memory, it must classify the type. These guidelines help
 
 ### Per-Vector Costs
 
-| Component | float32 (raw) | int8 (quantized) |
-|---|---|---|
-| Vector (1536d) | 6,144 bytes | 1,536 bytes |
-| Payload (avg) | ~500 bytes | ~500 bytes |
-| HNSW index overhead (per point) | ~128 bytes (m=16, both layers) | ~128 bytes |
-| **Total per point** | **~6,772 bytes** | **~2,164 bytes** |
+| Component                       | float32 (raw)                  | int8 (quantized) |
+| ------------------------------- | ------------------------------ | ---------------- |
+| Vector (1536d)                  | 6,144 bytes                    | 1,536 bytes      |
+| Payload (avg)                   | ~500 bytes                     | ~500 bytes       |
+| HNSW index overhead (per point) | ~128 bytes (m=16, both layers) | ~128 bytes       |
+| **Total per point**             | **~6,772 bytes**               | **~2,164 bytes** |
 
 ### Projection Table
 
-| Scale | Points | Raw (float32) | Quantized (int8) | Notes |
-|---|---|---|---|---|
-| **10K** | 10,000 | 65 MB | 21 MB | Single agent, active user base. Fits in L3 cache on modern CPUs. |
-| **100K** | 100,000 | 650 MB | 210 MB | Mature agent with many users. Comfortable on a 1 GB RAM allocation. |
-| **1M** | 1,000,000 | 6.5 GB | 2.1 GB | Enterprise scale. Requires dedicated Qdrant node. Quantization mandatory. |
+| Scale    | Points    | Raw (float32) | Quantized (int8) | Notes                                                                     |
+| -------- | --------- | ------------- | ---------------- | ------------------------------------------------------------------------- |
+| **10K**  | 10,000    | 65 MB         | 21 MB            | Single agent, active user base. Fits in L3 cache on modern CPUs.          |
+| **100K** | 100,000   | 650 MB        | 210 MB           | Mature agent with many users. Comfortable on a 1 GB RAM allocation.       |
+| **1M**   | 1,000,000 | 6.5 GB        | 2.1 GB           | Enterprise scale. Requires dedicated Qdrant node. Quantization mandatory. |
 
 ### Assumptions
 
@@ -922,12 +909,12 @@ When an agent creates a memory, it must classify the type. These guidelines help
 
 ### Per-Agent Expectations
 
-| Agent Profile | Expected Memory Volume (1 year) | Storage (quantized) |
-|---|---|---|
-| DevOps agent, 5 users | ~2,000 memories | ~4 MB |
-| Research agent, 20 users | ~15,000 memories | ~32 MB |
-| Personal assistant, 100 users | ~50,000 memories | ~105 MB |
-| All agents combined (platform) | ~100,000 memories | ~210 MB |
+| Agent Profile                  | Expected Memory Volume (1 year) | Storage (quantized) |
+| ------------------------------ | ------------------------------- | ------------------- |
+| DevOps agent, 5 users          | ~2,000 memories                 | ~4 MB               |
+| Research agent, 20 users       | ~15,000 memories                | ~32 MB              |
+| Personal assistant, 100 users  | ~50,000 memories                | ~105 MB             |
+| All agents combined (platform) | ~100,000 memories               | ~210 MB             |
 
 **Conclusion:** At projected scale, Qdrant runs comfortably within a single pod on k3s with 512 MB–1 GB RAM allocated. Quantization is enabled from day one as a free optimization — there's no reason to defer it.
 
@@ -946,7 +933,7 @@ When an agent creates a memory, it must classify the type. These guidelines help
 
 **Decision:** MemoryRecord fields are stored as a flat JSON payload in Qdrant, not as Qdrant's native structured payload schema.
 
-**Rationale:** Qdrant payloads are schemaless JSON by default. We *could* use Qdrant's payload schema validation feature, but it duplicates the TypeScript interface without adding value — we validate at the application layer before writing. Keeping Qdrant schemaless means schema evolution (adding optional fields) requires no Qdrant-side migration.
+**Rationale:** Qdrant payloads are schemaless JSON by default. We _could_ use Qdrant's payload schema validation feature, but it duplicates the TypeScript interface without adding value — we validate at the application layer before writing. Keeping Qdrant schemaless means schema evolution (adding optional fields) requires no Qdrant-side migration.
 
 ### 2. UUIDv7 as Point IDs
 
@@ -981,11 +968,13 @@ When an agent creates a memory, it must classify the type. These guidelines help
 ### 7. Cleanup Strategy
 
 **Decision:** A Graphile Worker cron task runs daily to:
+
 1. Delete memories past their `expiresAt` timestamp.
 2. Delete memories with a decay score below a configurable floor (default: 0.01 — effectively, memories older than ~7 half-lives).
 3. Collapse supersedes chains longer than 5 entries by deleting intermediate versions.
 
 **Rationale:** Without cleanup, the collection grows unboundedly. Decay-based scoring already deprioritizes old memories, but they still consume storage and slow ANN search. Active cleanup keeps collections lean. The 0.01 floor means:
+
 - `fact` (365d): deleted after ~7 years. Effectively permanent.
 - `task` (30d): deleted after ~7 months.
 - `episodic` (14d): deleted after ~3 months.
@@ -1008,6 +997,6 @@ This matches the intended lifespan — episodic memories don't need to persist f
 
 6. **Embedding model migration.** If we switch from `text-embedding-3-small` to a different model (different dimensions), all memories must be re-embedded. The migration strategy (re-embed in place vs dual-write to a new collection) needs design if this becomes necessary.
 
-7. **Multi-user memories.** Can an agent remember something about a *group* of users (e.g., "Team Alpha prefers Terraform")? Current design is single-user (`userId` is a scalar). Group memories would require a different ownership model — likely a separate collection or a `groupId` field.
+7. **Multi-user memories.** Can an agent remember something about a _group_ of users (e.g., "Team Alpha prefers Terraform")? Current design is single-user (`userId` is a scalar). Group memories would require a different ownership model — likely a separate collection or a `groupId` field.
 
 8. **Memory size limits.** Should there be a per-user memory cap (e.g., max 1000 memories per user per agent)? Without a cap, a power user could accumulate unbounded memories. Decay + cleanup mitigates this, but an explicit cap provides a hard ceiling for resource planning.

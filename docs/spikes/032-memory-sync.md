@@ -47,15 +47,15 @@ If a human adds a section to `MEMORY.md` saying "Always use `node:24-slim`, neve
 
 Spike #29's `MemoryRecord` schema supports markdown-sourced memories. The relevant fields:
 
-| Field | Value for markdown-sourced memories |
-|---|---|
-| `source` | `"markdown_sync"` (new source type, extending `MEMORY_SOURCE` from spike #29) |
-| `type` | Inferred from content or section context (e.g., `fact`, `preference`, `project`) |
-| `importance` | Default 0.8 — human-curated content is presumed important |
-| `confidence` | 1.0 — human-written content is authoritative |
-| `sessionId` | Null or a synthetic "sync session" ID |
-| `agentId` | The agent whose workspace contains the markdown file |
-| `userId` | The workspace owner (single-user assumption for now) |
+| Field        | Value for markdown-sourced memories                                              |
+| ------------ | -------------------------------------------------------------------------------- |
+| `source`     | `"markdown_sync"` (new source type, extending `MEMORY_SOURCE` from spike #29)    |
+| `type`       | Inferred from content or section context (e.g., `fact`, `preference`, `project`) |
+| `importance` | Default 0.8 — human-curated content is presumed important                        |
+| `confidence` | 1.0 — human-written content is authoritative                                     |
+| `sessionId`  | Null or a synthetic "sync session" ID                                            |
+| `agentId`    | The agent whose workspace contains the markdown file                             |
+| `userId`     | The workspace owner (single-user assumption for now)                             |
 
 ### Relationship to Spike #31
 
@@ -63,14 +63,14 @@ Spike #31's JSONL session buffer is the audit log for agent execution events. Ma
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| Spike #29: per-agent Qdrant collections | Markdown-sourced memories go into the same collection as agent-created memories |
-| Spike #29: `text-embedding-3-small` (1536d) | Chunk text is embedded with the same model as conversation-derived memories |
-| Spike #27: Node.js 24, TypeScript, ESM | File watching and sync logic runs in Node.js |
-| Stateless control plane | The sync service runs in the agent pod, not the control plane |
-| Human edits are authoritative | When a human and an agent disagree, the human's version wins |
-| k3s on ARM64 + x64 | File watcher must work on both architectures (no native deps) |
+| Constraint                                  | Implication                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------- |
+| Spike #29: per-agent Qdrant collections     | Markdown-sourced memories go into the same collection as agent-created memories |
+| Spike #29: `text-embedding-3-small` (1536d) | Chunk text is embedded with the same model as conversation-derived memories     |
+| Spike #27: Node.js 24, TypeScript, ESM      | File watching and sync logic runs in Node.js                                    |
+| Stateless control plane                     | The sync service runs in the agent pod, not the control plane                   |
+| Human edits are authoritative               | When a human and an agent disagree, the human's version wins                    |
+| k3s on ARM64 + x64                          | File watcher must work on both architectures (no native deps)                   |
 
 ---
 
@@ -100,16 +100,16 @@ Manual sync is required for production.
 
 ### Chunking Rules
 
-| Rule | Description |
-|---|---|
-| Primary split | `##` headers (level 2). Each `##` section becomes one chunk. |
-| Nested headers | `###` and deeper headers are included within their parent `##` chunk. They do not create separate chunks. |
-| Top-level header | The `#` (level 1) header is treated as document title metadata, not as a chunk boundary. Content between `#` and the first `##` is the "preamble" chunk. |
-| Preamble content | Content before the first `##` header (after any `#` title) becomes the "preamble" chunk. If empty, no chunk is created. |
-| Headerless files | Files with no `##` headers are chunked at paragraph level (double newline boundaries). |
+| Rule               | Description                                                                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary split      | `##` headers (level 2). Each `##` section becomes one chunk.                                                                                                            |
+| Nested headers     | `###` and deeper headers are included within their parent `##` chunk. They do not create separate chunks.                                                               |
+| Top-level header   | The `#` (level 1) header is treated as document title metadata, not as a chunk boundary. Content between `#` and the first `##` is the "preamble" chunk.                |
+| Preamble content   | Content before the first `##` header (after any `#` title) becomes the "preamble" chunk. If empty, no chunk is created.                                                 |
+| Headerless files   | Files with no `##` headers are chunked at paragraph level (double newline boundaries).                                                                                  |
 | Maximum chunk size | 4096 characters. If a `##` section exceeds this, it is split at paragraph boundaries within the section. The section header is prepended to each sub-chunk for context. |
-| Minimum chunk size | 32 characters (after whitespace trimming). Shorter chunks are discarded — they lack enough content for meaningful embedding. |
-| Front matter | YAML front matter (between `---` delimiters) is parsed as metadata, not as chunk content. |
+| Minimum chunk size | 32 characters (after whitespace trimming). Shorter chunks are discarded — they lack enough content for meaningful embedding.                                            |
+| Front matter       | YAML front matter (between `---` delimiters) is parsed as metadata, not as chunk content.                                                                               |
 
 ### Why Not Configurable Heading Level?
 
@@ -143,12 +143,14 @@ hash = SHA-256(normalize(chunkText))
 ```
 
 Where `normalize` applies:
+
 1. Trim leading/trailing whitespace.
 2. Collapse multiple consecutive blank lines into a single blank line.
 3. Strip trailing whitespace from each line.
 4. Normalize line endings to `\n` (strip `\r`).
 
 The hash does not include:
+
 - The file path (a renamed file with identical content should match).
 - The section header text (it's part of the chunk text already).
 - Any metadata (type classification, importance, timestamps).
@@ -164,14 +166,16 @@ Without normalization, trivially different whitespace would produce different ha
 
 ```markdown
 ## Deployment Setup
+
 Cluster runs k3s on ARM64.
 ```
+
 vs.
+
 ```markdown
 ## Deployment Setup
 
 Cluster runs k3s on ARM64.
-
 ```
 
 These are semantically identical. Normalization ensures they produce the same hash, avoiding unnecessary re-embedding.
@@ -192,13 +196,13 @@ export interface MemoryRecord {
   // ... existing fields from spike #29 ...
 
   /** SHA-256 hash of normalized chunk content. Null for non-markdown memories. */
-  contentHash: string | null;
+  contentHash: string | null
   /** Source file path relative to workspace root. Null for non-markdown memories. */
-  sourceFile: string | null;
+  sourceFile: string | null
   /** Chunk index within the source file (0-based). Null for non-markdown memories. */
-  chunkIndex: number | null;
+  chunkIndex: number | null
   /** Section header text (e.g., "## Deployment Setup"). Null if preamble chunk. */
-  sectionHeader: string | null;
+  sectionHeader: string | null
 }
 ```
 
@@ -234,11 +238,11 @@ Polling (`fs.stat` on an interval) works everywhere but:
 
 Editors save files in multiple operations. Vim writes to a temp file and renames (two events). VS Code may write partial content then complete content (multiple events). Without debounce, each intermediate write triggers a sync cycle.
 
-| Parameter | Value | Rationale |
-|---|---|---|
-| Debounce interval | 2000 ms | Covers multi-event save patterns from all major editors. Vim rename is <10ms. VS Code multi-write is <500ms. 2s provides comfortable margin. |
-| Debounce strategy | Trailing edge | Sync fires 2s after the *last* change event. If the user makes rapid edits, only the final state is synced. |
-| Restart on new event | Yes | If a new change event arrives during the debounce window, the timer resets. This prevents syncing intermediate states during continuous editing. |
+| Parameter            | Value         | Rationale                                                                                                                                        |
+| -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Debounce interval    | 2000 ms       | Covers multi-event save patterns from all major editors. Vim rename is <10ms. VS Code multi-write is <500ms. 2s provides comfortable margin.     |
+| Debounce strategy    | Trailing edge | Sync fires 2s after the _last_ change event. If the user makes rapid edits, only the final state is synced.                                      |
+| Restart on new event | Yes           | If a new change event arrives during the debounce window, the timer resets. This prevents syncing intermediate states during continuous editing. |
 
 ### Watcher Lifecycle
 
@@ -288,14 +292,14 @@ Linux's inotify has a system-wide limit on watches (default: 8192). Each watched
 
 Every sync cycle produces a set of chunks from the current file. This set is compared against the set of chunks in Qdrant (filtered by `sourceFile`). The difference determines the operations:
 
-| Chunk in file? | Chunk in Qdrant? | Action |
-|---|---|---|
-| Yes | No | **Insert** — new chunk. Embed and upsert. |
-| Yes | Yes, same hash | **No-op** — unchanged. Skip. |
-| Yes | Yes, different hash | **Update** — content changed. Re-embed and upsert. |
-| No | Yes | **Delete** — section removed by human. Delete from Qdrant. |
+| Chunk in file? | Chunk in Qdrant?    | Action                                                     |
+| -------------- | ------------------- | ---------------------------------------------------------- |
+| Yes            | No                  | **Insert** — new chunk. Embed and upsert.                  |
+| Yes            | Yes, same hash      | **No-op** — unchanged. Skip.                               |
+| Yes            | Yes, different hash | **Update** — content changed. Re-embed and upsert.         |
+| No             | Yes                 | **Delete** — section removed by human. Delete from Qdrant. |
 
-This is a set reconciliation, not an event-driven model. The sync process doesn't need to know *how* a section was removed (user deleted it, git revert, editor undo). It only observes the current state and the stored state, and reconciles the difference.
+This is a set reconciliation, not an event-driven model. The sync process doesn't need to know _how_ a section was removed (user deleted it, git revert, editor undo). It only observes the current state and the stored state, and reconciles the difference.
 
 ### Why Full Reconciliation, Not Event-Driven Deletion?
 
@@ -316,7 +320,7 @@ When a chunk's hash is present in Qdrant (via the `contentHash` payload field) b
 
 ### Why Hard Delete, Not Supersession?
 
-Spike #29's supersession chain (`supersedesId` / `supersededById`) is designed for *evolved* knowledge — "the cluster has 5 nodes now, not 3." When a human deletes a section from `MEMORY.md`, they're not evolving the knowledge — they're saying "this is no longer true" or "this doesn't belong here." Hard deletion is the correct semantic.
+Spike #29's supersession chain (`supersedesId` / `supersededById`) is designed for _evolved_ knowledge — "the cluster has 5 nodes now, not 3." When a human deletes a section from `MEMORY.md`, they're not evolving the knowledge — they're saying "this is no longer true" or "this doesn't belong here." Hard deletion is the correct semantic.
 
 If the deletion was a mistake, git history preserves the content. The human can re-add the section, and the next sync cycle will re-create the Qdrant point.
 
@@ -510,18 +514,18 @@ OpenAI's embeddings API supports batch requests (multiple texts in one call). On
 ```typescript
 interface BatchEmbedConfig {
   /** Maximum texts per embedding API call. OpenAI limit: 2048. */
-  batchSize: number;
+  batchSize: number
   /** Maximum concurrent embedding API calls. */
-  concurrency: number;
+  concurrency: number
   /** Delay between batches to respect rate limits. */
-  batchDelayMs: number;
+  batchDelayMs: number
 }
 
 const DEFAULT_BATCH_EMBED_CONFIG: BatchEmbedConfig = {
   batchSize: 100,
   concurrency: 3,
   batchDelayMs: 200,
-};
+}
 ```
 
 ### Batch Upsert
@@ -594,30 +598,24 @@ The primary use case is Claude Code's `MEMORY.md` — a small, focused file that
 ```typescript
 interface MemorySyncConfig {
   /** Glob patterns for files to sync. Relative to workspace root. */
-  include: string[];
+  include: string[]
   /** Glob patterns to exclude. Checked after include. */
-  exclude: string[];
+  exclude: string[]
   /** Whether sync is enabled at all. Default: true. */
-  enabled: boolean;
+  enabled: boolean
   /** Debounce interval in ms. Default: 2000. */
-  debounceMs: number;
+  debounceMs: number
   /** Batch embedding config. */
-  batchEmbed: BatchEmbedConfig;
+  batchEmbed: BatchEmbedConfig
 }
 
 const DEFAULT_MEMORY_SYNC_CONFIG: MemorySyncConfig = {
   include: ["MEMORY.md"],
-  exclude: [
-    "node_modules/**",
-    ".git/**",
-    "dist/**",
-    "**/CHANGELOG.md",
-    "**/LICENSE.md",
-  ],
+  exclude: ["node_modules/**", ".git/**", "dist/**", "**/CHANGELOG.md", "**/LICENSE.md"],
   enabled: true,
   debounceMs: 2000,
   batchEmbed: DEFAULT_BATCH_EMBED_CONFIG,
-};
+}
 ```
 
 ### Example Configurations
@@ -656,11 +654,11 @@ const DEFAULT_MEMORY_SYNC_CONFIG: MemorySyncConfig = {
 
 ### Safety Limits
 
-| Limit | Value | Rationale |
-|---|---|---|
-| Maximum files | 50 | Prevents accidentally syncing thousands of markdown files. Emits warning at 50, hard-fails at 200. |
-| Maximum total size | 5 MB (sum of all synced files) | Prevents embedding cost explosion. A 5 MB corpus at ~$0.02/1M tokens costs ~$0.05 to embed — acceptable for initial import. |
-| Maximum chunk count | 500 | Prevents Qdrant collection pollution. 500 markdown-sourced memories is generous for any workspace. |
+| Limit               | Value                          | Rationale                                                                                                                   |
+| ------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Maximum files       | 50                             | Prevents accidentally syncing thousands of markdown files. Emits warning at 50, hard-fails at 200.                          |
+| Maximum total size  | 5 MB (sum of all synced files) | Prevents embedding cost explosion. A 5 MB corpus at ~$0.02/1M tokens costs ~$0.05 to embed — acceptable for initial import. |
+| Maximum chunk count | 500                            | Prevents Qdrant collection pollution. 500 markdown-sourced memories is generous for any workspace.                          |
 
 When a limit is exceeded, the sync process logs a warning and truncates to the limit (syncing the first N files by alphabetical order). The user is informed via the agent's next conversation turn.
 
@@ -925,15 +923,15 @@ function normalize(text: string): string
 ```typescript
 interface Chunk {
   /** Normalized chunk text (what gets embedded and stored as MemoryRecord.content). */
-  text: string;
+  text: string
   /** Section header (e.g., "## Deployment Setup"). Null for preamble or headerless files. */
-  header: string | null;
+  header: string | null
   /** 0-based index of this chunk within the file. */
-  index: number;
+  index: number
   /** File path relative to workspace root. */
-  filePath: string;
+  filePath: string
   /** SHA-256 of normalize(text). Computed after chunking. */
-  contentHash?: string;
+  contentHash?: string
 }
 ```
 
@@ -943,24 +941,24 @@ Each chunk needs a `MemoryType` (spike #29). For markdown-sourced chunks, the ty
 
 ```typescript
 function classifyChunkType(chunk: Chunk): MemoryType {
-  const text = chunk.text.toLowerCase();
-  const header = (chunk.header ?? "").toLowerCase();
+  const text = chunk.text.toLowerCase()
+  const header = (chunk.header ?? "").toLowerCase()
 
   // Check header keywords first
-  if (/prefer|style|convention|always|never/.test(header)) return "preference";
-  if (/project|repo|stack|deploy/.test(header)) return "project";
-  if (/decision|chose|decided|rationale/.test(header)) return "decision";
-  if (/correct|mistake|wrong|fix/.test(header)) return "correction";
-  if (/task|todo|done|completed/.test(header)) return "task";
+  if (/prefer|style|convention|always|never/.test(header)) return "preference"
+  if (/project|repo|stack|deploy/.test(header)) return "project"
+  if (/decision|chose|decided|rationale/.test(header)) return "decision"
+  if (/correct|mistake|wrong|fix/.test(header)) return "correction"
+  if (/task|todo|done|completed/.test(header)) return "task"
 
   // Check body keywords
-  if (/prefers?\b|always use|never use|convention/.test(text)) return "preference";
-  if (/deployed|repository|sprint|deadline/.test(text)) return "project";
-  if (/decided|chose|because|rationale|trade-?off/.test(text)) return "decision";
-  if (/was wrong|corrected|mistake|actually/.test(text)) return "correction";
+  if (/prefers?\b|always use|never use|convention/.test(text)) return "preference"
+  if (/deployed|repository|sprint|deadline/.test(text)) return "project"
+  if (/decided|chose|because|rationale|trade-?off/.test(text)) return "decision"
+  if (/was wrong|corrected|mistake|actually/.test(text)) return "correction"
 
   // Default
-  return "fact";
+  return "fact"
 }
 ```
 
@@ -1033,16 +1031,16 @@ File change detected → debounce → sync cycle starts
 
 ### Conflict Scenarios and Outcomes
 
-| Scenario | Outcome | Rationale |
-|---|---|---|
-| Human adds new section | New chunk embedded and upserted | Normal operation |
-| Human edits existing section | Chunk re-embedded, old Qdrant point updated | Human's version is authoritative |
-| Human deletes section | Qdrant point deleted | Human decided this knowledge is no longer valid |
-| Human reorders sections | Chunk indices change, hashes unchanged | No re-embedding (content unchanged). State file updated with new indices. |
-| Human renames section header | Hash changes (header is part of chunk text) | Re-embedded as content changed |
-| Agent writes, then human edits before sync | Human's final version wins | Sync reads current file state, not intermediate states |
-| Agent and human edit simultaneously | Human's save wins (file on disk) | Agent's write is either before or after human's. The last save to disk is what sync reads. |
-| File deleted then recreated | All points deleted, then re-created on next sync | Sync sees deletion first, then new file on next event |
+| Scenario                                   | Outcome                                          | Rationale                                                                                  |
+| ------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Human adds new section                     | New chunk embedded and upserted                  | Normal operation                                                                           |
+| Human edits existing section               | Chunk re-embedded, old Qdrant point updated      | Human's version is authoritative                                                           |
+| Human deletes section                      | Qdrant point deleted                             | Human decided this knowledge is no longer valid                                            |
+| Human reorders sections                    | Chunk indices change, hashes unchanged           | No re-embedding (content unchanged). State file updated with new indices.                  |
+| Human renames section header               | Hash changes (header is part of chunk text)      | Re-embedded as content changed                                                             |
+| Agent writes, then human edits before sync | Human's final version wins                       | Sync reads current file state, not intermediate states                                     |
+| Agent and human edit simultaneously        | Human's save wins (file on disk)                 | Agent's write is either before or after human's. The last save to disk is what sync reads. |
+| File deleted then recreated                | All points deleted, then re-created on next sync | Sync sees deletion first, then new file on next event                                      |
 
 ---
 
@@ -1053,17 +1051,17 @@ File change detected → debounce → sync cycle starts
 ```typescript
 interface FileWatcherConfig {
   /** Glob patterns for files to watch. Resolved relative to workspace root. */
-  include: string[];
+  include: string[]
   /** Glob patterns to exclude from watching. */
-  exclude: string[];
+  exclude: string[]
   /** Debounce interval in milliseconds. Default: 2000. */
-  debounceMs: number;
+  debounceMs: number
   /** Whether to use native fs.watch (true) or polling fallback (false). */
-  useNativeWatcher: boolean;
+  useNativeWatcher: boolean
   /** Polling interval in ms (only used if useNativeWatcher is false). Default: 5000. */
-  pollIntervalMs: number;
+  pollIntervalMs: number
   /** Maximum number of files to watch. Exceeding this emits a warning. */
-  maxWatchedFiles: number;
+  maxWatchedFiles: number
 }
 
 const DEFAULT_FILE_WATCHER_CONFIG: FileWatcherConfig = {
@@ -1079,30 +1077,30 @@ const DEFAULT_FILE_WATCHER_CONFIG: FileWatcherConfig = {
   useNativeWatcher: true,
   pollIntervalMs: 5000,
   maxWatchedFiles: 50,
-};
+}
 ```
 
 ### Watcher Implementation
 
 ```typescript
-import { watch, type FSWatcher } from "node:fs";
-import { stat } from "node:fs/promises";
-import { resolve, relative } from "node:path";
-import type { Logger } from "pino";
+import { watch, type FSWatcher } from "node:fs"
+import { stat } from "node:fs/promises"
+import { resolve, relative } from "node:path"
+import type { Logger } from "pino"
 
 interface WatcherEvents {
-  onFileChanged: (filePath: string) => void;
-  onFileDeleted: (filePath: string) => void;
-  onError: (error: Error) => void;
+  onFileChanged: (filePath: string) => void
+  onFileDeleted: (filePath: string) => void
+  onError: (error: Error) => void
 }
 
 interface ManagedWatcher {
   /** Start watching. Resolves when the watcher is active. */
-  start(): Promise<void>;
+  start(): Promise<void>
   /** Stop watching and clean up resources. */
-  stop(): void;
+  stop(): void
   /** List of currently watched file paths. */
-  watchedFiles(): string[];
+  watchedFiles(): string[]
 }
 
 function createFileWatcher(
@@ -1111,86 +1109,79 @@ function createFileWatcher(
   events: WatcherEvents,
   logger: Logger,
 ): ManagedWatcher {
-  const watchers: FSWatcher[] = [];
-  const debounceTimers = new Map<string, NodeJS.Timeout>();
+  const watchers: FSWatcher[] = []
+  const debounceTimers = new Map<string, NodeJS.Timeout>()
 
   function handleChange(eventType: string, filePath: string): void {
     // Clear existing debounce timer for this file
-    const existing = debounceTimers.get(filePath);
-    if (existing) clearTimeout(existing);
+    const existing = debounceTimers.get(filePath)
+    if (existing) clearTimeout(existing)
 
     // Set new debounce timer
     debounceTimers.set(
       filePath,
       setTimeout(async () => {
-        debounceTimers.delete(filePath);
+        debounceTimers.delete(filePath)
         try {
-          await stat(resolve(workspaceRoot, filePath));
+          await stat(resolve(workspaceRoot, filePath))
           // File exists — it was created or modified
-          events.onFileChanged(filePath);
+          events.onFileChanged(filePath)
         } catch {
           // File doesn't exist — it was deleted
-          events.onFileDeleted(filePath);
+          events.onFileDeleted(filePath)
         }
       }, config.debounceMs),
-    );
+    )
   }
 
   return {
     async start(): Promise<void> {
       // Resolve include globs to actual file paths
       // (implementation uses glob library or fs.readdir)
-      const files = await resolveGlobs(
-        workspaceRoot,
-        config.include,
-        config.exclude,
-      );
+      const files = await resolveGlobs(workspaceRoot, config.include, config.exclude)
 
       if (files.length > config.maxWatchedFiles) {
         logger.warn(
           { fileCount: files.length, max: config.maxWatchedFiles },
           "File count exceeds maximum — watching first %d files only",
           config.maxWatchedFiles,
-        );
+        )
       }
 
-      const filesToWatch = files.slice(0, config.maxWatchedFiles);
+      const filesToWatch = files.slice(0, config.maxWatchedFiles)
 
       for (const file of filesToWatch) {
-        const absPath = resolve(workspaceRoot, file);
+        const absPath = resolve(workspaceRoot, file)
         try {
           const watcher = watch(absPath, (eventType) => {
-            handleChange(eventType, file);
-          });
-          watcher.on("error", events.onError);
-          watchers.push(watcher);
+            handleChange(eventType, file)
+          })
+          watcher.on("error", events.onError)
+          watchers.push(watcher)
         } catch (err) {
-          logger.warn({ file, err }, "Failed to watch file");
+          logger.warn({ file, err }, "Failed to watch file")
         }
       }
 
-      logger.info(
-        { fileCount: filesToWatch.length },
-        "File watcher started for memory sync",
-      );
+      logger.info({ fileCount: filesToWatch.length }, "File watcher started for memory sync")
     },
 
     stop(): void {
       for (const watcher of watchers) {
-        watcher.close();
+        watcher.close()
       }
-      watchers.length = 0;
+      watchers.length = 0
       for (const timer of debounceTimers.values()) {
-        clearTimeout(timer);
+        clearTimeout(timer)
       }
-      debounceTimers.clear();
-      logger.info("File watcher stopped");
+      debounceTimers.clear()
+      logger.info("File watcher stopped")
     },
 
     watchedFiles(): string[] {
-      return []; // Implementation tracks watched paths
+      return [] // Implementation tracks watched paths
     },
-  };
+  }
 }
 ```
 
@@ -1205,22 +1196,18 @@ function createPollingWatcher(
   events: WatcherEvents,
   logger: Logger,
 ): ManagedWatcher {
-  const mtimes = new Map<string, number>();
-  let interval: NodeJS.Timeout | null = null;
+  const mtimes = new Map<string, number>()
+  let interval: NodeJS.Timeout | null = null
 
   return {
     async start(): Promise<void> {
-      const files = await resolveGlobs(
-        workspaceRoot,
-        config.include,
-        config.exclude,
-      );
+      const files = await resolveGlobs(workspaceRoot, config.include, config.exclude)
 
       // Initialize mtime map
       for (const file of files) {
         try {
-          const s = await stat(resolve(workspaceRoot, file));
-          mtimes.set(file, s.mtimeMs);
+          const s = await stat(resolve(workspaceRoot, file))
+          mtimes.set(file, s.mtimeMs)
         } catch {
           // File doesn't exist yet — will be detected on next poll
         }
@@ -1229,36 +1216,36 @@ function createPollingWatcher(
       interval = setInterval(async () => {
         for (const file of files) {
           try {
-            const s = await stat(resolve(workspaceRoot, file));
-            const prevMtime = mtimes.get(file);
+            const s = await stat(resolve(workspaceRoot, file))
+            const prevMtime = mtimes.get(file)
             if (prevMtime === undefined || s.mtimeMs !== prevMtime) {
-              mtimes.set(file, s.mtimeMs);
-              events.onFileChanged(file);
+              mtimes.set(file, s.mtimeMs)
+              events.onFileChanged(file)
             }
           } catch {
             if (mtimes.has(file)) {
-              mtimes.delete(file);
-              events.onFileDeleted(file);
+              mtimes.delete(file)
+              events.onFileDeleted(file)
             }
           }
         }
-      }, config.pollIntervalMs);
+      }, config.pollIntervalMs)
 
       logger.info(
         { fileCount: files.length, pollInterval: config.pollIntervalMs },
         "Polling file watcher started for memory sync",
-      );
+      )
     },
 
     stop(): void {
-      if (interval) clearInterval(interval);
-      mtimes.clear();
+      if (interval) clearInterval(interval)
+      mtimes.clear()
     },
 
     watchedFiles(): string[] {
-      return Array.from(mtimes.keys());
+      return Array.from(mtimes.keys())
     },
-  };
+  }
 }
 ```
 
@@ -1268,66 +1255,66 @@ function createPollingWatcher(
 
 ### 1. Large Files
 
-| Scenario | Behavior | Mitigation |
-|---|---|---|
-| Single markdown file >1 MB | Chunks normally but may produce many chunks | Safety limit: max 500 chunks. File >1 MB triggers a warning. |
-| Single section >4096 chars | Split at paragraph boundaries within section | Header prepended to each sub-chunk for context. |
-| Total synced content >5 MB | Sync process truncates at file limit (50 files) | Warning emitted. User should narrow the include glob. |
-| Binary file matching glob | `chunkMarkdownFile` produces garbage chunks | Pre-check: skip files where >10% of bytes are non-UTF-8. Log warning. |
+| Scenario                   | Behavior                                        | Mitigation                                                            |
+| -------------------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| Single markdown file >1 MB | Chunks normally but may produce many chunks     | Safety limit: max 500 chunks. File >1 MB triggers a warning.          |
+| Single section >4096 chars | Split at paragraph boundaries within section    | Header prepended to each sub-chunk for context.                       |
+| Total synced content >5 MB | Sync process truncates at file limit (50 files) | Warning emitted. User should narrow the include glob.                 |
+| Binary file matching glob  | `chunkMarkdownFile` produces garbage chunks     | Pre-check: skip files where >10% of bytes are non-UTF-8. Log warning. |
 
 ### 2. Rapid Edits
 
-| Scenario | Behavior | Mitigation |
-|---|---|---|
-| User saves 10 times in 5 seconds | Debounce collapses to one sync cycle (fires 2s after last save) | Only the final file state is synced. |
-| User saves, sync starts, user saves again during sync | Second save triggers new debounce. Sync-in-progress completes with slightly stale data. Next sync cycle picks up the latest version. | No corruption — sync reads file at start and doesn't re-read mid-cycle. |
-| Editor creates temp file, renames | Watcher sees two events (temp file create + rename). Debounce collapses them. | Exclude common temp file patterns: `*.swp`, `*~`, `.#*`. |
-| Git checkout changes file | Watcher fires for each changed file. Debounce per-file. | Multiple sync cycles may fire, each processing one file. Rate limit embedding API calls. |
+| Scenario                                              | Behavior                                                                                                                             | Mitigation                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| User saves 10 times in 5 seconds                      | Debounce collapses to one sync cycle (fires 2s after last save)                                                                      | Only the final file state is synced.                                                     |
+| User saves, sync starts, user saves again during sync | Second save triggers new debounce. Sync-in-progress completes with slightly stale data. Next sync cycle picks up the latest version. | No corruption — sync reads file at start and doesn't re-read mid-cycle.                  |
+| Editor creates temp file, renames                     | Watcher sees two events (temp file create + rename). Debounce collapses them.                                                        | Exclude common temp file patterns: `*.swp`, `*~`, `.#*`.                                 |
+| Git checkout changes file                             | Watcher fires for each changed file. Debounce per-file.                                                                              | Multiple sync cycles may fire, each processing one file. Rate limit embedding API calls. |
 
 ### 3. Network Partitions
 
-| Scenario | Behavior | Mitigation |
-|---|---|---|
-| Qdrant unreachable during sync | Upsert/delete fails. Sync cycle errors out. | Retry with exponential backoff: 1s, 2s, 4s, max 30s. After 5 retries, skip sync cycle and retry on next file change. |
-| Embedding API unreachable | Embed call fails. Sync cycle errors out. | Same retry policy. Un-embedded chunks are tracked in state as "pending" and retried on next cycle. |
-| Qdrant unreachable during deletion | Delete fails. Orphaned points remain. | Deletion is retried on next sync cycle. Orphaned points are harmless (they'll be filtered out eventually by the next successful sync). |
-| Partial upsert (some points succeed, some fail) | State file is not updated for failed points. | Next sync cycle detects the failed points as "changed" (hash mismatch) and retries. |
+| Scenario                                        | Behavior                                     | Mitigation                                                                                                                             |
+| ----------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Qdrant unreachable during sync                  | Upsert/delete fails. Sync cycle errors out.  | Retry with exponential backoff: 1s, 2s, 4s, max 30s. After 5 retries, skip sync cycle and retry on next file change.                   |
+| Embedding API unreachable                       | Embed call fails. Sync cycle errors out.     | Same retry policy. Un-embedded chunks are tracked in state as "pending" and retried on next cycle.                                     |
+| Qdrant unreachable during deletion              | Delete fails. Orphaned points remain.        | Deletion is retried on next sync cycle. Orphaned points are harmless (they'll be filtered out eventually by the next successful sync). |
+| Partial upsert (some points succeed, some fail) | State file is not updated for failed points. | Next sync cycle detects the failed points as "changed" (hash mismatch) and retries.                                                    |
 
 ### 4. Concurrent Access
 
-| Scenario | Behavior | Mitigation |
-|---|---|---|
-| Agent writes while sync reads | Lock prevents overlap. Agent waits for sync to release lock. | 5-second timeout on lock acquisition. If exceeded, agent queues write. |
-| Two agent sessions write simultaneously | Only one pod runs per agent (Graphile Worker job uniqueness). | Architecture prevents this case. |
-| Human edits file, agent also edits | Agent's write goes to disk first (lock acquired), then human's editor shows "file changed on disk" prompt. | Human decides: reload (accepting agent's edit) or overwrite (human wins on next sync). |
-| File watcher missed an event (inotify overflow) | File change is not detected until next event or process restart. | On startup, sync process runs a full reconciliation regardless of watcher state. This catches any missed events. |
+| Scenario                                        | Behavior                                                                                                   | Mitigation                                                                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Agent writes while sync reads                   | Lock prevents overlap. Agent waits for sync to release lock.                                               | 5-second timeout on lock acquisition. If exceeded, agent queues write.                                           |
+| Two agent sessions write simultaneously         | Only one pod runs per agent (Graphile Worker job uniqueness).                                              | Architecture prevents this case.                                                                                 |
+| Human edits file, agent also edits              | Agent's write goes to disk first (lock acquired), then human's editor shows "file changed on disk" prompt. | Human decides: reload (accepting agent's edit) or overwrite (human wins on next sync).                           |
+| File watcher missed an event (inotify overflow) | File change is not detected until next event or process restart.                                           | On startup, sync process runs a full reconciliation regardless of watcher state. This catches any missed events. |
 
 ### 5. State Corruption
 
-| Scenario | Behavior | Mitigation |
-|---|---|---|
-| `.memory-sync-state.json` is corrupted or missing | Treated as first run. Full re-import. | Idempotent point IDs (UUIDv5) ensure re-import produces upserts, not duplicates. |
-| `.memory-sync-state.json` is out of sync with Qdrant | State says chunk X exists, but Qdrant doesn't have it. | On upsert, Qdrant creates the point. On delete, Qdrant returns success even if point doesn't exist. Self-healing. |
-| Qdrant has points not in state file | Orphaned points from a previous sync engine version or manual insertion. | Periodic full reconciliation (daily cron) compares Qdrant points with `source="markdown_sync"` against current file state. Orphans are deleted. |
+| Scenario                                             | Behavior                                                                 | Mitigation                                                                                                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.memory-sync-state.json` is corrupted or missing    | Treated as first run. Full re-import.                                    | Idempotent point IDs (UUIDv5) ensure re-import produces upserts, not duplicates.                                                                |
+| `.memory-sync-state.json` is out of sync with Qdrant | State says chunk X exists, but Qdrant doesn't have it.                   | On upsert, Qdrant creates the point. On delete, Qdrant returns success even if point doesn't exist. Self-healing.                               |
+| Qdrant has points not in state file                  | Orphaned points from a previous sync engine version or manual insertion. | Periodic full reconciliation (daily cron) compares Qdrant points with `source="markdown_sync"` against current file state. Orphans are deleted. |
 
 ### 6. File System Edge Cases
 
-| Scenario | Behavior | Mitigation |
-|---|---|---|
-| Symlinked MEMORY.md | `fs.watch` follows symlinks on most platforms. | Watch the symlink target, not the link itself. Resolve with `fs.realpath` before watching. |
-| File on NFS/network mount | inotify doesn't work on NFS. | Detect network mount and auto-switch to polling fallback. |
-| File permissions change (read-only) | Read succeeds, but agent can't write. | Agent write fails gracefully. Sync (read-only) continues normally. |
-| File moved/renamed | Watcher sees deletion of old path. | Treats as deletion (old points removed). When file appears at new path (if included in glob), treats as new file. |
-| Encoding issues (non-UTF-8 file) | `JSON.stringify` of chunk text fails or produces garbage. | Pre-check: read file with `{ encoding: "utf-8" }` and validate. Skip files that produce replacement characters (U+FFFD) in >1% of content. |
+| Scenario                            | Behavior                                                  | Mitigation                                                                                                                                 |
+| ----------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Symlinked MEMORY.md                 | `fs.watch` follows symlinks on most platforms.            | Watch the symlink target, not the link itself. Resolve with `fs.realpath` before watching.                                                 |
+| File on NFS/network mount           | inotify doesn't work on NFS.                              | Detect network mount and auto-switch to polling fallback.                                                                                  |
+| File permissions change (read-only) | Read succeeds, but agent can't write.                     | Agent write fails gracefully. Sync (read-only) continues normally.                                                                         |
+| File moved/renamed                  | Watcher sees deletion of old path.                        | Treats as deletion (old points removed). When file appears at new path (if included in glob), treats as new file.                          |
+| Encoding issues (non-UTF-8 file)    | `JSON.stringify` of chunk text fails or produces garbage. | Pre-check: read file with `{ encoding: "utf-8" }` and validate. Skip files that produce replacement characters (U+FFFD) in >1% of content. |
 
 ### 7. Embedding API Edge Cases
 
-| Scenario | Behavior | Mitigation |
-|---|---|---|
-| Rate limit (429) | Embedding API returns 429 with Retry-After header. | Respect Retry-After. Back off and retry. |
-| Embedding returns different dimensions | Qdrant rejects the upsert (dimension mismatch). | Validate embedding dimension matches collection config (1536) before upsert. If mismatch, log error and skip. |
-| Empty chunk text after normalization | Embedding API may return zero vector or error. | Skip chunks with empty text (MIN_CHUNK_SIZE filter catches this). |
-| Identical chunks across files | Same text produces same embedding. Two points in Qdrant (different point IDs due to different `sourceFile`). | Acceptable. Semantic deduplication is deferred. |
+| Scenario                               | Behavior                                                                                                     | Mitigation                                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Rate limit (429)                       | Embedding API returns 429 with Retry-After header.                                                           | Respect Retry-After. Back off and retry.                                                                      |
+| Embedding returns different dimensions | Qdrant rejects the upsert (dimension mismatch).                                                              | Validate embedding dimension matches collection config (1536) before upsert. If mismatch, log error and skip. |
+| Empty chunk text after normalization   | Embedding API may return zero vector or error.                                                               | Skip chunks with empty text (MIN_CHUNK_SIZE filter catches this).                                             |
+| Identical chunks across files          | Same text produces same embedding. Two points in Qdrant (different point IDs due to different `sourceFile`). | Acceptable. Semantic deduplication is deferred.                                                               |
 
 ---
 
@@ -1344,6 +1331,7 @@ function createPollingWatcher(
 **Decision:** Sync state (chunk hashes, point IDs) is stored in a local JSON file (`.memory-sync-state.json`), not in PostgreSQL.
 
 **Rationale:**
+
 - The sync process runs in the agent pod, which may not have PostgreSQL access (future architecture where agents run in isolated pods).
 - The state file is small (<100KB for 500 chunks) and changes infrequently.
 - If the state file is lost, the system self-heals by re-importing (idempotent point IDs).
@@ -1362,6 +1350,7 @@ This creates a divergence: agent-created memories use UUIDv7, markdown-sourced m
 **Decision:** Add `"markdown_sync"` to the `MEMORY_SOURCE` enum (spike #29).
 
 **Rationale:** The sync process needs a distinct source type to:
+
 - Filter markdown-sourced memories during reconciliation (find all points with `source = "markdown_sync"` and `sourceFile = "MEMORY.md"`).
 - Enable different default importance/confidence for human-curated content.
 - Allow agents to distinguish between memories they created and memories the human wrote.
@@ -1371,6 +1360,7 @@ This creates a divergence: agent-created memories use UUIDv7, markdown-sourced m
 **Decision:** We do not cache embeddings locally. If a chunk is unchanged (same hash), we skip embedding entirely. If it's changed, we re-embed.
 
 **Rationale:**
+
 - Embedding is idempotent: the same text always produces the same vector (for a given model version). If the hash is unchanged, the embedding is unchanged — no need to cache or re-embed.
 - An embedding cache would need invalidation logic, storage management, and model-version tracking. The cost of occasionally re-embedding a changed chunk ($0.000002 per chunk) does not justify this complexity.
 - Spike #29, Open Question #1, already deferred embedding caching for the same reasons.
@@ -1380,6 +1370,7 @@ This creates a divergence: agent-created memories use UUIDv7, markdown-sourced m
 **Decision:** When the agent writes sections to markdown files, it marks them with an HTML comment `<!-- cortex-managed -->`. This enables the sync process to distinguish agent-written sections from human-written sections.
 
 **Rationale:** The marker is invisible when rendering markdown (HTML comments are hidden) and survives all markdown processors. It enables future features:
+
 - The agent can update its own sections without touching human sections.
 - The UI can highlight agent-written vs human-written sections.
 - The conflict resolver can apply different policies to agent-written sections (agent can overwrite its own, but not human-written).

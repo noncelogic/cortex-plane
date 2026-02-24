@@ -48,6 +48,7 @@ The project scaffolds from the existing [noncelogic/boilerplate](https://github.
 - CI workflow, pre-commit hooks
 
 **Pruning required:** The boilerplate includes frontend-heavy packages (forms, feedback, screenshots, state, UI) that aren't needed initially. The initial scaffold strips these down to:
+
 - `packages/database` (Prisma → repurposed for app schema, coexisting with Graphile Worker)
 - `packages/shared` (types, constants)
 - `packages/control-plane` (the core engine — single process initially)
@@ -57,12 +58,12 @@ The project scaffolds from the existing [noncelogic/boilerplate](https://github.
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| k3s on ARM64 + x64 | Every dependency must build on both architectures |
-| Stateless control plane | No in-memory state; PostgreSQL is the single source of truth |
-| Graphile Worker is core | ORM/migration choice must not conflict with Worker's schema management |
-| Hot reload in dev | Watch mode required; fast feedback loop is non-negotiable |
+| Constraint                  | Implication                                                                 |
+| --------------------------- | --------------------------------------------------------------------------- |
+| k3s on ARM64 + x64          | Every dependency must build on both architectures                           |
+| Stateless control plane     | No in-memory state; PostgreSQL is the single source of truth                |
+| Graphile Worker is core     | ORM/migration choice must not conflict with Worker's schema management      |
+| Hot reload in dev           | Watch mode required; fast feedback loop is non-negotiable                   |
 | Health endpoints from day 1 | `/healthz` (liveness), `/readyz` (readiness — DB connected, Worker running) |
 
 ---
@@ -71,15 +72,15 @@ The project scaffolds from the existing [noncelogic/boilerplate](https://github.
 
 ### Options Evaluated
 
-| Criterion | pnpm Workspaces (bare) | Turborepo | Nx |
-|---|---|---|---|
-| Setup complexity | Low — `pnpm-workspace.yaml` only | Low — thin layer on pnpm | High — generators, plugins, project graph |
-| Build orchestration | Manual (`--filter`) | Task pipeline with topological ordering | Full dependency graph + affected commands |
-| Remote caching | No | Yes (Vercel or self-hosted) | Yes (Nx Cloud or self-hosted) |
-| ARM64 support | Native (pnpm is JS) | Native (JS-based) | Native (JS-based) |
-| Learning curve | Minimal | Low | Moderate-to-high |
-| Lock-in | None | Low (just remove turbo.json) | Moderate (nx.json, project.json per package) |
-| Right-sized for ~5 packages? | Yes | Yes | Overkill |
+| Criterion                    | pnpm Workspaces (bare)           | Turborepo                               | Nx                                           |
+| ---------------------------- | -------------------------------- | --------------------------------------- | -------------------------------------------- |
+| Setup complexity             | Low — `pnpm-workspace.yaml` only | Low — thin layer on pnpm                | High — generators, plugins, project graph    |
+| Build orchestration          | Manual (`--filter`)              | Task pipeline with topological ordering | Full dependency graph + affected commands    |
+| Remote caching               | No                               | Yes (Vercel or self-hosted)             | Yes (Nx Cloud or self-hosted)                |
+| ARM64 support                | Native (pnpm is JS)              | Native (JS-based)                       | Native (JS-based)                            |
+| Learning curve               | Minimal                          | Low                                     | Moderate-to-high                             |
+| Lock-in                      | None                             | Low (just remove turbo.json)            | Moderate (nx.json, project.json per package) |
+| Right-sized for ~5 packages? | Yes                              | Yes                                     | Overkill                                     |
 
 ### Decision: **pnpm Workspaces + Turborepo**
 
@@ -98,16 +99,16 @@ The project scaffolds from the existing [noncelogic/boilerplate](https://github.
 
 ### Options Evaluated
 
-| Criterion | pnpm | Bun |
-|---|---|---|
-| Maturity | Production-proven since 2017 | Runtime stable, package manager less battle-tested |
-| ARM64 support | Native — pure JS | Native — Zig-compiled binary available for ARM64 |
-| k3s/Docker compat | `corepack enable && pnpm install` | Requires Bun binary in image; not in official Node images |
-| Workspace support | First-class (`pnpm-workspace.yaml`) | Supported but less ecosystem integration |
-| Lockfile stability | `pnpm-lock.yaml` — mature, well-understood | `bun.lockb` — binary format, harder to review in PRs |
-| Turborepo compat | First-class support | Supported but Turborepo docs assume pnpm/npm/yarn |
-| Node.js compat | Is a package manager for Node.js | Is a runtime + package manager; we run on Node.js |
-| Speed | Fast (content-addressable store, hardlinks) | Fastest install times |
+| Criterion          | pnpm                                        | Bun                                                       |
+| ------------------ | ------------------------------------------- | --------------------------------------------------------- |
+| Maturity           | Production-proven since 2017                | Runtime stable, package manager less battle-tested        |
+| ARM64 support      | Native — pure JS                            | Native — Zig-compiled binary available for ARM64          |
+| k3s/Docker compat  | `corepack enable && pnpm install`           | Requires Bun binary in image; not in official Node images |
+| Workspace support  | First-class (`pnpm-workspace.yaml`)         | Supported but less ecosystem integration                  |
+| Lockfile stability | `pnpm-lock.yaml` — mature, well-understood  | `bun.lockb` — binary format, harder to review in PRs      |
+| Turborepo compat   | First-class support                         | Supported but Turborepo docs assume pnpm/npm/yarn         |
+| Node.js compat     | Is a package manager for Node.js            | Is a runtime + package manager; we run on Node.js         |
+| Speed              | Fast (content-addressable store, hardlinks) | Fastest install times                                     |
 
 ### Decision: **pnpm**
 
@@ -125,17 +126,17 @@ The project scaffolds from the existing [noncelogic/boilerplate](https://github.
 
 ### Options Evaluated
 
-| Criterion | Decision | Rationale |
-|---|---|---|
-| Strict mode | **Yes — `"strict": true`** | Non-negotiable for a new project. Catches nullability bugs, forces explicit types at boundaries. |
-| Module system | **ESM-only (`"module": "nodenext"`)** | Node.js 24 has stable ESM support. CJS is legacy. Graphile Worker supports ESM. |
-| Target | **`"target": "es2024"`** | Node.js 24 supports all ES2023 features natively. No transpilation overhead. |
-| Path aliases | **Yes — `@cortex/*` maps to workspace packages** | pnpm workspaces handle resolution; `paths` in tsconfig provides editor support. |
-| Shared base config | **Yes — `tsconfig.base.json` at root** | DRY. Per-package configs extend the base with their own `outDir`, `rootDir`, `references`. |
-| `verbatimModuleSyntax` | **Yes** | Forces `import type` for type-only imports. Prevents runtime import of type-only modules. |
-| `skipLibCheck` | **`true`** | Speeds up compilation. We trust our dependencies' types. |
-| `declaration` + `declarationMap` | **Yes for shared packages** | Enables Go-to-Definition across packages in the monorepo. |
-| `composite` + project references | **Yes** | Enables `tsc --build` for incremental cross-package compilation. |
+| Criterion                        | Decision                                         | Rationale                                                                                        |
+| -------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Strict mode                      | **Yes — `"strict": true`**                       | Non-negotiable for a new project. Catches nullability bugs, forces explicit types at boundaries. |
+| Module system                    | **ESM-only (`"module": "nodenext"`)**            | Node.js 24 has stable ESM support. CJS is legacy. Graphile Worker supports ESM.                  |
+| Target                           | **`"target": "es2024"`**                         | Node.js 24 supports all ES2023 features natively. No transpilation overhead.                     |
+| Path aliases                     | **Yes — `@cortex/*` maps to workspace packages** | pnpm workspaces handle resolution; `paths` in tsconfig provides editor support.                  |
+| Shared base config               | **Yes — `tsconfig.base.json` at root**           | DRY. Per-package configs extend the base with their own `outDir`, `rootDir`, `references`.       |
+| `verbatimModuleSyntax`           | **Yes**                                          | Forces `import type` for type-only imports. Prevents runtime import of type-only modules.        |
+| `skipLibCheck`                   | **`true`**                                       | Speeds up compilation. We trust our dependencies' types.                                         |
+| `declaration` + `declarationMap` | **Yes for shared packages**                      | Enables Go-to-Definition across packages in the monorepo.                                        |
+| `composite` + project references | **Yes**                                          | Enables `tsc --build` for incremental cross-package compilation.                                 |
 
 ### Decision: **Strict ESM with shared base config and project references**
 
@@ -147,15 +148,15 @@ See [Artifact: tsconfig.json](#artifact-tsconfigjson) for the full config.
 
 ### Options Evaluated
 
-| Criterion | Drizzle ORM | Kysely | Raw pg (`node-postgres`) |
-|---|---|---|---|
-| Type safety | Full — schema-as-code, inferred types | Full — type-safe query builder | Manual — hand-written interfaces |
-| Query style | ORM-like API + raw SQL escape hatch | SQL-like builder (feels like writing SQL) | Raw SQL strings |
-| Migration tooling | `drizzle-kit` — generates SQL from schema diffs | Own migration system or third-party | Manual SQL files |
-| Graphile Worker compat | **Conflict risk** — Drizzle wants to own the schema | **Good** — Kysely doesn't manage schema | **Perfect** — no abstraction to conflict |
-| Learning curve | Moderate (Drizzle API + drizzle-kit) | Low (if you know SQL) | None |
-| Schema introspection | Can pull from DB, but prefers push-based | Can generate types from DB | N/A |
-| Maturity | v0.x — still evolving, breaking changes occur | v0.x — API stable, widely used | Decades-old, battle-proven |
+| Criterion              | Drizzle ORM                                         | Kysely                                    | Raw pg (`node-postgres`)                 |
+| ---------------------- | --------------------------------------------------- | ----------------------------------------- | ---------------------------------------- |
+| Type safety            | Full — schema-as-code, inferred types               | Full — type-safe query builder            | Manual — hand-written interfaces         |
+| Query style            | ORM-like API + raw SQL escape hatch                 | SQL-like builder (feels like writing SQL) | Raw SQL strings                          |
+| Migration tooling      | `drizzle-kit` — generates SQL from schema diffs     | Own migration system or third-party       | Manual SQL files                         |
+| Graphile Worker compat | **Conflict risk** — Drizzle wants to own the schema | **Good** — Kysely doesn't manage schema   | **Perfect** — no abstraction to conflict |
+| Learning curve         | Moderate (Drizzle API + drizzle-kit)                | Low (if you know SQL)                     | None                                     |
+| Schema introspection   | Can pull from DB, but prefers push-based            | Can generate types from DB                | N/A                                      |
+| Maturity               | v0.x — still evolving, breaking changes occur       | v0.x — API stable, widely used            | Decades-old, battle-proven               |
 
 ### Decision: **Kysely**
 
@@ -177,6 +178,7 @@ This decision is driven almost entirely by the Graphile Worker constraint.
   - The query builder syntax reads like SQL, which makes code review straightforward. No magic.
 
 **Migration strategy:**
+
 - Application tables: Kysely's built-in migration system (`FileMigrationProvider`) with numbered SQL files in `migrations/`.
 - Graphile Worker tables: Managed automatically by Worker on startup. We never touch them.
 - Both share the same PostgreSQL database but operate in separate schemas (`public` for app, `graphile_worker` for Worker).
@@ -187,18 +189,18 @@ This decision is driven almost entirely by the Graphile Worker constraint.
 
 ### Options Evaluated
 
-| Criterion | Fastify | Hono | Express |
-|---|---|---|---|
-| Performance | ~75k req/s (native JSON serializer) | ~85k req/s (lightweight core) | ~15k req/s (slowest) |
-| TypeScript support | First-class, generic type parameters | First-class, built for TS | Bolted on via `@types/express` |
-| SSE support | Via `@fastify/sse` or raw response | Built-in `streamSSE` helper | Manual — write to `res` |
-| WebSocket support | `@fastify/websocket` (mature) | `hono/ws` adapter (newer) | `ws` + `express-ws` (clunky) |
-| Plugin ecosystem | 100+ official plugins | Growing but smaller | Largest (but many unmaintained) |
-| JSON Schema validation | Built-in (Ajv integration) | Via `@hono/zod-validator` | Manual (express-validator, etc.) |
-| Encapsulation | Plugin system with scoped contexts | Middleware only | Middleware only |
-| Maturity on Node.js | Native Node.js framework | Originally for edge; Node adapter added later | 10+ years |
-| Logging integration | Built-in Pino integration | Manual | Manual |
-| Hook system | Lifecycle hooks (onRequest, preSerialization, etc.) | Middleware only | Middleware only |
+| Criterion              | Fastify                                             | Hono                                          | Express                          |
+| ---------------------- | --------------------------------------------------- | --------------------------------------------- | -------------------------------- |
+| Performance            | ~75k req/s (native JSON serializer)                 | ~85k req/s (lightweight core)                 | ~15k req/s (slowest)             |
+| TypeScript support     | First-class, generic type parameters                | First-class, built for TS                     | Bolted on via `@types/express`   |
+| SSE support            | Via `@fastify/sse` or raw response                  | Built-in `streamSSE` helper                   | Manual — write to `res`          |
+| WebSocket support      | `@fastify/websocket` (mature)                       | `hono/ws` adapter (newer)                     | `ws` + `express-ws` (clunky)     |
+| Plugin ecosystem       | 100+ official plugins                               | Growing but smaller                           | Largest (but many unmaintained)  |
+| JSON Schema validation | Built-in (Ajv integration)                          | Via `@hono/zod-validator`                     | Manual (express-validator, etc.) |
+| Encapsulation          | Plugin system with scoped contexts                  | Middleware only                               | Middleware only                  |
+| Maturity on Node.js    | Native Node.js framework                            | Originally for edge; Node adapter added later | 10+ years                        |
+| Logging integration    | Built-in Pino integration                           | Manual                                        | Manual                           |
+| Hook system            | Lifecycle hooks (onRequest, preSerialization, etc.) | Middleware only                               | Middleware only                  |
 
 ### Decision: **Fastify**
 
@@ -222,16 +224,16 @@ This decision is driven almost entirely by the Graphile Worker constraint.
 
 ### Options Evaluated
 
-| Criterion | Pino | Winston |
-|---|---|---|
-| Performance | ~5x faster (10k+ msg/s) | Slower due to transform streams |
-| Output format | Structured JSON by default | Configurable (JSON, printf, custom) |
-| k8s/Loki compat | Excellent — JSON logs are native to k8s log pipelines | Good — needs JSON transport configured |
-| Fastify integration | Built-in — Fastify uses Pino natively | Requires `fastify-winston` (community plugin) |
-| Child loggers | Lightweight (inherits bindings, no clone) | Heavier (creates new logger instance) |
-| Pretty printing (dev) | `pino-pretty` CLI pipe | Built-in format options |
-| Log levels | Standard (trace, debug, info, warn, error, fatal) | Custom levels supported |
-| Async logging | Yes — uses `sonic-boom` for async writes | Sync by default |
+| Criterion             | Pino                                                  | Winston                                       |
+| --------------------- | ----------------------------------------------------- | --------------------------------------------- |
+| Performance           | ~5x faster (10k+ msg/s)                               | Slower due to transform streams               |
+| Output format         | Structured JSON by default                            | Configurable (JSON, printf, custom)           |
+| k8s/Loki compat       | Excellent — JSON logs are native to k8s log pipelines | Good — needs JSON transport configured        |
+| Fastify integration   | Built-in — Fastify uses Pino natively                 | Requires `fastify-winston` (community plugin) |
+| Child loggers         | Lightweight (inherits bindings, no clone)             | Heavier (creates new logger instance)         |
+| Pretty printing (dev) | `pino-pretty` CLI pipe                                | Built-in format options                       |
+| Log levels            | Standard (trace, debug, info, warn, error, fatal)     | Custom levels supported                       |
+| Async logging         | Yes — uses `sonic-boom` for async writes              | Sync by default                               |
 
 ### Decision: **Pino**
 
@@ -255,14 +257,14 @@ This is the easiest decision in the document. Pino wins on every axis that matte
 
 ### Options Evaluated
 
-| Criterion | dotenv + manual validation | convict | @fastify/env (envSchema) | Custom Zod/AJV |
-|---|---|---|---|---|
-| Type safety | None | Moderate (convict schema) | Ajv JSON Schema | Full (Zod infers types) |
-| Validation | Manual `if (!process.env.X)` | Built-in, runs on load | Built-in Ajv validation | Zod `.parse()` on startup |
-| Default values | In code | In schema | In JSON Schema | In Zod schema |
-| Secret handling | `.env` file | `.env` + config files | `.env` via `dotenv` | `.env` via `dotenv` |
-| Complexity | Low but fragile | Moderate | Low (Fastify plugin) | Low-moderate |
-| Fail-fast | Only if you write checks | Yes — throws on invalid | Yes — throws on invalid | Yes — throws on invalid |
+| Criterion       | dotenv + manual validation   | convict                   | @fastify/env (envSchema) | Custom Zod/AJV            |
+| --------------- | ---------------------------- | ------------------------- | ------------------------ | ------------------------- |
+| Type safety     | None                         | Moderate (convict schema) | Ajv JSON Schema          | Full (Zod infers types)   |
+| Validation      | Manual `if (!process.env.X)` | Built-in, runs on load    | Built-in Ajv validation  | Zod `.parse()` on startup |
+| Default values  | In code                      | In schema                 | In JSON Schema           | In Zod schema             |
+| Secret handling | `.env` file                  | `.env` + config files     | `.env` via `dotenv`      | `.env` via `dotenv`       |
+| Complexity      | Low but fragile              | Moderate                  | Low (Fastify plugin)     | Low-moderate              |
+| Fail-fast       | Only if you write checks     | Yes — throws on invalid   | Yes — throws on invalid  | Yes — throws on invalid   |
 
 ### Decision: **`@fastify/env` (Ajv-based env validation)**
 
@@ -288,16 +290,16 @@ This is the easiest decision in the document. Pino wins on every axis that matte
 
 ### Options Evaluated
 
-| Criterion | `node:24-slim` (Debian bookworm) | `node:24-alpine` (musl libc) |
-|---|---|---|
-| Image size | ~200MB | ~130MB |
-| ARM64 support | Excellent — official multi-arch | Good — but musl edge cases |
-| Native npm deps | glibc — everything works | musl — some packages need `--build-from-source` |
-| Playwright compat | Supported (with apt deps) | **Not supported** — Playwright docs explicitly say "do not use Alpine" |
-| Security updates | Debian security team | Alpine security team |
-| Debug tooling | `apt-get install` anything | `apk add` — smaller package repo |
-| `sharp` / image processing | Works out of the box | Requires `vips-dev` and rebuild |
-| glibc compat | Native | musl — occasional segfaults with native addons |
+| Criterion                  | `node:24-slim` (Debian bookworm) | `node:24-alpine` (musl libc)                                           |
+| -------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
+| Image size                 | ~200MB                           | ~130MB                                                                 |
+| ARM64 support              | Excellent — official multi-arch  | Good — but musl edge cases                                             |
+| Native npm deps            | glibc — everything works         | musl — some packages need `--build-from-source`                        |
+| Playwright compat          | Supported (with apt deps)        | **Not supported** — Playwright docs explicitly say "do not use Alpine" |
+| Security updates           | Debian security team             | Alpine security team                                                   |
+| Debug tooling              | `apt-get install` anything       | `apk add` — smaller package repo                                       |
+| `sharp` / image processing | Works out of the box             | Requires `vips-dev` and rebuild                                        |
+| glibc compat               | Native                           | musl — occasional segfaults with native addons                         |
 
 ### Decision: **`node:24-slim`**
 
@@ -411,7 +413,7 @@ cortex-plane/
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.0.0",
   },
   "scripts": {
     "build": "turbo run build",
@@ -426,7 +428,7 @@ cortex-plane/
     "db:migrate": "pnpm --filter @cortex/control-plane run db:migrate",
     "db:migrate:create": "pnpm --filter @cortex/control-plane run db:migrate:create",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",
@@ -435,8 +437,8 @@ cortex-plane/
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.4.0",
     "turbo": "^2.4.0",
-    "typescript": "^5.7.0"
-  }
+    "typescript": "^5.7.0",
+  },
 }
 ```
 
@@ -460,7 +462,7 @@ cortex-plane/
     "lint:fix": "eslint src/ --fix",
     "clean": "rm -rf dist",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:migrate:create": "tsx src/db/create-migration.ts"
+    "db:migrate:create": "tsx src/db/create-migration.ts",
   },
   "dependencies": {
     "@cortex/shared": "workspace:*",
@@ -471,14 +473,14 @@ cortex-plane/
     "graphile-worker": "^0.16.0",
     "kysely": "^0.27.0",
     "pg": "^8.13.0",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
   },
   "devDependencies": {
     "@types/pg": "^8.11.0",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.19.0",
-    "vitest": "^3.0.0"
-  }
+    "vitest": "^3.0.0",
+  },
 }
 ```
 
@@ -495,17 +497,17 @@ cortex-plane/
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+      "types": "./dist/index.d.ts",
+    },
   },
   "scripts": {
     "build": "tsc --build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
   },
-  "devDependencies": {}
+  "devDependencies": {},
 }
 ```
 
@@ -523,19 +525,19 @@ cortex-plane/
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf .next"
+    "clean": "rm -rf .next",
   },
   "dependencies": {
     "@cortex/shared": "workspace:*",
     "next": "^15.2.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.7.0"
-  }
+    "typescript": "^5.7.0",
+  },
 }
 ```
 
@@ -571,8 +573,8 @@ cortex-plane/
     // Performance
     "skipLibCheck": true,
     "incremental": true,
-    "composite": true
-  }
+    "composite": true,
+  },
 }
 ```
 
@@ -583,12 +585,10 @@ cortex-plane/
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
   },
   "include": ["src"],
-  "references": [
-    { "path": "../shared" }
-  ]
+  "references": [{ "path": "../shared" }],
 }
 ```
 
@@ -599,9 +599,9 @@ cortex-plane/
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
   },
-  "include": ["src"]
+  "include": ["src"],
 }
 ```
 
@@ -632,15 +632,13 @@ cortex-plane/
 
     // Path alias for local imports
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
     },
-    "plugins": [{ "name": "next" }]
+    "plugins": [{ "name": "next" }],
   },
   "include": ["src", "next-env.d.ts", ".next/types/**/*.ts"],
   "exclude": ["node_modules"],
-  "references": [
-    { "path": "../shared" }
-  ]
+  "references": [{ "path": "../shared" }],
 }
 ```
 
@@ -779,8 +777,8 @@ services:
     image: qdrant/qdrant:v1.13.2
     restart: unless-stopped
     ports:
-      - "6333:6333"   # REST API
-      - "6334:6334"   # gRPC
+      - "6333:6333" # REST API
+      - "6334:6334" # gRPC
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -848,19 +846,14 @@ We use **ESLint v9 flat config** with `typescript-eslint`. No legacy `.eslintrc`
 ### `eslint.config.js` (Root)
 
 ```javascript
-import eslint from "@eslint/js";
-import tseslint from "typescript-eslint";
-import eslintConfigPrettier from "eslint-config-prettier";
+import eslint from "@eslint/js"
+import tseslint from "typescript-eslint"
+import eslintConfigPrettier from "eslint-config-prettier"
 
 export default tseslint.config(
   // Global ignores
   {
-    ignores: [
-      "**/dist/",
-      "**/node_modules/",
-      "**/.next/",
-      "**/coverage/",
-    ],
+    ignores: ["**/dist/", "**/node_modules/", "**/.next/", "**/coverage/"],
   },
 
   // Base rules for all TypeScript files
@@ -881,29 +874,38 @@ export default tseslint.config(
   {
     rules: {
       // Enforce explicit return types on exported functions (API boundaries)
-      "@typescript-eslint/explicit-function-return-type": ["error", {
-        allowExpressions: true,
-        allowHigherOrderFunctions: true,
-        allowTypedFunctionExpressions: true,
-      }],
+      "@typescript-eslint/explicit-function-return-type": [
+        "error",
+        {
+          allowExpressions: true,
+          allowHigherOrderFunctions: true,
+          allowTypedFunctionExpressions: true,
+        },
+      ],
 
       // No floating promises — every async call must be awaited or void-annotated
       "@typescript-eslint/no-floating-promises": "error",
 
       // No unused vars (allow underscore prefix for intentionally unused)
-      "@typescript-eslint/no-unused-vars": ["error", {
-        argsIgnorePattern: "^_",
-        varsIgnorePattern: "^_",
-      }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
 
       // Prefer nullish coalescing over ||
       "@typescript-eslint/prefer-nullish-coalescing": "error",
 
       // Consistent type imports
-      "@typescript-eslint/consistent-type-imports": ["error", {
-        prefer: "type-imports",
-        fixStyle: "inline-type-imports",
-      }],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          fixStyle: "inline-type-imports",
+        },
+      ],
 
       // No console.log in production code (use pino logger)
       "no-console": "error",
@@ -912,7 +914,7 @@ export default tseslint.config(
 
   // Disable rules that conflict with Prettier
   eslintConfigPrettier,
-);
+)
 ```
 
 ### `.prettierrc`
@@ -925,7 +927,7 @@ export default tseslint.config(
   "printWidth": 100,
   "tabWidth": 2,
   "endOfLine": "lf",
-  "arrowParens": "always"
+  "arrowParens": "always",
 }
 ```
 
@@ -947,25 +949,25 @@ export default tseslint.config(
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**"],
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
     },
     "test": {
       "dependsOn": ["build"],
-      "cache": false
+      "cache": false,
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
     },
     "lint": {},
     "lint:fix": {},
     "clean": {
-      "cache": false
-    }
-  }
+      "cache": false,
+    },
+  },
 }
 ```
 
@@ -973,20 +975,20 @@ export default tseslint.config(
 
 ## Summary: Decision Matrix
 
-| # | Decision | Choice | Runner-up | Key Rationale |
-|---|---|---|---|---|
-| 1 | Monorepo tooling | pnpm Workspaces + Turborepo | Bare pnpm workspaces | Turbo adds topological builds + caching at near-zero cost |
-| 2 | Package manager | pnpm | Bun | We run Node.js, not Bun runtime; pnpm's strict resolution catches real bugs |
-| 3 | TypeScript config | Strict, ESM-only, project refs | — | Node.js 24 has stable ESM; strict catches bugs; project refs enable incremental builds |
-| 4 | ORM / Query builder | Kysely | Drizzle | Kysely doesn't conflict with Graphile Worker's schema management; shares pg driver |
-| 5 | HTTP framework | Fastify | Hono | Native Node.js framework; built-in Pino, Ajv, plugin encapsulation |
-| 6 | Logging | Pino | Winston | Fastify-native; 5x faster; structured JSON by default |
-| 7 | Config management | @fastify/env | convict | Fastify-native; JSON Schema validation; fail-fast on startup |
-| 8 | Docker base image | node:24-slim | node:24-alpine | glibc compatibility; Playwright support; ARM64 reliability |
-| — | ESLint | v9 flat config + typescript-eslint strict | — | Modern, no legacy config; strict type-checked rules |
-| — | Prettier | Standard config, double quotes, trailing commas | — | Clean diffs, no ASI bugs, JSON consistency |
-| — | Test runner | Vitest | Jest | ESM-native, fast, TypeScript without transform config |
-| — | Dev runner | tsx (watch mode) | ts-node | tsx uses esbuild under the hood, fast startup, watch mode built-in |
+| #   | Decision            | Choice                                          | Runner-up            | Key Rationale                                                                          |
+| --- | ------------------- | ----------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------- |
+| 1   | Monorepo tooling    | pnpm Workspaces + Turborepo                     | Bare pnpm workspaces | Turbo adds topological builds + caching at near-zero cost                              |
+| 2   | Package manager     | pnpm                                            | Bun                  | We run Node.js, not Bun runtime; pnpm's strict resolution catches real bugs            |
+| 3   | TypeScript config   | Strict, ESM-only, project refs                  | —                    | Node.js 24 has stable ESM; strict catches bugs; project refs enable incremental builds |
+| 4   | ORM / Query builder | Kysely                                          | Drizzle              | Kysely doesn't conflict with Graphile Worker's schema management; shares pg driver     |
+| 5   | HTTP framework      | Fastify                                         | Hono                 | Native Node.js framework; built-in Pino, Ajv, plugin encapsulation                     |
+| 6   | Logging             | Pino                                            | Winston              | Fastify-native; 5x faster; structured JSON by default                                  |
+| 7   | Config management   | @fastify/env                                    | convict              | Fastify-native; JSON Schema validation; fail-fast on startup                           |
+| 8   | Docker base image   | node:24-slim                                    | node:24-alpine       | glibc compatibility; Playwright support; ARM64 reliability                             |
+| —   | ESLint              | v9 flat config + typescript-eslint strict       | —                    | Modern, no legacy config; strict type-checked rules                                    |
+| —   | Prettier            | Standard config, double quotes, trailing commas | —                    | Clean diffs, no ASI bugs, JSON consistency                                             |
+| —   | Test runner         | Vitest                                          | Jest                 | ESM-native, fast, TypeScript without transform config                                  |
+| —   | Dev runner          | tsx (watch mode)                                | ts-node              | tsx uses esbuild under the hood, fast startup, watch mode built-in                     |
 
 ---
 
