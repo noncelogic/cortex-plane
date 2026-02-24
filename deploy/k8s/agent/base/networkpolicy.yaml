@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-isolation
+  labels:
+    app: cortex-agent
+    app.kubernetes.io/name: cortex-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+  egress:
+    # DNS resolution (kube-dns / CoreDNS)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Control plane
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+    # Qdrant
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: vector-store
+    # External HTTPS only — block all internal cluster IPs
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP

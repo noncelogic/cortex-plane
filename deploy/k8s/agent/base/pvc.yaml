@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-workspace
+  labels:
+    app: cortex-agent
+    app.kubernetes.io/name: cortex-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
