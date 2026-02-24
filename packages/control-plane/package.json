@@ -1,0 +1,36 @@
+{
+  "name": "@cortex/control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "clean": "rm -rf dist .tsbuildinfo",
+    "db:migrate": "tsx src/db/migrate.ts"
+  },
+  "dependencies": {
+    "@cortex/shared": "workspace:*",
+    "@fastify/env": "^5.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "@qdrant/js-client-rest": "^1.12.0",
+    "fastify": "^5.2.0",
+    "graphile-worker": "^0.16.0",
+    "kysely": "^0.27.0",
+    "pg": "^8.13.0",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.0",
+    "vitest": "^3.0.0"
+  }
+}
