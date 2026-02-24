@@ -2,9 +2,11 @@ import Fastify, { type FastifyInstance } from "fastify"
 import type { Kysely } from "kysely"
 import type pg from "pg"
 
+import { ApprovalService } from "./approval/service.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
+import { approvalRoutes } from "./routes/approval.js"
 import { healthRoutes } from "./routes/health.js"
 import { streamRoutes } from "./routes/stream.js"
 import { SSEConnectionManager } from "./streaming/manager.js"
@@ -46,7 +48,15 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   app.decorate("worker", runner)
   app.decorate("db", db)
 
+  // Approval service — core approval gate logic
+  const approvalService = new ApprovalService({ db })
+
   await app.register(healthRoutes)
+
+  // Register approval routes (always available)
+  await app.register(
+    approvalRoutes({ approvalService, sseManager }),
+  )
 
   // Register streaming routes if lifecycle manager is provided
   if (options.lifecycleManager) {

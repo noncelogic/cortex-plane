@@ -113,6 +113,7 @@ export interface JobTable {
   started_at: Date | null
   completed_at: Date | null
   heartbeat_at: Date | null
+  approval_expires_at: Date | null
 }
 
 export type Job = Selectable<JobTable>
@@ -134,11 +135,40 @@ export interface ApprovalRequestTable {
   decided_by: string | null
   expires_at: Date
   decision_note: string | null
+  requested_by_agent_id: string | null
+  approver_user_account_id: string | null
+  notification_channels: ColumnType<
+    Record<string, unknown>[],
+    Record<string, unknown>[] | undefined,
+    Record<string, unknown>[]
+  >
+  action_summary: string | null
 }
 
 export type ApprovalRequest = Selectable<ApprovalRequestTable>
 export type NewApprovalRequest = Insertable<ApprovalRequestTable>
 export type ApprovalRequestUpdate = Updateable<ApprovalRequestTable>
+
+// ---------------------------------------------------------------------------
+// Table: approval_audit_log
+// ---------------------------------------------------------------------------
+export interface ApprovalAuditLogTable {
+  id: Generated<string>
+  approval_request_id: string | null
+  job_id: string | null
+  event_type: string
+  actor_user_id: string | null
+  actor_channel: string | null
+  details: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type ApprovalAuditLog = Selectable<ApprovalAuditLogTable>
+export type NewApprovalAuditLog = Insertable<ApprovalAuditLogTable>
 
 // ---------------------------------------------------------------------------
 // Database interface — register all tables here.
@@ -150,4 +180,5 @@ export interface Database {
   session: SessionTable
   job: JobTable
   approval_request: ApprovalRequestTable
+  approval_audit_log: ApprovalAuditLogTable
 }
