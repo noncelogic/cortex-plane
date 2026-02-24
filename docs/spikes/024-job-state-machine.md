@@ -25,7 +25,7 @@
 
 Cortex Plane orchestrates autonomous agent workflows on k3s. The execution engine is built on **Graphile Worker**, which provides durable job processing with its own internal queue in the `graphile_worker` schema.
 
-Graphile Worker is excellent at what it does: reliable job queuing, automatic retries with exponential backoff, locking, and worker coordination. But it is an *execution engine*, not an *application state machine*. It has two terminal states for a job: completed (deleted) or permanently failed. Our domain requires richer semantics:
+Graphile Worker is excellent at what it does: reliable job queuing, automatic retries with exponential backoff, locking, and worker coordination. But it is an _execution engine_, not an _application state machine_. It has two terminal states for a job: completed (deleted) or permanently failed. Our domain requires richer semantics:
 
 - **Approval gates** — a job pauses at a decision point, waits for human approval, then resumes.
 - **Checkpointing** — agent workflows save progress incrementally so they can resume after a crash.
@@ -33,17 +33,17 @@ Graphile Worker is excellent at what it does: reliable job queuing, automatic re
 - **Application-level backoff** — configurable retry behavior per agent, independent of Worker's internal retry mechanism.
 - **Workflow visibility** — the dashboard needs to display job status, history, and progress in real-time.
 
-This spike defines the schema for the application-level job state machine that sits *on top of* Graphile Worker.
+This spike defines the schema for the application-level job state machine that sits _on top of_ Graphile Worker.
 
 ### Hard Constraints (from Spike #27)
 
-| Constraint | Implication |
-|---|---|
-| Kysely for queries | Schema defined as SQL DDL; Kysely types match columns 1:1 |
-| Graphile Worker owns its schema | Our tables live in `public` schema; we never modify `graphile_worker.*` |
-| PostgreSQL is the single source of truth | No in-memory state; every state transition is a DB write |
-| Stateless control plane | Any instance can process any job; no affinity |
-| Shared `pg` connection pool | Kysely and Graphile Worker share the same `pg.Pool` |
+| Constraint                               | Implication                                                             |
+| ---------------------------------------- | ----------------------------------------------------------------------- |
+| Kysely for queries                       | Schema defined as SQL DDL; Kysely types match columns 1:1               |
+| Graphile Worker owns its schema          | Our tables live in `public` schema; we never modify `graphile_worker.*` |
+| PostgreSQL is the single source of truth | No in-memory state; every state transition is a DB write                |
+| Stateless control plane                  | Any instance can process any job; no affinity                           |
+| Shared `pg` connection pool              | Kysely and Graphile Worker share the same `pg.Pool`                     |
 
 ---
 
@@ -79,25 +79,25 @@ The design follows the **shadow table** pattern recommended by Graphile Worker's
 
 ### What Graphile Worker Does (We Don't Duplicate)
 
-| Concern | Graphile Worker's Responsibility |
-|---|---|
-| Job locking | `locked_at` / `locked_by` on `_private_jobs` — prevents double-processing |
-| Worker coordination | Multiple Worker instances share the queue safely via advisory locks |
-| Task dispatch | Matches `task_identifier` to registered task functions |
-| Internal retries | Exponential backoff: `exp(least(10, attempt))` seconds between attempts |
-| Dead job recovery | Unlocks jobs stuck for >4 hours (crashed workers) |
+| Concern             | Graphile Worker's Responsibility                                          |
+| ------------------- | ------------------------------------------------------------------------- |
+| Job locking         | `locked_at` / `locked_by` on `_private_jobs` — prevents double-processing |
+| Worker coordination | Multiple Worker instances share the queue safely via advisory locks       |
+| Task dispatch       | Matches `task_identifier` to registered task functions                    |
+| Internal retries    | Exponential backoff: `exp(least(10, attempt))` seconds between attempts   |
+| Dead job recovery   | Unlocks jobs stuck for >4 hours (crashed workers)                         |
 
 ### What Our Schema Does (On Top of Worker)
 
-| Concern | Our Responsibility |
-|---|---|
-| Application state machine | `PENDING → RUNNING → COMPLETED / FAILED / WAITING_FOR_APPROVAL` |
-| Approval gates | `WAITING_FOR_APPROVAL` state with `approval_token` for external approval |
-| Checkpointing | `checkpoint` JSONB column updated after each agent step |
-| Application-level retries | `retry_count` / `max_retries` / `next_retry_at` with configurable backoff |
-| Audit trail | `job_history` table records every state transition with timestamp and metadata |
+| Concern                            | Our Responsibility                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| Application state machine          | `PENDING → RUNNING → COMPLETED / FAILED / WAITING_FOR_APPROVAL`                   |
+| Approval gates                     | `WAITING_FOR_APPROVAL` state with `approval_token` for external approval          |
+| Checkpointing                      | `checkpoint` JSONB column updated after each agent step                           |
+| Application-level retries          | `retry_count` / `max_retries` / `next_retry_at` with configurable backoff         |
+| Audit trail                        | `job_history` table records every state transition with timestamp and metadata    |
 | Job lifecycle after Worker deletes | Our `job` record persists in terminal states (`COMPLETED`, `FAILED`, `CANCELLED`) |
-| Dashboard queries | Indexes optimized for filtering by status, agent, and time range |
+| Dashboard queries                  | Indexes optimized for filtering by status, agent, and time range                  |
 
 ### Lifecycle: How a Job Flows Through Both Layers
 
@@ -107,13 +107,13 @@ The design follows the **shadow table** pattern recommended by Graphile Worker's
 4. **Agent executes steps.** After each step, the task handler updates `checkpoint` on our record (JSONL buffer flush).
 5. **Outcome:**
    - **Success:** Task handler sets our status to `COMPLETED`, returns normally. Worker deletes its internal job. Our `worker_job_id` becomes a dangling reference (harmless — it's nullable and we never query it after completion).
-   - **Approval needed:** Task handler sets our status to `WAITING_FOR_APPROVAL`, generates an `approval_token`, and returns normally from the Worker task. Worker deletes its job. When approval arrives, we create a *new* Worker job to resume.
+   - **Approval needed:** Task handler sets our status to `WAITING_FOR_APPROVAL`, generates an `approval_token`, and returns normally from the Worker task. Worker deletes its job. When approval arrives, we create a _new_ Worker job to resume.
    - **Transient failure:** Task handler throws. Worker increments its internal `attempts` and re-queues with backoff. Our status stays `RUNNING`. If Worker exhausts its `max_attempts`, our task handler is called one final time; we set status to `FAILED`.
    - **Application-level retry:** For failures where we want our own backoff logic (e.g., rate-limited API), the task handler sets our status to `RETRY`, computes `next_retry_at`, increments `retry_count`, and returns normally. A separate scheduled task (or cron) picks up retryable jobs at `next_retry_at` and re-enqueues them to Worker.
 
 ### Why Not Use a Foreign Key to `_private_jobs`?
 
-Graphile Worker's documentation notes that foreign keys to `_private_jobs` add performance overhead to the queue. More importantly, `_private_jobs` is a *private* implementation detail — the table name and structure may change in minor releases. We store `worker_job_id` as a plain `bigint` with no foreign key constraint. This is a soft reference for operational debugging only (correlating our records with Worker's queue during execution). After the Worker job completes or fails, the value is stale and irrelevant.
+Graphile Worker's documentation notes that foreign keys to `_private_jobs` add performance overhead to the queue. More importantly, `_private_jobs` is a _private_ implementation detail — the table name and structure may change in minor releases. We store `worker_job_id` as a plain `bigint` with no foreign key constraint. This is a soft reference for operational debugging only (correlating our records with Worker's queue during execution). After the Worker job completes or fails, the value is stale and irrelevant.
 
 ---
 
@@ -147,21 +147,21 @@ stateDiagram-v2
 
 ### Valid Transitions Table
 
-| From | To | Trigger |
-|---|---|---|
-| `PENDING` | `RUNNING` | Graphile Worker picks up the queued task |
-| `PENDING` | `CANCELLED` | External cancellation before execution |
-| `RUNNING` | `COMPLETED` | Agent workflow finishes all steps successfully |
-| `RUNNING` | `FAILED` | Unrecoverable error or max retries exhausted |
-| `RUNNING` | `WAITING_FOR_APPROVAL` | Agent reaches an approval gate |
-| `RUNNING` | `RETRY` | Transient failure; agent will retry after backoff |
-| `RUNNING` | `CANCELLED` | External cancellation during execution |
-| `RETRY` | `RUNNING` | Re-enqueued to Worker after `next_retry_at` elapses |
-| `RETRY` | `CANCELLED` | External cancellation during backoff wait |
-| `RETRY` | `FAILED` | `retry_count` reaches `max_retries` |
-| `WAITING_FOR_APPROVAL` | `RUNNING` | Approval token validated, job resumes |
-| `WAITING_FOR_APPROVAL` | `FAILED` | Approval explicitly denied |
-| `WAITING_FOR_APPROVAL` | `CANCELLED` | Cancelled while waiting for approval |
+| From                   | To                     | Trigger                                             |
+| ---------------------- | ---------------------- | --------------------------------------------------- |
+| `PENDING`              | `RUNNING`              | Graphile Worker picks up the queued task            |
+| `PENDING`              | `CANCELLED`            | External cancellation before execution              |
+| `RUNNING`              | `COMPLETED`            | Agent workflow finishes all steps successfully      |
+| `RUNNING`              | `FAILED`               | Unrecoverable error or max retries exhausted        |
+| `RUNNING`              | `WAITING_FOR_APPROVAL` | Agent reaches an approval gate                      |
+| `RUNNING`              | `RETRY`                | Transient failure; agent will retry after backoff   |
+| `RUNNING`              | `CANCELLED`            | External cancellation during execution              |
+| `RETRY`                | `RUNNING`              | Re-enqueued to Worker after `next_retry_at` elapses |
+| `RETRY`                | `CANCELLED`            | External cancellation during backoff wait           |
+| `RETRY`                | `FAILED`               | `retry_count` reaches `max_retries`                 |
+| `WAITING_FOR_APPROVAL` | `RUNNING`              | Approval token validated, job resumes               |
+| `WAITING_FOR_APPROVAL` | `FAILED`               | Approval explicitly denied                          |
+| `WAITING_FOR_APPROVAL` | `CANCELLED`            | Cancelled while waiting for approval                |
 
 ### Terminal States
 
@@ -193,22 +193,22 @@ export const JOB_STATUS = {
   RETRY: "RETRY",
   /** Job cancelled by external request. Terminal state. */
   CANCELLED: "CANCELLED",
-} as const;
+} as const
 
-export type JobStatus = (typeof JOB_STATUS)[keyof typeof JOB_STATUS];
+export type JobStatus = (typeof JOB_STATUS)[keyof typeof JOB_STATUS]
 
 /** States from which no further transitions are possible. */
 export const TERMINAL_STATUSES: ReadonlySet<JobStatus> = new Set([
   JOB_STATUS.COMPLETED,
   JOB_STATUS.FAILED,
   JOB_STATUS.CANCELLED,
-]);
+])
 ```
 
 ### Job Record Interface
 
 ```typescript
-import type { JsonValue } from "type-fest";
+import type { JsonValue } from "type-fest"
 
 /**
  * The application-level job record. This is the single source of truth for
@@ -216,59 +216,59 @@ import type { JsonValue } from "type-fest";
  */
 export interface JobRecord {
   /** UUIDv7 primary key. Sortable by creation time. */
-  id: string;
+  id: string
 
   /** References the agent definition that this job executes. */
-  agent_id: string;
+  agent_id: string
 
   /** Current state in the job lifecycle. */
-  status: JobStatus;
+  status: JobStatus
 
   /** Input data for the agent workflow. Immutable after creation. */
-  payload: JsonValue;
+  payload: JsonValue
 
   /**
    * Incremental agent progress. Updated after each step.
    * Structure is agent-defined (opaque JSONB). Null before first step.
    */
-  checkpoint: JsonValue | null;
+  checkpoint: JsonValue | null
 
   /** Number of application-level retries attempted so far. */
-  retry_count: number;
+  retry_count: number
 
   /** Maximum application-level retries allowed. */
-  max_retries: number;
+  max_retries: number
 
   /**
    * When the next retry should be attempted. Set when status transitions
    * to RETRY. Null otherwise. Used by the retry polling query.
    */
-  next_retry_at: Date | null;
+  next_retry_at: Date | null
 
   /**
    * Opaque token for approval gates. Generated when status transitions
    * to WAITING_FOR_APPROVAL. Null otherwise. Must be presented to approve/deny.
    */
-  approval_token: string | null;
+  approval_token: string | null
 
   /**
    * Soft reference to Graphile Worker's internal job ID.
    * Present only while a Worker job is in-flight. Null after Worker
    * job completes or is deleted. Not a foreign key — no constraint.
    */
-  worker_job_id: string | null;
+  worker_job_id: string | null
 
   /** Terminal error message. Set when status is FAILED. */
-  error_message: string | null;
+  error_message: string | null
 
   /** When the job record was created. */
-  created_at: Date;
+  created_at: Date
 
   /** When the job record was last modified. Updated on every state change. */
-  updated_at: Date;
+  updated_at: Date
 
   /** When the job reached a terminal state. Null while active. */
-  finished_at: Date | null;
+  finished_at: Date | null
 }
 ```
 
@@ -281,22 +281,22 @@ export interface JobRecord {
  */
 export interface JobHistoryRecord {
   /** UUIDv7 primary key. */
-  id: string;
+  id: string
 
   /** References the job this event belongs to. */
-  job_id: string;
+  job_id: string
 
   /** The state the job was in before this transition. Null for the initial PENDING entry. */
-  previous_status: JobStatus | null;
+  previous_status: JobStatus | null
 
   /** The state the job transitioned to. */
-  new_status: JobStatus;
+  new_status: JobStatus
 
   /** Optional metadata about this transition (error details, approval info, etc.). */
-  metadata: JsonValue | null;
+  metadata: JsonValue | null
 
   /** When this transition occurred. */
-  created_at: Date;
+  created_at: Date
 }
 ```
 
@@ -659,69 +659,69 @@ CREATE TRIGGER trg_record_job_creation
 These interfaces define the database types for Kysely's type-safe query builder. They live in `packages/control-plane/src/db/types.ts` and must match the SQL DDL exactly.
 
 ```typescript
-import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely";
+import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely"
 
 // ---------------------------------------------------------------------------
 // Job status enum — matches PostgreSQL `job_status` type.
 // Re-exported from @cortex/shared for use in both DB and application layers.
 // ---------------------------------------------------------------------------
-import type { JobStatus } from "@cortex/shared";
+import type { JobStatus } from "@cortex/shared"
 
 // ---------------------------------------------------------------------------
 // Table: job
 // ---------------------------------------------------------------------------
 export interface JobTable {
-  id: Generated<string>;
-  agent_id: string;
-  status: Generated<JobStatus>;
-  payload: Generated<Record<string, unknown>>;
-  checkpoint: Record<string, unknown> | null;
-  retry_count: Generated<number>;
-  max_retries: Generated<number>;
-  next_retry_at: Date | null;
-  approval_token: string | null;
-  worker_job_id: string | null;
-  error_message: string | null;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-  finished_at: Date | null;
+  id: Generated<string>
+  agent_id: string
+  status: Generated<JobStatus>
+  payload: Generated<Record<string, unknown>>
+  checkpoint: Record<string, unknown> | null
+  retry_count: Generated<number>
+  max_retries: Generated<number>
+  next_retry_at: Date | null
+  approval_token: string | null
+  worker_job_id: string | null
+  error_message: string | null
+  created_at: Generated<Date>
+  updated_at: Generated<Date>
+  finished_at: Date | null
 }
 
-export type Job = Selectable<JobTable>;
-export type NewJob = Insertable<JobTable>;
-export type JobUpdate = Updateable<JobTable>;
+export type Job = Selectable<JobTable>
+export type NewJob = Insertable<JobTable>
+export type JobUpdate = Updateable<JobTable>
 
 // ---------------------------------------------------------------------------
 // Table: job_history
 // ---------------------------------------------------------------------------
 export interface JobHistoryTable {
-  id: Generated<string>;
-  job_id: string;
-  previous_status: JobStatus | null;
-  new_status: JobStatus;
-  metadata: Record<string, unknown> | null;
-  created_at: Generated<Date>;
+  id: Generated<string>
+  job_id: string
+  previous_status: JobStatus | null
+  new_status: JobStatus
+  metadata: Record<string, unknown> | null
+  created_at: Generated<Date>
 }
 
-export type JobHistory = Selectable<JobHistoryTable>;
-export type NewJobHistory = Insertable<JobHistoryTable>;
+export type JobHistory = Selectable<JobHistoryTable>
+export type NewJobHistory = Insertable<JobHistoryTable>
 
 // ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
-  job: JobTable;
-  job_history: JobHistoryTable;
+  job: JobTable
+  job_history: JobHistoryTable
 }
 ```
 
 ### Usage Example
 
 ```typescript
-import { Kysely, PostgresDialect } from "kysely";
-import type { Database } from "./db/types.js";
+import { Kysely, PostgresDialect } from "kysely"
+import type { Database } from "./db/types.js"
 
-const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
+const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) })
 
 // Type-safe query: find retryable jobs whose backoff has elapsed.
 const retryableJobs = await db
@@ -730,7 +730,7 @@ const retryableJobs = await db
   .where("status", "=", "RETRY")
   .where("next_retry_at", "<=", new Date())
   .orderBy("next_retry_at", "asc")
-  .execute();
+  .execute()
 // retryableJobs is typed as Job[]
 ```
 
@@ -749,13 +749,13 @@ Application-level retries (our `RETRY` state) use exponential backoff with full 
  */
 export interface BackoffConfig {
   /** Base delay in milliseconds. Default: 1000 (1 second). */
-  baseDelayMs: number;
+  baseDelayMs: number
   /** Maximum delay in milliseconds. Default: 300_000 (5 minutes). */
-  maxDelayMs: number;
+  maxDelayMs: number
   /** Multiplier applied per retry. Default: 2 (doubles each time). */
-  multiplier: number;
+  multiplier: number
   /** Whether to add random jitter. Default: true. */
-  jitter: boolean;
+  jitter: boolean
 }
 
 export const DEFAULT_BACKOFF_CONFIG: BackoffConfig = {
@@ -763,7 +763,7 @@ export const DEFAULT_BACKOFF_CONFIG: BackoffConfig = {
   maxDelayMs: 300_000,
   multiplier: 2,
   jitter: true,
-};
+}
 
 /**
  * Compute the next retry timestamp.
@@ -790,24 +790,24 @@ export function computeNextRetryAt(
   const delay = Math.min(
     config.maxDelayMs,
     config.baseDelayMs * Math.pow(config.multiplier, retryCount),
-  );
-  const jitteredDelay = config.jitter ? Math.random() * delay : delay;
-  return new Date(Date.now() + jitteredDelay);
+  )
+  const jitteredDelay = config.jitter ? Math.random() * delay : delay
+  return new Date(Date.now() + jitteredDelay)
 }
 ```
 
 ### How This Differs from Graphile Worker's Backoff
 
-| Aspect | Graphile Worker (internal) | Our backoff (application-level) |
-|---|---|---|
-| Formula | `exp(least(10, attempt))` seconds | `min(maxDelay, base * multiplier^retry)` + jitter |
-| Purpose | Retry failed task execution | Retry after rate limits, transient API errors |
-| Scope | Retries the same Worker job | Creates a *new* Worker job for each retry |
-| Control | Fixed formula, not configurable per-job | Configurable per-agent via `BackoffConfig` |
-| Max delay | ~6 hours (e^10) | 5 minutes (default, configurable) |
-| State tracking | Worker's internal `attempts` column | Our `retry_count` + `next_retry_at` |
+| Aspect         | Graphile Worker (internal)              | Our backoff (application-level)                   |
+| -------------- | --------------------------------------- | ------------------------------------------------- |
+| Formula        | `exp(least(10, attempt))` seconds       | `min(maxDelay, base * multiplier^retry)` + jitter |
+| Purpose        | Retry failed task execution             | Retry after rate limits, transient API errors     |
+| Scope          | Retries the same Worker job             | Creates a _new_ Worker job for each retry         |
+| Control        | Fixed formula, not configurable per-job | Configurable per-agent via `BackoffConfig`        |
+| Max delay      | ~6 hours (e^10)                         | 5 minutes (default, configurable)                 |
+| State tracking | Worker's internal `attempts` column     | Our `retry_count` + `next_retry_at`               |
 
-**Why both?** Graphile Worker's retries handle *infrastructure-level* failures (task crashes, uncaught exceptions). Our retries handle *application-level* failures (API rate limits, upstream timeouts) where we want shorter backoff and explicit state tracking.
+**Why both?** Graphile Worker's retries handle _infrastructure-level_ failures (task crashes, uncaught exceptions). Our retries handle _application-level_ failures (API rate limits, upstream timeouts) where we want shorter backoff and explicit state tracking.
 
 ---
 
@@ -818,6 +818,7 @@ export function computeNextRetryAt(
 **Decision:** UUIDv7, generated at the application layer.
 
 **Rationale:**
+
 - UUIDv7 encodes a millisecond timestamp, making IDs chronologically sortable. This eliminates the need for a separate `created_at` sort in most queries.
 - UUIDs are safe for distributed ID generation. If we ever run multiple control plane instances, there's no sequence contention.
 - PostgreSQL stores UUID as 16 bytes — the same as `bigint` (8 bytes) plus one additional 8-byte block. The storage overhead vs. `bigserial` is marginal.
@@ -828,6 +829,7 @@ export function computeNextRetryAt(
 **Decision:** `CREATE TYPE job_status AS ENUM (...)` rather than `TEXT` with a `CHECK` constraint.
 
 **Rationale:**
+
 - Enums are stored as 4-byte OIDs internally — more compact than variable-length TEXT.
 - Adding a new enum value is `ALTER TYPE job_status ADD VALUE 'NEW_STATE'` — non-blocking, append-only.
 - Error messages are explicit: `invalid input value for enum job_status: "INVALID"` vs. a generic CHECK violation.
@@ -838,6 +840,7 @@ export function computeNextRetryAt(
 **Decision:** A `BEFORE UPDATE` trigger validates state transitions rather than relying on application code.
 
 **Rationale:**
+
 - Defense in depth. Even if application code has a bug, the database rejects invalid transitions.
 - The transition rules are defined in one place (the trigger function), not scattered across service methods.
 - The trigger fires within the same transaction as the UPDATE — no race condition between validation and write.
@@ -848,7 +851,8 @@ export function computeNextRetryAt(
 **Decision:** Append-only `job_history` table rather than adding `previous_status` / `status_changed_at` columns to `job`.
 
 **Rationale:**
-- A job may transition through 5+ states in its lifetime. Column-level tracking only captures the *most recent* transition; `job_history` captures all of them.
+
+- A job may transition through 5+ states in its lifetime. Column-level tracking only captures the _most recent_ transition; `job_history` captures all of them.
 - The `job` table stays lean for active query patterns (queue polling, dashboard filters). History is queried separately, typically for a specific job.
 - Append-only tables are trivially partitionable by `created_at` if they grow large.
 - The `AFTER UPDATE` trigger populates `job_history` automatically — application code doesn't need to remember to log transitions.
@@ -858,6 +862,7 @@ export function computeNextRetryAt(
 **Decision:** Partial indexes (`WHERE status = 'PENDING'`, `WHERE status = 'RETRY'`) rather than full-column indexes.
 
 **Rationale:**
+
 - At any given time, most jobs are in terminal states (`COMPLETED`, `FAILED`). Only a small fraction are `PENDING` or `RETRY`.
 - A full index on `status` would include millions of terminal-state rows that are never matched by polling queries.
 - Partial indexes include only the rows that match the `WHERE` clause. They're smaller, fit in memory better, and are faster to scan.
@@ -868,6 +873,7 @@ export function computeNextRetryAt(
 **Decision:** `worker_job_id BIGINT` with no `REFERENCES` constraint.
 
 **Rationale:**
+
 - Graphile Worker's `_private_jobs` table is a private implementation detail. The table name may change in minor releases.
 - Foreign keys to `_private_jobs` add write overhead to every Worker job insert/delete (FK validation).
 - Worker deletes jobs on success. If we had an FK with `ON DELETE SET NULL`, every completed Worker job would trigger an update to our `job` table — unnecessary write amplification.
@@ -878,6 +884,7 @@ export function computeNextRetryAt(
 **Decision:** `JSONB` rather than `JSON` or separate columns.
 
 **Rationale:**
+
 - `JSONB` is stored in a decomposed binary format. It supports indexing (GIN), efficient key access (`->`), and containment queries (`@>`).
 - `JSON` stores the raw text — no indexing, reparsed on every access. No advantage.
 - Separate columns for payload/checkpoint fields would require schema changes whenever an agent's data shape changes. JSONB is schema-flexible at the storage layer; TypeScript interfaces enforce shape at the application layer.
@@ -888,6 +895,7 @@ export function computeNextRetryAt(
 **Decision:** `job_history.job_id REFERENCES job(id) ON DELETE CASCADE`.
 
 **Rationale:**
+
 - If a job record is deleted (administrative cleanup), its history should be deleted too. Orphaned history rows serve no purpose.
 - In normal operation, jobs are never deleted — they reach terminal states and stay. The CASCADE is a safety net for administrative operations.
 

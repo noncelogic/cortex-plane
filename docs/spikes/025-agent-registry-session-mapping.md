@@ -34,13 +34,13 @@ Cortex Plane orchestrates autonomous agents that users interact with through mul
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| Spike #24: `job.agent_id UUID NOT NULL` | The `agent` table must exist and use UUID primary keys. Jobs reference agents. |
-| Stateless control plane | Session state lives in PostgreSQL, not in-memory. Any control plane instance handles any request. |
-| Cross-channel continuity | The same session must be accessible from any platform the user is connected on. |
-| Kysely for queries | All types match DDL 1:1. No ORM magic. |
-| UUIDv7 for primary keys | Consistent with spike #24's decision. Time-ordered, distributed-safe. |
+| Constraint                              | Implication                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Spike #24: `job.agent_id UUID NOT NULL` | The `agent` table must exist and use UUID primary keys. Jobs reference agents.                    |
+| Stateless control plane                 | Session state lives in PostgreSQL, not in-memory. Any control plane instance handles any request. |
+| Cross-channel continuity                | The same session must be accessible from any platform the user is connected on.                   |
+| Kysely for queries                      | All types match DDL 1:1. No ORM magic.                                                            |
+| UUIDv7 for primary keys                 | Consistent with spike #24's decision. Time-ordered, distributed-safe.                             |
 
 ---
 
@@ -164,22 +164,22 @@ stateDiagram-v2
 
 ### Session State Semantics
 
-| State | Meaning | Active Jobs Allowed? |
-|---|---|---|
-| `CREATED` | Session record exists but no interaction has occurred yet. Placeholder state for sessions created programmatically (e.g., by a scheduled trigger). | No — session is not yet active. |
-| `ACTIVE` | User and agent are actively interacting. Messages are being exchanged, jobs can be spawned. | Yes. |
-| `PAUSED` | Session is suspended. The user stepped away or an idle timeout fired. Existing running jobs continue to completion, but no new jobs are spawned. Context is preserved. | No new jobs. Existing jobs run to completion. |
-| `TERMINATED` | Session is permanently closed. Context is retained for audit/history but the session cannot be resumed. | No. All pending jobs should be cancelled. |
+| State        | Meaning                                                                                                                                                                | Active Jobs Allowed?                          |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `CREATED`    | Session record exists but no interaction has occurred yet. Placeholder state for sessions created programmatically (e.g., by a scheduled trigger).                     | No — session is not yet active.               |
+| `ACTIVE`     | User and agent are actively interacting. Messages are being exchanged, jobs can be spawned.                                                                            | Yes.                                          |
+| `PAUSED`     | Session is suspended. The user stepped away or an idle timeout fired. Existing running jobs continue to completion, but no new jobs are spawned. Context is preserved. | No new jobs. Existing jobs run to completion. |
+| `TERMINATED` | Session is permanently closed. Context is retained for audit/history but the session cannot be resumed.                                                                | No. All pending jobs should be cancelled.     |
 
 ### Valid Transitions Table
 
-| From | To | Trigger |
-|---|---|---|
-| `CREATED` | `ACTIVE` | First user message received or first job submitted |
-| `ACTIVE` | `PAUSED` | User requests pause / idle timeout (configurable per agent) |
-| `ACTIVE` | `TERMINATED` | User ends session / admin force-terminates / agent self-terminates |
-| `PAUSED` | `ACTIVE` | User sends a new message / explicit resume command |
-| `PAUSED` | `TERMINATED` | Retention policy cleanup / admin force-terminates |
+| From      | To           | Trigger                                                            |
+| --------- | ------------ | ------------------------------------------------------------------ |
+| `CREATED` | `ACTIVE`     | First user message received or first job submitted                 |
+| `ACTIVE`  | `PAUSED`     | User requests pause / idle timeout (configurable per agent)        |
+| `ACTIVE`  | `TERMINATED` | User ends session / admin force-terminates / agent self-terminates |
+| `PAUSED`  | `ACTIVE`     | User sends a new message / explicit resume command                 |
+| `PAUSED`  | `TERMINATED` | Retention policy cleanup / admin force-terminates                  |
 
 ### Terminal State
 
@@ -604,9 +604,9 @@ export const AGENT_STATUS = {
   ACTIVE: "ACTIVE",
   DISABLED: "DISABLED",
   ARCHIVED: "ARCHIVED",
-} as const;
+} as const
 
-export type AgentStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS];
+export type AgentStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS]
 
 /**
  * Model configuration for an agent. Defines which LLM to use and
@@ -614,13 +614,13 @@ export type AgentStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS];
  */
 export interface AgentModelConfig {
   /** Model identifier. E.g., "claude-sonnet-4-20250514". */
-  model: string;
+  model: string
   /** Sampling temperature. 0 = deterministic, 1 = creative. */
-  temperature?: number;
+  temperature?: number
   /** Maximum tokens in the model's response. */
-  max_tokens?: number;
+  max_tokens?: number
   /** System prompt for the agent. */
-  system_prompt?: string;
+  system_prompt?: string
 }
 
 /**
@@ -629,11 +629,11 @@ export interface AgentModelConfig {
  */
 export interface AgentResourceLimits {
   /** Maximum concurrent jobs this agent can run. Default: 5. */
-  max_concurrent_jobs?: number;
+  max_concurrent_jobs?: number
   /** Maximum memory in MB for the agent pod. Default: 512. */
-  max_memory_mb?: number;
+  max_memory_mb?: number
   /** Maximum execution time in seconds per job. Default: 3600 (1 hour). */
-  timeout_seconds?: number;
+  timeout_seconds?: number
 }
 
 /**
@@ -642,29 +642,29 @@ export interface AgentResourceLimits {
  */
 export interface Agent {
   /** UUIDv7 primary key. */
-  id: string;
+  id: string
   /** Human-readable name. Unique. E.g., "DevOps Agent". */
-  name: string;
+  name: string
   /** URL-safe identifier. Unique. E.g., "devops-agent". */
-  slug: string;
+  slug: string
   /** Lifecycle status. */
-  status: AgentStatus;
+  status: AgentStatus
   /** Functional role. E.g., "DevOps", "Janitor", "Research". */
-  role: string;
+  role: string
   /** Human-readable description of purpose and capabilities. */
-  description: string | null;
+  description: string | null
   /** LLM model configuration. */
-  model_config: AgentModelConfig;
+  model_config: AgentModelConfig
   /** Enabled skills and their settings. */
-  skill_config: Record<string, unknown>;
+  skill_config: Record<string, unknown>
   /** Resource constraints for job scheduling. */
-  resource_limits: AgentResourceLimits;
+  resource_limits: AgentResourceLimits
   /** Channels this agent is allowed to operate on. Empty = all. */
-  channel_permissions: string[];
+  channel_permissions: string[]
   /** When the agent was created. */
-  created_at: Date;
+  created_at: Date
   /** When the agent was last modified. */
-  updated_at: Date;
+  updated_at: Date
 }
 ```
 
@@ -684,9 +684,9 @@ export const SESSION_STATUS = {
   PAUSED: "PAUSED",
   /** Permanently closed. Cannot be resumed. */
   TERMINATED: "TERMINATED",
-} as const;
+} as const
 
-export type SessionStatus = (typeof SESSION_STATUS)[keyof typeof SESSION_STATUS];
+export type SessionStatus = (typeof SESSION_STATUS)[keyof typeof SESSION_STATUS]
 
 /**
  * A session is the interaction context between one user and one agent.
@@ -694,25 +694,25 @@ export type SessionStatus = (typeof SESSION_STATUS)[keyof typeof SESSION_STATUS]
  */
 export interface Session {
   /** UUIDv7 primary key. */
-  id: string;
+  id: string
   /** The user participating in this session. */
-  user_account_id: string;
+  user_account_id: string
   /** The agent serving this session. */
-  agent_id: string;
+  agent_id: string
   /** Current lifecycle state. */
-  status: SessionStatus;
+  status: SessionStatus
   /** Accumulated conversation context. Agent-defined schema. */
-  context: Record<string, unknown>;
+  context: Record<string, unknown>
   /** Short summary of the session. */
-  title: string | null;
+  title: string | null
   /** Which channel mapping initiated this session. */
-  origin_channel_mapping_id: string | null;
+  origin_channel_mapping_id: string | null
   /** Last message or job event timestamp. */
-  last_activity_at: Date;
+  last_activity_at: Date
   /** When the session was created. */
-  created_at: Date;
+  created_at: Date
   /** When the session was last modified. */
-  updated_at: Date;
+  updated_at: Date
 }
 ```
 
@@ -727,28 +727,28 @@ export const CHANNEL_TYPE = {
   TELEGRAM: "telegram",
   DISCORD: "discord",
   WHATSAPP: "whatsapp",
-} as const;
+} as const
 
-export type ChannelType = (typeof CHANNEL_TYPE)[keyof typeof CHANNEL_TYPE];
+export type ChannelType = (typeof CHANNEL_TYPE)[keyof typeof CHANNEL_TYPE]
 
 /**
  * Maps a platform-specific identity to a unified user_account.
  */
 export interface ChannelMapping {
   /** UUIDv7 primary key. */
-  id: string;
+  id: string
   /** The unified user_account this identity belongs to. */
-  user_account_id: string;
+  user_account_id: string
   /** Platform identifier: "telegram", "discord", "whatsapp". */
-  channel_type: string;
+  channel_type: string
   /** Platform-native user ID. Type varies by platform. */
-  channel_user_id: string;
+  channel_user_id: string
   /** Platform-specific profile data. */
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown>
   /** When this identity was verified. Null if unverified. */
-  verified_at: Date | null;
+  verified_at: Date | null
   /** When this mapping was created. */
-  created_at: Date;
+  created_at: Date
 }
 
 /**
@@ -756,13 +756,13 @@ export interface ChannelMapping {
  */
 export interface UserAccount {
   /** UUIDv7 primary key. The unified userId. */
-  id: string;
+  id: string
   /** Human-readable display name. */
-  display_name: string;
+  display_name: string
   /** When the account was created. */
-  created_at: Date;
+  created_at: Date
   /** When the account was last modified. */
-  updated_at: Date;
+  updated_at: Date
 }
 ```
 
@@ -773,91 +773,91 @@ export interface UserAccount {
 These extend the `Database` interface from spike #24 in `packages/control-plane/src/db/types.ts`.
 
 ```typescript
-import type { Generated, Insertable, Selectable, Updateable } from "kysely";
-import type { AgentStatus, SessionStatus } from "@cortex/shared";
+import type { Generated, Insertable, Selectable, Updateable } from "kysely"
+import type { AgentStatus, SessionStatus } from "@cortex/shared"
 
 // ---------------------------------------------------------------------------
 // Table: agent
 // ---------------------------------------------------------------------------
 export interface AgentTable {
-  id: Generated<string>;
-  name: string;
-  slug: string;
-  status: Generated<AgentStatus>;
-  role: string;
-  description: string | null;
-  model_config: Generated<Record<string, unknown>>;
-  skill_config: Generated<Record<string, unknown>>;
-  resource_limits: Generated<Record<string, unknown>>;
-  channel_permissions: Generated<string[]>;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
+  id: Generated<string>
+  name: string
+  slug: string
+  status: Generated<AgentStatus>
+  role: string
+  description: string | null
+  model_config: Generated<Record<string, unknown>>
+  skill_config: Generated<Record<string, unknown>>
+  resource_limits: Generated<Record<string, unknown>>
+  channel_permissions: Generated<string[]>
+  created_at: Generated<Date>
+  updated_at: Generated<Date>
 }
 
-export type AgentRow = Selectable<AgentTable>;
-export type NewAgent = Insertable<AgentTable>;
-export type AgentUpdate = Updateable<AgentTable>;
+export type AgentRow = Selectable<AgentTable>
+export type NewAgent = Insertable<AgentTable>
+export type AgentUpdate = Updateable<AgentTable>
 
 // ---------------------------------------------------------------------------
 // Table: user_account
 // ---------------------------------------------------------------------------
 export interface UserAccountTable {
-  id: Generated<string>;
-  display_name: string;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
+  id: Generated<string>
+  display_name: string
+  created_at: Generated<Date>
+  updated_at: Generated<Date>
 }
 
-export type UserAccountRow = Selectable<UserAccountTable>;
-export type NewUserAccount = Insertable<UserAccountTable>;
-export type UserAccountUpdate = Updateable<UserAccountTable>;
+export type UserAccountRow = Selectable<UserAccountTable>
+export type NewUserAccount = Insertable<UserAccountTable>
+export type UserAccountUpdate = Updateable<UserAccountTable>
 
 // ---------------------------------------------------------------------------
 // Table: channel_mapping
 // ---------------------------------------------------------------------------
 export interface ChannelMappingTable {
-  id: Generated<string>;
-  user_account_id: string;
-  channel_type: string;
-  channel_user_id: string;
-  metadata: Generated<Record<string, unknown>>;
-  verified_at: Date | null;
-  created_at: Generated<Date>;
+  id: Generated<string>
+  user_account_id: string
+  channel_type: string
+  channel_user_id: string
+  metadata: Generated<Record<string, unknown>>
+  verified_at: Date | null
+  created_at: Generated<Date>
 }
 
-export type ChannelMappingRow = Selectable<ChannelMappingTable>;
-export type NewChannelMapping = Insertable<ChannelMappingTable>;
+export type ChannelMappingRow = Selectable<ChannelMappingTable>
+export type NewChannelMapping = Insertable<ChannelMappingTable>
 
 // ---------------------------------------------------------------------------
 // Table: session
 // ---------------------------------------------------------------------------
 export interface SessionTable {
-  id: Generated<string>;
-  user_account_id: string;
-  agent_id: string;
-  status: Generated<SessionStatus>;
-  context: Generated<Record<string, unknown>>;
-  title: string | null;
-  origin_channel_mapping_id: string | null;
-  last_activity_at: Generated<Date>;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
+  id: Generated<string>
+  user_account_id: string
+  agent_id: string
+  status: Generated<SessionStatus>
+  context: Generated<Record<string, unknown>>
+  title: string | null
+  origin_channel_mapping_id: string | null
+  last_activity_at: Generated<Date>
+  created_at: Generated<Date>
+  updated_at: Generated<Date>
 }
 
-export type SessionRow = Selectable<SessionTable>;
-export type NewSession = Insertable<SessionTable>;
-export type SessionUpdate = Updateable<SessionTable>;
+export type SessionRow = Selectable<SessionTable>
+export type NewSession = Insertable<SessionTable>
+export type SessionUpdate = Updateable<SessionTable>
 
 // ---------------------------------------------------------------------------
 // Updated Database interface — extends spike #24's definition.
 // ---------------------------------------------------------------------------
 export interface Database {
-  job: JobTable;
-  job_history: JobHistoryTable;
-  agent: AgentTable;
-  user_account: UserAccountTable;
-  channel_mapping: ChannelMappingTable;
-  session: SessionTable;
+  job: JobTable
+  job_history: JobHistoryTable
+  agent: AgentTable
+  user_account: UserAccountTable
+  channel_mapping: ChannelMappingTable
+  session: SessionTable
 }
 ```
 
@@ -897,7 +897,7 @@ const agent = await db
     channel_permissions: ["telegram", "discord"],
   })
   .returningAll()
-  .executeTakeFirstOrThrow();
+  .executeTakeFirstOrThrow()
 ```
 
 ### 2. Create a User Account and Map a Telegram Identity
@@ -911,7 +911,7 @@ const user = await db
     display_name: "Alice",
   })
   .returningAll()
-  .executeTakeFirstOrThrow();
+  .executeTakeFirstOrThrow()
 
 // Map their Telegram identity to the account.
 const mapping = await db
@@ -920,7 +920,7 @@ const mapping = await db
     id: uuidv7(),
     user_account_id: user.id,
     channel_type: "telegram",
-    channel_user_id: "123456789",  // Telegram chat_id
+    channel_user_id: "123456789", // Telegram chat_id
     metadata: {
       username: "alice_dev",
       first_name: "Alice",
@@ -928,7 +928,7 @@ const mapping = await db
     },
   })
   .returningAll()
-  .executeTakeFirstOrThrow();
+  .executeTakeFirstOrThrow()
 ```
 
 ### 3. Add a Discord Identity to an Existing User
@@ -939,15 +939,15 @@ await db
   .insertInto("channel_mapping")
   .values({
     id: uuidv7(),
-    user_account_id: user.id,  // Same user as above
+    user_account_id: user.id, // Same user as above
     channel_type: "discord",
-    channel_user_id: "987654321012345678",  // Discord snowflake
+    channel_user_id: "987654321012345678", // Discord snowflake
     metadata: {
       username: "alice#1234",
       avatar: "abc123",
     },
   })
-  .executeTakeFirstOrThrow();
+  .executeTakeFirstOrThrow()
 ```
 
 ### 4. Find User Account by Telegram Chat ID
@@ -965,7 +965,7 @@ const userAccount = await db
   ])
   .where("channel_mapping.channel_type", "=", "telegram")
   .where("channel_mapping.channel_user_id", "=", "123456789")
-  .executeTakeFirst();
+  .executeTakeFirst()
 
 if (!userAccount) {
   // First-time user — create account and mapping in a transaction.
@@ -986,7 +986,7 @@ const session = await db
     title: "Deploy staging environment",
   })
   .returningAll()
-  .executeTakeFirstOrThrow();
+  .executeTakeFirstOrThrow()
 ```
 
 ### 6. Find Active Session for User + Agent (from Any Channel)
@@ -1000,7 +1000,7 @@ const activeSession = await db
   .where("user_account_id", "=", userAccountId)
   .where("agent_id", "=", agentId)
   .where("status", "in", ["CREATED", "ACTIVE", "PAUSED"])
-  .executeTakeFirst();
+  .executeTakeFirst()
 ```
 
 ### 7. List All Jobs in a Session
@@ -1011,7 +1011,7 @@ const sessionJobs = await db
   .selectAll()
   .where("session_id", "=", sessionId)
   .orderBy("created_at", "desc")
-  .execute();
+  .execute()
 ```
 
 ### 8. Find All Channel Identities for a User
@@ -1024,7 +1024,7 @@ const identities = await db
   .selectAll()
   .where("user_account_id", "=", userAccountId)
   .orderBy("created_at", "asc")
-  .execute();
+  .execute()
 ```
 
 ---
@@ -1059,15 +1059,16 @@ const identities = await db
 
 **Rationale:**
 
-The core requirement is: *a user starts a task on WhatsApp, checks status on Telegram, approves on Discord — same session.*
+The core requirement is: _a user starts a task on WhatsApp, checks status on Telegram, approves on Discord — same session._
 
 This works because:
+
 1. An incoming message arrives at the Telegram adapter.
 2. The adapter looks up `channel_mapping WHERE channel_type = 'telegram' AND channel_user_id = '...'` → gets `user_account_id`.
 3. The adapter looks up `session WHERE user_account_id = X AND agent_id = Y AND status != 'TERMINATED'` → gets the active session.
 4. The session is the same regardless of which channel the message came from.
 
-The `origin_channel_mapping_id` on session records which channel *started* the session (for analytics and debugging), but it doesn't restrict which channels can interact with it.
+The `origin_channel_mapping_id` on session records which channel _started_ the session (for analytics and debugging), but it doesn't restrict which channels can interact with it.
 
 **Can a user interact from Telegram AND Discord simultaneously?** Yes. Both channels resolve to the same user_account and therefore the same session. The session's `context` JSONB accumulates state from all channels. Message ordering is determined by `created_at` timestamps on events, not by channel. The agent sees a unified conversation stream.
 
@@ -1079,7 +1080,7 @@ The `origin_channel_mapping_id` on session records which channel *started* the s
 
 - Prevents confusion. If Alice could have two concurrent sessions with the DevOps agent, the agent wouldn't know which context to use for an incoming message. One active session per agent gives a clear routing target.
 - To start a fresh session, the user terminates the existing one. This is an explicit act, not an implicit side effect.
-- A user can have multiple sessions with *different* agents simultaneously (one with DevOps, one with Research). The constraint is per-agent, not global.
+- A user can have multiple sessions with _different_ agents simultaneously (one with DevOps, one with Research). The constraint is per-agent, not global.
 
 ### 5. Session ↔ Job Relationship
 

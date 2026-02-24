@@ -42,9 +42,9 @@ Spike #26 defines the checkpoint write protocol as per-step: one PostgreSQL UPDA
 3. Agent reasoning and intermediate state transitions.
 4. Error messages, retries, and diagnostics.
 
-If the agent pod crashes mid-step, the PostgreSQL checkpoint captures the state at the *start* of the step (the previous checkpoint), but everything that happened during the in-progress step is lost. This is acceptable for crash recovery — the step re-executes from the beginning, which is by design. But it is *not* acceptable for:
+If the agent pod crashes mid-step, the PostgreSQL checkpoint captures the state at the _start_ of the step (the previous checkpoint), but everything that happened during the in-progress step is lost. This is acceptable for crash recovery — the step re-executes from the beginning, which is by design. But it is _not_ acceptable for:
 
-- **Debugging.** When an agent fails, the operator needs to see *what happened* during the step that failed. "The LLM said X, then the agent called tool Y with input Z, and it returned error W" — this narrative is essential for diagnosing failures. Without it, the operator sees only the checkpoint before the failure and the error message.
+- **Debugging.** When an agent fails, the operator needs to see _what happened_ during the step that failed. "The LLM said X, then the agent called tool Y with input Z, and it returned error W" — this narrative is essential for diagnosing failures. Without it, the operator sees only the checkpoint before the failure and the error message.
 
 - **Audit & compliance.** For agents that interact with external systems (deploy to production, modify DNS, execute financial operations), there must be a complete record of every action attempted, not just the ones that completed successfully.
 
@@ -59,18 +59,18 @@ The JSONL session buffer is a **local append-only log** on the agent pod's files
 - **Not the source of truth.** PostgreSQL is. The JSONL buffer is a detailed journal that supplements the checkpoint, not replaces it.
 - **Ephemeral per pod.** When a pod is replaced, the new pod starts a fresh buffer. The previous pod's buffer is retained on the PersistentVolume (if one exists) or lost (if using emptyDir).
 - **Write-optimized.** Appending a line to a file is orders of magnitude cheaper than a PostgreSQL UPDATE. The buffer can capture events at tool-call granularity without database overhead.
-- **Recovery-optional.** The agent can resume from the PostgreSQL checkpoint alone. The JSONL buffer enables *enhanced* recovery (skip completed tool calls within a step) and *diagnostic* recovery (understand what happened before a crash). Neither is required for correctness.
+- **Recovery-optional.** The agent can resume from the PostgreSQL checkpoint alone. The JSONL buffer enables _enhanced_ recovery (skip completed tool calls within a step) and _diagnostic_ recovery (understand what happened before a crash). Neither is required for correctness.
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
-| Spike #26: PostgreSQL checkpoint is the source of truth | The JSONL buffer is supplementary — never authoritative for state recovery |
-| Spike #27: Node.js 24, Pino for logging | JSONL writes use Node.js `fs` API; event format is compatible with Pino's structured JSON |
-| k3s pod lifecycle | Pod filesystems are ephemeral unless backed by a PersistentVolumeClaim (PVC) |
-| Stateless control plane | The control plane never reads the JSONL buffer directly; it reads PostgreSQL |
-| ARM64 + x64 | No native dependencies for buffer writes — pure Node.js `fs` module |
-| Graphile Worker task handler | The buffer is opened when the task handler starts and closed when it returns |
+| Constraint                                              | Implication                                                                               |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Spike #26: PostgreSQL checkpoint is the source of truth | The JSONL buffer is supplementary — never authoritative for state recovery                |
+| Spike #27: Node.js 24, Pino for logging                 | JSONL writes use Node.js `fs` API; event format is compatible with Pino's structured JSON |
+| k3s pod lifecycle                                       | Pod filesystems are ephemeral unless backed by a PersistentVolumeClaim (PVC)              |
+| Stateless control plane                                 | The control plane never reads the JSONL buffer directly; it reads PostgreSQL              |
+| ARM64 + x64                                             | No native dependencies for buffer writes — pure Node.js `fs` module                       |
+| Graphile Worker task handler                            | The buffer is opened when the task handler starts and closed when it returns              |
 
 ### Relationship to Existing Checkpoints
 
@@ -121,25 +121,25 @@ The JSONL buffer does not write "checkpoints." It writes **events** — discrete
 
 ### JSONL Event Types
 
-| Event Type | Written When | Purpose |
-|---|---|---|
-| `SESSION_START` | Task handler begins | Marks the start of an execution session on this pod |
-| `CHECKPOINT_LOADED` | Checkpoint read from PostgreSQL | Records the checkpoint that this session resumes from (or null for first run) |
-| `LLM_REQUEST` | Before sending LLM API call | Captures the prompt sent (or hash of prompt + model params) |
-| `LLM_RESPONSE` | After LLM response received | Captures token usage, finish reason, tool_use blocks (content is truncated/summarized) |
-| `TOOL_START` | Before executing a tool call | Records tool name, invocation_id, input hash, and the input itself |
-| `TOOL_RESULT` | After tool call completes | Records result (or error), duration, and invocation_id for correlation |
-| `CHECKPOINT_WRITTEN` | After PostgreSQL checkpoint commits | Confirms that the checkpoint was durably written; includes checkpoint_id |
-| `APPROVAL_REQUESTED` | Approval gate reached | Records the approval action, token hash (not plaintext), and routing info |
-| `STATE_TRANSITION` | Job status changes | Records old and new status |
-| `ERROR` | Any error during execution | Captures error message, stack trace (truncated), and context |
-| `SESSION_END` | Task handler returns | Marks normal termination of this session (success, approval pause, or failure) |
+| Event Type           | Written When                        | Purpose                                                                                |
+| -------------------- | ----------------------------------- | -------------------------------------------------------------------------------------- |
+| `SESSION_START`      | Task handler begins                 | Marks the start of an execution session on this pod                                    |
+| `CHECKPOINT_LOADED`  | Checkpoint read from PostgreSQL     | Records the checkpoint that this session resumes from (or null for first run)          |
+| `LLM_REQUEST`        | Before sending LLM API call         | Captures the prompt sent (or hash of prompt + model params)                            |
+| `LLM_RESPONSE`       | After LLM response received         | Captures token usage, finish reason, tool_use blocks (content is truncated/summarized) |
+| `TOOL_START`         | Before executing a tool call        | Records tool name, invocation_id, input hash, and the input itself                     |
+| `TOOL_RESULT`        | After tool call completes           | Records result (or error), duration, and invocation_id for correlation                 |
+| `CHECKPOINT_WRITTEN` | After PostgreSQL checkpoint commits | Confirms that the checkpoint was durably written; includes checkpoint_id               |
+| `APPROVAL_REQUESTED` | Approval gate reached               | Records the approval action, token hash (not plaintext), and routing info              |
+| `STATE_TRANSITION`   | Job status changes                  | Records old and new status                                                             |
+| `ERROR`              | Any error during execution          | Captures error message, stack trace (truncated), and context                           |
+| `SESSION_END`        | Task handler returns                | Marks normal termination of this session (success, approval pause, or failure)         |
 
 ### Why Events, Not Snapshots
 
-The PostgreSQL checkpoint already captures full snapshots. Duplicating snapshots in the JSONL buffer would be wasteful: a 50KB checkpoint written 20 times produces 1MB of largely redundant data. Events are compact (typically 200 bytes–2KB each) and capture the *narrative* — the sequence of actions — not the *state*.
+The PostgreSQL checkpoint already captures full snapshots. Duplicating snapshots in the JSONL buffer would be wasteful: a 50KB checkpoint written 20 times produces 1MB of largely redundant data. Events are compact (typically 200 bytes–2KB each) and capture the _narrative_ — the sequence of actions — not the _state_.
 
-The combination is powerful: the PostgreSQL checkpoint tells you *where* the agent is, and the JSONL buffer tells you *how it got there*.
+The combination is powerful: the PostgreSQL checkpoint tells you _where_ the agent is, and the JSONL buffer tells you _how it got there_.
 
 ### What Is NOT Written to the Buffer
 
@@ -157,8 +157,8 @@ The combination is powerful: the PostgreSQL checkpoint tells you *where* the age
 
 The JSONL buffer is fundamentally different from the PostgreSQL checkpoint when it comes to versioning:
 
-- **Checkpoints must be migrated** because the agent *resumes from them*. A checkpoint with an old schema must be transformed to the current schema for the resume logic to work.
-- **Buffer files are never migrated** because they are *historical records*. No code path reads a buffer file and uses it to reconstruct state. Buffer files are read by humans (debugging), by log pipelines (shipping to Loki), and by the enhanced recovery logic (scanning for completed tool calls within the current step). None of these require the data to match the current schema exactly.
+- **Checkpoints must be migrated** because the agent _resumes from them_. A checkpoint with an old schema must be transformed to the current schema for the resume logic to work.
+- **Buffer files are never migrated** because they are _historical records_. No code path reads a buffer file and uses it to reconstruct state. Buffer files are read by humans (debugging), by log pipelines (shipping to Loki), and by the enhanced recovery logic (scanning for completed tool calls within the current step). None of these require the data to match the current schema exactly.
 
 ### Schema Version Semantics
 
@@ -168,7 +168,7 @@ The JSONL buffer is fundamentally different from the PostgreSQL checkpoint when 
  * - An existing event type's field set changes incompatibly.
  * - Event type names are renamed (not when new types are added).
  */
-const BUFFER_SCHEMA_VERSION = 1;
+const BUFFER_SCHEMA_VERSION = 1
 ```
 
 The `SESSION_START` event includes `buffer_schema_version`. A reader encountering a buffer file:
@@ -180,15 +180,15 @@ The `SESSION_START` event includes `buffer_schema_version`. A reader encounterin
 
 ### Forward Compatibility Rules
 
-| Change | Version Bump? | Rationale |
-|---|---|---|
-| Adding a new event type | **No** | Unknown event types are skipped by older readers. |
-| Adding a new optional field to an existing event | **No** | Unknown fields are ignored by older readers. |
-| Removing a field from an existing event | **No** | Readers handle missing optional fields already. |
-| Renaming an event type or required field | **Yes** | Old readers can't find the field/type they expect. |
-| Changing a field's type | **Yes** | Old readers would parse it incorrectly. |
+| Change                                           | Version Bump? | Rationale                                          |
+| ------------------------------------------------ | ------------- | -------------------------------------------------- |
+| Adding a new event type                          | **No**        | Unknown event types are skipped by older readers.  |
+| Adding a new optional field to an existing event | **No**        | Unknown fields are ignored by older readers.       |
+| Removing a field from an existing event          | **No**        | Readers handle missing optional fields already.    |
+| Renaming an event type or required field         | **Yes**       | Old readers can't find the field/type they expect. |
+| Changing a field's type                          | **Yes**       | Old readers would parse it incorrectly.            |
 
-This is a deliberate asymmetry with the checkpoint versioning (spike #26). Checkpoints are *consumed* by critical recovery logic — they must be exact. Buffer files are *consumed* by diagnostic tooling — they can be approximate.
+This is a deliberate asymmetry with the checkpoint versioning (spike #26). Checkpoints are _consumed_ by critical recovery logic — they must be exact. Buffer files are _consumed_ by diagnostic tooling — they can be approximate.
 
 ---
 
@@ -200,15 +200,15 @@ This is a deliberate asymmetry with the checkpoint versioning (spike #26). Check
 
 The buffer is opened with a write file descriptor at `SESSION_START`. Events are appended using buffered writes (Node.js `fs.writeFile` in append mode, or a write stream). The key question is when to call `fsync` to guarantee the data has reached disk:
 
-| Flush Point | Why | Cost |
-|---|---|---|
-| After `TOOL_RESULT` for side-effecting tools | If the pod crashes after a side-effecting tool call completes but before the PostgreSQL checkpoint, the buffer is the only record that the side effect occurred. Without fsync, the OS might not have flushed the write to disk. | ~1ms per fsync on SSD |
-| Before `CHECKPOINT_WRITTEN` | The buffer must be consistent with the PostgreSQL checkpoint. If the buffer says "tool X completed" but the pod crashes before the buffer is flushed, the recovery logic might re-execute the tool. | ~1ms per fsync |
-| At `SESSION_END` | Final flush before the task handler returns. Ensures the complete session is on disk. | ~1ms (once per session) |
+| Flush Point                                  | Why                                                                                                                                                                                                                              | Cost                    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| After `TOOL_RESULT` for side-effecting tools | If the pod crashes after a side-effecting tool call completes but before the PostgreSQL checkpoint, the buffer is the only record that the side effect occurred. Without fsync, the OS might not have flushed the write to disk. | ~1ms per fsync on SSD   |
+| Before `CHECKPOINT_WRITTEN`                  | The buffer must be consistent with the PostgreSQL checkpoint. If the buffer says "tool X completed" but the pod crashes before the buffer is flushed, the recovery logic might re-execute the tool.                              | ~1ms per fsync          |
+| At `SESSION_END`                             | Final flush before the task handler returns. Ensures the complete session is on disk.                                                                                                                                            | ~1ms (once per session) |
 
 ### What About After Every Event?
 
-Calling `fsync` after every event would guarantee that *no* events are lost on crash. But it's unnecessary and expensive:
+Calling `fsync` after every event would guarantee that _no_ events are lost on crash. But it's unnecessary and expensive:
 
 - **Unnecessary** because events between flush points are reconstructable. If the buffer loses an `LLM_RESPONSE` event (crash between write and fsync), the agent will re-execute the LLM call on resume anyway (since the PostgreSQL checkpoint doesn't reflect the step). The lost event is a minor diagnostic gap, not a correctness issue.
 - **Expensive** because fsync is a blocking I/O call. At ~1ms per fsync, 100 events per job would add 100ms of pure sync overhead. For the flush points defined above, the overhead is ~5-15ms per job (3-10 tool results + 5-20 checkpoint writes).
@@ -223,54 +223,54 @@ The `agent.skill_config` JSONB can include a `buffer_flush_mode` field:
 }
 ```
 
-| Mode | Behavior | Use Case |
-|---|---|---|
-| `"default"` | Flush at tool results + before checkpoints | Most agents |
-| `"paranoid"` | Flush after every event (`O_SYNC`-equivalent) | Agents performing financial operations or irreversible actions |
-| `"lazy"` | Flush only at `SESSION_END` | Low-stakes agents where diagnostic completeness is less important than throughput |
+| Mode         | Behavior                                      | Use Case                                                                          |
+| ------------ | --------------------------------------------- | --------------------------------------------------------------------------------- |
+| `"default"`  | Flush at tool results + before checkpoints    | Most agents                                                                       |
+| `"paranoid"` | Flush after every event (`O_SYNC`-equivalent) | Agents performing financial operations or irreversible actions                    |
+| `"lazy"`     | Flush only at `SESSION_END`                   | Low-stakes agents where diagnostic completeness is less important than throughput |
 
 ### Implementation
 
 ```typescript
-import { open, type FileHandle } from "node:fs/promises";
+import { open, type FileHandle } from "node:fs/promises"
 
 interface BufferWriter {
-  append(event: BufferEvent): Promise<void>;
-  flush(): Promise<void>;
-  close(): Promise<void>;
+  append(event: BufferEvent): Promise<void>
+  flush(): Promise<void>
+  close(): Promise<void>
 }
 
 async function createBufferWriter(
   filePath: string,
   flushMode: "default" | "paranoid" | "lazy",
 ): Promise<BufferWriter> {
-  const handle: FileHandle = await open(filePath, "a");
-  let pendingBytes = 0;
+  const handle: FileHandle = await open(filePath, "a")
+  let pendingBytes = 0
 
   return {
     async append(event: BufferEvent): Promise<void> {
-      const line = JSON.stringify(event) + "\n";
-      await handle.appendFile(line, { encoding: "utf-8" });
-      pendingBytes += Buffer.byteLength(line, "utf-8");
+      const line = JSON.stringify(event) + "\n"
+      await handle.appendFile(line, { encoding: "utf-8" })
+      pendingBytes += Buffer.byteLength(line, "utf-8")
 
       if (flushMode === "paranoid") {
-        await handle.sync();
-        pendingBytes = 0;
+        await handle.sync()
+        pendingBytes = 0
       }
     },
 
     async flush(): Promise<void> {
       if (pendingBytes > 0 && flushMode !== "lazy") {
-        await handle.sync();
-        pendingBytes = 0;
+        await handle.sync()
+        pendingBytes = 0
       }
     },
 
     async close(): Promise<void> {
-      await handle.sync();
-      await handle.close();
+      await handle.sync()
+      await handle.close()
     },
-  };
+  }
 }
 ```
 
@@ -309,12 +309,12 @@ For k3s pod replacement (the common crash scenario — OOM kill, node drain, pre
 
 ### Summary
 
-| Approach | Per-write cost | Guarantee | Decision |
-|---|---|---|---|
-| `O_SYNC` | ~1ms | Every write durable | **Rejected** — too expensive for a non-authoritative log |
-| `O_DSYNC` | ~0.5ms | Every write data-durable | **Rejected** — same reasoning |
-| `write()` + periodic `fsync()` | ~1μs write, ~1ms fsync | Data durable up to last fsync | **Accepted** — right balance for a supplementary buffer |
-| `write()` only, no `fsync` | ~1μs | Best-effort (kernel may flush) | **Rejected** — too weak for side-effecting tool call records |
+| Approach                       | Per-write cost         | Guarantee                      | Decision                                                     |
+| ------------------------------ | ---------------------- | ------------------------------ | ------------------------------------------------------------ |
+| `O_SYNC`                       | ~1ms                   | Every write durable            | **Rejected** — too expensive for a non-authoritative log     |
+| `O_DSYNC`                      | ~0.5ms                 | Every write data-durable       | **Rejected** — same reasoning                                |
+| `write()` + periodic `fsync()` | ~1μs write, ~1ms fsync | Data durable up to last fsync  | **Accepted** — right balance for a supplementary buffer      |
+| `write()` only, no `fsync`     | ~1μs                   | Best-effort (kernel may flush) | **Rejected** — too weak for side-effecting tool call records |
 
 ---
 
@@ -349,15 +349,15 @@ Time-based rotation (e.g., hourly) has the same problem: it would split sessions
 ```typescript
 interface BufferRetentionConfig {
   /** Minimum retention after job reaches terminal state. Default: 24h. */
-  postTerminalRetentionMs: number;
+  postTerminalRetentionMs: number
   /** Maximum retention regardless of job state. Default: 7 days. */
-  maxRetentionMs: number;
+  maxRetentionMs: number
 }
 
 const DEFAULT_RETENTION: BufferRetentionConfig = {
-  postTerminalRetentionMs: 24 * 60 * 60 * 1000,  // 24 hours
-  maxRetentionMs: 7 * 24 * 60 * 60 * 1000,        // 7 days
-};
+  postTerminalRetentionMs: 24 * 60 * 60 * 1000, // 24 hours
+  maxRetentionMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+}
 ```
 
 **Cleanup process:** A Graphile Worker cron task (`cleanup_session_buffers`) runs daily. For each job directory in `/data/sessions/`:
@@ -385,6 +385,7 @@ A 5GB PersistentVolume provides comfortable headroom.
 **Phase 1: PostgreSQL Recovery (mandatory, unchanged from spike #26)**
 
 The new pod reads `job.checkpoint` from PostgreSQL. This tells the agent:
+
 - Which step to resume from (`step_index + 1`).
 - The state of active tools at the checkpoint write time.
 - The full memory context and execution log.
@@ -393,14 +394,14 @@ This is sufficient for correctness. The agent can resume from here without any J
 
 **Phase 2: Buffer-Enhanced Recovery (optional, new)**
 
-If the previous session's buffer file exists on the PersistentVolume, the agent scans it for events that occurred *after* the last `CHECKPOINT_WRITTEN` event. These events represent work done during the in-progress step that crashed:
+If the previous session's buffer file exists on the PersistentVolume, the agent scans it for events that occurred _after_ the last `CHECKPOINT_WRITTEN` event. These events represent work done during the in-progress step that crashed:
 
 1. Scan backward from the end of the file to find the last `CHECKPOINT_WRITTEN` event.
 2. Read all events after it.
 3. For each `TOOL_RESULT` event: record that this tool call (by `invocation_id`) was completed.
 4. When executing the current step, skip tool calls whose `invocation_id` appears in the buffer as completed.
 
-This saves re-executing tool calls that already completed but weren't captured in the PostgreSQL checkpoint (because the checkpoint is written after *all* tool calls in a step, not after each one).
+This saves re-executing tool calls that already completed but weren't captured in the PostgreSQL checkpoint (because the checkpoint is written after _all_ tool calls in a step, not after each one).
 
 ### When Buffer-Enhanced Recovery Is Skipped
 
@@ -450,7 +451,7 @@ Pod starts → Read PostgreSQL checkpoint
 
 ### How Buffer Corruption Happens
 
-Unlike the PostgreSQL checkpoint (where corruption is rare due to WAL), JSONL buffer corruption is *expected*:
+Unlike the PostgreSQL checkpoint (where corruption is rare due to WAL), JSONL buffer corruption is _expected_:
 
 1. **Truncated last line.** The most common case. The agent appended `{"type":"TOOL_RESULT","inv` and then the pod was killed. The write was incomplete — the line is not valid JSON.
 2. **Missing events.** Events in the kernel page cache that weren't fsync'd before the pod was killed. The file ends cleanly at a previous event, but some events are missing.
@@ -461,11 +462,11 @@ Unlike the PostgreSQL checkpoint (where corruption is rare due to WAL), JSONL bu
 ```typescript
 interface BufferScanResult {
   /** Events successfully parsed from the buffer. */
-  events: BufferEvent[];
+  events: BufferEvent[]
   /** Number of lines that failed to parse. */
-  corruptedLines: number;
+  corruptedLines: number
   /** Whether the last line was truncated (expected on crash). */
-  lastLineTruncated: boolean;
+  lastLineTruncated: boolean
 }
 
 /**
@@ -479,17 +480,17 @@ interface BufferScanResult {
  * is expected and tolerated because the buffer is not authoritative.
  */
 function scanBufferFile(content: string): BufferScanResult {
-  const lines = content.split("\n");
-  const events: BufferEvent[] = [];
-  let corruptedLines = 0;
-  let lastLineTruncated = false;
+  const lines = content.split("\n")
+  const events: BufferEvent[] = []
+  let corruptedLines = 0
+  let lastLineTruncated = false
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!.trim();
-    if (line === "") continue; // Skip empty lines (including trailing newline)
+    const line = lines[i]!.trim()
+    if (line === "") continue // Skip empty lines (including trailing newline)
 
     try {
-      const parsed = JSON.parse(line) as unknown;
+      const parsed = JSON.parse(line) as unknown
 
       // Minimal structural validation: must be an object with type and timestamp.
       if (
@@ -499,38 +500,38 @@ function scanBufferFile(content: string): BufferScanResult {
         "type" in parsed &&
         "timestamp" in parsed
       ) {
-        events.push(parsed as BufferEvent);
+        events.push(parsed as BufferEvent)
       } else {
-        corruptedLines++;
+        corruptedLines++
       }
     } catch {
       // JSON parse failure. If this is the last non-empty line,
       // it's likely a truncated write (crash mid-append).
-      const isLastLine = lines.slice(i + 1).every((l) => l.trim() === "");
+      const isLastLine = lines.slice(i + 1).every((l) => l.trim() === "")
       if (isLastLine) {
-        lastLineTruncated = true;
+        lastLineTruncated = true
       } else {
-        corruptedLines++;
+        corruptedLines++
       }
     }
   }
 
-  return { events, corruptedLines, lastLineTruncated };
+  return { events, corruptedLines, lastLineTruncated }
 }
 ```
 
 ### Corruption Response
 
-| Scenario | Response | Rationale |
-|---|---|---|
-| Last line truncated | Discard last line silently. Log at `DEBUG` level. | Expected on crash. The event was being written when the pod died. |
-| Interior line corrupted (1-2 lines) | Skip corrupted lines, use remaining events. Log at `WARN`. | Minor corruption — the rest of the buffer is still useful for diagnostics and enhanced recovery. |
-| Many interior lines corrupted (>10% of lines) | Discard entire buffer. Log at `WARN`. Use Phase 1 only. | The buffer is too damaged to be trustworthy. Don't use it for enhanced recovery. |
-| File unreadable (permissions, missing) | Skip buffer entirely. Log at `WARN`. Use Phase 1 only. | The buffer is unavailable. Phase 1 is sufficient. |
+| Scenario                                      | Response                                                   | Rationale                                                                                        |
+| --------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Last line truncated                           | Discard last line silently. Log at `DEBUG` level.          | Expected on crash. The event was being written when the pod died.                                |
+| Interior line corrupted (1-2 lines)           | Skip corrupted lines, use remaining events. Log at `WARN`. | Minor corruption — the rest of the buffer is still useful for diagnostics and enhanced recovery. |
+| Many interior lines corrupted (>10% of lines) | Discard entire buffer. Log at `WARN`. Use Phase 1 only.    | The buffer is too damaged to be trustworthy. Don't use it for enhanced recovery.                 |
+| File unreadable (permissions, missing)        | Skip buffer entirely. Log at `WARN`. Use Phase 1 only.     | The buffer is unavailable. Phase 1 is sufficient.                                                |
 
 ### Why Tolerate Corruption?
 
-The JSONL buffer is a *supplementary* log, not the source of truth. The PostgreSQL checkpoint provides correctness. The buffer provides diagnostics and optimization. If the buffer is partially corrupted, the diagnostic value is reduced but the agent's correctness is unaffected. Failing the job because of buffer corruption would be an overreaction — like canceling a flight because the in-flight magazine has a torn page.
+The JSONL buffer is a _supplementary_ log, not the source of truth. The PostgreSQL checkpoint provides correctness. The buffer provides diagnostics and optimization. If the buffer is partially corrupted, the diagnostic value is reduced but the agent's correctness is unaffected. Failing the job because of buffer corruption would be an overreaction — like canceling a flight because the in-flight magazine has a torn page.
 
 ---
 
@@ -640,7 +641,16 @@ The schema below defines the structure of individual lines in the JSONL buffer f
 ```json
 {
   "type": "object",
-  "required": ["type", "timestamp", "job_id", "session_id", "seq", "buffer_schema_version", "agent_id", "pod_name"],
+  "required": [
+    "type",
+    "timestamp",
+    "job_id",
+    "session_id",
+    "seq",
+    "buffer_schema_version",
+    "agent_id",
+    "pod_name"
+  ],
   "properties": {
     "type": { "const": "SESSION_START" },
     "buffer_schema_version": {
@@ -727,7 +737,17 @@ The schema below defines the structure of individual lines in the JSONL buffer f
 ```json
 {
   "type": "object",
-  "required": ["type", "timestamp", "job_id", "session_id", "seq", "step_index", "prompt_tokens", "completion_tokens", "finish_reason"],
+  "required": [
+    "type",
+    "timestamp",
+    "job_id",
+    "session_id",
+    "seq",
+    "step_index",
+    "prompt_tokens",
+    "completion_tokens",
+    "finish_reason"
+  ],
   "properties": {
     "type": { "const": "LLM_RESPONSE" },
     "step_index": { "type": "integer", "minimum": 0 },
@@ -757,7 +777,16 @@ The schema below defines the structure of individual lines in the JSONL buffer f
 ```json
 {
   "type": "object",
-  "required": ["type", "timestamp", "job_id", "session_id", "seq", "invocation_id", "tool_name", "input_hash"],
+  "required": [
+    "type",
+    "timestamp",
+    "job_id",
+    "session_id",
+    "seq",
+    "invocation_id",
+    "tool_name",
+    "input_hash"
+  ],
   "properties": {
     "type": { "const": "TOOL_START" },
     "invocation_id": {
@@ -789,7 +818,17 @@ The schema below defines the structure of individual lines in the JSONL buffer f
 ```json
 {
   "type": "object",
-  "required": ["type", "timestamp", "job_id", "session_id", "seq", "invocation_id", "tool_name", "success", "duration_ms"],
+  "required": [
+    "type",
+    "timestamp",
+    "job_id",
+    "session_id",
+    "seq",
+    "invocation_id",
+    "tool_name",
+    "success",
+    "duration_ms"
+  ],
   "properties": {
     "type": { "const": "TOOL_RESULT" },
     "invocation_id": {
@@ -919,14 +958,14 @@ Task handler starts
 
 ### Failure Modes
 
-| Failure | Buffer State | Recovery Behavior |
-|---|---|---|
-| Pod crash during LLM API call | Buffer has `LLM_REQUEST` but no `LLM_RESPONSE` | Phase 1 only. Step re-executes from scratch. Buffer gap is diagnostic. |
-| Pod crash during tool execution | Buffer has `TOOL_START` but no `TOOL_RESULT` | Phase 1 only. If Phase 2 available, tool call is known to have started but not completed — may need idempotency check. |
-| Pod crash after tool result, before fsync | `TOOL_RESULT` may be in page cache but not on disk | If page cache was flushed by kernel: event is on disk, Phase 2 can use it. If not: event is lost, Phase 1 only. |
-| Pod crash after fsync, before PG write | Buffer has complete events but no `CHECKPOINT_WRITTEN` | Phase 1 resumes from previous checkpoint. Buffer events after last `CHECKPOINT_WRITTEN` represent work that will be re-done. |
+| Failure                                                      | Buffer State                                               | Recovery Behavior                                                                                                                                                                                 |
+| ------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pod crash during LLM API call                                | Buffer has `LLM_REQUEST` but no `LLM_RESPONSE`             | Phase 1 only. Step re-executes from scratch. Buffer gap is diagnostic.                                                                                                                            |
+| Pod crash during tool execution                              | Buffer has `TOOL_START` but no `TOOL_RESULT`               | Phase 1 only. If Phase 2 available, tool call is known to have started but not completed — may need idempotency check.                                                                            |
+| Pod crash after tool result, before fsync                    | `TOOL_RESULT` may be in page cache but not on disk         | If page cache was flushed by kernel: event is on disk, Phase 2 can use it. If not: event is lost, Phase 1 only.                                                                                   |
+| Pod crash after fsync, before PG write                       | Buffer has complete events but no `CHECKPOINT_WRITTEN`     | Phase 1 resumes from previous checkpoint. Buffer events after last `CHECKPOINT_WRITTEN` represent work that will be re-done.                                                                      |
 | Pod crash after PG write, before `CHECKPOINT_WRITTEN` marker | PG checkpoint is durable but marker is missing from buffer | Phase 1 resumes from the just-written checkpoint. Buffer lacks the marker — Phase 2 will not find a matching `CHECKPOINT_WRITTEN` and falls back to Phase 1 only. Safe but slightly less optimal. |
-| Pod crash during `SESSION_END` write | Buffer may have truncated `SESSION_END` | No impact. `SESSION_END` is informational. |
+| Pod crash during `SESSION_END` write                         | Buffer may have truncated `SESSION_END`                    | No impact. `SESSION_END` is informational.                                                                                                                                                        |
 
 ---
 
@@ -1023,7 +1062,7 @@ The buffer corruption detection operates at two levels: line-level (per JSONL li
 Each line in the JSONL buffer is independently parseable. Corruption detection is built into the line parser:
 
 ```typescript
-import type { Logger } from "pino";
+import type { Logger } from "pino"
 
 /**
  * Corruption severity levels for buffer scanning.
@@ -1039,47 +1078,43 @@ const enum CorruptionSeverity {
 
 interface LineScanResult {
   /** The parsed event, or null if the line is corrupt. */
-  event: BufferEvent | null;
+  event: BufferEvent | null
   /** Line number (1-based) in the file. */
-  lineNumber: number;
+  lineNumber: number
   /** Raw line content (for diagnostics). Truncated to 200 chars. */
-  rawPreview: string;
+  rawPreview: string
   /** Whether this line was successfully parsed. */
-  valid: boolean;
+  valid: boolean
 }
 
 /**
  * Parse a single JSONL line with corruption tolerance.
  */
 function parseLine(raw: string, lineNumber: number): LineScanResult {
-  const trimmed = raw.trim();
-  const rawPreview = trimmed.slice(0, 200);
+  const trimmed = raw.trim()
+  const rawPreview = trimmed.slice(0, 200)
 
   if (trimmed === "") {
-    return { event: null, lineNumber, rawPreview, valid: true }; // Empty line — skip
+    return { event: null, lineNumber, rawPreview, valid: true } // Empty line — skip
   }
 
   try {
-    const parsed = JSON.parse(trimmed) as unknown;
+    const parsed = JSON.parse(trimmed) as unknown
 
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      return { event: null, lineNumber, rawPreview, valid: false };
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { event: null, lineNumber, rawPreview, valid: false }
     }
 
-    const obj = parsed as Record<string, unknown>;
+    const obj = parsed as Record<string, unknown>
 
     // Minimum required fields for any buffer event.
     if (typeof obj.type !== "string" || typeof obj.timestamp !== "string") {
-      return { event: null, lineNumber, rawPreview, valid: false };
+      return { event: null, lineNumber, rawPreview, valid: false }
     }
 
-    return { event: obj as unknown as BufferEvent, lineNumber, rawPreview, valid: true };
+    return { event: obj as unknown as BufferEvent, lineNumber, rawPreview, valid: true }
   } catch {
-    return { event: null, lineNumber, rawPreview, valid: false };
+    return { event: null, lineNumber, rawPreview, valid: false }
   }
 }
 ```
@@ -1089,17 +1124,17 @@ function parseLine(raw: string, lineNumber: number): LineScanResult {
 ```typescript
 interface BufferIntegrityReport {
   /** Total non-empty lines in the file. */
-  totalLines: number;
+  totalLines: number
   /** Lines successfully parsed as valid events. */
-  validLines: number;
+  validLines: number
   /** Lines that failed parsing (excluding truncated tail). */
-  corruptLines: number;
+  corruptLines: number
   /** Whether the last line appears truncated (incomplete JSON). */
-  tailTruncated: boolean;
+  tailTruncated: boolean
   /** Overall assessment. */
-  severity: CorruptionSeverity | null;
+  severity: CorruptionSeverity | null
   /** Corruption ratio (corruptLines / totalLines). */
-  corruptionRatio: number;
+  corruptionRatio: number
 }
 
 /**
@@ -1108,16 +1143,13 @@ interface BufferIntegrityReport {
  * Returns a report that the recovery logic uses to decide
  * whether to trust the buffer for Phase 2 recovery.
  */
-function assessBufferIntegrity(
-  content: string,
-  logger: Logger,
-): BufferIntegrityReport {
-  const lines = content.split("\n");
-  const nonEmptyLines: Array<{ raw: string; index: number }> = [];
+function assessBufferIntegrity(content: string, logger: Logger): BufferIntegrityReport {
+  const lines = content.split("\n")
+  const nonEmptyLines: Array<{ raw: string; index: number }> = []
 
   for (let i = 0; i < lines.length; i++) {
     if (lines[i]!.trim() !== "") {
-      nonEmptyLines.push({ raw: lines[i]!, index: i });
+      nonEmptyLines.push({ raw: lines[i]!, index: i })
     }
   }
 
@@ -1129,46 +1161,46 @@ function assessBufferIntegrity(
       tailTruncated: false,
       severity: CorruptionSeverity.UNREADABLE,
       corruptionRatio: 0,
-    };
+    }
   }
 
-  let validLines = 0;
-  let corruptLines = 0;
-  let tailTruncated = false;
+  let validLines = 0
+  let corruptLines = 0
+  let tailTruncated = false
 
   for (let i = 0; i < nonEmptyLines.length; i++) {
-    const { raw, index } = nonEmptyLines[i]!;
-    const result = parseLine(raw, index + 1);
+    const { raw, index } = nonEmptyLines[i]!
+    const result = parseLine(raw, index + 1)
 
     if (result.valid && result.event !== null) {
-      validLines++;
+      validLines++
     } else if (!result.valid) {
       // Is this the last non-empty line?
       if (i === nonEmptyLines.length - 1) {
-        tailTruncated = true;
+        tailTruncated = true
         // Don't count truncated tail as corruption — it's expected.
       } else {
-        corruptLines++;
+        corruptLines++
         logger.warn(
           { lineNumber: index + 1, rawPreview: result.rawPreview },
           "Corrupt line in JSONL buffer",
-        );
+        )
       }
     }
   }
 
-  const totalLines = nonEmptyLines.length;
-  const corruptionRatio = totalLines > 0 ? corruptLines / totalLines : 0;
+  const totalLines = nonEmptyLines.length
+  const corruptionRatio = totalLines > 0 ? corruptLines / totalLines : 0
 
   // Determine severity.
-  let severity: CorruptionSeverity | null = null;
+  let severity: CorruptionSeverity | null = null
 
   if (corruptLines === 0 && tailTruncated) {
-    severity = CorruptionSeverity.TRUNCATED_TAIL;
+    severity = CorruptionSeverity.TRUNCATED_TAIL
   } else if (corruptionRatio > 0.1) {
-    severity = CorruptionSeverity.CORRUPT_INTERIOR;
+    severity = CorruptionSeverity.CORRUPT_INTERIOR
   } else if (corruptLines > 0) {
-    severity = CorruptionSeverity.CORRUPT_INTERIOR;
+    severity = CorruptionSeverity.CORRUPT_INTERIOR
   }
 
   return {
@@ -1178,27 +1210,24 @@ function assessBufferIntegrity(
     tailTruncated,
     severity,
     corruptionRatio,
-  };
+  }
 }
 ```
 
 ### Recovery Decision Based on Integrity
 
 ```typescript
-const CORRUPTION_RATIO_THRESHOLD = 0.1; // 10%
+const CORRUPTION_RATIO_THRESHOLD = 0.1 // 10%
 
-function shouldUseBufferForRecovery(
-  report: BufferIntegrityReport,
-  logger: Logger,
-): boolean {
+function shouldUseBufferForRecovery(report: BufferIntegrityReport, logger: Logger): boolean {
   if (report.totalLines === 0) {
-    logger.debug("Buffer file is empty — skipping Phase 2");
-    return false;
+    logger.debug("Buffer file is empty — skipping Phase 2")
+    return false
   }
 
   if (report.severity === CorruptionSeverity.UNREADABLE) {
-    logger.warn("Buffer file is unreadable — skipping Phase 2");
-    return false;
+    logger.warn("Buffer file is unreadable — skipping Phase 2")
+    return false
   }
 
   if (report.corruptionRatio > CORRUPTION_RATIO_THRESHOLD) {
@@ -1209,22 +1238,22 @@ function shouldUseBufferForRecovery(
         ratio: report.corruptionRatio,
       },
       "Buffer corruption exceeds threshold — skipping Phase 2",
-    );
-    return false;
+    )
+    return false
   }
 
   if (report.tailTruncated) {
-    logger.debug("Buffer has truncated tail (expected on crash) — proceeding with Phase 2");
+    logger.debug("Buffer has truncated tail (expected on crash) — proceeding with Phase 2")
   }
 
   if (report.corruptLines > 0) {
     logger.warn(
       { corruptLines: report.corruptLines },
       "Buffer has minor corruption — proceeding with Phase 2 using valid events only",
-    );
+    )
   }
 
-  return true;
+  return true
 }
 ```
 
@@ -1240,16 +1269,17 @@ function shouldUseBufferForRecovery(
 
 Components:
 
-| Component | Format | Example | Purpose |
-|---|---|---|---|
-| Base path | `/data/sessions/` | `/data/sessions/` | Root directory for all session buffers. Mounted as PVC or emptyDir. |
-| Job directory | `<job_id>/` | `01956a3b-7c4d-7e8f-9a1b-2c3d4e5f6789/` | UUIDv7 job ID. Groups all sessions for a single job. |
-| File prefix | `session_` | `session_` | Fixed prefix for greppability and glob matching. |
-| Timestamp | `<ISO8601_compact>` | `20260223T143022Z` | Session start time in compact ISO 8601 (UTC). Enables chronological sorting by filename. |
-| Pod name | `<pod_name>` | `agent-worker-7b9f4-xk2n3` | Kubernetes pod name. Correlates buffer files with k8s logs and events. |
-| Extension | `.jsonl` | `.jsonl` | JSONL (newline-delimited JSON). |
+| Component     | Format              | Example                                 | Purpose                                                                                  |
+| ------------- | ------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Base path     | `/data/sessions/`   | `/data/sessions/`                       | Root directory for all session buffers. Mounted as PVC or emptyDir.                      |
+| Job directory | `<job_id>/`         | `01956a3b-7c4d-7e8f-9a1b-2c3d4e5f6789/` | UUIDv7 job ID. Groups all sessions for a single job.                                     |
+| File prefix   | `session_`          | `session_`                              | Fixed prefix for greppability and glob matching.                                         |
+| Timestamp     | `<ISO8601_compact>` | `20260223T143022Z`                      | Session start time in compact ISO 8601 (UTC). Enables chronological sorting by filename. |
+| Pod name      | `<pod_name>`        | `agent-worker-7b9f4-xk2n3`              | Kubernetes pod name. Correlates buffer files with k8s logs and events.                   |
+| Extension     | `.jsonl`            | `.jsonl`                                | JSONL (newline-delimited JSON).                                                          |
 
 Full example:
+
 ```
 /data/sessions/01956a3b-7c4d-7e8f-9a1b-2c3d4e5f6789/session_20260223T143022Z_agent-worker-7b9f4-xk2n3.jsonl
 ```
@@ -1268,13 +1298,13 @@ Full example:
 
 There is no active rotation. Files rotate naturally by session lifecycle:
 
-| Trigger | Action | Rationale |
-|---|---|---|
-| Task handler starts | Create new file | Each session gets a fresh file. |
-| Task handler returns | Close file (fsync + close) | Session is complete. File is immutable from this point. |
-| Pod crash | File may have truncated last line | Handled by corruption detection (Question 7). |
-| Job completes + 24h | Cleanup cron deletes job directory | Retention policy (Question 5). |
-| File age > 7 days | Cleanup cron deletes file | Safety net for orphaned files. |
+| Trigger              | Action                             | Rationale                                               |
+| -------------------- | ---------------------------------- | ------------------------------------------------------- |
+| Task handler starts  | Create new file                    | Each session gets a fresh file.                         |
+| Task handler returns | Close file (fsync + close)         | Session is complete. File is immutable from this point. |
+| Pod crash            | File may have truncated last line  | Handled by corruption detection (Question 7).           |
+| Job completes + 24h  | Cleanup cron deletes job directory | Retention policy (Question 5).                          |
+| File age > 7 days    | Cleanup cron deletes file          | Safety net for orphaned files.                          |
 
 ### Retention Policy (Formal)
 
@@ -1285,7 +1315,7 @@ interface RetentionPolicy {
    * retain its buffer files for this duration before deletion.
    * Default: 24 hours.
    */
-  postTerminalRetentionMs: number;
+  postTerminalRetentionMs: number
 
   /**
    * Maximum age for any buffer file, regardless of job state.
@@ -1293,13 +1323,13 @@ interface RetentionPolicy {
    * stuck jobs, etc.).
    * Default: 7 days.
    */
-  maxFileAgeMs: number;
+  maxFileAgeMs: number
 }
 
 const DEFAULT_RETENTION_POLICY: RetentionPolicy = {
   postTerminalRetentionMs: 24 * 60 * 60 * 1000,
   maxFileAgeMs: 7 * 24 * 60 * 60 * 1000,
-};
+}
 ```
 
 ### Cleanup Cron Task
@@ -1351,7 +1381,7 @@ spec:
   resources:
     requests:
       storage: 5Gi
-  storageClassName: local-path  # k3s default
+  storageClassName: local-path # k3s default
 ```
 
 The PVC is mounted at `/data/sessions` in the agent worker pod. `ReadWriteOnce` is sufficient because each pod writes to its own files — there's no concurrent access to the same file.
@@ -1383,7 +1413,7 @@ The alternative was to make the JSONL buffer the primary write path and sync to 
 **Rationale:**
 
 - Events are compact. A `TOOL_RESULT` event is ~500 bytes. A full checkpoint snapshot is ~50KB. Writing snapshots to the buffer after every tool call would produce 50KB × 50 tool calls = 2.5MB of mostly redundant data per job.
-- Events capture *causality*. "LLM said use tool X, tool X returned Y, then LLM said use tool Z" is a narrative that snapshots don't convey.
+- Events capture _causality_. "LLM said use tool X, tool X returned Y, then LLM said use tool Z" is a narrative that snapshots don't convey.
 - The PostgreSQL checkpoint already provides the snapshot. Duplicating it in the buffer adds no information.
 
 ### 3. Per-Job Directories vs Flat File Layout
@@ -1415,7 +1445,7 @@ The sequence number is cheap (one integer per event) and provides high diagnosti
 **Rationale:**
 
 - **Checkpoint CRC catches partial PostgreSQL writes.** These are catastrophic and rare — the CRC is worth the cost.
-- **Buffer line corruption is detectable by JSON parsing.** A truncated or garbled line fails `JSON.parse()`. There's no need for a separate integrity check — the parser *is* the integrity check.
+- **Buffer line corruption is detectable by JSON parsing.** A truncated or garbled line fails `JSON.parse()`. There's no need for a separate integrity check — the parser _is_ the integrity check.
 - **CRC per line would slow writes.** Computing CRC-32 for every event adds ~1μs per event. For 100 events per job, that's 0.1ms total — negligible in absolute terms, but it's complexity for zero additional detection capability (JSON.parse already catches corruption).
 
 ### 6. Session ID for Cross-Session Correlation

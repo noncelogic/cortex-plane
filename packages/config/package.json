@@ -1,0 +1,12 @@
+{
+  "name": "@cortex/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "tsconfig.base.json",
+    "tsconfig.node.json",
+    "tsconfig.nextjs.json",
+    "eslint.config.js"
+  ]
+}

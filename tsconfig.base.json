@@ -1,0 +1,3 @@
+{
+  "extends": "@cortex/config/tsconfig.base.json"
+}
