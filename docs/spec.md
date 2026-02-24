@@ -1,9 +1,10 @@
 # Cortex Plane — Architecture Specification
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Date:** 2026-02-24  
 **Status:** Draft  
-**Authors:** Joe Graham, Hessian (⚡)
+**Authors:** Joe Graham, Hessian (⚡)  
+**Changelog:** v1.1 — integrated gap analysis (memory extraction, PostgreSQL deployment, observability, LLM failover, skills framework, dashboard strategy)
 
 ---
 
@@ -25,10 +26,16 @@
 14. [Browser Orchestration](#14-browser-orchestration)
 15. [Channel Integration](#15-channel-integration)
 16. [Voice Integration](#16-voice-integration)
-17. [Infrastructure & Deployment](#17-infrastructure--deployment)
-18. [Migration Path](#18-migration-path)
-19. [Risk Assessment](#19-risk-assessment)
-20. [Appendices](#appendices)
+17. [Memory Extraction Pipeline](#17-memory-extraction-pipeline)
+18. [PostgreSQL Deployment](#18-postgresql-deployment)
+19. [Observability & Telemetry](#19-observability--telemetry)
+20. [LLM Failover](#20-llm-failover)
+21. [Skills Framework (Containerized)](#21-skills-framework-containerized)
+22. [Dashboard Strategy](#22-dashboard-strategy)
+23. [Infrastructure & Deployment](#23-infrastructure--deployment)
+24. [Migration Path](#24-migration-path)
+25. [Risk Assessment](#25-risk-assessment)
+26. [Appendices](#appendices)
 
 ---
 
@@ -843,9 +850,398 @@ Adapters are npm packages (`@cortex-plane/adapter-telegram`, `@cortex-plane/adap
 
 ---
 
-## 17. Infrastructure & Deployment
+## 17. Memory Extraction Pipeline
 
-### 17.1 Target Environment
+> **Research Reference:** [Deep Research #2, Gap 1](research/deep-research-02-gap-analysis.md)
+
+The extraction pipeline transitions ephemeral conversational data into structured, permanent semantic knowledge in Qdrant (Tier 3).
+
+### 23.1 Trigger Mechanics
+
+Hybrid threshold model — extraction runs asynchronously via a Graphile Worker background job, triggered when:
+
+1. The session buffer accumulates **50 new messages** (configurable), OR
+2. The session **gracefully terminates**
+
+Batching allows the extraction model to observe conversational arcs and resolve ambiguities before committing to vector storage. The trade-off: facts from message 10 aren't in Qdrant until the 50-message threshold. Agents rely on the JSONL buffer for short-term recall.
+
+### 23.2 Model Selection
+
+Extraction uses a **cheap intermediate model** (Claude Haiku / GPT-4o-mini), not the frontier reasoning model. The task requires JSON schema adherence and semantic filtering — well within intermediate model capabilities.
+
+**Cost model:** 50-message batch ≈ 15K input tokens ≈ $0.004 per extraction. Five agents × 100 extractions/day = <$15/month.
+
+### 23.3 Extraction Prompt
+
+```
+You are the Cortex Plane Semantic Memory Extractor. Analyze the
+provided conversational transcript and extract structured atomic facts.
+
+CRITICAL INSTRUCTIONS:
+1. Ignore casual chatter, transient errors, pleasantries. Focus on durable knowledge.
+2. Every fact must be atomic and self-contained. Resolve all pronouns to proper
+   nouns (not "He deployed it" → "Joe Graham deployed the Qdrant container").
+3. Review <existing_memories>. If a new fact contradicts or updates an existing
+   memory, include the old memory's ID in supersedesId.
+4. If a fact is identical to an existing memory, do not extract it.
+5. Output a JSON array of MemoryRecord objects. No markdown wrapping.
+
+<existing_memories>
+{{EXISTING_QDRANT_CONTEXT}}
+</existing_memories>
+```
+
+### 23.4 Validation & Deduplication
+
+1. **Schema validation:** Zod/AJV validates extraction output before embedding. Malformed output → retry with Graphile backoff.
+2. **Duplicate detection:** Cosine similarity >0.95 with identical semantic meaning → discard.
+3. **Supersession:** Similarity 0.85-0.95 with contradictory content → mark old memory as superseded, preserve chain.
+4. **Confidence threshold:** Extracted facts with confidence <0.5 are discarded.
+
+### 23.5 Extended MemoryRecord Schema
+
+```typescript
+interface MemoryRecord {
+  id: string;                    // UUIDv7 (agent-created) or UUIDv5 (markdown-synced)
+  type: 'fact' | 'preference' | 'event' | 'system_rule';
+  content: string;               // Atomic, self-contained statement
+  tags: string[];
+  people: string[];
+  projects: string[];
+  importance: 1 | 2 | 3 | 4 | 5;
+  supersedesId?: string;         // UUID of conflicting legacy memory
+  confidence: number;            // 0.0-1.0 extraction certainty
+  source: string;                // 'session_45', 'MEMORY.md', 'markdown_sync'
+  createdAt: number;
+  accessCount: number;
+  lastAccessedAt: number;
+}
+```
+
+**Priority:** Must-have for Phase 1.
+
+---
+
+## 18. PostgreSQL Deployment
+
+> **Research Reference:** [Deep Research #2, Gap 2](research/deep-research-02-gap-analysis.md)
+
+### 18.1 Deployment Strategy
+
+**MVP (Phase 1):** Single-node PostgreSQL on local-path storage. Simple, fast, minimal moving parts.
+
+**Phase 2:** Two-node HA cluster via **CloudNativePG (CNPG)** operator with automatic Patroni failover. Built-in PgBouncer for connection pooling.
+
+Rationale for starting single-node: CloudNativePG + MinIO for WAL archiving is significant infrastructure overhead. For 1-2 agents on a homelab, single-node with daily `pg_dump` and PVC snapshots is sufficient. Migrate to CNPG when agent count justifies the complexity.
+
+### 18.2 Storage
+
+**local-path provisioner** — bind PostgreSQL directly to NVMe drives. Distributed block storage (Longhorn, Ceph) introduces write amplification that kills Graphile Worker performance (rapid row creation/deletion).
+
+### 18.3 Resource Sizing
+
+| Component | CPU Request | CPU Limit | RAM Request | RAM Limit | Storage |
+|---|---|---|---|---|---|
+| PostgreSQL (single) | 500m | 1000m | 1Gi | 2Gi | 10Gi |
+| PostgreSQL (CNPG, per instance) | 1000m | 1000m | 2Gi | 2Gi | 10Gi |
+
+Matching requests = limits forces **Guaranteed QoS** — CNPG adjusts OOM killer scores to protect the postmaster.
+
+### 18.4 Backup Strategy
+
+**MVP:** Daily `pg_dump` to local storage + PVC snapshots.
+
+**Phase 2:** Continuous WAL archiving to internal MinIO (S3-compatible) via CNPG's barman integration. Enables point-in-time recovery (PITR) to any second.
+
+### 18.5 Schema Migrations
+
+**golang-migrate** with raw SQL files. Version-controlled, CI-integrated, no ORM coupling.
+
+```
+migrations/
+├── 001_create_job_table.up.sql
+├── 001_create_job_table.down.sql
+├── 002_create_agent_table.up.sql
+└── ...
+```
+
+### 18.6 Monitoring
+
+Expose via `prometheus-community/postgres_exporter`:
+- `pg_stat_activity` — active connections, long-running queries
+- `pg_stat_statements` — query performance
+- Dead tuple count / autovacuum status — critical for Graphile Worker (rapid row churn causes table bloat)
+- Connection pool saturation
+- Transaction duration p95/p99
+
+### 18.7 TLS
+
+**Phase 1:** Skip internal TLS (homelab, Tailscale mesh already encrypted).
+**Phase 2:** CNPG auto-provisions and rotates certificates for client + replication traffic.
+
+### 18.8 CloudNativePG Manifest (Phase 2)
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cortex-db
+  namespace: cortex-plane
+spec:
+  instances: 2
+  primaryUpdateStrategy: unsupervised
+  storage:
+    storageClass: local-path
+    size: 10Gi
+  resources:
+    requests: { memory: "2Gi", cpu: "1" }
+    limits:   { memory: "2Gi", cpu: "1" }
+  bootstrap:
+    initdb:
+      database: cortex
+      owner: cortex_admin
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://cortex-backups/
+      endpointURL: http://minio-service.storage.svc.cluster.local:9000
+      s3Credentials:
+        accessKeyId:
+          name: minio-credentials
+          key: MINIO_ACCESS_KEY
+        secretAccessKey:
+          name: minio-credentials
+          key: MINIO_SECRET_KEY
+```
+
+**Priority:** Must-have for Phase 1 (single-node). CNPG upgrade for Phase 2.
+
+---
+
+## 19. Observability & Telemetry
+
+> **Research Reference:** [Deep Research #2, Gap 3](research/deep-research-02-gap-analysis.md)
+
+### 19.1 Strategy
+
+**Pino structured logging + Grafana stack.** No Langfuse (tested previously — doesn't work reliably with native OpenTelemetry despite claiming OTLP support).
+
+| Layer | Tool | Purpose |
+|---|---|---|
+| Application logging | Pino (via Fastify) | Structured JSON logs with correlation IDs |
+| Log aggregation | Grafana Loki | Search, filter, alert on logs |
+| Distributed tracing | Grafana Tempo | Trace correlation across services |
+| Metrics | Prometheus | System + PostgreSQL + Qdrant metrics |
+| Dashboards | Grafana | Single pane of glass |
+
+### 19.2 MVP (Phase 1): Correlation IDs
+
+Before deploying full OTel infrastructure, start with **Pino structured logging with embedded trace context**:
+
+```typescript
+const logger = pino({
+  mixin() {
+    return { traceId: asyncLocalStorage.getStore()?.traceId };
+  }
+});
+```
+
+Every log line carries a `traceId` that links:
+- User's Telegram message → channel adapter → job creation → agent execution → tool calls
+
+Searchable in Loki with `{app="cortex-plane"} | json | traceId="abc123"`.
+
+### 19.3 Phase 2: Full OpenTelemetry
+
+- **OpenTelemetry SDK** for automatic span creation
+- **W3C traceparent** propagated through Graphile Worker job payloads
+- Export spans to **Grafana Tempo**
+- Auto-instrumentation via `@opentelemetry/auto-instrumentations-node`
+
+### 19.4 Minimum Viable Telemetry
+
+Instrument from day 1:
+- Every LLM inference call (model, tokens in/out, latency, cost)
+- Every tool invocation (tool name, duration, success/failure)
+- Every Graphile state transition (job_id, old_state → new_state)
+- Memory extraction results (count extracted, count deduplicated, count superseded)
+
+### 19.5 Alerting Thresholds
+
+| Condition | Severity | Action |
+|---|---|---|
+| Agent stuck on single job >10 min | Warning | Telegram notification |
+| Provider error rate >50% over 5 min | Critical | Page operator |
+| Memory extraction repeated failure | Warning | Telegram notification |
+| PostgreSQL connection pool >80% | Warning | Grafana alert |
+| Dead tuple ratio >20% | Warning | Trigger manual vacuum |
+
+### 19.6 Insights Agent (Phase 3)
+
+Scheduled Graphile job that queries Loki/Tempo APIs to identify systemic failure patterns. Uses an intermediate LLM to cluster errors and propose remediations. Practical at any scale — just runs less frequently at homelab scale.
+
+### 19.7 Retention
+
+- Traces (Tempo): 30 days
+- Logs (Loki): 14 days
+- Metrics (Prometheus): 90 days
+
+**Priority:** High for Phase 1 (Pino + correlation IDs). Full OTel in Phase 2.
+
+---
+
+## 20. LLM Failover
+
+> **Research Reference:** [Deep Research #2, Gap 4](research/deep-research-02-gap-analysis.md)
+
+### 20.1 MVP (Phase 1): Simple Retry
+
+For the initial deployment, a simple retry mechanism with exponential backoff is sufficient:
+
+```typescript
+const retryConfig = {
+  retryableCodes: [429, 500, 502, 503, 529],
+  fatalCodes: [401, 403],       // Page human immediately
+  maxRetries: 3,
+  baseDelay: 1000,
+  maxDelay: 30000,
+  backoffMultiplier: 2,
+};
+```
+
+**401/403 errors halt the job and notify the operator** — these indicate credential issues, not transient outages.
+
+### 20.2 Phase 2: Circuit Breaker
+
+Sliding-window circuit breaker pattern:
+
+- **Sample window:** Last 50 requests per provider
+- **Trip threshold:** 20% non-retryable error rate → circuit opens
+- **Recovery:** 1% traffic bleeds back to failed provider. 50 consecutive successes → circuit closes.
+
+### 20.3 Capability Tiers
+
+Failovers only move **horizontally or up** — never downgrade to a less capable model:
+
+| Tier | Use Case | Primary | Fallbacks |
+|---|---|---|---|
+| **Tier 1** | Complex reasoning, code generation | Claude Opus | GPT-4o, Gemini Pro |
+| **Tier 2** | Standard tool execution | GPT-4o-mini | Claude Haiku, Gemini Flash |
+| **Tier 3** | Memory extraction, parsing | Claude Haiku | GPT-4o-mini |
+
+`allow_downgrade: false` for Tier 1 — never fall back to Tier 2 for complex reasoning tasks.
+
+### 20.4 Session Stickiness
+
+Prefer same provider within a single job for persona consistency. But **resilience > consistency** — switch mid-job if the primary fails. A slight tone shift is vastly preferable to a stalled pipeline.
+
+**Priority:** Deferrable to Phase 1.5. Simple retry for MVP.
+
+---
+
+## 21. Skills Framework (Containerized)
+
+> **Research Reference:** [Deep Research #2, Gap 5](research/deep-research-02-gap-analysis.md)
+
+### 21.1 Delivery Mechanism
+
+Skills are delivered via **PVC subPath mounts**, not baked into container images:
+
+```yaml
+volumeMounts:
+  - name: agent-workspace
+    mountPath: /workspace/skills
+    subPath: dynamic-skills    # Read-write for skill generation
+```
+
+The container root filesystem remains **read-only**. Only `/workspace/skills` is writable. This preserves security (dropped ALL capabilities, no privilege escalation) while enabling the Skill Creator meta-skill.
+
+### 21.2 Hot Reload
+
+When a skill file is written or updated, the agent invalidates `require.cache` for the specific file path:
+
+```typescript
+function hotReloadSkill(skillPath: string): void {
+  delete require.cache[require.resolve(skillPath)];
+}
+```
+
+This allows the agent to use newly created tools on the very next reasoning loop without pod restart.
+
+### 21.3 Progressive Disclosure
+
+Agents don't load all skills into the system prompt. Instead:
+
+1. **Metadata index** (in-memory or Qdrant) holds skill names + descriptions
+2. Agent scans metadata to identify relevant skills for the current task
+3. Full SKILL.md is loaded into working memory only for the duration of that task
+4. Unloaded after use to conserve context window
+
+### 21.4 Skill Dependencies
+
+Skills share a flattened directory structure within the PVC. If Skill A requires Skill B's helper scripts, the dependency resolves natively via filesystem paths. No package manager needed.
+
+### 21.5 Security
+
+- **Read-only root filesystem** — skill code runs in `/workspace/skills` only
+- **ALL capabilities dropped** — no privilege escalation possible
+- **NetworkPolicies** — outbound traffic restricted to control plane + Qdrant + allowed external APIs
+- **No host namespace access** — container sandbox is completely isolated
+
+A malicious skill can write files to the skills directory but cannot escape the container, access other agents' data, or communicate with other pods.
+
+### 21.6 Versioning
+
+Implicit — the Skill Creator overwrites the file, cache invalidation forces the new version. No formal versioning system needed for Phase 1.
+
+**Priority:** Must-have for Phase 1.
+
+---
+
+## 22. Dashboard Strategy
+
+> **Research Reference:** [Deep Research #2, Gap 6](research/deep-research-02-gap-analysis.md)
+
+### 22.1 MVP: Telegram-First
+
+**Skip the dashboard entirely for Phase 1.** Telegram inline buttons provide identical functionality:
+
+- **Agent status:** Bot sends status updates proactively
+- **Approval gates:** Inline buttons (Approve / Reject / Details)
+- **Log streaming:** On-demand via bot commands
+- **Alerts:** Direct Telegram notifications
+
+Zero frontend engineering overhead. All approval workflows and status updates work through the existing channel adapter.
+
+### 22.2 Phase 2: Next.js Dashboard
+
+When the single-operator Telegram interface becomes insufficient:
+
+- **SSE (Server-Sent Events)** for real-time streaming (not WebSocket — SSE is unidirectional, HTTP/2 native, auto-reconnects)
+- **JWT authentication**
+- **Screenshot polling** for browser observation (not noVNC — too bandwidth-heavy)
+- **Inline approval buttons** tied to Graphile Worker's row-level locking
+- **Agent log viewer** streaming JSONL buffer events
+
+### 22.3 SSE Event Schema
+
+```typescript
+interface DashboardEvent {
+  type: 'tool_execution' | 'state_transition' | 'approval_request'
+      | 'error' | 'log' | 'screenshot' | 'metric';
+  traceId: string;
+  agentId: string;
+  timestamp: string;
+  data: Record<string, unknown>;
+}
+```
+
+**Priority:** Can wait for Phase 2+.
+
+---
+
+## 23. Infrastructure & Deployment
+
+### 23.1 Target Environment
 
 k3s cluster on Proxmox VE, running across homelab hardware:
 
@@ -855,7 +1251,7 @@ k3s cluster on Proxmox VE, running across homelab hardware:
 | lnx-orion | Ryzen 9 3950X | k3s worker |
 | lnx-pegasus | Proxmox VE server | VM hosting (Qdrant VM, future k3s nodes) |
 
-### 17.2 Resource Budget
+### 23.2 Resource Budget
 
 | Component | CPU | RAM | Storage |
 |---|---|---|---|
@@ -867,7 +1263,7 @@ k3s cluster on Proxmox VE, running across homelab hardware:
 
 At 1536 dimensions with int8 quantization, 100K vectors consume ~210 MB of RAM in Qdrant. The 2 GB limit provides massive headroom.
 
-### 17.3 Cost Model
+### 23.3 Cost Model
 
 Infrastructure is self-hosted (zero cloud compute cost). Operational costs shift to API usage:
 
@@ -879,7 +1275,7 @@ Infrastructure is self-hosted (zero cloud compute cost). Operational costs shift
 
 ---
 
-## 18. Migration Path
+## 24. Migration Path
 
 ### Phase 1: Dual-Brain Integration (Weeks 1-2)
 
@@ -901,7 +1297,7 @@ Infrastructure is self-hosted (zero cloud compute cost). Operational costs shift
 
 ---
 
-## 19. Risk Assessment
+## 25. Risk Assessment
 
 | Risk | Impact | Probability | Mitigation |
 |---|---|---|---|
