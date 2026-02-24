@@ -29,11 +29,13 @@
     "graphile-worker": "^0.16.0",
     "kysely": "^0.27.0",
     "pg": "^8.13.0",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@cortex/config": "workspace:*",
     "@types/pg": "^8.11.0",
+    "@types/ws": "^8.18.1",
     "embedded-postgres": "18.2.0-beta.16",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.19.0",

@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify"
+import fastifyWebSocket from "@fastify/websocket"
 import type { Kysely } from "kysely"
 import type pg from "pg"
 
@@ -6,8 +7,10 @@ import { ApprovalService } from "./approval/service.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
+import { BrowserObservationService } from "./observation/service.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { healthRoutes } from "./routes/health.js"
+import { observationRoutes } from "./routes/observation.js"
 import { streamRoutes } from "./routes/stream.js"
 import { SSEConnectionManager } from "./streaming/manager.js"
 import { createWorker, type Runner } from "./worker/index.js"
@@ -17,6 +20,7 @@ export interface AppContext {
   app: FastifyInstance
   runner: Runner
   sseManager: SSEConnectionManager
+  observationService: BrowserObservationService
 }
 
 export interface AppOptions {
@@ -44,6 +48,12 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // SSE connection manager for agent streaming
   const sseManager = new SSEConnectionManager()
 
+  // Browser observation service
+  const observationService = new BrowserObservationService()
+
+  // WebSocket support (used by VNC proxy and future WS endpoints)
+  await app.register(fastifyWebSocket)
+
   // Decorate Fastify with runner + db references for health checks
   app.decorate("worker", runner)
   app.decorate("db", db)
@@ -58,20 +68,28 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     approvalRoutes({ approvalService, sseManager }),
   )
 
-  // Register streaming routes if lifecycle manager is provided
+  // Register streaming + observation routes if lifecycle manager is provided
   if (options.lifecycleManager) {
     await app.register(
       streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }),
+    )
+    await app.register(
+      observationRoutes({
+        sseManager,
+        lifecycleManager: options.lifecycleManager,
+        observationService,
+      }),
     )
   }
 
   // Register graceful shutdown handlers (SIGTERM, SIGINT)
   registerShutdownHandlers({ fastify: app, runner, pool })
 
-  // Shut down SSE connections on app close
+  // Shut down SSE connections + observation service on app close
   app.addHook("onClose", async () => {
     sseManager.shutdown()
+    await observationService.shutdown()
   })
 
-  return { app, runner, sseManager }
+  return { app, runner, sseManager, observationService }
 }

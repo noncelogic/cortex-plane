@@ -22,6 +22,10 @@ export type SSEEventType =
   | "approval:created"
   | "approval:decided"
   | "approval:expired"
+  | "browser:screenshot"
+  | "browser:tabs"
+  | "browser:trace:state"
+  | "browser:annotation:ack"
 
 /** A serialized SSE event with an ID for replay support. */
 export interface SSEEvent {
