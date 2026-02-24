@@ -64,8 +64,23 @@ export function registerShutdownHandlers(deps: ShutdownDeps): () => void {
   process.on("SIGTERM", onSigterm)
   process.on("SIGINT", onSigint)
 
+  // Catch unhandled errors so the process doesn't die silently
+  const onUnhandledRejection = (err: unknown): void => {
+    deps.fastify.log.fatal({ err }, "Unhandled promise rejection — shutting down")
+    void shutdown("unhandledRejection")
+  }
+  const onUncaughtException = (err: unknown): void => {
+    deps.fastify.log.fatal({ err }, "Uncaught exception — shutting down")
+    void shutdown("uncaughtException")
+  }
+
+  process.on("unhandledRejection", onUnhandledRejection)
+  process.on("uncaughtException", onUncaughtException)
+
   return () => {
     process.removeListener("SIGTERM", onSigterm)
     process.removeListener("SIGINT", onSigint)
+    process.removeListener("unhandledRejection", onUnhandledRejection)
+    process.removeListener("uncaughtException", onUncaughtException)
   }
 }

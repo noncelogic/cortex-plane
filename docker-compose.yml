@@ -34,6 +34,31 @@ services:
       timeout: 5s
       retries: 3
 
+  control-plane:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.control-plane
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgres://cortex:cortex_dev@postgres:5432/cortex_plane
+      QDRANT_URL: http://qdrant:6333
+      PORT: "4000"
+      HOST: "0.0.0.0"
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      GRAPHILE_WORKER_CONCURRENCY: "5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/healthz').then(r => { if (!r.ok) process.exit(1) })"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
 volumes:
   pgdata:
   qdrant_data:
