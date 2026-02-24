@@ -16,12 +16,17 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "clean": "rm -rf dist .tsbuildinfo"
+    "clean": "rm -rf dist .tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@cortex/shared": "workspace:*"
+    "@cortex/shared": "workspace:*",
+    "discord.js": "^14.18.0"
   },
   "devDependencies": {
-    "@cortex/config": "workspace:*"
+    "@cortex/config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.0.0"
   }
 }
