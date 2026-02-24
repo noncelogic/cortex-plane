@@ -9,6 +9,9 @@ export type {
   SteerAckPayload,
   SSEConnectionInfo,
   BufferConfig,
+  ApprovalCreatedPayload,
+  ApprovalDecidedPayload,
+  ApprovalExpiredPayload,
 } from "./types.js"
 export { DEFAULT_BUFFER_CONFIG } from "./types.js"
 export { SSEConnection } from "./connection.js"

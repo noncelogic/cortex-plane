@@ -19,6 +19,9 @@ export type SSEEventType =
   | "agent:complete"
   | "steer:ack"
   | "heartbeat"
+  | "approval:created"
+  | "approval:decided"
+  | "approval:expired"
 
 /** A serialized SSE event with an ID for replay support. */
 export interface SSEEvent {
@@ -77,6 +80,35 @@ export interface SteerAckPayload {
   timestamp: string
   status: "accepted" | "rejected"
   reason?: string
+}
+
+// ---------------------------------------------------------------------------
+// Approval Event Payloads
+// ---------------------------------------------------------------------------
+
+export interface ApprovalCreatedPayload {
+  approvalRequestId: string
+  jobId: string
+  agentId: string
+  actionSummary: string
+  actionType: string
+  expiresAt: string
+  timestamp: string
+}
+
+export interface ApprovalDecidedPayload {
+  approvalRequestId: string
+  jobId: string
+  decision: string
+  decidedBy: string
+  timestamp: string
+}
+
+export interface ApprovalExpiredPayload {
+  approvalRequestId: string
+  jobId: string
+  expiredAt: string
+  timestamp: string
 }
 
 // ---------------------------------------------------------------------------

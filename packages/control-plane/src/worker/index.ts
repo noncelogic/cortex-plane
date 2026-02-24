@@ -15,6 +15,7 @@ import type { Pool } from "pg"
 
 import type { Database } from "../db/types.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
+import { createApprovalExpireTask } from "./tasks/approval-expire.js"
 import { createMemoryExtractTask } from "./tasks/memory-extract.js"
 
 export interface WorkerOptions {
@@ -36,6 +37,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
   const taskList: TaskList = {
     agent_execute: createAgentExecuteTask(db),
     memory_extract: createMemoryExtractTask(),
+    approval_expire: createApprovalExpireTask(db),
   }
 
   const runner = await run({
@@ -43,6 +45,10 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     taskList,
     concurrency: workerConcurrency,
     noHandleSignals: true, // We handle SIGTERM ourselves in shutdown.ts
+    crontab: [
+      // Expire stale approval requests every 60 seconds
+      "* * * * * approval_expire ?max=1",
+    ].join("\n"),
   })
 
   return runner
