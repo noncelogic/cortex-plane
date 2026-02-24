@@ -1,0 +1,1558 @@
+openapi: 3.1.0
+info:
+  title: Cortex Plane Control API
+  version: 1.0.0
+  description: |
+    REST API for the Cortex Plane autonomous agent orchestration platform.
+
+    The control plane is a stateless orchestrator that dispatches work to
+    per-agent containers on a k3s cluster.  PostgreSQL is the source of truth
+    for all authoritative state; Qdrant provides semantic search over
+    long-term memory.
+
+    ## Authentication
+
+    Three authentication mechanisms are supported, depending on the caller:
+
+    | Mechanism | Header | Use case |
+    |-----------|--------|----------|
+    | API key | `X-API-Key: <key>` | External clients, CI/CD pipelines |
+    | Session token | `Authorization: Bearer <session-id>` | Dashboard, agent SSE streams |
+    | k8s ServiceAccount | `Authorization: Bearer <sa-token>` | In-cluster agents, init containers |
+
+    All endpoints except `/healthz`, `/readyz`, and `/approvals/stream`
+    require authentication.
+
+    ## Rate Limiting
+
+    Rate limits are enforced per API key / session and returned in response
+    headers:
+
+    | Header | Description |
+    |--------|-------------|
+    | `X-RateLimit-Limit` | Max requests in the current window |
+    | `X-RateLimit-Remaining` | Requests remaining in the current window |
+    | `X-RateLimit-Reset` | UTC epoch seconds when the window resets |
+
+    **Default tiers:**
+
+    | Tier | Limit | Applies to |
+    |------|-------|------------|
+    | Standard | 60 req/min | Read endpoints (`GET`) |
+    | Write | 30 req/min | Mutating endpoints (`POST`) |
+    | Streaming | 5 concurrent | SSE connections per agent |
+
+    When a rate limit is exceeded the API returns `429 Too Many Requests`
+    with a `Retry-After` header.
+
+    ## Pagination
+
+    List endpoints use **offset-based pagination** via `limit` and `offset`
+    query parameters.
+
+    | Parameter | Type | Default | Range |
+    |-----------|------|---------|-------|
+    | `limit` | integer | 20 | 1–100 |
+    | `offset` | integer | 0 | ≥ 0 |
+
+    Paginated responses include a `pagination` object:
+
+    ```json
+    {
+      "pagination": {
+        "total": 42,
+        "limit": 20,
+        "offset": 0,
+        "hasMore": true
+      }
+    }
+    ```
+
+    ## Error Format (RFC 7807)
+
+    All error responses conform to
+    [RFC 7807 Problem Details](https://www.rfc-editor.org/rfc/rfc7807):
+
+    ```json
+    {
+      "type": "https://cortex-plane.dev/errors/not-found",
+      "title": "Not Found",
+      "status": 404,
+      "detail": "Agent agent-devops-01 is not managed by this control plane.",
+      "instance": "/agents/agent-devops-01"
+    }
+    ```
+
+    ## WebSocket / SSE Upgrade Paths
+
+    Real-time features use **Server-Sent Events (SSE)**, not WebSocket.
+    SSE is simpler, supports native browser reconnection via `Last-Event-ID`,
+    and works through HTTP/2 proxies without upgrade negotiation.
+
+    | Path | Protocol | Purpose |
+    |------|----------|---------|
+    | `GET /agents/{agentId}/stream` | SSE | Live agent output, state changes, steering acks |
+    | `GET /approvals/stream` | SSE | Real-time approval events (all agents) |
+
+    WebSocket is reserved for future interactive features (e.g., browser
+    VNC relay).  The `/voice/webrtc-offer` endpoint uses standard HTTP
+    POST for SDP exchange; the media transport is WebRTC (UDP).
+  contact:
+    name: Cortex Plane
+    url: https://github.com/openclaw-ai/cortex-plane
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://cortex.{domain}
+    description: Production cluster
+    variables:
+      domain:
+        default: openclaw.ai
+
+tags:
+  - name: Agents
+    description: Agent lifecycle, streaming, and steering
+  - name: Jobs
+    description: Job approval gates
+  - name: Memory
+    description: Memory synchronization
+  - name: Voice
+    description: Voice AI (WebRTC)
+  - name: Health
+    description: Kubernetes probes
+
+# ---------------------------------------------------------------------------
+# Security schemes
+# ---------------------------------------------------------------------------
+security:
+  - apiKey: []
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Static API key for external clients and CI/CD pipelines.
+        Issued by the platform operator and stored as a k8s Secret.
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Session token (UUID) or Kubernetes ServiceAccount JWT.
+        Session tokens are validated against the `session` table.
+        ServiceAccount tokens are validated via the TokenReview API.
+
+  # -----------------------------------------------------------------------
+  # Headers
+  # -----------------------------------------------------------------------
+  headers:
+    X-RateLimit-Limit:
+      description: Maximum requests allowed in the current window.
+      schema:
+        type: integer
+        example: 60
+    X-RateLimit-Remaining:
+      description: Requests remaining in the current window.
+      schema:
+        type: integer
+        example: 57
+    X-RateLimit-Reset:
+      description: UTC epoch seconds when the rate-limit window resets.
+      schema:
+        type: integer
+        example: 1740422400
+    Retry-After:
+      description: Seconds to wait before retrying (on 429).
+      schema:
+        type: integer
+        example: 12
+
+  # -----------------------------------------------------------------------
+  # Reusable schemas
+  # -----------------------------------------------------------------------
+  schemas:
+    # --- Problem Details (RFC 7807) ---
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details error response.
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI reference identifying the problem type.
+          example: https://cortex-plane.dev/errors/not-found
+        title:
+          type: string
+          description: Short human-readable summary.
+          example: Not Found
+        status:
+          type: integer
+          description: HTTP status code.
+          example: 404
+        detail:
+          type: string
+          description: Human-readable explanation specific to this occurrence.
+          example: Agent agent-devops-01 is not managed by this control plane.
+        instance:
+          type: string
+          description: URI reference identifying the specific occurrence.
+          example: /agents/agent-devops-01
+
+    # --- Pagination ---
+    Pagination:
+      type: object
+      required:
+        - total
+        - limit
+        - offset
+        - hasMore
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          example: 42
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 20
+        offset:
+          type: integer
+          minimum: 0
+          example: 0
+        hasMore:
+          type: boolean
+          example: true
+
+    # --- Agent ---
+    AgentStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - DISABLED
+        - ARCHIVED
+
+    AgentLifecycleState:
+      type: string
+      enum:
+        - BOOTING
+        - HYDRATING
+        - READY
+        - EXECUTING
+        - DRAINING
+        - TERMINATED
+
+    AgentSummary:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - role
+        - status
+        - lifecycleState
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: DevOps Agent 01
+        slug:
+          type: string
+          example: devops-01
+        role:
+          type: string
+          example: infrastructure
+        description:
+          type: string
+          example: Manages CI/CD pipelines and k8s deployments.
+        status:
+          $ref: "#/components/schemas/AgentStatus"
+        lifecycleState:
+          $ref: "#/components/schemas/AgentLifecycleState"
+        currentJobId:
+          type: string
+          format: uuid
+          description: ID of the currently executing job, if any.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AgentDetail:
+      allOf:
+        - $ref: "#/components/schemas/AgentSummary"
+        - type: object
+          properties:
+            modelConfig:
+              type: object
+              description: LLM model configuration (provider, model, temperature, etc.).
+              additionalProperties: true
+              example:
+                provider: anthropic
+                model: claude-sonnet-4-5-20250929
+                maxTokens: 8192
+            skillConfig:
+              type: object
+              description: Skill framework configuration.
+              additionalProperties: true
+              example:
+                browser: true
+                codeExecution: true
+            resourceLimits:
+              type: object
+              description: Kubernetes resource requests/limits.
+              additionalProperties: true
+              example:
+                cpu: "1000m"
+                memory: 1Gi
+            channelPermissions:
+              type: object
+              description: Per-channel permission flags.
+              additionalProperties: true
+              example:
+                telegram: { read: true, write: true }
+                discord: { read: true, write: false }
+            checkpoint:
+              $ref: "#/components/schemas/Checkpoint"
+
+    # --- Job ---
+    JobStatus:
+      type: string
+      enum:
+        - PENDING
+        - SCHEDULED
+        - RUNNING
+        - WAITING_FOR_APPROVAL
+        - COMPLETED
+        - FAILED
+        - TIMED_OUT
+        - RETRYING
+        - DEAD_LETTER
+
+    # --- Checkpoint ---
+    Checkpoint:
+      type: object
+      description: Last known agent checkpoint (full snapshot).
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        savedAt:
+          type: string
+          format: date-time
+        crc32:
+          type: integer
+          description: CRC-32 integrity checksum.
+        data:
+          type: object
+          additionalProperties: true
+
+    # --- Approval ---
+    ApprovalStatus:
+      type: string
+      enum:
+        - PENDING
+        - APPROVED
+        - REJECTED
+        - EXPIRED
+
+    ApprovalRequest:
+      type: object
+      required:
+        - id
+        - jobId
+        - status
+        - actionType
+        - actionSummary
+        - requestedAt
+        - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        agentId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/ApprovalStatus"
+        actionType:
+          type: string
+          example: git_push_force
+        actionSummary:
+          type: string
+          maxLength: 500
+          example: Force-push branch main to remote origin.
+        actionDetail:
+          type: object
+          additionalProperties: true
+        approverUserAccountId:
+          type: string
+          format: uuid
+        requestedAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type: string
+          format: date-time
+        decidedBy:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        decision:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+        reason:
+          type: string
+
+    # --- SSE Events ---
+    SSEEventType:
+      type: string
+      enum:
+        - agent:output
+        - agent:state
+        - agent:error
+        - agent:complete
+        - steer:ack
+        - heartbeat
+        - approval:created
+        - approval:decided
+        - approval:expired
+
+    # --- Steer ---
+    SteerRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: Steering instruction injected into the agent's execution context.
+          example: Focus on the database migration first; skip frontend tests.
+        priority:
+          type: string
+          enum:
+            - normal
+            - high
+          default: normal
+          description: |
+            `high` priority messages interrupt the current LLM turn;
+            `normal` messages are queued for the next turn boundary.
+
+    SteerResponse:
+      type: object
+      required:
+        - steerMessageId
+        - status
+        - agentId
+        - priority
+      properties:
+        steerMessageId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - accepted
+        agentId:
+          type: string
+          format: uuid
+        priority:
+          type: string
+          enum:
+            - normal
+            - high
+
+    # --- Health ---
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+
+    ReadinessResponse:
+      type: object
+      required:
+        - status
+        - checks
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - not_ready
+        checks:
+          type: object
+          required:
+            - worker
+            - db
+          properties:
+            worker:
+              type: boolean
+              description: Graphile Worker runner is present.
+            db:
+              type: boolean
+              description: PostgreSQL is reachable.
+
+    # --- Memory sync ---
+    MemorySyncRequest:
+      type: object
+      required:
+        - agentId
+      properties:
+        agentId:
+          type: string
+          format: uuid
+          description: Agent whose memory files should be synced.
+        direction:
+          type: string
+          enum:
+            - file_to_qdrant
+            - qdrant_to_file
+            - bidirectional
+          default: bidirectional
+          description: |
+            Sync direction. `file_to_qdrant` is the most common path
+            (markdown is authoritative).  `bidirectional` performs both
+            directions, with file content winning on conflicts.
+        dryRun:
+          type: boolean
+          default: false
+          description: If true, report changes without applying them.
+
+    MemorySyncResponse:
+      type: object
+      required:
+        - syncId
+        - agentId
+        - status
+        - stats
+      properties:
+        syncId:
+          type: string
+          format: uuid
+        agentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - completed
+            - dry_run
+        stats:
+          type: object
+          required:
+            - upserted
+            - deleted
+            - unchanged
+          properties:
+            upserted:
+              type: integer
+              minimum: 0
+            deleted:
+              type: integer
+              minimum: 0
+            unchanged:
+              type: integer
+              minimum: 0
+            durationMs:
+              type: integer
+              minimum: 0
+
+    # --- Voice / WebRTC ---
+    WebRTCOfferRequest:
+      type: object
+      required:
+        - agentId
+        - sdp
+      properties:
+        agentId:
+          type: string
+          format: uuid
+          description: Agent to initiate a voice session with.
+        sdp:
+          type: string
+          description: SDP offer payload from the client.
+          example: "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\n..."
+
+    WebRTCOfferResponse:
+      type: object
+      required:
+        - sessionId
+        - sdp
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Ephemeral voice session identifier.
+        sdp:
+          type: string
+          description: SDP answer payload from the server.
+        iceServers:
+          type: array
+          items:
+            type: object
+            properties:
+              urls:
+                type: array
+                items:
+                  type: string
+              username:
+                type: string
+              credential:
+                type: string
+
+  # -----------------------------------------------------------------------
+  # Reusable parameters
+  # -----------------------------------------------------------------------
+  parameters:
+    agentId:
+      name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique agent identifier.
+      example: 550e8400-e29b-41d4-a716-446655440000
+
+    jobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique job identifier.
+      example: 660e8400-e29b-41d4-a716-446655440001
+
+    limitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Maximum number of items to return.
+
+    offsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Number of items to skip.
+
+  # -----------------------------------------------------------------------
+  # Reusable responses
+  # -----------------------------------------------------------------------
+  responses:
+    BadRequest:
+      description: The request body or parameters are invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: https://cortex-plane.dev/errors/bad-request
+            title: Bad Request
+            status: 400
+            detail: "body/message must NOT have fewer than 1 characters"
+            instance: /agents/550e8400-e29b-41d4-a716-446655440000/steer
+
+    Unauthorized:
+      description: Missing or invalid authentication credentials.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: https://cortex-plane.dev/errors/unauthorized
+            title: Unauthorized
+            status: 401
+            detail: Missing or invalid Authorization header.
+
+    Forbidden:
+      description: Authenticated but insufficient permissions.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: https://cortex-plane.dev/errors/forbidden
+            title: Forbidden
+            status: 403
+            detail: Session does not have access to this agent.
+
+    NotFound:
+      description: The requested resource does not exist.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: https://cortex-plane.dev/errors/not-found
+            title: Not Found
+            status: 404
+            detail: Agent 550e8400-e29b-41d4-a716-446655440000 is not managed by this control plane.
+
+    Conflict:
+      description: The request conflicts with the current resource state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: https://cortex-plane.dev/errors/conflict
+            title: Conflict
+            status: 409
+            detail: "Cannot steer agent: agent is in READY state, must be EXECUTING."
+
+    Gone:
+      description: The resource existed but has been permanently removed or terminated.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: https://cortex-plane.dev/errors/gone
+            title: Gone
+            status: 410
+            detail: Agent has terminated.
+
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/Retry-After"
+        X-RateLimit-Limit:
+          $ref: "#/components/headers/X-RateLimit-Limit"
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/X-RateLimit-Remaining"
+        X-RateLimit-Reset:
+          $ref: "#/components/headers/X-RateLimit-Reset"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: https://cortex-plane.dev/errors/rate-limit-exceeded
+            title: Too Many Requests
+            status: 429
+            detail: Rate limit exceeded. Retry after 12 seconds.
+
+# ===========================================================================
+# Paths
+# ===========================================================================
+paths:
+  # -------------------------------------------------------------------------
+  # Agents
+  # -------------------------------------------------------------------------
+  /agents:
+    get:
+      operationId: listAgents
+      summary: List all active agents and their statuses
+      description: |
+        Returns a paginated list of agents registered in the control plane.
+        By default only `ACTIVE` agents are returned; use the `status`
+        filter to include `DISABLED` or `ARCHIVED` agents.
+      tags:
+        - Agents
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/AgentStatus"
+          description: Filter by agent status.
+        - name: lifecycleState
+          in: query
+          schema:
+            $ref: "#/components/schemas/AgentLifecycleState"
+          description: Filter by runtime lifecycle state.
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/offsetParam"
+      responses:
+        "200":
+          description: Paginated list of agents.
+          headers:
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/X-RateLimit-Limit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - agents
+                  - pagination
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgentSummary"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                agents:
+                  - id: 550e8400-e29b-41d4-a716-446655440000
+                    name: DevOps Agent 01
+                    slug: devops-01
+                    role: infrastructure
+                    status: ACTIVE
+                    lifecycleState: EXECUTING
+                    currentJobId: 770e8400-e29b-41d4-a716-446655440002
+                    createdAt: "2026-02-20T10:00:00Z"
+                    updatedAt: "2026-02-24T14:30:00Z"
+                pagination:
+                  total: 1
+                  limit: 20
+                  offset: 0
+                  hasMore: false
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /agents/{agentId}:
+    get:
+      operationId: getAgent
+      summary: Get agent details
+      description: |
+        Returns the full agent definition including model configuration,
+        skill config, resource limits, channel permissions, and the last
+        known checkpoint.
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      responses:
+        "200":
+          description: Agent details.
+          headers:
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/X-RateLimit-Limit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDetail"
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                name: DevOps Agent 01
+                slug: devops-01
+                role: infrastructure
+                description: Manages CI/CD pipelines and k8s deployments.
+                status: ACTIVE
+                lifecycleState: EXECUTING
+                currentJobId: 770e8400-e29b-41d4-a716-446655440002
+                modelConfig:
+                  provider: anthropic
+                  model: claude-sonnet-4-5-20250929
+                  maxTokens: 8192
+                skillConfig:
+                  browser: true
+                  codeExecution: true
+                resourceLimits:
+                  cpu: "1000m"
+                  memory: 1Gi
+                channelPermissions:
+                  telegram:
+                    read: true
+                    write: true
+                checkpoint:
+                  jobId: 770e8400-e29b-41d4-a716-446655440002
+                  savedAt: "2026-02-24T14:25:00Z"
+                  crc32: 3456789012
+                createdAt: "2026-02-20T10:00:00Z"
+                updatedAt: "2026-02-24T14:30:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /agents/{agentId}/steer:
+    post:
+      operationId: steerAgent
+      summary: Inject mid-execution steering instruction
+      description: |
+        Sends a steering message to a running agent.  The agent must be in
+        `EXECUTING` lifecycle state.  The message is delivered through the
+        lifecycle manager and acknowledged via the SSE stream.
+
+        Returns `202 Accepted` — the steering message is enqueued, not
+        necessarily processed yet.
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SteerRequest"
+            example:
+              message: Focus on the database migration first; skip frontend tests.
+              priority: normal
+      responses:
+        "202":
+          description: Steering message accepted.
+          headers:
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/X-RateLimit-Limit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SteerResponse"
+              example:
+                steerMessageId: 880e8400-e29b-41d4-a716-446655440003
+                status: accepted
+                agentId: 550e8400-e29b-41d4-a716-446655440000
+                priority: normal
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /agents/{agentId}/pause:
+    post:
+      operationId: pauseAgent
+      summary: Force graceful pause, write checkpoint
+      description: |
+        Signals the agent to pause execution gracefully.  The agent completes
+        its current LLM turn, flushes state to the JSONL buffer, writes a
+        full checkpoint to PostgreSQL, and transitions to `DRAINING` →
+        `READY` lifecycle state.
+
+        The checkpoint is written atomically with a CRC-32 integrity check.
+        The agent can be resumed from this checkpoint via
+        `POST /agents/{agentId}/resume`.
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+                  description: Human-readable reason for pausing.
+                  example: User requested pause for manual review.
+                timeoutSeconds:
+                  type: integer
+                  minimum: 5
+                  maximum: 120
+                  default: 60
+                  description: |
+                    Maximum seconds to wait for the current LLM turn to
+                    complete before aborting.
+      responses:
+        "202":
+          description: Pause request accepted. Checkpoint will be written.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - agentId
+                  - status
+                properties:
+                  agentId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum:
+                      - pausing
+                  checkpoint:
+                    $ref: "#/components/schemas/Checkpoint"
+              example:
+                agentId: 550e8400-e29b-41d4-a716-446655440000
+                status: pausing
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Agent is not in a pausable state.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: https://cortex-plane.dev/errors/conflict
+                title: Conflict
+                status: 409
+                detail: "Cannot pause agent: agent is in READY state, must be EXECUTING."
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /agents/{agentId}/resume:
+    post:
+      operationId: resumeAgent
+      summary: Resume agent from checkpoint
+      description: |
+        Resumes a paused agent from its last checkpoint.  The agent
+        transitions from `READY` → `HYDRATING` → `EXECUTING`, loading
+        the checkpoint data and restoring execution context.
+
+        If no checkpoint exists, the agent starts fresh from `READY`.
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checkpointId:
+                  type: string
+                  format: uuid
+                  description: |
+                    Specific checkpoint to resume from. If omitted, the
+                    most recent checkpoint is used.
+                instruction:
+                  type: string
+                  maxLength: 10000
+                  description: |
+                    Optional instruction to inject upon resume, e.g.
+                    "Continue with the next step" or revised directives.
+      responses:
+        "202":
+          description: Resume request accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - agentId
+                  - status
+                properties:
+                  agentId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum:
+                      - resuming
+                  fromCheckpoint:
+                    type: string
+                    format: uuid
+                    description: Checkpoint ID being restored.
+              example:
+                agentId: 550e8400-e29b-41d4-a716-446655440000
+                status: resuming
+                fromCheckpoint: 990e8400-e29b-41d4-a716-446655440004
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Agent is not in a resumable state.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: https://cortex-plane.dev/errors/conflict
+                title: Conflict
+                status: 409
+                detail: "Cannot resume agent: agent is in EXECUTING state."
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /agents/{agentId}/stream:
+    get:
+      operationId: streamAgent
+      summary: SSE stream of live agent output
+      description: |
+        Opens a Server-Sent Events connection for real-time agent output.
+
+        **Protocol:** The response uses `text/event-stream` content type.
+        Each event has an `id`, `event` type, and JSON `data` payload.
+
+        **Reconnection:** Clients should set the `Last-Event-ID` header
+        when reconnecting to receive missed events.
+
+        **Heartbeat:** A comment line (`: heartbeat`) is sent every 15
+        seconds to keep the connection alive through proxies.
+
+        **Event types:**
+
+        | Event | Description |
+        |-------|-------------|
+        | `agent:state` | Lifecycle state change (initial state sent on connect) |
+        | `agent:output` | LLM output, tool results, steering messages |
+        | `agent:error` | Execution error |
+        | `agent:complete` | Job completed |
+        | `steer:ack` | Steering message acknowledged |
+        | `approval:created` | Approval gate triggered |
+        | `approval:decided` | Approval decision received |
+        | `approval:expired` | Approval request expired |
+
+        **Example event stream:**
+        ```
+        id: 1
+        event: agent:state
+        data: {"agentId":"550e8400-...","state":"EXECUTING","timestamp":"2026-02-24T14:30:00Z"}
+
+        id: 2
+        event: agent:output
+        data: {"agentId":"550e8400-...","output":{"type":"text","content":"Running migration..."}}
+
+        : heartbeat
+
+        id: 3
+        event: steer:ack
+        data: {"agentId":"550e8400-...","steerMessageId":"880e8400-...","status":"accepted"}
+        ```
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+        - name: Last-Event-ID
+          in: header
+          schema:
+            type: string
+          description: ID of the last received event for reconnection.
+      responses:
+        "200":
+          description: SSE event stream opened.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-cache
+            Connection:
+              schema:
+                type: string
+                example: keep-alive
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE-formatted event stream.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # -------------------------------------------------------------------------
+  # Memory
+  # -------------------------------------------------------------------------
+  /memory/sync:
+    post:
+      operationId: syncMemory
+      summary: Trigger bidirectional Markdown ↔ Qdrant sync
+      description: |
+        Manually triggers a memory synchronization between the agent's
+        markdown files (MEMORY.md) and Qdrant vector storage.
+
+        By default the sync is bidirectional with the markdown file as
+        authoritative on conflicts ("human wins" policy).  Use the
+        `direction` parameter to limit to one direction.
+
+        Sync uses structure-aware chunking (parsing `##` headers),
+        SHA-256 content hashing for deduplication, and UUIDv5
+        deterministic IDs for idempotent upserts.
+      tags:
+        - Memory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemorySyncRequest"
+            example:
+              agentId: 550e8400-e29b-41d4-a716-446655440000
+              direction: file_to_qdrant
+              dryRun: false
+      responses:
+        "200":
+          description: Sync completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemorySyncResponse"
+              example:
+                syncId: aa0e8400-e29b-41d4-a716-446655440005
+                agentId: 550e8400-e29b-41d4-a716-446655440000
+                status: completed
+                stats:
+                  upserted: 12
+                  deleted: 3
+                  unchanged: 45
+                  durationMs: 1823
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Agent not found or has no memory files.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # -------------------------------------------------------------------------
+  # Voice
+  # -------------------------------------------------------------------------
+  /voice/webrtc-offer:
+    post:
+      operationId: exchangeWebRTCOffer
+      summary: Exchange SDP for Voice AI session
+      description: |
+        Initiates a WebRTC voice session with an agent.  The client sends
+        an SDP offer; the server returns an SDP answer and optional ICE
+        server configuration.
+
+        The voice session shares the same agent session and memory context
+        as text channels (session continuity).
+
+        **Transport:** WebRTC over UDP with adaptive jitter buffering.
+        **STT/TTS:** ElevenLabs Conversational AI pipeline.
+      tags:
+        - Voice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebRTCOfferRequest"
+            example:
+              agentId: 550e8400-e29b-41d4-a716-446655440000
+              sdp: "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n..."
+      responses:
+        "200":
+          description: SDP answer with optional ICE servers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebRTCOfferResponse"
+              example:
+                sessionId: bb0e8400-e29b-41d4-a716-446655440006
+                sdp: "v=0\r\no=- 0 0 IN IP4 10.0.1.5\r\ns=-\r\nt=0 0\r\n..."
+                iceServers:
+                  - urls:
+                      - "stun:stun.l.google.com:19302"
+                  - urls:
+                      - "turn:turn.cortex.openclaw.ai:3478"
+                    username: ephemeral-user
+                    credential: ephemeral-pass
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # -------------------------------------------------------------------------
+  # Jobs — Approval Gates
+  # -------------------------------------------------------------------------
+  /jobs/{jobId}/approve:
+    post:
+      operationId: approveJob
+      summary: Un-pause job at approval gate
+      description: |
+        Approves or rejects a job that is paused at a human approval gate
+        (`WAITING_FOR_APPROVAL` status).  On approval, the Graphile Worker
+        job is re-enqueued and the agent resumes from its checkpoint.
+
+        This endpoint accepts decisions by approval request ID.  For
+        token-based decisions (e.g., from Telegram inline buttons), use
+        `POST /approval/token/decide`.
+      tags:
+        - Jobs
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - decision
+                - decidedBy
+              properties:
+                decision:
+                  type: string
+                  enum:
+                    - APPROVED
+                    - REJECTED
+                  description: Approval decision.
+                decidedBy:
+                  type: string
+                  description: Identifier of the person making the decision.
+                  example: joe@openclaw.ai
+                channel:
+                  type: string
+                  description: Channel through which the decision was made.
+                  example: api
+                  default: api
+                reason:
+                  type: string
+                  maxLength: 1000
+                  description: Optional rationale for the decision.
+                  example: Reviewed the diff — changes look safe.
+            example:
+              decision: APPROVED
+              decidedBy: joe@openclaw.ai
+              channel: api
+              reason: Reviewed the diff — changes look safe.
+      responses:
+        "200":
+          description: Decision recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - approvalRequestId
+                  - decision
+                  - decidedAt
+                properties:
+                  approvalRequestId:
+                    type: string
+                    format: uuid
+                  decision:
+                    type: string
+                    enum:
+                      - APPROVED
+                      - REJECTED
+                  decidedAt:
+                    type: string
+                    format: date-time
+              example:
+                approvalRequestId: cc0e8400-e29b-41d4-a716-446655440007
+                decision: APPROVED
+                decidedAt: "2026-02-24T14:35:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Approval already decided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: https://cortex-plane.dev/errors/already-decided
+                title: Conflict
+                status: 409
+                detail: This approval request has already been decided.
+        "410":
+          description: Approval request expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: https://cortex-plane.dev/errors/expired
+                title: Gone
+                status: 410
+                detail: This approval request has expired.
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /jobs/{jobId}/approvals:
+    get:
+      operationId: listJobApprovals
+      summary: List approval requests for a job
+      description: |
+        Returns all approval requests associated with a specific job,
+        ordered by creation time (newest first).
+      tags:
+        - Jobs
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ApprovalStatus"
+          description: Filter by approval status.
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/offsetParam"
+      responses:
+        "200":
+          description: Paginated list of approval requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - approvals
+                  - pagination
+                properties:
+                  approvals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApprovalRequest"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                approvals:
+                  - id: cc0e8400-e29b-41d4-a716-446655440007
+                    jobId: 660e8400-e29b-41d4-a716-446655440001
+                    agentId: 550e8400-e29b-41d4-a716-446655440000
+                    status: APPROVED
+                    actionType: git_push_force
+                    actionSummary: Force-push branch main to remote origin.
+                    requestedAt: "2026-02-24T14:30:00Z"
+                    decidedAt: "2026-02-24T14:35:00Z"
+                    decidedBy: joe@openclaw.ai
+                    expiresAt: "2026-02-25T14:30:00Z"
+                    decision: APPROVED
+                    reason: Reviewed the diff — changes look safe.
+                pagination:
+                  total: 1
+                  limit: 20
+                  offset: 0
+                  hasMore: false
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # -------------------------------------------------------------------------
+  # Health
+  # -------------------------------------------------------------------------
+  /healthz:
+    get:
+      operationId: liveness
+      summary: Liveness probe
+      description: |
+        Returns `200 OK` if the process is alive.  Used by Kubernetes
+        liveness probe — always succeeds if the HTTP server is responding.
+      tags:
+        - Health
+      security: []
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+
+  /readyz:
+    get:
+      operationId: readiness
+      summary: Readiness probe
+      description: |
+        Returns `200 OK` if all critical subsystems are operational
+        (Graphile Worker runner and PostgreSQL connectivity).  Returns
+        `503 Service Unavailable` if any check fails.
+
+        Used by Kubernetes readiness probe — the pod is removed from
+        Service endpoints when not ready.
+      tags:
+        - Health
+      security: []
+      responses:
+        "200":
+          description: All subsystems ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: ok
+                checks:
+                  worker: true
+                  db: true
+        "503":
+          description: One or more subsystems not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: not_ready
+                checks:
+                  worker: true
+                  db: false
