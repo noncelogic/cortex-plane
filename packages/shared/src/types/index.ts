@@ -7,8 +7,8 @@ export type JobStatus =
   | "FAILED"
   | "TIMED_OUT"
   | "RETRYING"
-  | "DEAD_LETTER";
+  | "DEAD_LETTER"
 
-export type AgentStatus = "ACTIVE" | "DISABLED" | "ARCHIVED";
+export type AgentStatus = "ACTIVE" | "DISABLED" | "ARCHIVED"
 
-export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"

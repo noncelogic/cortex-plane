@@ -20,5 +20,8 @@
   },
   "dependencies": {
     "@cortex/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cortex/config": "workspace:*"
   }
 }

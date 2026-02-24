@@ -1,1 +1,1 @@
-export const channelType = "discord" as const;
+export const channelType = "discord" as const

@@ -1,1 +1,1 @@
-export const channelType = "telegram" as const;
+export const channelType = "telegram" as const
