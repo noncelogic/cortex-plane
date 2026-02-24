@@ -4,19 +4,24 @@ import type pg from "pg"
 
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
+import type { AgentLifecycleManager } from "./lifecycle/manager.js"
 import { healthRoutes } from "./routes/health.js"
+import { streamRoutes } from "./routes/stream.js"
+import { SSEConnectionManager } from "./streaming/manager.js"
 import { createWorker, type Runner } from "./worker/index.js"
 import { registerShutdownHandlers } from "./worker/shutdown.js"
 
 export interface AppContext {
   app: FastifyInstance
   runner: Runner
+  sseManager: SSEConnectionManager
 }
 
 export interface AppOptions {
   db: Kysely<Database>
   pool: pg.Pool
   config: Config
+  lifecycleManager?: AgentLifecycleManager
 }
 
 export async function buildApp(options: AppOptions): Promise<AppContext> {
@@ -34,14 +39,29 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     concurrency: config.workerConcurrency,
   })
 
+  // SSE connection manager for agent streaming
+  const sseManager = new SSEConnectionManager()
+
   // Decorate Fastify with runner + db references for health checks
   app.decorate("worker", runner)
   app.decorate("db", db)
 
   await app.register(healthRoutes)
 
+  // Register streaming routes if lifecycle manager is provided
+  if (options.lifecycleManager) {
+    await app.register(
+      streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }),
+    )
+  }
+
   // Register graceful shutdown handlers (SIGTERM, SIGINT)
   registerShutdownHandlers({ fastify: app, runner, pool })
 
-  return { app, runner }
+  // Shut down SSE connections on app close
+  app.addHook("onClose", async () => {
+    sseManager.shutdown()
+  })
+
+  return { app, runner, sseManager }
 }

@@ -51,6 +51,17 @@ export interface AgentContext {
   deploymentConfig: AgentDeploymentConfig | null
 }
 
+/** A steering message injected mid-execution. */
+export interface SteerMessage {
+  id: string
+  agentId: string
+  message: string
+  priority: "normal" | "high"
+  timestamp: Date
+}
+
+export type SteerListener = (msg: SteerMessage) => void
+
 // ---------------------------------------------------------------------------
 // Manager
 // ---------------------------------------------------------------------------
@@ -64,6 +75,8 @@ export class AgentLifecycleManager {
   readonly crashDetector: CrashLoopDetector
   readonly idleDetector: IdleDetector
   private readonly onLifecycleEvent?: (event: LifecycleTransitionEvent) => void
+  /** agentId → listeners for steering messages */
+  private readonly steerListeners = new Map<string, Set<SteerListener>>()
 
   constructor(deps: LifecycleManagerDeps) {
     this.db = deps.db
@@ -313,6 +326,52 @@ export class AgentLifecycleManager {
   }
 
   // -------------------------------------------------------------------------
+  // Steering: mid-execution message injection
+  // -------------------------------------------------------------------------
+
+  /**
+   * Inject a steering message to a running agent.
+   * The agent must be in EXECUTING state.
+   * Notifies all registered listeners for the agent.
+   */
+  steer(msg: SteerMessage): void {
+    const ctx = this.requireContext(msg.agentId)
+
+    if (ctx.stateMachine.state !== "EXECUTING") {
+      throw new Error(
+        `Cannot steer agent ${msg.agentId}: not in EXECUTING state (current: ${ctx.stateMachine.state})`,
+      )
+    }
+
+    this.idleDetector.recordActivity(msg.agentId)
+
+    const listeners = this.steerListeners.get(msg.agentId)
+    if (listeners) {
+      for (const listener of listeners) {
+        listener(msg)
+      }
+    }
+  }
+
+  /**
+   * Register a listener for steering messages to a specific agent.
+   * Returns an unsubscribe function.
+   */
+  onSteer(agentId: string, listener: SteerListener): () => void {
+    if (!this.steerListeners.has(agentId)) {
+      this.steerListeners.set(agentId, new Set())
+    }
+    this.steerListeners.get(agentId)!.add(listener)
+
+    return () => {
+      this.steerListeners.get(agentId)?.delete(listener)
+      if (this.steerListeners.get(agentId)?.size === 0) {
+        this.steerListeners.delete(agentId)
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Heartbeat handling
   // -------------------------------------------------------------------------
 
@@ -369,5 +428,6 @@ export class AgentLifecycleManager {
     this.agents.delete(agentId)
     this.idleDetector.removeAgent(agentId)
     this.heartbeatReceiver.removeAgent(agentId)
+    this.steerListeners.delete(agentId)
   }
 }
