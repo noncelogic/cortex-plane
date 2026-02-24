@@ -50,7 +50,11 @@ describe("scanBuffer", () => {
   })
 
   it("counts interior corrupt lines", () => {
-    const content = [makeEventLine({ sequence: 0 }), "GARBAGE_DATA", makeEventLine({ sequence: 2 })].join("\n")
+    const content = [
+      makeEventLine({ sequence: 0 }),
+      "GARBAGE_DATA",
+      makeEventLine({ sequence: 2 }),
+    ].join("\n")
 
     const result = scanBuffer(content)
     expect(result.events).toHaveLength(2)
@@ -73,7 +77,7 @@ describe("scanBuffer", () => {
   })
 
   it("rejects JSON arrays", () => {
-    const content = '[1, 2, 3]'
+    const content = "[1, 2, 3]"
     const result = scanBuffer(content)
     expect(result.events).toHaveLength(0)
     expect(result.corruptedLines).toBe(1)
@@ -201,10 +205,7 @@ describe("BufferReader", () => {
     const jobDir = join(tempDir, JOB_ID)
     mkdirSync(jobDir, { recursive: true })
 
-    writeFileSync(
-      join(jobDir, "session-001.jsonl"),
-      makeEventLine({ type: "LLM_REQUEST" }) + "\n",
-    )
+    writeFileSync(join(jobDir, "session-001.jsonl"), makeEventLine({ type: "LLM_REQUEST" }) + "\n")
 
     const reader = new BufferReader(tempDir, JOB_ID)
     expect(reader.findLastCheckpoint()).toBeNull()
@@ -232,8 +233,7 @@ describe("BufferReader", () => {
 
     writeFileSync(
       join(jobDir, "session-001.jsonl"),
-      [makeEventLine({ sequence: 0 }), "GARBAGE", makeEventLine({ sequence: 2 })].join("\n") +
-        "\n",
+      [makeEventLine({ sequence: 0 }), "GARBAGE", makeEventLine({ sequence: 2 })].join("\n") + "\n",
     )
 
     const reader = new BufferReader(tempDir, JOB_ID)

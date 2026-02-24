@@ -81,23 +81,17 @@ export function createWatcher(
       })
 
       watcher.on("add", (absPath) => {
-        const rel = absPath.startsWith(watchDir)
-          ? absPath.slice(watchDir.length + 1)
-          : absPath
+        const rel = absPath.startsWith(watchDir) ? absPath.slice(watchDir.length + 1) : absPath
         handleEvent(rel)
       })
 
       watcher.on("change", (absPath) => {
-        const rel = absPath.startsWith(watchDir)
-          ? absPath.slice(watchDir.length + 1)
-          : absPath
+        const rel = absPath.startsWith(watchDir) ? absPath.slice(watchDir.length + 1) : absPath
         handleEvent(rel)
       })
 
       watcher.on("unlink", (absPath) => {
-        const rel = absPath.startsWith(watchDir)
-          ? absPath.slice(watchDir.length + 1)
-          : absPath
+        const rel = absPath.startsWith(watchDir) ? absPath.slice(watchDir.length + 1) : absPath
 
         // Clear any pending debounce and immediately fire delete
         const existing = debounceTimers.get(rel)

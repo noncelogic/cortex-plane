@@ -335,7 +335,8 @@ function parsePodStatus(pod: k8s.V1Pod): AgentPodStatus {
       let state = "unknown"
       if (cs.state?.running) state = "running"
       else if (cs.state?.waiting) state = `waiting: ${cs.state.waiting.reason ?? "unknown"}`
-      else if (cs.state?.terminated) state = `terminated: ${cs.state.terminated.reason ?? "unknown"}`
+      else if (cs.state?.terminated)
+        state = `terminated: ${cs.state.terminated.reason ?? "unknown"}`
 
       return {
         name: cs.name,

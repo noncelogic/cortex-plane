@@ -61,7 +61,9 @@ describe("diff", () => {
   }
 
   it("classifies all chunks as toCreate when state is empty", () => {
-    const chunks = makeChunks("## Section\n\nContent that is long enough to pass the minimum chunk threshold.")
+    const chunks = makeChunks(
+      "## Section\n\nContent that is long enough to pass the minimum chunk threshold.",
+    )
     const result = diff({ entries: {} }, chunks, filePath)
     expect(result.toCreate).toHaveLength(1)
     expect(result.toUpdate).toHaveLength(0)
@@ -92,8 +94,10 @@ describe("diff", () => {
   })
 
   it("detects updated chunks (same heading path, different hash)", () => {
-    const originalContent = "## Section\n\nOriginal content that is long enough to pass minimum chunk size for testing."
-    const updatedContent = "## Section\n\nUpdated content that is long enough to pass minimum chunk size for testing."
+    const originalContent =
+      "## Section\n\nOriginal content that is long enough to pass minimum chunk size for testing."
+    const updatedContent =
+      "## Section\n\nUpdated content that is long enough to pass minimum chunk size for testing."
 
     const originalChunks = makeChunks(originalContent)
     const updatedChunks = makeChunks(updatedContent)
@@ -118,7 +122,8 @@ describe("diff", () => {
   })
 
   it("detects deleted chunks (in state but not in file)", () => {
-    const fullContent = "## Section One\n\nFirst section content long enough for valid chunk.\n\n## Section Two\n\nSecond section content long enough for valid chunk."
+    const fullContent =
+      "## Section One\n\nFirst section content long enough for valid chunk.\n\n## Section Two\n\nSecond section content long enough for valid chunk."
     const partialContent = "## Section One\n\nFirst section content long enough for valid chunk."
 
     const fullChunks = makeChunks(fullContent)
@@ -142,7 +147,9 @@ describe("diff", () => {
   })
 
   it("ignores state entries from other files", () => {
-    const chunks = makeChunks("## Section\n\nContent long enough to pass minimum chunk size for testing.")
+    const chunks = makeChunks(
+      "## Section\n\nContent long enough to pass minimum chunk size for testing.",
+    )
 
     const state: SyncState = {
       entries: {
@@ -166,7 +173,10 @@ describe("applyDiff", () => {
   const filePath = "MEMORY.md"
 
   it("adds entries for created chunks", () => {
-    const chunks = chunkMarkdown("## New\n\nNew content long enough to pass minimum chunk size.", filePath)
+    const chunks = chunkMarkdown(
+      "## New\n\nNew content long enough to pass minimum chunk size.",
+      filePath,
+    )
     const chunk = chunks[0]!
 
     const state = applyDiff({ entries: {} }, filePath, [chunk], [], [])

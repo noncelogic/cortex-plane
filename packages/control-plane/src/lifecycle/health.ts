@@ -158,8 +158,7 @@ export const CRASH_COOLDOWN = {
  */
 export function calculateCrashCooldown(consecutiveCrashes: number): number {
   if (consecutiveCrashes <= 0) return 0
-  const delay =
-    CRASH_COOLDOWN.baseMs * Math.pow(CRASH_COOLDOWN.multiplier, consecutiveCrashes - 1)
+  const delay = CRASH_COOLDOWN.baseMs * Math.pow(CRASH_COOLDOWN.multiplier, consecutiveCrashes - 1)
   return Math.min(delay, CRASH_COOLDOWN.maxMs)
 }
 

@@ -11,6 +11,7 @@ We're now starting implementation. The following subsystems were described in th
 The architecture describes "an LLM extracts highly structured atomic facts" for Tier 3 memory, but the mechanics are unspecified.
 
 **Questions:**
+
 1. What triggers extraction? Session end? Context compaction? Every N messages? Configurable?
 2. What's the extraction prompt? Produce a production-ready prompt template that outputs structured JSON matching our MemoryRecord schema (type, content, tags, people, projects, importance, supersedesId).
 3. Which model should run extraction? The primary reasoning model (expensive) or a cheaper model (Claude Haiku, GPT-4o-mini)? Cost/quality trade-off analysis.
@@ -25,6 +26,7 @@ The architecture describes "an LLM extracts highly structured atomic facts" for 
 We have detailed Qdrant deployment specs (spike #30) but nothing equivalent for PostgreSQL, which is the authoritative state store.
 
 **Questions:**
+
 1. Single instance vs HA (Patroni, CloudNativePG operator)? For a homelab with 1-5 agents, is HA overkill?
 2. Connection pooling: PgBouncer as sidecar, or rely on Graphile Worker's built-in pool?
 3. WAL archiving and PITR: what's the simplest backup strategy that gives us point-in-time recovery? Local WAL archive + daily pg_dump, or something more sophisticated?
@@ -39,6 +41,7 @@ We have detailed Qdrant deployment specs (spike #30) but nothing equivalent for 
 The architecture references OpenTelemetry, Langfuse, and an "Insights Agent" but provides no implementation detail.
 
 **Questions:**
+
 1. What do we instrument? Every LLM call? Every tool invocation? Every state transition? What's the minimum viable telemetry?
 2. OpenTelemetry vs application-level logging: for a homelab, is OTel infrastructure (collector, Jaeger/Tempo) worth the overhead, or is structured Pino logging + Grafana Loki sufficient?
 3. LLM-specific metrics: tokens in/out, latency p50/p95/p99, error rate by provider, cost per job. How to capture and expose these?
@@ -52,6 +55,7 @@ The architecture references OpenTelemetry, Langfuse, and an "Insights Agent" but
 The risk assessment mentions Claude → Gemini → GPT failover but no spike designs it.
 
 **Questions:**
+
 1. Health check: how do we detect a provider is down? Failed requests? Latency spike? HTTP status codes?
 2. Failover strategy: automatic circuit breaker, or manual switchover? If automatic, what are the thresholds (N failures in M seconds)?
 3. Model capability mapping: not all models are equal. If Claude Opus is down and we fall back to Gemini Flash, some tasks may not work. How do we model capability tiers?
@@ -65,6 +69,7 @@ The risk assessment mentions Claude → Gemini → GPT failover but no spike des
 OpenClaw loads skills from the local filesystem. In k3s pods, skills need a different loading mechanism.
 
 **Questions:**
+
 1. How are skills delivered to agent pods? Baked into the container image? Mounted via ConfigMap/PVC? Pulled at runtime from a registry?
 2. Progressive disclosure in containers: the agent scans skill metadata, then loads full SKILL.md on demand. Where does the metadata index live?
 3. Skill dependencies: if Skill A requires Skill B's helper scripts, how is that resolved in a container?
@@ -78,6 +83,7 @@ OpenClaw loads skills from the local filesystem. In k3s pods, skills need a diff
 The architecture specifies a Next.js dashboard with SSE streaming, but no spike covers it.
 
 **Questions:**
+
 1. SSE vs WebSocket: for real-time agent status updates, which is simpler and more reliable?
 2. Event schema: what events does the dashboard subscribe to? Agent status changes, job progress, approval requests, log streams?
 3. Authentication: how does the dashboard authenticate? JWT? Session cookies? OAuth?
@@ -90,6 +96,7 @@ The architecture specifies a Next.js dashboard with SSE streaming, but no spike 
 ## Output Format
 
 For each gap, produce:
+
 1. **Recommendation** — the concrete approach you'd take, with reasoning
 2. **Schema/Config** — any TypeScript interfaces, SQL schemas, YAML configs, or prompt templates
 3. **Trade-offs** — what you're giving up with this approach

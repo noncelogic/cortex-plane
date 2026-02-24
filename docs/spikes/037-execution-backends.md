@@ -38,12 +38,12 @@ Today the system has no formal contract for what an execution backend provides, 
 
 Each coding model has different invocation semantics:
 
-| Backend | Invocation | Output | Streaming | Lifecycle |
-|---|---|---|---|---|
-| **Claude Code** | CLI subprocess (`claude -p`) | stdout + file diffs + exit code | Yes (stdout stream) | Process per task |
-| **Codex** | REST API | Response object with file patches | Yes (SSE) | Stateless API call |
-| **Aider** | CLI subprocess (`aider --message`) | stdout + file diffs + exit code | Yes (stdout stream) | Process per task |
-| **Custom/local** | Varies | Varies | Maybe | Varies |
+| Backend          | Invocation                         | Output                            | Streaming           | Lifecycle          |
+| ---------------- | ---------------------------------- | --------------------------------- | ------------------- | ------------------ |
+| **Claude Code**  | CLI subprocess (`claude -p`)       | stdout + file diffs + exit code   | Yes (stdout stream) | Process per task   |
+| **Codex**        | REST API                           | Response object with file patches | Yes (SSE)           | Stateless API call |
+| **Aider**        | CLI subprocess (`aider --message`) | stdout + file diffs + exit code   | Yes (stdout stream) | Process per task   |
+| **Custom/local** | Varies                             | Varies                            | Maybe               | Varies             |
 
 Without an adapter interface, the control plane must contain backend-specific code in the job execution path. Adding a new backend means modifying the orchestration layer — violating the open/closed principle.
 
@@ -60,14 +60,14 @@ A single `ExecutionBackend` interface that:
 
 ### Hard Constraints
 
-| Constraint | Implication |
-|---|---|
+| Constraint                                                           | Implication                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Agent pods are k8s Jobs with `restartPolicy: Never` (spike #33, #34) | Backend adapters run inside the agent pod, not as separate services |
-| PostgreSQL checkpoint is the resume point (spike #26) | Backend execution must produce checkpointable state |
-| Heartbeats every 30s (spike #28) | Long-running backend calls must not block the heartbeat timer |
-| Error classification into TRANSIENT/PERMANENT/TIMEOUT (spike #28) | Backend errors must be classifiable by the existing error taxonomy |
-| Channel adapters are npm packages (spec §15.3) | Execution backends follow the same packaging pattern |
-| Token budget per job (spike #34) | Backend adapters must report token consumption |
+| PostgreSQL checkpoint is the resume point (spike #26)                | Backend execution must produce checkpointable state                 |
+| Heartbeats every 30s (spike #28)                                     | Long-running backend calls must not block the heartbeat timer       |
+| Error classification into TRANSIENT/PERMANENT/TIMEOUT (spike #28)    | Backend errors must be classifiable by the existing error taxonomy  |
+| Channel adapters are npm packages (spec §15.3)                       | Execution backends follow the same packaging pattern                |
+| Token budget per job (spike #34)                                     | Backend adapters must report token consumption                      |
 
 ---
 
@@ -79,20 +79,20 @@ A single `ExecutionBackend` interface that:
 
 ### Method Analysis
 
-| Method | Purpose | Required? | Rationale |
-|---|---|---|---|
-| `start()` | Initialize the backend (verify binary exists, warm connection pool) | Yes | Backend may need setup before first task |
-| `stop()` | Graceful shutdown (kill subprocesses, close connections) | Yes | Drain protocol (spike #34) needs clean teardown |
-| `healthCheck()` | Verify the backend is available and ready to accept work | Yes | Pre-dispatch validation, circuit breaker input |
-| `executeTask()` | Submit a task and return a handle for tracking | Yes | Core dispatch method |
-| `cancel()` | Abort a running task | Yes | Drain, timeout, and user-initiated cancellation |
-| `getCapabilities()` | Report what the backend supports (streaming, file edit, etc.) | Yes | Backend selection and feature negotiation |
+| Method              | Purpose                                                             | Required? | Rationale                                       |
+| ------------------- | ------------------------------------------------------------------- | --------- | ----------------------------------------------- |
+| `start()`           | Initialize the backend (verify binary exists, warm connection pool) | Yes       | Backend may need setup before first task        |
+| `stop()`            | Graceful shutdown (kill subprocesses, close connections)            | Yes       | Drain protocol (spike #34) needs clean teardown |
+| `healthCheck()`     | Verify the backend is available and ready to accept work            | Yes       | Pre-dispatch validation, circuit breaker input  |
+| `executeTask()`     | Submit a task and return a handle for tracking                      | Yes       | Core dispatch method                            |
+| `cancel()`          | Abort a running task                                                | Yes       | Drain, timeout, and user-initiated cancellation |
+| `getCapabilities()` | Report what the backend supports (streaming, file edit, etc.)       | Yes       | Backend selection and feature negotiation       |
 
 ### Why `executeTask()` Returns a Handle, Not a Result
 
 A naive interface would be `executeTask(task: ExecutionTask): Promise<ExecutionResult>`. This blocks the caller for the entire execution duration — minutes for complex tasks. During that time:
 
-1. The heartbeat timer can't fire (if the event loop is blocked, which it isn't in async code, but the *conceptual* problem remains: how does the caller observe progress?).
+1. The heartbeat timer can't fire (if the event loop is blocked, which it isn't in async code, but the _conceptual_ problem remains: how does the caller observe progress?).
 2. The caller can't cancel the task.
 3. The caller can't stream intermediate output.
 4. The caller can't checkpoint partial progress.
@@ -100,27 +100,27 @@ A naive interface would be `executeTask(task: ExecutionTask): Promise<ExecutionR
 Instead, `executeTask()` returns an `ExecutionHandle` — a lightweight object that provides methods to observe, cancel, and await the task:
 
 ```typescript
-const handle = await backend.executeTask(task);
+const handle = await backend.executeTask(task)
 
 // Stream output as it arrives.
 for await (const event of handle.events()) {
-  if (event.type === 'output') {
-    buffer.append(event);
+  if (event.type === "output") {
+    buffer.append(event)
   }
-  if (event.type === 'files_changed') {
-    checkpoint.recordFileChange(event);
+  if (event.type === "files_changed") {
+    checkpoint.recordFileChange(event)
   }
 }
 
 // Or await the final result.
-const result = await handle.result();
+const result = await handle.result()
 ```
 
 This pattern is analogous to `child_process.spawn()` returning a `ChildProcess` handle, not a promise of the final output. The caller controls the observation strategy.
 
 ### Why Not Separate `streamOutput()` and `getResult()`?
 
-Earlier designs had `streamOutput(taskId): AsyncIterable<OutputEvent>` and `getResult(taskId): Promise<ExecutionResult>` as standalone methods. This creates a coupling problem: the caller must track task IDs and coordinate between two methods. The handle pattern encapsulates both — the handle *is* the task reference, and it provides both streaming and final-result access.
+Earlier designs had `streamOutput(taskId): AsyncIterable<OutputEvent>` and `getResult(taskId): Promise<ExecutionResult>` as standalone methods. This creates a coupling problem: the caller must track task IDs and coordinate between two methods. The handle pattern encapsulates both — the handle _is_ the task reference, and it provides both streaming and final-result access.
 
 ---
 
@@ -134,11 +134,11 @@ Earlier designs had `streamOutput(taskId): AsyncIterable<OutputEvent>` and `getR
 
 Different backends accept different input shapes:
 
-| Backend | Expects |
-|---|---|
+| Backend     | Expects                                                                           |
+| ----------- | --------------------------------------------------------------------------------- |
 | Claude Code | `claude -p "prompt text"` with `--allowedTools`, `--model`, working directory set |
-| Codex | JSON body: `{ instructions, context, model, ... }` |
-| Aider | `aider --message "prompt" --file path1 --file path2` |
+| Codex       | JSON body: `{ instructions, context, model, ... }`                                |
+| Aider       | `aider --message "prompt" --file path1 --file path2`                              |
 
 If the control plane constructs backend-specific payloads, adding a new backend requires modifying the dispatch logic. The adapter's job is to translate from a universal task format to the backend's native format.
 
@@ -147,22 +147,22 @@ If the control plane constructs backend-specific payloads, adding a new backend 
 ```typescript
 interface ExecutionTask {
   /** Unique task ID (UUIDv7). Used for idempotency and tracking. */
-  id: string;
+  id: string
 
   /** The job this task belongs to. */
-  jobId: string;
+  jobId: string
 
   /** The agent executing this task. */
-  agentId: string;
+  agentId: string
 
   /** What to do — the core instruction. */
-  instruction: TaskInstruction;
+  instruction: TaskInstruction
 
   /** What the backend needs to know — files, history, memory. */
-  context: TaskContext;
+  context: TaskContext
 
   /** Resource and behavioral limits. */
-  constraints: TaskConstraints;
+  constraints: TaskConstraints
 }
 ```
 
@@ -173,7 +173,7 @@ The instruction is the "what" — a prompt string with optional structured metad
 ```typescript
 interface TaskInstruction {
   /** The primary prompt text. Backend-agnostic natural language. */
-  prompt: string;
+  prompt: string
 
   /**
    * Structured goal type. Helps the backend optimize its approach.
@@ -183,18 +183,18 @@ interface TaskInstruction {
    * 'shell_command': Execute commands and report results.
    * 'research': Gather information, no code changes.
    */
-  goalType: 'code_edit' | 'code_generate' | 'code_review' | 'shell_command' | 'research';
+  goalType: "code_edit" | "code_generate" | "code_review" | "shell_command" | "research"
 
   /** Optional list of target file paths the task should focus on. */
-  targetFiles?: string[];
+  targetFiles?: string[]
 
   /** Previous conversation turns for multi-step tasks. */
-  conversationHistory?: ConversationTurn[];
+  conversationHistory?: ConversationTurn[]
 }
 
 interface ConversationTurn {
-  role: 'user' | 'assistant';
-  content: string;
+  role: "user" | "assistant"
+  content: string
 }
 ```
 
@@ -205,23 +205,23 @@ The context is the "what to know" — information the backend needs to understan
 ```typescript
 interface TaskContext {
   /** Absolute path to the workspace root (mounted PVC). */
-  workspacePath: string;
+  workspacePath: string
 
   /** Agent identity and persona (from IDENTITY.md). */
-  systemPrompt: string;
+  systemPrompt: string
 
   /** Relevant memories retrieved from Qdrant (pre-fetched during hydration). */
-  memories: string[];
+  memories: string[]
 
   /**
    * Files to preload into the backend's context.
    * Key: relative path from workspace root. Value: file content.
    * Only include files critical to the task — don't dump the entire repo.
    */
-  relevantFiles: Record<string, string>;
+  relevantFiles: Record<string, string>
 
   /** Environment variables to expose to the backend (filtered, no secrets by default). */
-  environment: Record<string, string>;
+  environment: Record<string, string>
 }
 ```
 
@@ -232,28 +232,28 @@ The constraints are the "what limits apply" — resource, time, and behavioral b
 ```typescript
 interface TaskConstraints {
   /** Maximum execution time in milliseconds. Backend must self-terminate after this. */
-  timeoutMs: number;
+  timeoutMs: number
 
   /** Maximum tokens the backend may consume (input + output combined). */
-  maxTokens: number;
+  maxTokens: number
 
   /** LLM model to use (backend maps this to its native model identifier). */
-  model: string;
+  model: string
 
   /** Tools the backend is allowed to use. Empty array = no tool use. */
-  allowedTools: string[];
+  allowedTools: string[]
 
   /** Tools the backend must NOT use. Takes precedence over allowedTools. */
-  deniedTools: string[];
+  deniedTools: string[]
 
   /** Maximum number of LLM turns (prevents infinite loops). */
-  maxTurns: number;
+  maxTurns: number
 
   /** Whether the backend may make network requests. */
-  networkAccess: boolean;
+  networkAccess: boolean
 
   /** Whether the backend may execute shell commands. */
-  shellAccess: boolean;
+  shellAccess: boolean
 }
 ```
 
@@ -262,42 +262,45 @@ interface TaskConstraints {
 The adapter translates `ExecutionTask` to the backend's native format:
 
 **Claude Code:**
+
 ```typescript
 // ExecutionTask → claude CLI arguments
 const args = [
-  '--print',                               // Non-interactive
-  '--output-format', 'stream-json',        // Structured streaming output
-  '--model', task.constraints.model,
-  '--max-turns', String(task.constraints.maxTurns),
-  ...task.constraints.allowedTools.flatMap(t => ['--allowedTools', t]),
-  ...task.constraints.deniedTools.flatMap(t => ['--deniedTools', t]),
-];
+  "--print", // Non-interactive
+  "--output-format",
+  "stream-json", // Structured streaming output
+  "--model",
+  task.constraints.model,
+  "--max-turns",
+  String(task.constraints.maxTurns),
+  ...task.constraints.allowedTools.flatMap((t) => ["--allowedTools", t]),
+  ...task.constraints.deniedTools.flatMap((t) => ["--deniedTools", t]),
+]
 
 // Prompt = system prompt + instruction + context
 const prompt = [
   task.context.systemPrompt,
   task.instruction.prompt,
-  ...task.context.memories.map(m => `<memory>${m}</memory>`),
-].join('\n\n');
+  ...task.context.memories.map((m) => `<memory>${m}</memory>`),
+].join("\n\n")
 ```
 
 **Codex (hypothetical):**
+
 ```typescript
 // ExecutionTask → Codex API request body
 const body = {
   instructions: task.instruction.prompt,
   model: task.constraints.model,
   context: {
-    files: Object.entries(task.context.relevantFiles).map(
-      ([path, content]) => ({ path, content })
-    ),
+    files: Object.entries(task.context.relevantFiles).map(([path, content]) => ({ path, content })),
     system_prompt: task.context.systemPrompt,
   },
   limits: {
     max_tokens: task.constraints.maxTokens,
     timeout_seconds: task.constraints.timeoutMs / 1000,
   },
-};
+}
 ```
 
 ### Why Three Parts, Not a Flat Struct?
@@ -323,110 +326,110 @@ An adapter that ignores the distinction still works (it's just TypeScript proper
 ```typescript
 interface ExecutionResult {
   /** The task ID this result corresponds to. */
-  taskId: string;
+  taskId: string
 
   /** Overall execution outcome. */
-  status: ExecutionStatus;
+  status: ExecutionStatus
 
   /** Exit code from the backend process (0 = success). Null if not applicable (API-based backends). */
-  exitCode: number | null;
+  exitCode: number | null
 
   /** Human-readable summary of what was done. Generated by the backend or extracted from output. */
-  summary: string;
+  summary: string
 
   /** Files that were created, modified, or deleted. */
-  fileChanges: FileChange[];
+  fileChanges: FileChange[]
 
   /** Combined stdout from the backend process. */
-  stdout: string;
+  stdout: string
 
   /** Combined stderr from the backend process. */
-  stderr: string;
+  stderr: string
 
   /** Token usage for this execution. */
-  tokenUsage: TokenUsage;
+  tokenUsage: TokenUsage
 
   /** Arbitrary structured artifacts produced by the backend. */
-  artifacts: ExecutionArtifact[];
+  artifacts: ExecutionArtifact[]
 
   /** Wall-clock execution duration in milliseconds. */
-  durationMs: number;
+  durationMs: number
 
   /** Error details if status is 'failed' or 'timed_out'. */
-  error?: ExecutionError;
+  error?: ExecutionError
 }
 
-type ExecutionStatus = 'completed' | 'failed' | 'timed_out' | 'cancelled';
+type ExecutionStatus = "completed" | "failed" | "timed_out" | "cancelled"
 
 interface FileChange {
   /** Relative path from workspace root. */
-  path: string;
+  path: string
 
   /** What happened to the file. */
-  operation: 'created' | 'modified' | 'deleted';
+  operation: "created" | "modified" | "deleted"
 
   /** Unified diff (if available). Null for deletions or when diff isn't captured. */
-  diff: string | null;
+  diff: string | null
 }
 
 interface TokenUsage {
   /** Input tokens consumed. */
-  inputTokens: number;
+  inputTokens: number
 
   /** Output tokens consumed. */
-  outputTokens: number;
+  outputTokens: number
 
   /** Estimated cost in USD (backend-specific pricing). */
-  costUsd: number;
+  costUsd: number
 
   /** Cache read tokens (if the backend supports prompt caching). */
-  cacheReadTokens: number;
+  cacheReadTokens: number
 
   /** Cache creation tokens. */
-  cacheCreationTokens: number;
+  cacheCreationTokens: number
 }
 
 interface ExecutionArtifact {
   /** Artifact type — backends define their own types. */
-  type: string;
+  type: string
 
   /** Artifact name (for display). */
-  name: string;
+  name: string
 
   /** Artifact content. Could be text, JSON, base64-encoded binary, or a file path. */
-  content: string;
+  content: string
 
   /** MIME type of the content. */
-  mimeType: string;
+  mimeType: string
 }
 
 interface ExecutionError {
   /** Error message. */
-  message: string;
+  message: string
 
   /** Error classification for retry decisions (maps to spike #28's ErrorClassification). */
-  classification: 'transient' | 'permanent' | 'timeout' | 'resource';
+  classification: "transient" | "permanent" | "timeout" | "resource"
 
   /** Backend-specific error code. */
-  code?: string;
+  code?: string
 
   /** Whether the task may have produced partial side effects. */
-  partialExecution: boolean;
+  partialExecution: boolean
 }
 ```
 
 ### What Each Backend Populates
 
-| Field | Claude Code | Codex (API) | Aider |
-|---|---|---|---|
-| `exitCode` | Process exit code | `null` | Process exit code |
-| `summary` | Extracted from `result` event in JSON stream | From API response body | Parsed from stdout |
-| `fileChanges` | Parsed from `diff` events or post-execution `git diff` | From API response `file_patches` | Post-execution `git diff` |
-| `stdout` | Captured from subprocess stdout | N/A (empty string) | Captured from subprocess stdout |
-| `stderr` | Captured from subprocess stderr | N/A (empty string) | Captured from subprocess stderr |
-| `tokenUsage` | Parsed from `usage` events in JSON stream | From API response `usage` field | Not available (zeros) |
-| `artifacts` | Screenshots, browser captures from tool use | Code patches as artifacts | None |
-| `durationMs` | Measured by adapter | Measured by adapter | Measured by adapter |
+| Field         | Claude Code                                            | Codex (API)                      | Aider                           |
+| ------------- | ------------------------------------------------------ | -------------------------------- | ------------------------------- |
+| `exitCode`    | Process exit code                                      | `null`                           | Process exit code               |
+| `summary`     | Extracted from `result` event in JSON stream           | From API response body           | Parsed from stdout              |
+| `fileChanges` | Parsed from `diff` events or post-execution `git diff` | From API response `file_patches` | Post-execution `git diff`       |
+| `stdout`      | Captured from subprocess stdout                        | N/A (empty string)               | Captured from subprocess stdout |
+| `stderr`      | Captured from subprocess stderr                        | N/A (empty string)               | Captured from subprocess stderr |
+| `tokenUsage`  | Parsed from `usage` events in JSON stream              | From API response `usage` field  | Not available (zeros)           |
+| `artifacts`   | Screenshots, browser captures from tool use            | Code patches as artifacts        | None                            |
+| `durationMs`  | Measured by adapter                                    | Measured by adapter              | Measured by adapter             |
 
 ### Handling Missing Data
 
@@ -446,6 +449,7 @@ Storing full file contents in the result would be redundant — the files are al
 4. **Lightweight serialization.** Diffs are typically 1-10 KB; full files could be megabytes.
 
 The adapter computes `fileChanges` by either:
+
 - Parsing the backend's native diff output (Claude Code's JSON stream includes diffs).
 - Running `git diff --name-status` before and after execution.
 
@@ -464,27 +468,27 @@ The agent's `model_config` JSONB column (spike #25) already stores model configu
 ```typescript
 interface AgentModelConfig {
   /** Primary execution backend. */
-  backend: string;   // e.g., 'claude-code'
+  backend: string // e.g., 'claude-code'
 
   /** Model to use with the primary backend. */
-  model: string;     // e.g., 'claude-sonnet-4-5-20250929'
+  model: string // e.g., 'claude-sonnet-4-5-20250929'
 
   /** Ordered fallback chain. Tried left-to-right if the primary fails. */
-  fallbackChain: BackendFallback[];
+  fallbackChain: BackendFallback[]
 
   /** Backend-specific configuration overrides. */
-  backendConfig: Record<string, Record<string, unknown>>;
+  backendConfig: Record<string, Record<string, unknown>>
 }
 
 interface BackendFallback {
   /** Backend identifier (must be registered in the BackendRegistry). */
-  backend: string;
+  backend: string
 
   /** Model to use with this fallback backend. */
-  model: string;
+  model: string
 
   /** Error classifications that trigger this fallback. */
-  triggerOn: Array<'transient' | 'permanent' | 'timeout' | 'resource'>;
+  triggerOn: Array<"transient" | "permanent" | "timeout" | "resource">
 }
 ```
 
@@ -523,13 +527,13 @@ async function dispatchTask(
   registry: BackendRegistry,
 ): Promise<ExecutionResult> {
   // 1. Try the primary backend.
-  const primary = registry.get(config.backend);
+  const primary = registry.get(config.backend)
   if (!primary) {
-    throw new PermanentError(`Backend '${config.backend}' not registered`);
+    throw new PermanentError(`Backend '${config.backend}' not registered`)
   }
 
-  const primaryHealth = await primary.healthCheck();
-  if (primaryHealth.status === 'healthy') {
+  const primaryHealth = await primary.healthCheck()
+  if (primaryHealth.status === "healthy") {
     try {
       const handle = await primary.executeTask({
         ...task,
@@ -537,16 +541,16 @@ async function dispatchTask(
           ...task.constraints,
           model: config.model,
         },
-      });
-      return await handle.result();
+      })
+      return await handle.result()
     } catch (err) {
-      const classification = classifyBackendError(err);
-      return tryFallbacks(task, config, registry, classification);
+      const classification = classifyBackendError(err)
+      return tryFallbacks(task, config, registry, classification)
     }
   }
 
   // Primary unhealthy — go straight to fallbacks.
-  return tryFallbacks(task, config, registry, 'resource');
+  return tryFallbacks(task, config, registry, "resource")
 }
 
 async function tryFallbacks(
@@ -557,14 +561,14 @@ async function tryFallbacks(
 ): Promise<ExecutionResult> {
   for (const fallback of config.fallbackChain) {
     if (!fallback.triggerOn.includes(triggerClassification as FallbackTrigger)) {
-      continue;
+      continue
     }
 
-    const backend = registry.get(fallback.backend);
-    if (!backend) continue;
+    const backend = registry.get(fallback.backend)
+    if (!backend) continue
 
-    const health = await backend.healthCheck();
-    if (health.status !== 'healthy') continue;
+    const health = await backend.healthCheck()
+    if (health.status !== "healthy") continue
 
     try {
       const handle = await backend.executeTask({
@@ -573,14 +577,14 @@ async function tryFallbacks(
           ...task.constraints,
           model: fallback.model,
         },
-      });
-      return await handle.result();
+      })
+      return await handle.result()
     } catch {
-      continue; // Try next fallback.
+      continue // Try next fallback.
     }
   }
 
-  throw new Error('All backends failed — primary and all fallbacks exhausted');
+  throw new Error("All backends failed — primary and all fallbacks exhausted")
 }
 ```
 
@@ -617,21 +621,21 @@ The `triggerOn` array lets each fallback specify which error types activate it. 
 
 Claude Code runs as a local subprocess. Running 10 concurrent Claude Code processes on a 2-CPU pod will OOM the node. Codex is an API — it can handle many concurrent requests, but the API has rate limits. Each backend has different concurrency characteristics:
 
-| Backend | Concurrency Model | Practical Limit |
-|---|---|---|
+| Backend                  | Concurrency Model                                  | Practical Limit                    |
+| ------------------------ | -------------------------------------------------- | ---------------------------------- |
 | Claude Code (subprocess) | One process per task. Each consumes 500MB–1GB RAM. | 1–2 concurrent tasks per agent pod |
-| Codex (API) | Stateless HTTP. Rate limited by API provider. | 5–10 concurrent requests |
-| Aider (subprocess) | One process per task. Similar to Claude Code. | 1–2 concurrent tasks per agent pod |
+| Codex (API)              | Stateless HTTP. Rate limited by API provider.      | 5–10 concurrent requests           |
+| Aider (subprocess)       | One process per task. Similar to Claude Code.      | 1–2 concurrent tasks per agent pod |
 
 ### Semaphore Design
 
 ```typescript
 interface BackendCapacity {
   /** Maximum concurrent tasks this backend can handle. */
-  maxConcurrent: number;
+  maxConcurrent: number
 
   /** Current number of active tasks. */
-  activeTasks: number;
+  activeTasks: number
 }
 ```
 
@@ -639,53 +643,53 @@ The BackendRegistry tracks capacity per backend:
 
 ```typescript
 class BackendSemaphore {
-  private active = 0;
+  private active = 0
   private readonly waiters: Array<{
-    resolve: () => void;
-    reject: (err: Error) => void;
-  }> = [];
+    resolve: () => void
+    reject: (err: Error) => void
+  }> = []
 
   constructor(private readonly maxConcurrent: number) {}
 
   async acquire(timeoutMs: number): Promise<SemaphoreRelease> {
     if (this.active < this.maxConcurrent) {
-      this.active++;
-      return { release: () => this.release() };
+      this.active++
+      return { release: () => this.release() }
     }
 
     // Queue the request — wait for a slot to open.
     return new Promise<SemaphoreRelease>((resolve, reject) => {
       const timer = setTimeout(() => {
-        const idx = this.waiters.findIndex(w => w.resolve === wrappedResolve);
-        if (idx !== -1) this.waiters.splice(idx, 1);
-        reject(new Error(`Backend semaphore timeout after ${timeoutMs}ms`));
-      }, timeoutMs);
+        const idx = this.waiters.findIndex((w) => w.resolve === wrappedResolve)
+        if (idx !== -1) this.waiters.splice(idx, 1)
+        reject(new Error(`Backend semaphore timeout after ${timeoutMs}ms`))
+      }, timeoutMs)
 
       const wrappedResolve = (): void => {
-        clearTimeout(timer);
-        this.active++;
-        resolve({ release: () => this.release() });
-      };
+        clearTimeout(timer)
+        this.active++
+        resolve({ release: () => this.release() })
+      }
 
-      this.waiters.push({ resolve: wrappedResolve, reject });
-    });
+      this.waiters.push({ resolve: wrappedResolve, reject })
+    })
   }
 
   private release(): void {
-    this.active--;
-    const next = this.waiters.shift();
+    this.active--
+    const next = this.waiters.shift()
     if (next) {
-      next.resolve();
+      next.resolve()
     }
   }
 
   get available(): number {
-    return this.maxConcurrent - this.active;
+    return this.maxConcurrent - this.active
   }
 }
 
 interface SemaphoreRelease {
-  release(): void;
+  release(): void
 }
 ```
 
@@ -698,20 +702,20 @@ async function dispatchWithWipLimit(
   semaphore: BackendSemaphore,
 ): Promise<ExecutionResult> {
   // Acquire a slot — wait up to 30 seconds.
-  const permit = await semaphore.acquire(30_000);
+  const permit = await semaphore.acquire(30_000)
 
   try {
-    const handle = await backend.executeTask(task);
-    return await handle.result();
+    const handle = await backend.executeTask(task)
+    return await handle.result()
   } finally {
-    permit.release();
+    permit.release()
   }
 }
 ```
 
 ### Why In-Process Semaphore, Not Database Lock?
 
-Agent pods are k8s Jobs with `restartPolicy: Never` (spike #33, #34). Each pod processes one job. The WIP limit is per-backend *within a single pod*. Since each pod is a single process, an in-process semaphore is correct.
+Agent pods are k8s Jobs with `restartPolicy: Never` (spike #33, #34). Each pod processes one job. The WIP limit is per-backend _within a single pod_. Since each pod is a single process, an in-process semaphore is correct.
 
 If future multi-pod agents need cross-pod WIP limits (e.g., "only 3 Claude Code processes across the entire cluster"), the semaphore would be replaced with a PostgreSQL advisory lock or a Redis-based distributed semaphore. That's a future optimization — day one has one job per pod.
 
@@ -719,13 +723,14 @@ If future multi-pod agents need cross-pod WIP limits (e.g., "only 3 Claude Code 
 
 ```typescript
 const DEFAULT_CONCURRENCY: Record<string, number> = {
-  'claude-code': 1,     // Subprocess, memory-heavy
-  'codex': 5,           // API, rate-limit-bound
-  'aider': 1,           // Subprocess, memory-heavy
-};
+  "claude-code": 1, // Subprocess, memory-heavy
+  codex: 5, // API, rate-limit-bound
+  aider: 1, // Subprocess, memory-heavy
+}
 ```
 
 Claude Code defaults to 1 concurrent task because:
+
 1. Each Claude Code process consumes 500MB–1GB of RAM.
 2. Agent pods have a 1Gi memory limit (spec §12.2).
 3. Running 2+ concurrent processes risks OOM kill (exit code 137).
@@ -761,61 +766,61 @@ type OutputEvent =
   | OutputProgressEvent
   | OutputUsageEvent
   | OutputErrorEvent
-  | OutputCompleteEvent;
+  | OutputCompleteEvent
 
 interface OutputTextEvent {
-  type: 'text';
-  timestamp: string;
-  content: string;      // Incremental text (not cumulative)
+  type: "text"
+  timestamp: string
+  content: string // Incremental text (not cumulative)
 }
 
 interface OutputToolUseEvent {
-  type: 'tool_use';
-  timestamp: string;
-  toolName: string;
-  toolInput: Record<string, unknown>;
+  type: "tool_use"
+  timestamp: string
+  toolName: string
+  toolInput: Record<string, unknown>
 }
 
 interface OutputToolResultEvent {
-  type: 'tool_result';
-  timestamp: string;
-  toolName: string;
-  output: string;
-  isError: boolean;
+  type: "tool_result"
+  timestamp: string
+  toolName: string
+  output: string
+  isError: boolean
 }
 
 interface OutputFileChangeEvent {
-  type: 'file_change';
-  timestamp: string;
-  path: string;
-  operation: 'created' | 'modified' | 'deleted';
+  type: "file_change"
+  timestamp: string
+  path: string
+  operation: "created" | "modified" | "deleted"
 }
 
 interface OutputProgressEvent {
-  type: 'progress';
-  timestamp: string;
+  type: "progress"
+  timestamp: string
   /** 0.0 to 1.0, or null if progress is indeterminate. */
-  percent: number | null;
-  message: string;
+  percent: number | null
+  message: string
 }
 
 interface OutputUsageEvent {
-  type: 'usage';
-  timestamp: string;
-  tokenUsage: TokenUsage;
+  type: "usage"
+  timestamp: string
+  tokenUsage: TokenUsage
 }
 
 interface OutputErrorEvent {
-  type: 'error';
-  timestamp: string;
-  message: string;
-  classification: 'transient' | 'permanent' | 'timeout' | 'resource';
+  type: "error"
+  timestamp: string
+  message: string
+  classification: "transient" | "permanent" | "timeout" | "resource"
 }
 
 interface OutputCompleteEvent {
-  type: 'complete';
-  timestamp: string;
-  result: ExecutionResult;
+  type: "complete"
+  timestamp: string
+  result: ExecutionResult
 }
 ```
 
@@ -864,54 +869,52 @@ interface OutputCompleteEvent {
 **Claude Code** natively streams structured JSON events when invoked with `--output-format stream-json`. The adapter parses these into `OutputEvent`:
 
 ```typescript
-async function* parseClaudeCodeStream(
-  subprocess: ChildProcess,
-): AsyncGenerator<OutputEvent> {
-  const rl = readline.createInterface({ input: subprocess.stdout! });
+async function* parseClaudeCodeStream(subprocess: ChildProcess): AsyncGenerator<OutputEvent> {
+  const rl = readline.createInterface({ input: subprocess.stdout! })
 
   for await (const line of rl) {
-    const event = JSON.parse(line);
+    const event = JSON.parse(line)
 
     switch (event.type) {
-      case 'assistant':
+      case "assistant":
         yield {
-          type: 'text',
+          type: "text",
           timestamp: new Date().toISOString(),
           content: event.message.content
-            .filter((b: { type: string }) => b.type === 'text')
+            .filter((b: { type: string }) => b.type === "text")
             .map((b: { text: string }) => b.text)
-            .join(''),
-        };
-        break;
+            .join(""),
+        }
+        break
 
-      case 'tool_use':
+      case "tool_use":
         yield {
-          type: 'tool_use',
+          type: "tool_use",
           timestamp: new Date().toISOString(),
           toolName: event.tool.name,
           toolInput: event.tool.input,
-        };
-        break;
+        }
+        break
 
-      case 'tool_result':
+      case "tool_result":
         yield {
-          type: 'tool_result',
+          type: "tool_result",
           timestamp: new Date().toISOString(),
           toolName: event.tool.name,
-          output: event.tool.output ?? '',
+          output: event.tool.output ?? "",
           isError: event.tool.is_error ?? false,
-        };
-        break;
+        }
+        break
 
-      case 'result':
+      case "result":
         // Final result — collect file changes and yield complete.
-        const fileChanges = await computeFileChanges(subprocess.cwd);
+        const fileChanges = await computeFileChanges(subprocess.cwd)
         yield {
-          type: 'complete',
+          type: "complete",
           timestamp: new Date().toISOString(),
           result: mapToExecutionResult(event, fileChanges),
-        };
-        break;
+        }
+        break
     }
   }
 }
@@ -924,31 +927,31 @@ async function* pollStdout(
   subprocess: ChildProcess,
   intervalMs: number = 1000,
 ): AsyncGenerator<OutputEvent> {
-  let buffer = '';
+  let buffer = ""
 
-  subprocess.stdout!.on('data', (chunk: Buffer) => {
-    buffer += chunk.toString();
-  });
+  subprocess.stdout!.on("data", (chunk: Buffer) => {
+    buffer += chunk.toString()
+  })
 
   while (!subprocess.killed) {
     if (buffer.length > 0) {
       yield {
-        type: 'text',
+        type: "text",
         timestamp: new Date().toISOString(),
         content: buffer,
-      };
-      buffer = '';
+      }
+      buffer = ""
     }
-    await new Promise(r => setTimeout(r, intervalMs));
+    await new Promise((r) => setTimeout(r, intervalMs))
   }
 
   // Flush remaining.
   if (buffer.length > 0) {
     yield {
-      type: 'text',
+      type: "text",
       timestamp: new Date().toISOString(),
       content: buffer,
-    };
+    }
   }
 }
 ```
@@ -993,11 +996,11 @@ async function* pollStdout(
 
 ### Default Timeout Per Backend
 
-| Backend | Default Task Timeout | Rationale |
-|---|---|---|
-| Claude Code | 600s (10 min) | Complex multi-tool tasks can take 5–10 minutes. 10 min is generous but bounded. |
-| Codex | 300s (5 min) | API-based, typically faster. 5 min is more than enough. |
-| Aider | 600s (10 min) | Similar to Claude Code — subprocess-based, complex tasks. |
+| Backend     | Default Task Timeout | Rationale                                                                       |
+| ----------- | -------------------- | ------------------------------------------------------------------------------- |
+| Claude Code | 600s (10 min)        | Complex multi-tool tasks can take 5–10 minutes. 10 min is generous but bounded. |
+| Codex       | 300s (5 min)         | API-based, typically faster. 5 min is more than enough.                         |
+| Aider       | 600s (10 min)        | Similar to Claude Code — subprocess-based, complex tasks.                       |
 
 ### What If Claude Code Takes 10 Minutes?
 
@@ -1049,32 +1052,32 @@ A single global timeout (e.g., "all tasks must complete in 5 minutes") fails bec
 ```typescript
 interface BackendHealthReport {
   /** Backend identifier. */
-  backendId: string;
+  backendId: string
 
   /** Current health status. */
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: "healthy" | "degraded" | "unhealthy"
 
   /** Human-readable reason for non-healthy status. */
-  reason?: string;
+  reason?: string
 
   /** Timestamp of this health check. */
-  checkedAt: string;
+  checkedAt: string
 
   /** Latency of the health check itself (ms). A slow health check suggests degradation. */
-  latencyMs: number;
+  latencyMs: number
 
   /** Backend-specific details. */
-  details: Record<string, unknown>;
+  details: Record<string, unknown>
 }
 ```
 
 ### Three-State Health Model
 
-| Status | Meaning | Dispatcher Behavior |
-|---|---|---|
-| `healthy` | Backend is fully operational. Ready to accept tasks. | Dispatch normally. |
-| `degraded` | Backend is functional but impaired (slow response, reduced capacity, warnings). | Dispatch with caution. Log warning. Consider fallback if available. |
-| `unhealthy` | Backend cannot accept tasks. | Skip. Try fallback chain. |
+| Status      | Meaning                                                                         | Dispatcher Behavior                                                 |
+| ----------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `healthy`   | Backend is fully operational. Ready to accept tasks.                            | Dispatch normally.                                                  |
+| `degraded`  | Backend is functional but impaired (slow response, reduced capacity, warnings). | Dispatch with caution. Log warning. Consider fallback if available. |
+| `unhealthy` | Backend cannot accept tasks.                                                    | Skip. Try fallback chain.                                           |
 
 ### Backend-Specific Health Checks
 
@@ -1194,26 +1197,26 @@ Health checks should be fast (< 5 seconds), but calling them before every task d
 
 ```typescript
 class CachedHealthCheck {
-  private cache: BackendHealthReport | null = null;
-  private readonly ttlMs: number;
+  private cache: BackendHealthReport | null = null
+  private readonly ttlMs: number
 
   constructor(
     private readonly backend: ExecutionBackend,
     ttlMs: number = 30_000, // 30 seconds
   ) {
-    this.ttlMs = ttlMs;
+    this.ttlMs = ttlMs
   }
 
   async check(): Promise<BackendHealthReport> {
     if (this.cache && Date.now() - new Date(this.cache.checkedAt).getTime() < this.ttlMs) {
-      return this.cache;
+      return this.cache
     }
-    this.cache = await this.backend.healthCheck();
-    return this.cache;
+    this.cache = await this.backend.healthCheck()
+    return this.cache
   }
 
   invalidate(): void {
-    this.cache = null;
+    this.cache = null
   }
 }
 ```
@@ -1227,20 +1230,21 @@ The health check feeds the per-backend circuit breaker (analogous to the per-age
 ```typescript
 interface BackendCircuitBreaker {
   /** Number of consecutive failures before tripping. */
-  failureThreshold: number;    // Default: 3
+  failureThreshold: number // Default: 3
 
   /** Window for counting failures. */
-  windowMs: number;            // Default: 5 minutes
+  windowMs: number // Default: 5 minutes
 
   /** Cooldown before allowing a probe request. */
-  cooldownMs: number;          // Default: 60 seconds
+  cooldownMs: number // Default: 60 seconds
 
   /** Current state. */
-  state: 'closed' | 'open' | 'half-open';
+  state: "closed" | "open" | "half-open"
 }
 ```
 
 When the circuit breaker is open:
+
 1. `healthCheck()` returns `unhealthy` immediately (no actual check).
 2. After the cooldown, one "probe" request is allowed (half-open state).
 3. If the probe succeeds, the circuit closes. If it fails, the cooldown restarts.
@@ -1263,27 +1267,27 @@ When the circuit breaker is open:
  */
 export interface ExecutionBackend {
   /** Unique identifier for this backend type (e.g., 'claude-code', 'codex'). */
-  readonly backendId: string;
+  readonly backendId: string
 
   /**
    * Initialize the backend. Called once during agent boot (BOOTING state).
    * Verify binary existence, warm connection pools, validate API keys.
    * Throw if the backend cannot be initialized — this is a fatal error.
    */
-  start(config: Record<string, unknown>): Promise<void>;
+  start(config: Record<string, unknown>): Promise<void>
 
   /**
    * Graceful shutdown. Called during DRAINING state.
    * Kill active subprocesses, close connections, release resources.
    * Must complete within the drain deadline (45 seconds, spike #34).
    */
-  stop(): Promise<void>;
+  stop(): Promise<void>
 
   /**
    * Check if the backend is available and ready to accept tasks.
    * Must complete within 5 seconds. Must not throw — return unhealthy status instead.
    */
-  healthCheck(): Promise<BackendHealthReport>;
+  healthCheck(): Promise<BackendHealthReport>
 
   /**
    * Submit a task for execution. Returns immediately with an ExecutionHandle
@@ -1295,13 +1299,13 @@ export interface ExecutionBackend {
    * @throws if the task cannot be started (invalid config, backend not started).
    *         Does NOT throw for execution failures — those are reported in the result.
    */
-  executeTask(task: ExecutionTask): Promise<ExecutionHandle>;
+  executeTask(task: ExecutionTask): Promise<ExecutionHandle>
 
   /**
    * Report the backend's capabilities. Used by the dispatcher for feature
    * negotiation and backend selection.
    */
-  getCapabilities(): BackendCapabilities;
+  getCapabilities(): BackendCapabilities
 }
 
 /**
@@ -1310,7 +1314,7 @@ export interface ExecutionBackend {
  */
 export interface ExecutionHandle {
   /** The task ID. */
-  readonly taskId: string;
+  readonly taskId: string
 
   /**
    * Async iterable of output events. Yields events as they arrive from
@@ -1319,14 +1323,14 @@ export interface ExecutionHandle {
    *
    * Supports backpressure — the consumer controls the iteration rate.
    */
-  events(): AsyncIterable<OutputEvent>;
+  events(): AsyncIterable<OutputEvent>
 
   /**
    * Await the final result. Resolves when the task completes.
    * If events() is being consumed concurrently, result() resolves
    * when the 'complete' event is emitted.
    */
-  result(): Promise<ExecutionResult>;
+  result(): Promise<ExecutionResult>
 
   /**
    * Cancel the running task. Sends SIGTERM to the subprocess or
@@ -1334,7 +1338,7 @@ export interface ExecutionHandle {
    *
    * @param reason - Human-readable cancellation reason for audit logging.
    */
-  cancel(reason: string): Promise<void>;
+  cancel(reason: string): Promise<void>
 }
 
 /**
@@ -1343,25 +1347,25 @@ export interface ExecutionHandle {
  */
 export interface BackendCapabilities {
   /** Whether the backend supports streaming output events. */
-  supportsStreaming: boolean;
+  supportsStreaming: boolean
 
   /** Whether the backend can modify files in the workspace. */
-  supportsFileEdit: boolean;
+  supportsFileEdit: boolean
 
   /** Whether the backend can execute shell commands. */
-  supportsShellExecution: boolean;
+  supportsShellExecution: boolean
 
   /** Whether the backend reports token usage. */
-  reportsTokenUsage: boolean;
+  reportsTokenUsage: boolean
 
   /** Whether the backend supports cancellation mid-execution. */
-  supportsCancellation: boolean;
+  supportsCancellation: boolean
 
   /** Supported goal types (from TaskInstruction.goalType). */
-  supportedGoalTypes: TaskInstruction['goalType'][];
+  supportedGoalTypes: TaskInstruction["goalType"][]
 
   /** Maximum context window size in tokens (for the backend's default model). */
-  maxContextTokens: number;
+  maxContextTokens: number
 }
 ```
 
@@ -1380,27 +1384,27 @@ export interface BackendCapabilities {
  */
 export interface ExecutionTask {
   /** Unique task ID (UUIDv7). */
-  id: string;
+  id: string
 
   /** The job this task belongs to. */
-  jobId: string;
+  jobId: string
 
   /** The agent executing this task. */
-  agentId: string;
+  agentId: string
 
   /** What to do. */
-  instruction: TaskInstruction;
+  instruction: TaskInstruction
 
   /** What the backend needs to know. */
-  context: TaskContext;
+  context: TaskContext
 
   /** Resource and behavioral limits. */
-  constraints: TaskConstraints;
+  constraints: TaskConstraints
 }
 
 export interface TaskInstruction {
   /** The primary prompt text. Backend-agnostic natural language. */
-  prompt: string;
+  prompt: string
 
   /**
    * Structured goal type.
@@ -1410,61 +1414,61 @@ export interface TaskInstruction {
    * - 'shell_command': Execute commands and report results.
    * - 'research': Gather information, no code changes.
    */
-  goalType: 'code_edit' | 'code_generate' | 'code_review' | 'shell_command' | 'research';
+  goalType: "code_edit" | "code_generate" | "code_review" | "shell_command" | "research"
 
   /** Target file paths the task should focus on. */
-  targetFiles?: string[];
+  targetFiles?: string[]
 
   /** Previous conversation turns for multi-step tasks. */
-  conversationHistory?: ConversationTurn[];
+  conversationHistory?: ConversationTurn[]
 }
 
 export interface ConversationTurn {
-  role: 'user' | 'assistant';
-  content: string;
+  role: "user" | "assistant"
+  content: string
 }
 
 export interface TaskContext {
   /** Absolute path to the workspace root. */
-  workspacePath: string;
+  workspacePath: string
 
   /** Agent identity and persona (system prompt). */
-  systemPrompt: string;
+  systemPrompt: string
 
   /** Relevant memories from Qdrant. */
-  memories: string[];
+  memories: string[]
 
   /** Files to preload. Key: relative path, Value: content. */
-  relevantFiles: Record<string, string>;
+  relevantFiles: Record<string, string>
 
   /** Environment variables to expose. */
-  environment: Record<string, string>;
+  environment: Record<string, string>
 }
 
 export interface TaskConstraints {
   /** Maximum execution time (ms). */
-  timeoutMs: number;
+  timeoutMs: number
 
   /** Maximum tokens (input + output). */
-  maxTokens: number;
+  maxTokens: number
 
   /** LLM model identifier. */
-  model: string;
+  model: string
 
   /** Allowed tools (empty = no tools). */
-  allowedTools: string[];
+  allowedTools: string[]
 
   /** Denied tools (takes precedence over allowed). */
-  deniedTools: string[];
+  deniedTools: string[]
 
   /** Maximum LLM turns. */
-  maxTurns: number;
+  maxTurns: number
 
   /** Whether the backend may make network requests. */
-  networkAccess: boolean;
+  networkAccess: boolean
 
   /** Whether the backend may execute shell commands. */
-  shellAccess: boolean;
+  shellAccess: boolean
 }
 
 // ──────────────────────────────────────────────────
@@ -1473,71 +1477,71 @@ export interface TaskConstraints {
 
 export interface ExecutionResult {
   /** Task ID this result corresponds to. */
-  taskId: string;
+  taskId: string
 
   /** Execution outcome. */
-  status: ExecutionStatus;
+  status: ExecutionStatus
 
   /** Process exit code. Null for API-based backends. */
-  exitCode: number | null;
+  exitCode: number | null
 
   /** Human-readable summary. */
-  summary: string;
+  summary: string
 
   /** Files created, modified, or deleted. */
-  fileChanges: FileChange[];
+  fileChanges: FileChange[]
 
   /** Combined stdout. */
-  stdout: string;
+  stdout: string
 
   /** Combined stderr. */
-  stderr: string;
+  stderr: string
 
   /** Token consumption. */
-  tokenUsage: TokenUsage;
+  tokenUsage: TokenUsage
 
   /** Structured artifacts. */
-  artifacts: ExecutionArtifact[];
+  artifacts: ExecutionArtifact[]
 
   /** Wall-clock duration (ms). */
-  durationMs: number;
+  durationMs: number
 
   /** Error details (if status is 'failed' or 'timed_out'). */
-  error?: ExecutionError;
+  error?: ExecutionError
 }
 
-export type ExecutionStatus = 'completed' | 'failed' | 'timed_out' | 'cancelled';
+export type ExecutionStatus = "completed" | "failed" | "timed_out" | "cancelled"
 
 export interface FileChange {
   /** Relative path from workspace root. */
-  path: string;
-  operation: 'created' | 'modified' | 'deleted';
+  path: string
+  operation: "created" | "modified" | "deleted"
   /** Unified diff. Null for deletions or when unavailable. */
-  diff: string | null;
+  diff: string | null
 }
 
 export interface TokenUsage {
-  inputTokens: number;
-  outputTokens: number;
-  costUsd: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
+  inputTokens: number
+  outputTokens: number
+  costUsd: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
 }
 
 export interface ExecutionArtifact {
-  type: string;
-  name: string;
-  content: string;
-  mimeType: string;
+  type: string
+  name: string
+  content: string
+  mimeType: string
 }
 
 export interface ExecutionError {
-  message: string;
+  message: string
   /** Maps to spike #28's ErrorClassification. */
-  classification: 'transient' | 'permanent' | 'timeout' | 'resource';
-  code?: string;
+  classification: "transient" | "permanent" | "timeout" | "resource"
+  code?: string
   /** Whether the task may have produced partial side effects. */
-  partialExecution: boolean;
+  partialExecution: boolean
 }
 
 // ──────────────────────────────────────────────────
@@ -1552,60 +1556,60 @@ export type OutputEvent =
   | OutputProgressEvent
   | OutputUsageEvent
   | OutputErrorEvent
-  | OutputCompleteEvent;
+  | OutputCompleteEvent
 
 export interface OutputTextEvent {
-  type: 'text';
-  timestamp: string;
-  content: string;
+  type: "text"
+  timestamp: string
+  content: string
 }
 
 export interface OutputToolUseEvent {
-  type: 'tool_use';
-  timestamp: string;
-  toolName: string;
-  toolInput: Record<string, unknown>;
+  type: "tool_use"
+  timestamp: string
+  toolName: string
+  toolInput: Record<string, unknown>
 }
 
 export interface OutputToolResultEvent {
-  type: 'tool_result';
-  timestamp: string;
-  toolName: string;
-  output: string;
-  isError: boolean;
+  type: "tool_result"
+  timestamp: string
+  toolName: string
+  output: string
+  isError: boolean
 }
 
 export interface OutputFileChangeEvent {
-  type: 'file_change';
-  timestamp: string;
-  path: string;
-  operation: 'created' | 'modified' | 'deleted';
+  type: "file_change"
+  timestamp: string
+  path: string
+  operation: "created" | "modified" | "deleted"
 }
 
 export interface OutputProgressEvent {
-  type: 'progress';
-  timestamp: string;
-  percent: number | null;
-  message: string;
+  type: "progress"
+  timestamp: string
+  percent: number | null
+  message: string
 }
 
 export interface OutputUsageEvent {
-  type: 'usage';
-  timestamp: string;
-  tokenUsage: TokenUsage;
+  type: "usage"
+  timestamp: string
+  tokenUsage: TokenUsage
 }
 
 export interface OutputErrorEvent {
-  type: 'error';
-  timestamp: string;
-  message: string;
-  classification: 'transient' | 'permanent' | 'timeout' | 'resource';
+  type: "error"
+  timestamp: string
+  message: string
+  classification: "transient" | "permanent" | "timeout" | "resource"
 }
 
 export interface OutputCompleteEvent {
-  type: 'complete';
-  timestamp: string;
-  result: ExecutionResult;
+  type: "complete"
+  timestamp: string
+  result: ExecutionResult
 }
 
 // ──────────────────────────────────────────────────
@@ -1613,12 +1617,12 @@ export interface OutputCompleteEvent {
 // ──────────────────────────────────────────────────
 
 export interface BackendHealthReport {
-  backendId: string;
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  reason?: string;
-  checkedAt: string;
-  latencyMs: number;
-  details: Record<string, unknown>;
+  backendId: string
+  status: "healthy" | "degraded" | "unhealthy"
+  reason?: string
+  checkedAt: string
+  latencyMs: number
+  details: Record<string, unknown>
 }
 ```
 
@@ -1674,51 +1678,51 @@ The Claude Code adapter is the **reference implementation** — the first backen
 ### Task Translation
 
 ```typescript
-import { spawn, type ChildProcess } from 'node:child_process';
-import { createInterface } from 'node:readline';
+import { spawn, type ChildProcess } from "node:child_process"
+import { createInterface } from "node:readline"
 
 export class ClaudeCodeBackend implements ExecutionBackend {
-  readonly backendId = 'claude-code';
+  readonly backendId = "claude-code"
 
-  private binaryPath = 'claude';
-  private activeProcess: ChildProcess | null = null;
+  private binaryPath = "claude"
+  private activeProcess: ChildProcess | null = null
 
   async start(config: Record<string, unknown>): Promise<void> {
     if (config.binaryPath) {
-      this.binaryPath = config.binaryPath as string;
+      this.binaryPath = config.binaryPath as string
     }
 
     // Verify the binary exists.
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    const execFileAsync = promisify(execFile);
+    const { execFile } = await import("node:child_process")
+    const { promisify } = await import("node:util")
+    const execFileAsync = promisify(execFile)
 
-    const { stdout } = await execFileAsync(this.binaryPath, ['--version'], {
+    const { stdout } = await execFileAsync(this.binaryPath, ["--version"], {
       timeout: 10_000,
-    });
+    })
     // stdout contains version string; log it for diagnostics.
   }
 
   async stop(): Promise<void> {
     if (this.activeProcess && !this.activeProcess.killed) {
-      this.activeProcess.kill('SIGTERM');
+      this.activeProcess.kill("SIGTERM")
 
       await Promise.race([
-        new Promise<void>(resolve => {
-          this.activeProcess!.on('exit', () => resolve());
+        new Promise<void>((resolve) => {
+          this.activeProcess!.on("exit", () => resolve())
         }),
-        new Promise<void>(resolve => setTimeout(resolve, 10_000)),
-      ]);
+        new Promise<void>((resolve) => setTimeout(resolve, 10_000)),
+      ])
 
       if (!this.activeProcess.killed) {
-        this.activeProcess.kill('SIGKILL');
+        this.activeProcess.kill("SIGKILL")
       }
     }
   }
 
   async executeTask(task: ExecutionTask): Promise<ExecutionHandle> {
-    const args = this.buildArgs(task);
-    const prompt = this.buildPrompt(task);
+    const args = this.buildArgs(task)
+    const prompt = this.buildPrompt(task)
 
     const subprocess = spawn(this.binaryPath, [...args, prompt], {
       cwd: task.context.workspacePath,
@@ -1726,63 +1730,66 @@ export class ClaudeCodeBackend implements ExecutionBackend {
         ...process.env,
         ...task.context.environment,
       },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+      stdio: ["pipe", "pipe", "pipe"],
+    })
 
-    this.activeProcess = subprocess;
+    this.activeProcess = subprocess
 
-    return new ClaudeCodeHandle(task.id, subprocess, task.context.workspacePath);
+    return new ClaudeCodeHandle(task.id, subprocess, task.context.workspacePath)
   }
 
   private buildArgs(task: ExecutionTask): string[] {
     const args: string[] = [
-      '--print',
-      '--output-format', 'stream-json',
-      '--model', task.constraints.model,
-      '--max-turns', String(task.constraints.maxTurns),
-    ];
+      "--print",
+      "--output-format",
+      "stream-json",
+      "--model",
+      task.constraints.model,
+      "--max-turns",
+      String(task.constraints.maxTurns),
+    ]
 
     for (const tool of task.constraints.allowedTools) {
-      args.push('--allowedTools', tool);
+      args.push("--allowedTools", tool)
     }
 
     for (const tool of task.constraints.deniedTools) {
-      args.push('--deniedTools', tool);
+      args.push("--deniedTools", tool)
     }
 
-    return args;
+    return args
   }
 
   private buildPrompt(task: ExecutionTask): string {
-    const parts: string[] = [];
+    const parts: string[] = []
 
     // System context.
     if (task.context.systemPrompt) {
-      parts.push(task.context.systemPrompt);
+      parts.push(task.context.systemPrompt)
     }
 
     // Memories.
     for (const memory of task.context.memories) {
-      parts.push(`<memory>\n${memory}\n</memory>`);
+      parts.push(`<memory>\n${memory}\n</memory>`)
     }
 
     // Conversation history.
     if (task.instruction.conversationHistory?.length) {
-      parts.push('Previous conversation:');
+      parts.push("Previous conversation:")
       for (const turn of task.instruction.conversationHistory) {
-        parts.push(`${turn.role}: ${turn.content}`);
+        parts.push(`${turn.role}: ${turn.content}`)
       }
     }
 
     // Target files.
     if (task.instruction.targetFiles?.length) {
-      parts.push(`Focus on these files: ${task.instruction.targetFiles.join(', ')}`);
+      parts.push(`Focus on these files: ${task.instruction.targetFiles.join(", ")}`)
     }
 
     // The instruction itself.
-    parts.push(task.instruction.prompt);
+    parts.push(task.instruction.prompt)
 
-    return parts.join('\n\n');
+    return parts.join("\n\n")
   }
 
   getCapabilities(): BackendCapabilities {
@@ -1793,17 +1800,26 @@ export class ClaudeCodeBackend implements ExecutionBackend {
       reportsTokenUsage: true,
       supportsCancellation: true,
       supportedGoalTypes: [
-        'code_edit', 'code_generate', 'code_review',
-        'shell_command', 'research',
+        "code_edit",
+        "code_generate",
+        "code_review",
+        "shell_command",
+        "research",
       ],
       maxContextTokens: 200_000,
-    };
+    }
   }
 
   // healthCheck() — see Question 8 for full implementation.
   async healthCheck(): Promise<BackendHealthReport> {
     // ... (see Question 8)
-    return { backendId: 'claude-code', status: 'healthy', checkedAt: new Date().toISOString(), latencyMs: 0, details: {} };
+    return {
+      backendId: "claude-code",
+      status: "healthy",
+      checkedAt: new Date().toISOString(),
+      latencyMs: 0,
+      details: {},
+    }
   }
 }
 ```
@@ -1812,139 +1828,145 @@ export class ClaudeCodeBackend implements ExecutionBackend {
 
 ```typescript
 class ClaudeCodeHandle implements ExecutionHandle {
-  readonly taskId: string;
-  private subprocess: ChildProcess;
-  private workspacePath: string;
-  private resultPromise: Promise<ExecutionResult>;
-  private resolveResult!: (result: ExecutionResult) => void;
-  private collectedEvents: OutputEvent[] = [];
-  private stdout = '';
-  private stderr = '';
-  private startTime: number;
+  readonly taskId: string
+  private subprocess: ChildProcess
+  private workspacePath: string
+  private resultPromise: Promise<ExecutionResult>
+  private resolveResult!: (result: ExecutionResult) => void
+  private collectedEvents: OutputEvent[] = []
+  private stdout = ""
+  private stderr = ""
+  private startTime: number
 
   constructor(taskId: string, subprocess: ChildProcess, workspacePath: string) {
-    this.taskId = taskId;
-    this.subprocess = subprocess;
-    this.workspacePath = workspacePath;
-    this.startTime = Date.now();
+    this.taskId = taskId
+    this.subprocess = subprocess
+    this.workspacePath = workspacePath
+    this.startTime = Date.now()
 
-    this.resultPromise = new Promise<ExecutionResult>(resolve => {
-      this.resolveResult = resolve;
-    });
+    this.resultPromise = new Promise<ExecutionResult>((resolve) => {
+      this.resolveResult = resolve
+    })
 
     // Capture stderr.
-    subprocess.stderr?.on('data', (chunk: Buffer) => {
-      this.stderr += chunk.toString();
-    });
+    subprocess.stderr?.on("data", (chunk: Buffer) => {
+      this.stderr += chunk.toString()
+    })
   }
 
   async *events(): AsyncIterable<OutputEvent> {
-    const rl = createInterface({ input: this.subprocess.stdout! });
+    const rl = createInterface({ input: this.subprocess.stdout! })
 
     for await (const line of rl) {
-      if (!line.trim()) continue;
+      if (!line.trim()) continue
 
-      let parsed: Record<string, unknown>;
+      let parsed: Record<string, unknown>
       try {
-        parsed = JSON.parse(line);
+        parsed = JSON.parse(line)
       } catch {
         // Non-JSON line — emit as raw text.
-        this.stdout += line + '\n';
+        this.stdout += line + "\n"
         const event: OutputTextEvent = {
-          type: 'text',
+          type: "text",
           timestamp: new Date().toISOString(),
           content: line,
-        };
-        this.collectedEvents.push(event);
-        yield event;
-        continue;
+        }
+        this.collectedEvents.push(event)
+        yield event
+        continue
       }
 
-      const events = this.mapClaudeEvent(parsed);
+      const events = this.mapClaudeEvent(parsed)
       for (const event of events) {
-        this.collectedEvents.push(event);
-        yield event;
+        this.collectedEvents.push(event)
+        yield event
 
-        if (event.type === 'complete') {
-          this.resolveResult(event.result);
+        if (event.type === "complete") {
+          this.resolveResult(event.result)
         }
       }
     }
 
     // Process exited — if we haven't yielded a 'complete' event, build one.
-    const exitCode = await new Promise<number | null>(resolve => {
-      this.subprocess.on('exit', (code) => resolve(code));
-    });
+    const exitCode = await new Promise<number | null>((resolve) => {
+      this.subprocess.on("exit", (code) => resolve(code))
+    })
 
-    if (!this.collectedEvents.some(e => e.type === 'complete')) {
-      const result = await this.buildFinalResult(exitCode);
+    if (!this.collectedEvents.some((e) => e.type === "complete")) {
+      const result = await this.buildFinalResult(exitCode)
       const event: OutputCompleteEvent = {
-        type: 'complete',
+        type: "complete",
         timestamp: new Date().toISOString(),
         result,
-      };
-      this.collectedEvents.push(event);
-      this.resolveResult(result);
-      yield event;
+      }
+      this.collectedEvents.push(event)
+      this.resolveResult(result)
+      yield event
     }
   }
 
   async result(): Promise<ExecutionResult> {
-    return this.resultPromise;
+    return this.resultPromise
   }
 
   async cancel(reason: string): Promise<void> {
     if (!this.subprocess.killed) {
-      this.subprocess.kill('SIGTERM');
+      this.subprocess.kill("SIGTERM")
 
       await Promise.race([
-        new Promise<void>(r => this.subprocess.on('exit', () => r())),
-        new Promise<void>(r => setTimeout(r, 10_000)),
-      ]);
+        new Promise<void>((r) => this.subprocess.on("exit", () => r())),
+        new Promise<void>((r) => setTimeout(r, 10_000)),
+      ])
 
       if (!this.subprocess.killed) {
-        this.subprocess.kill('SIGKILL');
+        this.subprocess.kill("SIGKILL")
       }
     }
 
     this.resolveResult({
       taskId: this.taskId,
-      status: 'cancelled',
+      status: "cancelled",
       exitCode: this.subprocess.exitCode,
       summary: `Cancelled: ${reason}`,
       fileChanges: [],
       stdout: this.stdout,
       stderr: this.stderr,
-      tokenUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+      tokenUsage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      },
       artifacts: [],
       durationMs: Date.now() - this.startTime,
-    });
+    })
   }
 
   private mapClaudeEvent(event: Record<string, unknown>): OutputEvent[] {
     // Map Claude Code's stream-json events to OutputEvent.
     // Implementation depends on the exact Claude Code JSON stream format.
     // See Question 6 for the mapping logic.
-    const events: OutputEvent[] = [];
-    const type = event.type as string;
+    const events: OutputEvent[] = []
+    const type = event.type as string
 
-    if (type === 'assistant' && event.message) {
-      const message = event.message as { content: Array<{ type: string; text?: string }> };
+    if (type === "assistant" && event.message) {
+      const message = event.message as { content: Array<{ type: string; text?: string }> }
       const text = message.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text ?? '')
-        .join('');
+        .filter((b) => b.type === "text")
+        .map((b) => b.text ?? "")
+        .join("")
       if (text) {
-        this.stdout += text;
-        events.push({ type: 'text', timestamp: new Date().toISOString(), content: text });
+        this.stdout += text
+        events.push({ type: "text", timestamp: new Date().toISOString(), content: text })
       }
     }
 
-    if (type === 'result') {
-      const result = event as Record<string, unknown>;
-      const usage = result.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    if (type === "result") {
+      const result = event as Record<string, unknown>
+      const usage = result.usage as { input_tokens?: number; output_tokens?: number } | undefined
       events.push({
-        type: 'usage',
+        type: "usage",
         timestamp: new Date().toISOString(),
         tokenUsage: {
           inputTokens: usage?.input_tokens ?? 0,
@@ -1953,63 +1975,74 @@ class ClaudeCodeHandle implements ExecutionHandle {
           cacheReadTokens: 0,
           cacheCreationTokens: 0,
         },
-      });
+      })
     }
 
-    return events;
+    return events
   }
 
   private async buildFinalResult(exitCode: number | null): Promise<ExecutionResult> {
     // Compute file changes via git diff.
-    const fileChanges = await this.computeFileChanges();
+    const fileChanges = await this.computeFileChanges()
 
     // Extract token usage from collected events.
-    const usageEvent = this.collectedEvents.find(e => e.type === 'usage') as OutputUsageEvent | undefined;
+    const usageEvent = this.collectedEvents.find((e) => e.type === "usage") as
+      | OutputUsageEvent
+      | undefined
 
     return {
       taskId: this.taskId,
-      status: exitCode === 0 ? 'completed' : 'failed',
+      status: exitCode === 0 ? "completed" : "failed",
       exitCode,
       summary: this.stdout.slice(-500), // Last 500 chars as summary fallback.
       fileChanges,
       stdout: this.stdout,
       stderr: this.stderr,
       tokenUsage: usageEvent?.tokenUsage ?? {
-        inputTokens: 0, outputTokens: 0, costUsd: 0,
-        cacheReadTokens: 0, cacheCreationTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
       },
       artifacts: [],
       durationMs: Date.now() - this.startTime,
-      error: exitCode !== 0 ? {
-        message: this.stderr || `Process exited with code ${exitCode}`,
-        classification: exitCode === 137 ? 'resource' : 'permanent',
-        partialExecution: true,
-      } : undefined,
-    };
+      error:
+        exitCode !== 0
+          ? {
+              message: this.stderr || `Process exited with code ${exitCode}`,
+              classification: exitCode === 137 ? "resource" : "permanent",
+              partialExecution: true,
+            }
+          : undefined,
+    }
   }
 
   private async computeFileChanges(): Promise<FileChange[]> {
     // Use git diff to detect workspace changes.
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    const exec = promisify(execFile);
+    const { execFile } = await import("node:child_process")
+    const { promisify } = await import("node:util")
+    const exec = promisify(execFile)
 
     try {
-      const { stdout } = await exec('git', ['diff', '--name-status', 'HEAD'], {
+      const { stdout } = await exec("git", ["diff", "--name-status", "HEAD"], {
         cwd: this.workspacePath,
         timeout: 5_000,
-      });
+      })
 
-      return stdout.trim().split('\n').filter(Boolean).map(line => {
-        const [status, ...pathParts] = line.split('\t');
-        const path = pathParts.join('\t');
-        const operation: FileChange['operation'] =
-          status === 'A' ? 'created' :
-          status === 'D' ? 'deleted' : 'modified';
-        return { path, operation, diff: null };
-      });
+      return stdout
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const [status, ...pathParts] = line.split("\t")
+          const path = pathParts.join("\t")
+          const operation: FileChange["operation"] =
+            status === "A" ? "created" : status === "D" ? "deleted" : "modified"
+          return { path, operation, diff: null }
+        })
     } catch {
-      return []; // Git not available or not a repo.
+      return [] // Git not available or not a repo.
     }
   }
 }
@@ -2032,9 +2065,9 @@ The BackendRegistry is a singleton that manages all registered backends. It prov
  * registered explicitly at startup, not discovered at runtime.
  */
 export class BackendRegistry {
-  private readonly backends = new Map<string, ExecutionBackend>();
-  private readonly healthChecks = new Map<string, CachedHealthCheck>();
-  private readonly semaphores = new Map<string, BackendSemaphore>();
+  private readonly backends = new Map<string, ExecutionBackend>()
+  private readonly healthChecks = new Map<string, CachedHealthCheck>()
+  private readonly semaphores = new Map<string, BackendSemaphore>()
 
   /**
    * Register a backend. Called during agent boot (BOOTING state).
@@ -2046,20 +2079,14 @@ export class BackendRegistry {
     maxConcurrent: number,
   ): Promise<void> {
     if (this.backends.has(backend.backendId)) {
-      throw new Error(`Backend '${backend.backendId}' already registered`);
+      throw new Error(`Backend '${backend.backendId}' already registered`)
     }
 
-    await backend.start(config);
+    await backend.start(config)
 
-    this.backends.set(backend.backendId, backend);
-    this.healthChecks.set(
-      backend.backendId,
-      new CachedHealthCheck(backend, 30_000),
-    );
-    this.semaphores.set(
-      backend.backendId,
-      new BackendSemaphore(maxConcurrent),
-    );
+    this.backends.set(backend.backendId, backend)
+    this.healthChecks.set(backend.backendId, new CachedHealthCheck(backend, 30_000))
+    this.semaphores.set(backend.backendId, new BackendSemaphore(maxConcurrent))
   }
 
   /**
@@ -2067,65 +2094,62 @@ export class BackendRegistry {
    * Returns undefined if not registered.
    */
   get(backendId: string): ExecutionBackend | undefined {
-    return this.backends.get(backendId);
+    return this.backends.get(backendId)
   }
 
   /**
    * Get the cached health status for a backend.
    */
   async getHealth(backendId: string): Promise<BackendHealthReport | undefined> {
-    const check = this.healthChecks.get(backendId);
-    return check?.check();
+    const check = this.healthChecks.get(backendId)
+    return check?.check()
   }
 
   /**
    * Get all backend health statuses (for dashboard/API).
    */
   async getAllHealth(): Promise<BackendHealthReport[]> {
-    const reports: BackendHealthReport[] = [];
+    const reports: BackendHealthReport[] = []
     for (const [, check] of this.healthChecks) {
-      reports.push(await check.check());
+      reports.push(await check.check())
     }
-    return reports;
+    return reports
   }
 
   /**
    * Acquire a WIP semaphore permit for a backend.
    */
-  async acquirePermit(
-    backendId: string,
-    timeoutMs: number,
-  ): Promise<SemaphoreRelease> {
-    const semaphore = this.semaphores.get(backendId);
+  async acquirePermit(backendId: string, timeoutMs: number): Promise<SemaphoreRelease> {
+    const semaphore = this.semaphores.get(backendId)
     if (!semaphore) {
-      throw new Error(`No semaphore for backend '${backendId}'`);
+      throw new Error(`No semaphore for backend '${backendId}'`)
     }
-    return semaphore.acquire(timeoutMs);
+    return semaphore.acquire(timeoutMs)
   }
 
   /**
    * Invalidate the health cache for a backend (e.g., after a failure).
    */
   invalidateHealth(backendId: string): void {
-    this.healthChecks.get(backendId)?.invalidate();
+    this.healthChecks.get(backendId)?.invalidate()
   }
 
   /**
    * List all registered backend IDs.
    */
   list(): string[] {
-    return [...this.backends.keys()];
+    return [...this.backends.keys()]
   }
 
   /**
    * Graceful shutdown — stop all backends.
    */
   async stopAll(): Promise<void> {
-    const stops = [...this.backends.values()].map(b => b.stop());
-    await Promise.allSettled(stops);
-    this.backends.clear();
-    this.healthChecks.clear();
-    this.semaphores.clear();
+    const stops = [...this.backends.values()].map((b) => b.stop())
+    await Promise.allSettled(stops)
+    this.backends.clear()
+    this.healthChecks.clear()
+    this.semaphores.clear()
   }
 }
 ```
@@ -2134,30 +2158,28 @@ export class BackendRegistry {
 
 ```typescript
 // In the agent pod's boot sequence (BOOTING → HYDRATING):
-const registry = new BackendRegistry();
+const registry = new BackendRegistry()
 
 // Register backends based on agent config.
-const agentConfig = await loadAgentConfig(agentId);
-const modelConfig = agentConfig.model_config as AgentModelConfig;
+const agentConfig = await loadAgentConfig(agentId)
+const modelConfig = agentConfig.model_config as AgentModelConfig
 
 // Primary backend.
-const primaryBackend = createBackend(modelConfig.backend);
-const backendSpecificConfig = modelConfig.backendConfig[modelConfig.backend] ?? {};
-const maxConcurrent = (backendSpecificConfig.maxConcurrent as number)
-  ?? DEFAULT_CONCURRENCY[modelConfig.backend]
-  ?? 1;
+const primaryBackend = createBackend(modelConfig.backend)
+const backendSpecificConfig = modelConfig.backendConfig[modelConfig.backend] ?? {}
+const maxConcurrent =
+  (backendSpecificConfig.maxConcurrent as number) ?? DEFAULT_CONCURRENCY[modelConfig.backend] ?? 1
 
-await registry.register(primaryBackend, backendSpecificConfig, maxConcurrent);
+await registry.register(primaryBackend, backendSpecificConfig, maxConcurrent)
 
 // Fallback backends.
 for (const fallback of modelConfig.fallbackChain) {
-  const fb = createBackend(fallback.backend);
-  const fbConfig = modelConfig.backendConfig[fallback.backend] ?? {};
-  const fbConcurrent = (fbConfig.maxConcurrent as number)
-    ?? DEFAULT_CONCURRENCY[fallback.backend]
-    ?? 1;
+  const fb = createBackend(fallback.backend)
+  const fbConfig = modelConfig.backendConfig[fallback.backend] ?? {}
+  const fbConcurrent =
+    (fbConfig.maxConcurrent as number) ?? DEFAULT_CONCURRENCY[fallback.backend] ?? 1
 
-  await registry.register(fb, fbConfig, fbConcurrent);
+  await registry.register(fb, fbConfig, fbConcurrent)
 }
 ```
 
@@ -2166,15 +2188,15 @@ for (const fallback of modelConfig.fallbackChain) {
 ```typescript
 function createBackend(backendId: string): ExecutionBackend {
   switch (backendId) {
-    case 'claude-code':
-      return new ClaudeCodeBackend();
+    case "claude-code":
+      return new ClaudeCodeBackend()
     // Future:
     // case 'codex':
     //   return new CodexBackend();
     // case 'aider':
     //   return new AiderBackend();
     default:
-      throw new Error(`Unknown backend: '${backendId}'`);
+      throw new Error(`Unknown backend: '${backendId}'`)
   }
 }
 ```
@@ -2237,20 +2259,20 @@ sequenceDiagram
 
 ### Health Check Timing
 
-| Backend | What's Checked | Expected Latency | Timeout |
-|---|---|---|---|
-| Claude Code | Binary exists (`fs.access`), `--version` runs, API key present | 50–200ms | 5s |
-| Codex | `/models` API endpoint responds, auth valid | 200–500ms | 5s |
-| Aider | Binary exists, `--version` runs, API key present | 50–200ms | 5s |
+| Backend     | What's Checked                                                 | Expected Latency | Timeout |
+| ----------- | -------------------------------------------------------------- | ---------------- | ------- |
+| Claude Code | Binary exists (`fs.access`), `--version` runs, API key present | 50–200ms         | 5s      |
+| Codex       | `/models` API endpoint responds, auth valid                    | 200–500ms        | 5s      |
+| Aider       | Binary exists, `--version` runs, API key present               | 50–200ms         | 5s      |
 
 ### Health Check Frequency
 
-| Trigger | When |
-|---|---|
-| **Pre-dispatch** | Before every task dispatch (uses cache, not a real check) |
-| **Cache miss** | When cached result is > 30 seconds old |
-| **Post-failure** | After a task fails (cache invalidated, forces fresh check) |
-| **Dashboard poll** | Every 15 seconds (via `getAllHealth()` API endpoint) |
+| Trigger            | When                                                       |
+| ------------------ | ---------------------------------------------------------- |
+| **Pre-dispatch**   | Before every task dispatch (uses cache, not a real check)  |
+| **Cache miss**     | When cached result is > 30 seconds old                     |
+| **Post-failure**   | After a task fails (cache invalidated, forces fresh check) |
+| **Dashboard poll** | Every 15 seconds (via `getAllHealth()` API endpoint)       |
 
 ### Circuit Breaker States
 
@@ -2287,57 +2309,59 @@ stateDiagram-v2
 
 ```typescript
 class BackendCircuitBreaker {
-  private failures: number[] = []; // Timestamps of failures
-  private state: 'closed' | 'open' | 'half-open' = 'closed';
-  private openedAt: number = 0;
+  private failures: number[] = [] // Timestamps of failures
+  private state: "closed" | "open" | "half-open" = "closed"
+  private openedAt: number = 0
 
-  private readonly failureThreshold: number;
-  private readonly windowMs: number;
-  private readonly cooldownMs: number;
+  private readonly failureThreshold: number
+  private readonly windowMs: number
+  private readonly cooldownMs: number
 
-  constructor(config: {
-    failureThreshold?: number;
-    windowMs?: number;
-    cooldownMs?: number;
-  } = {}) {
-    this.failureThreshold = config.failureThreshold ?? 3;
-    this.windowMs = config.windowMs ?? 5 * 60 * 1000;
-    this.cooldownMs = config.cooldownMs ?? 60 * 1000;
+  constructor(
+    config: {
+      failureThreshold?: number
+      windowMs?: number
+      cooldownMs?: number
+    } = {},
+  ) {
+    this.failureThreshold = config.failureThreshold ?? 3
+    this.windowMs = config.windowMs ?? 5 * 60 * 1000
+    this.cooldownMs = config.cooldownMs ?? 60 * 1000
   }
 
   isOpen(): boolean {
-    if (this.state === 'closed') return false;
+    if (this.state === "closed") return false
 
-    if (this.state === 'open') {
+    if (this.state === "open") {
       // Check if cooldown has elapsed.
       if (Date.now() - this.openedAt >= this.cooldownMs) {
-        this.state = 'half-open';
-        return false; // Allow one probe.
+        this.state = "half-open"
+        return false // Allow one probe.
       }
-      return true;
+      return true
     }
 
     // half-open: allow one probe.
-    return false;
+    return false
   }
 
   recordFailure(): void {
-    const now = Date.now();
-    this.failures.push(now);
+    const now = Date.now()
+    this.failures.push(now)
 
     // Prune old failures outside the window.
-    this.failures = this.failures.filter(t => now - t < this.windowMs);
+    this.failures = this.failures.filter((t) => now - t < this.windowMs)
 
     if (this.failures.length >= this.failureThreshold) {
-      this.state = 'open';
-      this.openedAt = now;
+      this.state = "open"
+      this.openedAt = now
     }
   }
 
   recordSuccess(): void {
-    if (this.state === 'half-open') {
-      this.state = 'closed';
-      this.failures = [];
+    if (this.state === "half-open") {
+      this.state = "closed"
+      this.failures = []
     }
   }
 }

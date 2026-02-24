@@ -103,10 +103,7 @@ export async function loadCheckpoint(jobId: string, db: Kysely<Database>): Promi
 /**
  * Load agent identity, skills, and persona from the database.
  */
-export async function loadIdentity(
-  agentId: string,
-  db: Kysely<Database>,
-): Promise<AgentIdentity> {
+export async function loadIdentity(agentId: string, db: Kysely<Database>): Promise<AgentIdentity> {
   const agent = await db
     .selectFrom("agent")
     .select([

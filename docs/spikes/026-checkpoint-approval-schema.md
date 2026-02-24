@@ -1863,7 +1863,7 @@ export function validateCheckpoint(
 
 **Rationale:**
 
-- **Audit trail.** A job might go through multiple approval gates in its lifetime (approve deploy, then approve DNS change, then approve certificate rotation). Each gate produces a separate approval_request. Columns on the job table can only represent the _current_ approval.
+- **Audit trail.** A job might go through multiple approval gates in its lifetime (approve deploy, then approve DNS change, then approve certificate rotation). Each gate produces a separate approval*request. Columns on the job table can only represent the \_current* approval.
 - **Separation of concerns.** The job table tracks job state. The approval_request table tracks approval state. They have different lifecycles: a job persists forever; an approval request is consumed and becomes historical.
 - **Clean queries.** "Show me all pending approvals for user X" is a simple query on approval_request. Adding this to the job table would require filtering by status + approval columns.
 
