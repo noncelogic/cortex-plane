@@ -120,25 +120,35 @@ describe("buildPod", () => {
     expect(pod.spec?.containers).toHaveLength(2)
     const pw = pod.spec?.containers.find((c) => c.name === "playwright")
     expect(pw).toBeDefined()
-    expect(pw?.image).toBe("mcr.microsoft.com/playwright:latest")
+    expect(pw?.image).toBe("noncelogic/cortex-playwright-sidecar:latest")
     expect(pw?.ports?.[0]?.containerPort).toBe(9222)
+    expect(pw?.command).toEqual(["node", "/opt/entrypoint.mjs"])
   })
 
-  it("playwright sidecar has correct resources", () => {
+  it("playwright sidecar has correct resources with 2Gi RAM cap", () => {
     const pod = buildPod({ ...baseConfig, playwrightEnabled: true })
     const pw = pod.spec?.containers.find((c) => c.name === "playwright")
-    expect(pw?.resources?.requests?.cpu).toBe("1000m")
-    expect(pw?.resources?.requests?.memory).toBe("1Gi")
+    expect(pw?.resources?.requests?.cpu).toBe("500m")
+    expect(pw?.resources?.requests?.memory).toBe("512Mi")
     expect(pw?.resources?.limits?.cpu).toBe("2000m")
     expect(pw?.resources?.limits?.memory).toBe("2Gi")
   })
 
-  it("playwright sidecar has same security context pattern", () => {
+  it("playwright sidecar has security context with capabilities dropped", () => {
     const pod = buildPod({ ...baseConfig, playwrightEnabled: true })
     const pw = pod.spec?.containers.find((c) => c.name === "playwright")
-    expect(pw?.securityContext?.readOnlyRootFilesystem).toBe(true)
+    expect(pw?.securityContext?.readOnlyRootFilesystem).toBe(false)
     expect(pw?.securityContext?.allowPrivilegeEscalation).toBe(false)
     expect(pw?.securityContext?.capabilities?.drop).toEqual(["ALL"])
+  })
+
+  it("playwright sidecar has readiness and startup probes on /json/version", () => {
+    const pod = buildPod({ ...baseConfig, playwrightEnabled: true })
+    const pw = pod.spec?.containers.find((c) => c.name === "playwright")
+    expect(pw?.readinessProbe?.httpGet?.path).toBe("/json/version")
+    expect(pw?.readinessProbe?.httpGet?.port).toBe(9222)
+    expect(pw?.startupProbe?.httpGet?.path).toBe("/json/version")
+    expect(pw?.startupProbe?.httpGet?.port).toBe(9222)
   })
 
   it("playwright sidecar has /dev/shm emptyDir mount", () => {
@@ -148,6 +158,12 @@ describe("buildPod", () => {
     expect(shm?.mountPath).toBe("/dev/shm")
     const shmVol = pod.spec?.volumes?.find((v) => v.name === "dshm")
     expect(shmVol?.emptyDir?.medium).toBe("Memory")
+  })
+
+  it("playwright sidecar tmp volume has size limit", () => {
+    const pod = buildPod({ ...baseConfig, playwrightEnabled: true })
+    const tmpVol = pod.spec?.volumes?.find((v) => v.name === "tmp-playwright")
+    expect(tmpVol?.emptyDir?.sizeLimit).toBe("500Mi")
   })
 
   it("uses custom namespace when provided", () => {

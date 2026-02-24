@@ -23,6 +23,7 @@
     "@cortex/shared": "workspace:*",
     "@fastify/env": "^5.0.0",
     "@fastify/websocket": "^11.0.0",
+    "@kubernetes/client-node": "^1.4.0",
     "@qdrant/js-client-rest": "^1.12.0",
     "fastify": "^5.2.0",
     "graphile-worker": "^0.16.0",
