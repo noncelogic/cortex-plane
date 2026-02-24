@@ -1,4 +1,11 @@
 import type { FastifyInstance } from "fastify"
+import type { Runner } from "graphile-worker"
+
+declare module "fastify" {
+  interface FastifyInstance {
+    worker: Runner
+  }
+}
 
 export function healthRoutes(app: FastifyInstance): void {
   app.get("/healthz", async (_request, reply) => {
@@ -6,7 +13,10 @@ export function healthRoutes(app: FastifyInstance): void {
   })
 
   app.get("/readyz", async (_request, reply) => {
-    // TODO: check PostgreSQL and Graphile Worker connectivity
-    return reply.send({ status: "ok" })
+    const workerReady = app.worker !== undefined
+    if (!workerReady) {
+      return reply.status(503).send({ status: "not_ready", worker: false })
+    }
+    return reply.send({ status: "ok", worker: true })
   })
 }

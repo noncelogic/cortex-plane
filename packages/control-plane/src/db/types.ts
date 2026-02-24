@@ -1,6 +1,5 @@
-import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely"
-
 import type { AgentStatus, ApprovalStatus, JobStatus } from "@cortex/shared"
+import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely"
 
 // ---------------------------------------------------------------------------
 // Table: agent
@@ -11,9 +10,21 @@ export interface AgentTable {
   slug: string
   role: string
   description: string | null
-  model_config: ColumnType<Record<string, unknown>, Record<string, unknown> | undefined, Record<string, unknown>>
-  skill_config: ColumnType<Record<string, unknown>, Record<string, unknown> | undefined, Record<string, unknown>>
-  resource_limits: ColumnType<Record<string, unknown>, Record<string, unknown> | undefined, Record<string, unknown>>
+  model_config: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  skill_config: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  resource_limits: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
   channel_permissions: ColumnType<
     Record<string, unknown>,
     Record<string, unknown> | undefined,
@@ -48,7 +59,11 @@ export interface ChannelMappingTable {
   user_account_id: string
   channel_type: string
   channel_user_id: string
-  metadata: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null>
+  metadata: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
   created_at: ColumnType<Date, Date | undefined, never>
 }
 
@@ -63,7 +78,11 @@ export interface SessionTable {
   agent_id: string
   user_account_id: string
   status: ColumnType<string, string | undefined, string>
-  metadata: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null>
+  metadata: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, never>
 }
