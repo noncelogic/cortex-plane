@@ -113,7 +113,16 @@ template:
           - name: cdp
             containerPort: 9222
             protocol: TCP
+          - name: vnc
+            containerPort: 5900
+            protocol: TCP
+          - name: websockify
+            containerPort: 6080
+            protocol: TCP
         command: ["node", "/opt/entrypoint.mjs"]
+        env:
+          - name: VNC_ENABLED
+            value: "true"
         resources:
           requests:
             cpu: 500m

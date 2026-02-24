@@ -79,7 +79,12 @@ function buildPod(config: AgentDeploymentConfig): k8s.V1Pod {
       name: "playwright",
       image: "noncelogic/cortex-playwright-sidecar:latest",
       command: ["node", "/opt/entrypoint.mjs"],
-      ports: [{ containerPort: 9222, name: "cdp", protocol: "TCP" }],
+      ports: [
+        { containerPort: 9222, name: "cdp", protocol: "TCP" },
+        { containerPort: 5900, name: "vnc", protocol: "TCP" },
+        { containerPort: 6080, name: "websockify", protocol: "TCP" },
+      ],
+      env: [{ name: "VNC_ENABLED", value: "true" }],
       resources: {
         requests: { cpu: "500m", memory: "512Mi" },
         limits: { cpu: "2000m", memory: "2Gi" },

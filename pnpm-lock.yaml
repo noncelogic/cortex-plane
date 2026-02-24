@@ -127,6 +127,9 @@ importers:
       pino:
         specifier: ^9.6.0
         version: 9.14.0
+      ws:
+        specifier: ^8.19.0
+        version: 8.19.0
     devDependencies:
       '@cortex/config':
         specifier: workspace:*
@@ -134,6 +137,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.0
         version: 8.16.0
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       embedded-postgres:
         specifier: 18.2.0-beta.16
         version: 18.2.0-beta.16
