@@ -1,0 +1,31 @@
+{
+  "name": "@cortex/agent-cdp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "playwright-core": "^1.52.0"
+  },
+  "devDependencies": {
+    "@cortex/config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.0.0"
+  }
+}

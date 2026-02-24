@@ -77,16 +77,29 @@ function buildPod(config: AgentDeploymentConfig): k8s.V1Pod {
   if (config.playwrightEnabled) {
     containers.push({
       name: "playwright",
-      image: "mcr.microsoft.com/playwright:latest",
+      image: "noncelogic/cortex-playwright-sidecar:latest",
+      command: ["node", "/opt/entrypoint.mjs"],
       ports: [{ containerPort: 9222, name: "cdp", protocol: "TCP" }],
       resources: {
-        requests: { cpu: "1000m", memory: "1Gi" },
+        requests: { cpu: "500m", memory: "512Mi" },
         limits: { cpu: "2000m", memory: "2Gi" },
       },
       securityContext: {
         allowPrivilegeEscalation: false,
-        readOnlyRootFilesystem: true,
+        readOnlyRootFilesystem: false,
         capabilities: { drop: ["ALL"] },
+      },
+      readinessProbe: {
+        httpGet: { path: "/json/version", port: 9222 },
+        initialDelaySeconds: 5,
+        periodSeconds: 10,
+        timeoutSeconds: 3,
+        failureThreshold: 3,
+      },
+      startupProbe: {
+        httpGet: { path: "/json/version", port: 9222 },
+        periodSeconds: 3,
+        failureThreshold: 20,
       },
       volumeMounts: [
         { name: "workspace", mountPath: "/workspace", subPath: config.name },
@@ -97,7 +110,7 @@ function buildPod(config: AgentDeploymentConfig): k8s.V1Pod {
 
     volumes.push(
       { name: "dshm", emptyDir: { medium: "Memory", sizeLimit: "256Mi" } },
-      { name: "tmp-playwright", emptyDir: {} },
+      { name: "tmp-playwright", emptyDir: { sizeLimit: "500Mi" } },
     )
   }
 

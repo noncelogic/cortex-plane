@@ -1,0 +1,30 @@
+# ==============================================================================
+# Playwright CDP Sidecar
+# Runs headless Chromium with Chrome DevTools Protocol on port 9222.
+# Used as a sidecar container in agent pods for browser automation.
+# ==============================================================================
+FROM mcr.microsoft.com/playwright:v1.52.0-noble
+
+USER root
+
+# Remove unnecessary browsers — only Chromium is needed for CDP
+RUN rm -rf /ms-playwright/firefox-* /ms-playwright/webkit-*
+
+# Create non-root user matching pod security context (uid 1000)
+RUN groupadd -g 2000 playwright && \
+    useradd -u 1000 -g 2000 -m -s /bin/sh playwright
+
+# Workspace directory shared with core-agent via PVC
+RUN mkdir -p /workspace && chown 1000:2000 /workspace
+
+# Install a tiny entrypoint that launches Chromium with CDP
+COPY deploy/docker/playwright-entrypoint.mjs /opt/entrypoint.mjs
+
+USER 1000
+
+EXPOSE 9222
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:9222/json/version').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+
+ENTRYPOINT ["node", "/opt/entrypoint.mjs"]
