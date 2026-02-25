@@ -130,29 +130,23 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         }
       }
 
-      // ── Step 3: Resolve backend ──
-      const backendId =
+      // ── Step 3: Build ExecutionTask (needed for routing) ──
+      const task = buildExecutionTask(job, agent, agentConfig)
+
+      // ── Step 4: Resolve backend via router (failover-aware) or direct lookup ──
+      const preferredBackendId =
         typeof agentConfig.backendId === "string"
           ? agentConfig.backendId
           : undefined
-      const backend = backendId ? registry.get(backendId) : registry.getDefault()
+      const { backend, providerId } = registry.routeTask(task, preferredBackendId)
 
-      if (!backend) {
-        throw new Error(
-          `No execution backend available${backendId ? ` (requested: ${backendId})` : ""}`,
-        )
-      }
-
-      // ── Step 4: Acquire semaphore permit ──
+      // ── Step 5: Acquire semaphore permit ──
       const permit = await registry.acquirePermit(backend.backendId, SEMAPHORE_TIMEOUT_MS)
 
       let handle: ExecutionHandle | undefined
       let bufferWriter: BufferWriter | undefined
 
       try {
-        // ── Step 5: Build ExecutionTask ──
-        const task = buildExecutionTask(job, agent, agentConfig)
-
         // ── Step 6: Initialize JSONL session buffer ──
         if (sessionBufferFactory) {
           bufferWriter = sessionBufferFactory(jobId, agent.id)
@@ -188,7 +182,15 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         // ── Step 9: Await final result ──
         const result = await handle.result()
 
-        // ── Step 10: Map status and persist result ──
+        // ── Step 10: Record outcome for circuit breaker ──
+        const success = result.status === "completed"
+        registry.recordOutcome(
+          providerId,
+          success,
+          result.error?.classification,
+        )
+
+        // ── Step 11: Map status and persist result ──
         const jobStatus = mapExecutionStatus(result.status)
 
         await db
