@@ -27,6 +27,8 @@ import type {
   OutputUsageEvent,
   TokenUsage,
 } from "@cortex/shared"
+import { trace } from "@opentelemetry/api"
+import { CortexAttributes } from "@cortex/shared/tracing"
 
 const execFile = promisify(execFileCb)
 
@@ -403,6 +405,16 @@ class ClaudeCodeHandle implements ExecutionHandle {
         costUsd: 0,
         cacheReadTokens: 0,
         cacheCreationTokens: 0,
+      }
+
+      // Record token usage as span attributes for observability
+      const activeSpan = trace.getActiveSpan()
+      if (activeSpan) {
+        activeSpan.setAttribute(CortexAttributes.TOKEN_INPUT, tokenUsage.inputTokens)
+        activeSpan.setAttribute(CortexAttributes.TOKEN_OUTPUT, tokenUsage.outputTokens)
+        activeSpan.setAttribute(CortexAttributes.TOKEN_CACHE_READ, tokenUsage.cacheReadTokens)
+        activeSpan.setAttribute(CortexAttributes.TOKEN_CACHE_CREATION, tokenUsage.cacheCreationTokens)
+        activeSpan.setAttribute(CortexAttributes.TOKEN_COST_USD, tokenUsage.costUsd)
       }
 
       events.push({
