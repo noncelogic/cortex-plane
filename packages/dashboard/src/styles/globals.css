@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cortex-50: #f0f7ff;
+  --color-cortex-100: #e0effe;
+  --color-cortex-200: #bae0fd;
+  --color-cortex-300: #7cc8fc;
+  --color-cortex-400: #36adf8;
+  --color-cortex-500: #0c93e9;
+  --color-cortex-600: #0074c7;
+  --color-cortex-700: #015ca1;
+  --color-cortex-800: #064f85;
+  --color-cortex-900: #0b426e;
+  --color-cortex-950: #072a49;
+
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+}
