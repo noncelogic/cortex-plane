@@ -1,4 +1,18 @@
 export {
+  CircuitBreaker,
+  DEFAULT_CIRCUIT_BREAKER_CONFIG,
+  type CircuitBreakerConfig,
+  type CircuitState,
+  type CircuitStats,
+} from "./circuit-breaker.js"
+export {
+  ProviderRouter,
+  type ProviderEntry,
+  type RouteResult,
+  type RoutingEvent,
+  type RoutingEventListener,
+} from "./provider-router.js"
+export {
   BackendRegistry,
   BackendSemaphore,
   CachedHealthCheck,
