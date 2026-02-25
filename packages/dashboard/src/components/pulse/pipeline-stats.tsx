@@ -1,25 +1,63 @@
-interface StatProps {
+import type { ContentPipelineStats } from "@/lib/api-client"
+import { duration } from "@/lib/format"
+
+interface StatCardProps {
+  icon: string
   label: string
-  value: number
+  value: string | number
+  iconColor: string
+  iconBg: string
 }
 
-function Stat({ label, value }: StatProps): React.JSX.Element {
+function StatCard({ icon, label, value, iconColor, iconBg }: StatCardProps): React.JSX.Element {
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900 p-4 text-center">
-      <p className="text-2xl font-bold text-gray-100">{value}</p>
-      <p className="text-xs text-gray-500">{label}</p>
+    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
+      <div className={`flex size-10 items-center justify-center rounded-lg ${iconBg}`}>
+        <span className={`material-symbols-outlined text-xl ${iconColor}`}>{icon}</span>
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-text-main dark:text-white">{value}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      </div>
     </div>
   )
 }
 
-export function PipelineStats(): React.JSX.Element {
-  // TODO: fetch from API
+interface PipelineStatsProps {
+  stats: ContentPipelineStats
+}
+
+export function PipelineStats({ stats }: PipelineStatsProps): React.JSX.Element {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <Stat label="Drafts" value={0} />
-      <Stat label="In Review" value={0} />
-      <Stat label="Published" value={0} />
-      <Stat label="Rejected" value={0} />
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatCard
+        icon="article"
+        label="Total Pieces"
+        value={stats.totalPieces}
+        iconColor="text-blue-500"
+        iconBg="bg-blue-50 dark:bg-blue-900/20"
+      />
+      <StatCard
+        icon="publish"
+        label="Published Today"
+        value={stats.publishedToday}
+        iconColor="text-emerald-500"
+        iconBg="bg-emerald-50 dark:bg-emerald-900/20"
+      />
+      <StatCard
+        icon="schedule"
+        label="Avg Review Time"
+        value={duration(stats.avgReviewTimeMs)}
+        iconColor="text-amber-500"
+        iconBg="bg-amber-50 dark:bg-amber-900/20"
+      />
+      <StatCard
+        icon="pending_actions"
+        label="Pending Review"
+        value={stats.pendingReview}
+        iconColor="text-purple-500"
+        iconBg="bg-purple-50 dark:bg-purple-900/20"
+      />
     </div>
   )
 }

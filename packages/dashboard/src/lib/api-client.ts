@@ -345,6 +345,36 @@ export async function syncMemory(
 }
 
 // ---------------------------------------------------------------------------
+// Content pipeline types
+// ---------------------------------------------------------------------------
+
+export type ContentStatus = "DRAFT" | "IN_REVIEW" | "QUEUED" | "PUBLISHED"
+
+export type ContentType = "blog" | "social" | "newsletter" | "report"
+
+export interface ContentPiece {
+  id: string
+  title: string
+  body: string
+  type: ContentType
+  status: ContentStatus
+  agentId: string
+  agentName: string
+  wordCount: number
+  createdAt: string
+  updatedAt?: string
+  publishedAt?: string
+  channel?: string
+}
+
+export interface ContentPipelineStats {
+  totalPieces: number
+  publishedToday: number
+  avgReviewTimeMs: number
+  pendingReview: number
+}
+
+// ---------------------------------------------------------------------------
 // Browser observation types
 // ---------------------------------------------------------------------------
 
@@ -390,6 +420,43 @@ export interface Screenshot {
   thumbnailUrl: string
   fullUrl: string
   dimensions: { width: number; height: number }
+}
+
+// ---------------------------------------------------------------------------
+// Content pipeline endpoint functions
+// ---------------------------------------------------------------------------
+
+export async function listContent(params?: {
+  status?: ContentStatus
+  type?: ContentType
+  agentId?: string
+  limit?: number
+  offset?: number
+}): Promise<{ content: ContentPiece[]; pagination: Pagination }> {
+  const search = new URLSearchParams()
+  if (params?.status) search.set("status", params.status)
+  if (params?.type) search.set("type", params.type)
+  if (params?.agentId) search.set("agentId", params.agentId)
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/content${qs ? `?${qs}` : ""}`)
+}
+
+export async function publishContent(
+  contentId: string,
+  channel: string,
+): Promise<{ contentId: string; status: "published"; publishedAt: string }> {
+  return apiFetch(`/content/${contentId}/publish`, {
+    method: "POST",
+    body: { channel },
+  })
+}
+
+export async function archiveContent(
+  contentId: string,
+): Promise<{ contentId: string; status: "archived" }> {
+  return apiFetch(`/content/${contentId}/archive`, { method: "POST" })
 }
 
 // ---------------------------------------------------------------------------
