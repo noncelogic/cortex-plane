@@ -9,11 +9,17 @@ export function PageHeader({ title, backHref }: PageHeaderProps): React.JSX.Elem
   return (
     <div className="flex items-center gap-3">
       {backHref && (
-        <Link href={backHref} className="text-sm text-gray-400 hover:text-gray-200">
-          &larr; Back
+        <Link
+          href={backHref}
+          className="flex items-center gap-1 text-sm text-text-muted hover:text-primary transition-colors"
+        >
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+          Back
         </Link>
       )}
-      <h1 className="text-2xl font-bold text-gray-100">{title}</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight text-text-main dark:text-white">
+        {title}
+      </h1>
     </div>
   )
 }

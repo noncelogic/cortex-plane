@@ -1,11 +1,5 @@
-import { JobTable } from "@/components/jobs/job-table"
-import { PageHeader } from "@/components/layout/page-header"
+import { RoutePlaceholder } from "@/components/layout/route-placeholder"
 
 export default function JobsPage(): React.JSX.Element {
-  return (
-    <main className="space-y-6">
-      <PageHeader title="Job History" />
-      <JobTable />
-    </main>
-  )
+  return <RoutePlaceholder title="Jobs" icon="list_alt" />
 }

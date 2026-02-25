@@ -1,11 +1,5 @@
-import { ApprovalList } from "@/components/approvals/approval-list"
-import { PageHeader } from "@/components/layout/page-header"
+import { RoutePlaceholder } from "@/components/layout/route-placeholder"
 
 export default function ApprovalsPage(): React.JSX.Element {
-  return (
-    <main className="space-y-6">
-      <PageHeader title="Approvals" />
-      <ApprovalList />
-    </main>
-  )
+  return <RoutePlaceholder title="Approvals" icon="verified_user" />
 }
