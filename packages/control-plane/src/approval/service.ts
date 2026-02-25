@@ -23,8 +23,9 @@ import {
   type CreateApprovalRequest,
   type ApprovalDecisionResult,
 } from "@cortex/shared"
-import type { Database, ApprovalRequest } from "../db/types.js"
+import type { Database, ApprovalRequest, ApprovalAuditLog } from "../db/types.js"
 import { generateApprovalToken, hashApprovalToken, isValidTokenFormat } from "./token.js"
+import { createAuditEntry, type AuditActorMetadata, type AuditEntry } from "./audit.js"
 
 export interface ApprovalServiceDeps {
   db: Kysely<Database>
@@ -135,6 +136,7 @@ export class ApprovalService {
     decidedBy: string,
     channel: string,
     reason?: string,
+    actorMetadata?: AuditActorMetadata,
   ): Promise<ApprovalDecisionResult> {
     // Fetch the request
     const request = await this.db
@@ -229,17 +231,33 @@ export class ApprovalService {
       await this.workerUtils.addJob("agent_execute", { jobId }, { maxAttempts: 1 })
     }
 
-    // Audit log
+    // Audit log with chained hash for tamper evidence
+    const auditDetails: Record<string, unknown> = {
+      decision,
+      reason: reason ?? null,
+    }
+    if (actorMetadata) {
+      auditDetails.actor = actorMetadata
+
+      // Build chained audit entry
+      const previousHash = await this.getLastAuditHash(approvalRequestId)
+      const auditEntry = createAuditEntry(
+        approvalRequestId,
+        decision,
+        actorMetadata,
+        previousHash,
+      )
+      auditDetails.entry_hash = auditEntry.entryHash
+      auditDetails.previous_hash = auditEntry.previousHash
+    }
+
     await this.writeAuditLog({
       approvalRequestId,
       jobId: request.job_id,
       eventType: "request_decided",
       actorUserId: decidedBy,
       actorChannel: channel,
-      details: {
-        decision,
-        reason: reason ?? null,
-      },
+      details: auditDetails,
     })
 
     return {
@@ -259,6 +277,7 @@ export class ApprovalService {
     decidedBy: string,
     channel: string,
     reason?: string,
+    actorMetadata?: AuditActorMetadata,
   ): Promise<ApprovalDecisionResult> {
     if (!isValidTokenFormat(plaintextToken)) {
       return { success: false, error: "invalid_token_format" }
@@ -277,7 +296,7 @@ export class ApprovalService {
       return { success: false, error: "not_found" }
     }
 
-    return this.decide(request.id, decision, decidedBy, channel, reason)
+    return this.decide(request.id, decision, decidedBy, channel, reason, actorMetadata)
   }
 
   /**
@@ -439,9 +458,44 @@ export class ApprovalService {
     return query.execute()
   }
 
+  /**
+   * Get the audit trail for an approval request.
+   * Returns all audit log entries ordered chronologically.
+   */
+  async getAuditTrail(approvalRequestId: string): Promise<ApprovalAuditLog[]> {
+    return this.db
+      .selectFrom("approval_audit_log")
+      .selectAll()
+      .where("approval_request_id", "=", approvalRequestId)
+      .orderBy("created_at", "asc")
+      .execute()
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Get the hash from the last audit entry for chaining.
+   */
+  private async getLastAuditHash(approvalRequestId: string): Promise<string | null> {
+    try {
+      const last = await this.db
+        .selectFrom("approval_audit_log")
+        .select("details")
+        .where("approval_request_id", "=", approvalRequestId)
+        .orderBy("created_at", "desc")
+        .executeTakeFirst()
+
+      if (last?.details && typeof last.details === "object") {
+        const hash = (last.details as Record<string, unknown>).entry_hash
+        if (typeof hash === "string") return hash
+      }
+    } catch {
+      // Non-fatal
+    }
+    return null
+  }
 
   private async writeAuditLog(entry: {
     approvalRequestId: string
