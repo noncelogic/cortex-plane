@@ -1,6 +1,7 @@
 {
   "extends": "@cortex/config/tsconfig.nextjs.json",
   "compilerOptions": {
+    "lib": ["es2024", "dom", "dom.iterable"],
     "paths": {
       "@/*": ["./src/*"]
     },
