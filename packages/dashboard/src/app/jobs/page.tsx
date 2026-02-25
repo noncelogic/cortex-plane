@@ -1,126 +1,25 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
-
 import { JobCard } from "@/components/jobs/job-card"
 import { JobDetailDrawer } from "@/components/jobs/job-detail-drawer"
 import { JobTable } from "@/components/jobs/job-table"
 import { Skeleton } from "@/components/layout/skeleton"
-import { useApiQuery } from "@/hooks/use-api"
-import type { JobStatus, JobSummary } from "@/lib/api-client"
-import { listJobs } from "@/lib/api-client"
-
-// ---------------------------------------------------------------------------
-// Mock data for development (until API is live)
-// ---------------------------------------------------------------------------
-
-function generateMockJobs(): JobSummary[] {
-  const statuses: JobStatus[] = [
-    "COMPLETED",
-    "COMPLETED",
-    "COMPLETED",
-    "FAILED",
-    "RUNNING",
-    "PENDING",
-    "SCHEDULED",
-    "RETRYING",
-    "TIMED_OUT",
-    "WAITING_FOR_APPROVAL",
-    "DEAD_LETTER",
-    "COMPLETED",
-    "COMPLETED",
-    "FAILED",
-    "RUNNING",
-    "COMPLETED",
-    "COMPLETED",
-    "COMPLETED",
-    "FAILED",
-    "COMPLETED",
-    "RUNNING",
-    "PENDING",
-    "COMPLETED",
-    "COMPLETED",
-    "SCHEDULED",
-  ]
-  const types = ["inference", "tool-call", "pipeline", "batch", "scheduled"]
-  const agents = [
-    "agt-a1b2c3d4",
-    "agt-e5f6g7h8",
-    "agt-i9j0k1l2",
-    "agt-m3n4o5p6",
-    "agt-q7r8s9t0",
-  ]
-  const now = Date.now()
-
-  return statuses.map((status, i) => {
-    const createdAt = new Date(now - (i + 1) * 1_800_000 - Math.random() * 3_600_000)
-    const durationMs = 15_000 + Math.floor(Math.random() * 300_000)
-    const completedAt =
-      status === "RUNNING" || status === "PENDING" || status === "SCHEDULED"
-        ? undefined
-        : new Date(createdAt.getTime() + durationMs).toISOString()
-
-    return {
-      id: `job-${String(i + 1).padStart(4, "0")}-${Math.random().toString(36).slice(2, 10)}`,
-      agentId: agents[i % agents.length]!,
-      status,
-      type: types[i % types.length]!,
-      createdAt: createdAt.toISOString(),
-      updatedAt: new Date(createdAt.getTime() + durationMs).toISOString(),
-      completedAt,
-      error:
-        status === "FAILED"
-          ? "Model inference timeout — upstream provider returned 504"
-          : status === "DEAD_LETTER"
-            ? "Max retry attempts exceeded (3/3)"
-            : undefined,
-    }
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Status summary helper
-// ---------------------------------------------------------------------------
-
-function statusCounts(jobs: JobSummary[]): { running: number; failed: number; completed: number } {
-  let running = 0
-  let failed = 0
-  let completed = 0
-  for (const j of jobs) {
-    if (j.status === "RUNNING") running++
-    else if (j.status === "FAILED" || j.status === "DEAD_LETTER") failed++
-    else if (j.status === "COMPLETED") completed++
-  }
-  return { running, failed, completed }
-}
+import { useJobsPage } from "@/hooks/use-jobs-page"
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function JobsPage(): React.JSX.Element {
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
-
-  // Fetch from API; fall back to mock data
-  const { data, isLoading, error, refetch } = useApiQuery(
-    () => listJobs({ limit: 100 }),
-    [],
-  )
-
-  const jobs: JobSummary[] = useMemo(() => {
-    if (data?.jobs && data.jobs.length > 0) return data.jobs
-    // Fall back to mock data during development
-    if (error || (!isLoading && (!data?.jobs || data.jobs.length === 0))) {
-      return generateMockJobs()
-    }
-    return data?.jobs ?? []
-  }, [data, error, isLoading])
-
-  const counts = useMemo(() => statusCounts(jobs), [jobs])
-
-  const handleRefresh = useCallback(() => {
-    void refetch()
-  }, [refetch])
+  const {
+    jobs,
+    counts,
+    selectedJobId,
+    setSelectedJobId,
+    isLoading,
+    error,
+    handleRefresh,
+  } = useJobsPage()
 
   // Loading skeleton
   if (isLoading && jobs.length === 0) {

@@ -62,7 +62,7 @@ describe("API Client", () => {
   describe("successful requests", () => {
     it("listAgents returns agents and pagination", async () => {
       const body = {
-        agents: [{ id: "a1", name: "Agent 1", slug: "a1", role: "test" }],
+        agents: [{ id: "a1", name: "Agent 1", slug: "a1", role: "test", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" }],
         pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
       }
       mockFetchResponse(body)
@@ -78,7 +78,7 @@ describe("API Client", () => {
     })
 
     it("getAgent fetches by ID", async () => {
-      mockFetchResponse({ id: "agent-1", name: "Test Agent" })
+      mockFetchResponse({ id: "agent-1", name: "Test Agent", slug: "test-agent", role: "tester", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" })
 
       const result = await getAgent("agent-1")
 
@@ -146,7 +146,7 @@ describe("API Client", () => {
   describe("API key header", () => {
     it("sends X-API-Key when env is set", async () => {
       vi.stubEnv("NEXT_PUBLIC_CORTEX_API_KEY", "test-key-123")
-      mockFetchResponse({ id: "a1" })
+      mockFetchResponse({ id: "a1", name: "A1", slug: "a1", role: "test", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" })
 
       await getAgent("a1")
 
@@ -155,7 +155,7 @@ describe("API Client", () => {
     })
 
     it("omits X-API-Key when env is not set", async () => {
-      mockFetchResponse({ id: "a1" })
+      mockFetchResponse({ id: "a1", name: "A1", slug: "a1", role: "test", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" })
 
       await getAgent("a1")
 
