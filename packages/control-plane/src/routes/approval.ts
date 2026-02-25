@@ -1,19 +1,23 @@
 /**
  * Approval REST Routes
  *
- * POST /jobs/:jobId/approval       — Create an approval request
- * POST /approval/:id/decide        — Approve or reject by request ID
- * POST /approval/token/decide      — Approve or reject by plaintext token
- * GET  /approvals                   — List approval requests (with filters)
- * GET  /approvals/:id               — Get a single approval request
- * GET  /approvals/stream            — SSE stream for real-time approval events
+ * POST /jobs/:jobId/approval       — Create an approval request (requires: operator)
+ * POST /approval/:id/decide        — Approve or reject by request ID (requires: approver)
+ * POST /approval/token/decide      — Approve or reject by plaintext token (requires: approver)
+ * GET  /approvals                   — List approval requests (requires: auth)
+ * GET  /approvals/:id               — Get a single approval request (requires: auth)
+ * GET  /approvals/:id/audit         — Get audit trail for an approval (requires: auth)
+ * GET  /approvals/stream            — SSE stream for real-time approval events (requires: auth)
  */
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
+import type { FastifyInstance, FastifyRequest, FastifyReply, preHandlerHookHandler } from "fastify"
 
 import type { ApprovalService } from "../approval/service.js"
+import { buildActorMetadata } from "../approval/audit.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import type { ApprovalStatus } from "@cortex/shared"
+import type { AuthConfig, AuthenticatedRequest } from "../middleware/types.js"
+import { createRequireAuth, createRequireRole } from "../middleware/auth.js"
 
 // ---------------------------------------------------------------------------
 // Route types
@@ -38,7 +42,6 @@ interface DecideParams {
 
 interface DecideBody {
   decision: "APPROVED" | "REJECTED"
-  decidedBy: string
   channel?: string
   reason?: string
 }
@@ -46,7 +49,6 @@ interface DecideBody {
 interface TokenDecideBody {
   token: string
   decision: "APPROVED" | "REJECTED"
-  decidedBy: string
   channel?: string
   reason?: string
 }
@@ -66,18 +68,25 @@ interface ListQuery {
 export interface ApprovalRouteDeps {
   approvalService: ApprovalService
   sseManager?: SSEConnectionManager
+  authConfig: AuthConfig
 }
 
 export function approvalRoutes(deps: ApprovalRouteDeps) {
-  const { approvalService, sseManager } = deps
+  const { approvalService, sseManager, authConfig } = deps
+
+  const requireAuth: preHandlerHookHandler = createRequireAuth(authConfig)
+  const requireApprover: preHandlerHookHandler = createRequireRole("approver")
+  const requireOperator: preHandlerHookHandler = createRequireRole("operator")
 
   return function register(app: FastifyInstance): void {
     // -----------------------------------------------------------------
     // POST /jobs/:jobId/approval — Create an approval request
+    // Requires: auth + operator role
     // -----------------------------------------------------------------
     app.post<{ Params: CreateApprovalParams; Body: CreateApprovalBody }>(
       "/jobs/:jobId/approval",
       {
+        preHandler: [requireAuth, requireOperator],
         schema: {
           params: {
             type: "object",
@@ -145,10 +154,13 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
 
     // -----------------------------------------------------------------
     // POST /approval/:id/decide — Decide by request ID
+    // Requires: auth + approver role
+    // decidedBy is derived from the authenticated principal
     // -----------------------------------------------------------------
     app.post<{ Params: DecideParams; Body: DecideBody }>(
       "/approval/:id/decide",
       {
+        preHandler: [requireAuth, requireApprover],
         schema: {
           params: {
             type: "object",
@@ -161,11 +173,10 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
             type: "object",
             properties: {
               decision: { type: "string", enum: ["APPROVED", "REJECTED"] },
-              decidedBy: { type: "string" },
               channel: { type: "string" },
               reason: { type: "string", maxLength: 1000 },
             },
-            required: ["decision", "decidedBy"],
+            required: ["decision"],
           },
         },
       },
@@ -174,14 +185,23 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
         reply: FastifyReply,
       ) => {
         const { id } = request.params
-        const { decision, decidedBy, channel, reason } = request.body
+        const { decision, channel, reason } = request.body
+        const principal = (request as AuthenticatedRequest).principal
+
+        // Build full actor metadata from authenticated principal
+        const actor = buildActorMetadata(
+          principal,
+          request.ip,
+          request.headers["user-agent"] ?? "unknown",
+        )
 
         const result = await approvalService.decide(
           id,
           decision,
-          decidedBy,
+          principal.userId,
           channel ?? "api",
           reason,
+          actor,
         )
 
         if (!result.success) {
@@ -204,7 +224,7 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
             state: decision === "APPROVED" ? "RUNNING" : "FAILED",
             approvalRequestId: id,
             decision,
-            decidedBy,
+            decidedBy: principal.userId,
           })
         }
 
@@ -218,21 +238,23 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
 
     // -----------------------------------------------------------------
     // POST /approval/token/decide — Decide by plaintext token
+    // Requires: auth + approver role
+    // decidedBy is derived from the authenticated principal
     // -----------------------------------------------------------------
     app.post<{ Body: TokenDecideBody }>(
       "/approval/token/decide",
       {
+        preHandler: [requireAuth, requireApprover],
         schema: {
           body: {
             type: "object",
             properties: {
               token: { type: "string", minLength: 1 },
               decision: { type: "string", enum: ["APPROVED", "REJECTED"] },
-              decidedBy: { type: "string" },
               channel: { type: "string" },
               reason: { type: "string", maxLength: 1000 },
             },
-            required: ["token", "decision", "decidedBy"],
+            required: ["token", "decision"],
           },
         },
       },
@@ -240,14 +262,22 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
         request: FastifyRequest<{ Body: TokenDecideBody }>,
         reply: FastifyReply,
       ) => {
-        const { token, decision, decidedBy, channel, reason } = request.body
+        const { token, decision, channel, reason } = request.body
+        const principal = (request as AuthenticatedRequest).principal
+
+        const actor = buildActorMetadata(
+          principal,
+          request.ip,
+          request.headers["user-agent"] ?? "unknown",
+        )
 
         const result = await approvalService.decideByToken(
           token,
           decision,
-          decidedBy,
+          principal.userId,
           channel ?? "api",
           reason,
+          actor,
         )
 
         if (!result.success) {
@@ -272,10 +302,12 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
 
     // -----------------------------------------------------------------
     // GET /approvals — List approval requests
+    // Requires: auth (any role)
     // -----------------------------------------------------------------
     app.get<{ Querystring: ListQuery }>(
       "/approvals",
       {
+        preHandler: [requireAuth],
         schema: {
           querystring: {
             type: "object",
@@ -310,10 +342,12 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
 
     // -----------------------------------------------------------------
     // GET /approvals/:id — Get single approval request
+    // Requires: auth (any role)
     // -----------------------------------------------------------------
     app.get<{ Params: { id: string } }>(
       "/approvals/:id",
       {
+        preHandler: [requireAuth],
         schema: {
           params: {
             type: "object",
@@ -337,10 +371,39 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
     )
 
     // -----------------------------------------------------------------
+    // GET /approvals/:id/audit — Get audit trail for an approval
+    // Requires: auth (any role)
+    // -----------------------------------------------------------------
+    app.get<{ Params: { id: string } }>(
+      "/approvals/:id/audit",
+      {
+        preHandler: [requireAuth],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+            },
+            required: ["id"],
+          },
+        },
+      },
+      async (
+        request: FastifyRequest<{ Params: { id: string } }>,
+        reply: FastifyReply,
+      ) => {
+        const auditEntries = await approvalService.getAuditTrail(request.params.id)
+        return reply.status(200).send({ audit: auditEntries })
+      },
+    )
+
+    // -----------------------------------------------------------------
     // GET /approvals/stream — SSE for real-time approval events
+    // Requires: auth (validated on connection setup, not per-event)
     // -----------------------------------------------------------------
     app.get(
       "/approvals/stream",
+      { preHandler: [requireAuth] },
       async (_request: FastifyRequest, reply: FastifyReply) => {
         if (!sseManager) {
           return reply.status(503).send({ error: "sse_not_available" })
