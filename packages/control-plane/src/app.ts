@@ -3,7 +3,9 @@ import fastifyWebSocket from "@fastify/websocket"
 import type { Kysely } from "kysely"
 import type pg from "pg"
 
+import { BackendRegistry } from "@cortex/shared/backends"
 import { ApprovalService } from "./approval/service.js"
+import { ClaudeCodeBackend } from "./backends/claude-code.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
@@ -21,6 +23,7 @@ export interface AppContext {
   runner: Runner
   sseManager: SSEConnectionManager
   observationService: BrowserObservationService
+  registry: BackendRegistry
 }
 
 export interface AppOptions {
@@ -28,6 +31,7 @@ export interface AppOptions {
   pool: pg.Pool
   config: Config
   lifecycleManager?: AgentLifecycleManager
+  registry?: BackendRegistry
 }
 
 export async function buildApp(options: AppOptions): Promise<AppContext> {
@@ -38,15 +42,20 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     },
   })
 
+  // Initialize backend registry
+  const registry = options.registry ?? await createDefaultRegistry()
+
+  // SSE connection manager for agent streaming
+  const sseManager = new SSEConnectionManager()
+
   // Start Graphile Worker alongside Fastify — shared pg.Pool
   const runner = await createWorker({
     pgPool: pool,
     db,
+    registry,
+    streamManager: sseManager,
     concurrency: config.workerConcurrency,
   })
-
-  // SSE connection manager for agent streaming
-  const sseManager = new SSEConnectionManager()
 
   // Browser observation service
   const observationService = new BrowserObservationService()
@@ -85,11 +94,34 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Register graceful shutdown handlers (SIGTERM, SIGINT)
   registerShutdownHandlers({ fastify: app, runner, pool })
 
-  // Shut down SSE connections + observation service on app close
+  // Shut down SSE connections + observation service + backend registry on app close
   app.addHook("onClose", async () => {
     sseManager.shutdown()
     await observationService.shutdown()
+    await registry.stopAll()
   })
 
-  return { app, runner, sseManager, observationService }
+  return { app, runner, sseManager, observationService, registry }
+}
+
+/**
+ * Create a default BackendRegistry with the Claude Code backend.
+ * The backend starts in a degraded state if the `claude` binary is unavailable.
+ */
+async function createDefaultRegistry(): Promise<BackendRegistry> {
+  const registry = new BackendRegistry()
+
+  const claudeBackend = new ClaudeCodeBackend()
+  try {
+    await registry.register(
+      claudeBackend,
+      { binaryPath: process.env.CLAUDE_BINARY_PATH ?? "claude" },
+      parseInt(process.env.BACKEND_MAX_CONCURRENT ?? "3", 10),
+    )
+  } catch {
+    // Backend registration failed (e.g. binary not found).
+    // The registry remains empty — jobs will fail with a clear error.
+  }
+
+  return registry
 }

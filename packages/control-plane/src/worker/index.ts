@@ -13,7 +13,10 @@ import { run, type Runner, type TaskList } from "graphile-worker"
 import type { Kysely } from "kysely"
 import type { Pool } from "pg"
 
+import type { BackendRegistry } from "@cortex/shared/backends"
+import type { BufferWriter } from "@cortex/shared/buffer"
 import type { Database } from "../db/types.js"
+import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
 import { createApprovalExpireTask } from "./tasks/approval-expire.js"
 import { createMemoryExtractTask } from "./tasks/memory-extract.js"
@@ -21,6 +24,9 @@ import { createMemoryExtractTask } from "./tasks/memory-extract.js"
 export interface WorkerOptions {
   pgPool: Pool
   db: Kysely<Database>
+  registry: BackendRegistry
+  streamManager?: SSEConnectionManager
+  sessionBufferFactory?: (jobId: string, agentId: string) => BufferWriter
   concurrency?: number
 }
 
@@ -29,13 +35,13 @@ export interface WorkerOptions {
  * Returns the Runner instance (used for shutdown and health checks).
  */
 export async function createWorker(options: WorkerOptions): Promise<Runner> {
-  const { pgPool, db, concurrency } = options
+  const { pgPool, db, registry, streamManager, sessionBufferFactory, concurrency } = options
 
   const workerConcurrency =
     concurrency ?? parseInt(process.env.GRAPHILE_WORKER_CONCURRENCY ?? "5", 10)
 
   const taskList: TaskList = {
-    agent_execute: createAgentExecuteTask(db),
+    agent_execute: createAgentExecuteTask({ db, registry, streamManager, sessionBufferFactory }),
     memory_extract: createMemoryExtractTask(),
     approval_expire: createApprovalExpireTask(db),
   }

@@ -14,6 +14,10 @@
       "import": "./dist/backends/index.js",
       "types": "./dist/backends/index.d.ts"
     },
+    "./buffer": {
+      "import": "./dist/buffer/index.js",
+      "types": "./dist/buffer/index.d.ts"
+    },
     "./channels": {
       "import": "./dist/channels/index.js",
       "types": "./dist/channels/index.d.ts"
