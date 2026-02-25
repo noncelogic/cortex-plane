@@ -5,144 +5,43 @@
  * Implementation is a thin wrapper around fetch() with auth headers.
  */
 
+import type { z } from "zod"
+
+import {
+  AgentDetailSchema,
+  AgentListResponseSchema,
+} from "./schemas/agents"
+import { ApprovalListResponseSchema } from "./schemas/approvals"
+import {
+  BrowserSessionSchema,
+} from "./schemas/browser"
+import { ContentListResponseSchema } from "./schemas/content"
+import { JobDetailSchema, JobListResponseSchema } from "./schemas/jobs"
+import { MemorySearchResponseSchema } from "./schemas/memory"
+
 // ---------------------------------------------------------------------------
-// Shared types (from OpenAPI spec)
+// Re-export types from schemas for backward compatibility
 // ---------------------------------------------------------------------------
 
-export type AgentStatus = "ACTIVE" | "DISABLED" | "ARCHIVED"
+export type { AgentStatus, AgentLifecycleState, AgentSummary, AgentDetail, Checkpoint } from "./schemas/agents"
+export type { JobStatus, JobSummary, JobStep, JobMetrics, JobLogEntry, JobDetail } from "./schemas/jobs"
+export type { ApprovalStatus, ApprovalRequest } from "./schemas/approvals"
+export type { Pagination } from "./schemas/common"
+export type { MemoryRecord } from "./schemas/memory"
+export type { ContentStatus, ContentType, ContentPiece, ContentPipelineStats } from "./schemas/content"
+export type {
+  BrowserSessionStatus,
+  BrowserEventType,
+  BrowserEventSeverity,
+  BrowserTab,
+  BrowserSession,
+  BrowserEvent,
+  Screenshot,
+} from "./schemas/browser"
 
-export type AgentLifecycleState =
-  | "BOOTING"
-  | "HYDRATING"
-  | "READY"
-  | "EXECUTING"
-  | "DRAINING"
-  | "TERMINATED"
-
-export interface AgentSummary {
-  id: string
-  name: string
-  slug: string
-  role: string
-  description?: string
-  status: AgentStatus
-  lifecycleState: AgentLifecycleState
-  currentJobId?: string
-  createdAt: string
-  updatedAt?: string
-}
-
-export interface AgentDetail extends AgentSummary {
-  modelConfig?: Record<string, unknown>
-  skillConfig?: Record<string, unknown>
-  resourceLimits?: Record<string, unknown>
-  channelPermissions?: Record<string, unknown>
-  checkpoint?: Checkpoint
-}
-
-export interface Checkpoint {
-  jobId: string
-  savedAt: string
-  crc32: number
-  data?: Record<string, unknown>
-}
-
-export type JobStatus =
-  | "PENDING"
-  | "SCHEDULED"
-  | "RUNNING"
-  | "WAITING_FOR_APPROVAL"
-  | "COMPLETED"
-  | "FAILED"
-  | "TIMED_OUT"
-  | "RETRYING"
-  | "DEAD_LETTER"
-
-export interface JobSummary {
-  id: string
-  agentId: string
-  status: JobStatus
-  type: string
-  createdAt: string
-  updatedAt?: string
-  completedAt?: string
-  error?: string
-}
-
-export interface JobStep {
-  name: string
-  status: "COMPLETED" | "FAILED" | "RUNNING" | "PENDING"
-  startedAt?: string
-  completedAt?: string
-  durationMs?: number
-  worker?: string
-  error?: string
-}
-
-export interface JobMetrics {
-  cpuPercent: number
-  memoryMb: number
-  networkInBytes: number
-  networkOutBytes: number
-  threadCount: number
-}
-
-export interface JobLogEntry {
-  timestamp: string
-  level: "INFO" | "WARN" | "ERR" | "DEBUG"
-  message: string
-}
-
-export interface JobDetail extends JobSummary {
-  agentName?: string
-  agentVersion?: string
-  durationMs?: number
-  steps: JobStep[]
-  metrics?: JobMetrics
-  logs: JobLogEntry[]
-}
-
-export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"
-
-export interface ApprovalRequest {
-  id: string
-  jobId: string
-  agentId?: string
-  status: ApprovalStatus
-  actionType: string
-  actionSummary: string
-  actionDetail?: Record<string, unknown>
-  approverUserAccountId?: string
-  requestedAt: string
-  decidedAt?: string
-  decidedBy?: string
-  expiresAt: string
-  decision?: "APPROVED" | "REJECTED"
-  reason?: string
-}
-
-export interface Pagination {
-  total: number
-  limit: number
-  offset: number
-  hasMore: boolean
-}
-
-export interface MemoryRecord {
-  id: string
-  type: "fact" | "preference" | "event" | "system_rule"
-  content: string
-  tags: string[]
-  people: string[]
-  projects: string[]
-  importance: 1 | 2 | 3 | 4 | 5
-  confidence: number
-  source: string
-  createdAt: number
-  accessCount: number
-  lastAccessedAt: number
-  score?: number
-}
+// ---------------------------------------------------------------------------
+// Types that remain local (request/response shapes not validated)
+// ---------------------------------------------------------------------------
 
 export interface SteerRequest {
   message: string
@@ -177,8 +76,8 @@ interface FetchOptions {
   signal?: AbortSignal
 }
 
-async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
-  const { method = "GET", body, signal } = options
+async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.ZodType<T> } = {}): Promise<T> {
+  const { method = "GET", body, signal, schema } = options
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -211,7 +110,8 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
     throw new ApiError(res.status, detail)
   }
 
-  return res.json() as Promise<T>
+  const data = await res.json()
+  return schema ? schema.parse(data) as T : data as T
 }
 
 export class ApiError extends Error {
@@ -233,22 +133,22 @@ export class ApiError extends Error {
 // ---------------------------------------------------------------------------
 
 export async function listAgents(params?: {
-  status?: AgentStatus
-  lifecycleState?: AgentLifecycleState
+  status?: string
+  lifecycleState?: string
   limit?: number
   offset?: number
-}): Promise<{ agents: AgentSummary[]; pagination: Pagination }> {
+}): Promise<{ agents: import("./schemas/agents").AgentSummary[]; pagination: import("./schemas/common").Pagination }> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.lifecycleState) search.set("lifecycleState", params.lifecycleState)
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
-  return apiFetch(`/agents${qs ? `?${qs}` : ""}`)
+  return apiFetch(`/agents${qs ? `?${qs}` : ""}`, { schema: AgentListResponseSchema })
 }
 
-export async function getAgent(agentId: string): Promise<AgentDetail> {
-  return apiFetch(`/agents/${agentId}`)
+export async function getAgent(agentId: string): Promise<import("./schemas/agents").AgentDetail> {
+  return apiFetch(`/agents/${agentId}`, { schema: AgentDetailSchema })
 }
 
 export async function steerAgent(agentId: string, request: SteerRequest): Promise<SteerResponse> {
@@ -270,18 +170,18 @@ export async function resumeAgent(
 }
 
 export async function listApprovals(params?: {
-  status?: ApprovalStatus
+  status?: string
   jobId?: string
   limit?: number
   offset?: number
-}): Promise<{ approvals: ApprovalRequest[]; pagination: Pagination }> {
+}): Promise<{ approvals: import("./schemas/approvals").ApprovalRequest[]; pagination: import("./schemas/common").Pagination }> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.jobId) search.set("jobId", params.jobId)
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
-  return apiFetch(`/approvals${qs ? `?${qs}` : ""}`)
+  return apiFetch(`/approvals${qs ? `?${qs}` : ""}`, { schema: ApprovalListResponseSchema })
 }
 
 export async function approveRequest(
@@ -298,21 +198,21 @@ export async function approveRequest(
 
 export async function listJobs(params?: {
   agentId?: string
-  status?: JobStatus
+  status?: string
   limit?: number
   offset?: number
-}): Promise<{ jobs: JobSummary[]; pagination: Pagination }> {
+}): Promise<{ jobs: import("./schemas/jobs").JobSummary[]; pagination: import("./schemas/common").Pagination }> {
   const search = new URLSearchParams()
   if (params?.agentId) search.set("agentId", params.agentId)
   if (params?.status) search.set("status", params.status)
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
-  return apiFetch(`/jobs${qs ? `?${qs}` : ""}`)
+  return apiFetch(`/jobs${qs ? `?${qs}` : ""}`, { schema: JobListResponseSchema })
 }
 
-export async function getJob(jobId: string): Promise<JobDetail> {
-  return apiFetch(`/jobs/${jobId}`)
+export async function getJob(jobId: string): Promise<import("./schemas/jobs").JobDetail> {
+  return apiFetch(`/jobs/${jobId}`, { schema: JobDetailSchema })
 }
 
 export async function retryJob(
@@ -325,12 +225,12 @@ export async function searchMemory(params: {
   agentId: string
   query: string
   limit?: number
-}): Promise<{ results: MemoryRecord[] }> {
+}): Promise<{ results: import("./schemas/memory").MemoryRecord[] }> {
   const search = new URLSearchParams()
   search.set("agentId", params.agentId)
   search.set("query", params.query)
   if (params.limit) search.set("limit", String(params.limit))
-  return apiFetch(`/memory/search?${search.toString()}`)
+  return apiFetch(`/memory/search?${search.toString()}`, { schema: MemorySearchResponseSchema })
 }
 
 export async function syncMemory(
@@ -345,94 +245,16 @@ export async function syncMemory(
 }
 
 // ---------------------------------------------------------------------------
-// Content pipeline types
-// ---------------------------------------------------------------------------
-
-export type ContentStatus = "DRAFT" | "IN_REVIEW" | "QUEUED" | "PUBLISHED"
-
-export type ContentType = "blog" | "social" | "newsletter" | "report"
-
-export interface ContentPiece {
-  id: string
-  title: string
-  body: string
-  type: ContentType
-  status: ContentStatus
-  agentId: string
-  agentName: string
-  wordCount: number
-  createdAt: string
-  updatedAt?: string
-  publishedAt?: string
-  channel?: string
-}
-
-export interface ContentPipelineStats {
-  totalPieces: number
-  publishedToday: number
-  avgReviewTimeMs: number
-  pendingReview: number
-}
-
-// ---------------------------------------------------------------------------
-// Browser observation types
-// ---------------------------------------------------------------------------
-
-export type BrowserSessionStatus = "connecting" | "connected" | "disconnected" | "error"
-
-export type BrowserEventType = "GET" | "CLICK" | "CONSOLE" | "SNAPSHOT" | "NAVIGATE" | "ERROR"
-
-export interface BrowserTab {
-  id: string
-  title: string
-  url: string
-  favicon?: string
-  active: boolean
-}
-
-export interface BrowserSession {
-  id: string
-  agentId: string
-  vncUrl: string | null
-  status: BrowserSessionStatus
-  tabs: BrowserTab[]
-  latencyMs: number
-  lastHeartbeat?: string
-}
-
-export type BrowserEventSeverity = "info" | "warn" | "error"
-
-export interface BrowserEvent {
-  id: string
-  type: BrowserEventType
-  timestamp: string
-  url?: string
-  selector?: string
-  message?: string
-  durationMs?: number
-  severity?: BrowserEventSeverity
-}
-
-export interface Screenshot {
-  id: string
-  agentId: string
-  timestamp: string
-  thumbnailUrl: string
-  fullUrl: string
-  dimensions: { width: number; height: number }
-}
-
-// ---------------------------------------------------------------------------
 // Content pipeline endpoint functions
 // ---------------------------------------------------------------------------
 
 export async function listContent(params?: {
-  status?: ContentStatus
-  type?: ContentType
+  status?: string
+  type?: string
   agentId?: string
   limit?: number
   offset?: number
-}): Promise<{ content: ContentPiece[]; pagination: Pagination }> {
+}): Promise<{ content: import("./schemas/content").ContentPiece[]; pagination: import("./schemas/common").Pagination }> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.type) search.set("type", params.type)
@@ -440,7 +262,7 @@ export async function listContent(params?: {
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
-  return apiFetch(`/content${qs ? `?${qs}` : ""}`)
+  return apiFetch(`/content${qs ? `?${qs}` : ""}`, { schema: ContentListResponseSchema })
 }
 
 export async function publishContent(
@@ -463,14 +285,14 @@ export async function archiveContent(
 // Browser observation endpoint functions
 // ---------------------------------------------------------------------------
 
-export async function getAgentBrowser(agentId: string): Promise<BrowserSession> {
-  return apiFetch(`/agents/${agentId}/browser`)
+export async function getAgentBrowser(agentId: string): Promise<import("./schemas/browser").BrowserSession> {
+  return apiFetch(`/agents/${agentId}/browser`, { schema: BrowserSessionSchema })
 }
 
 export async function getAgentScreenshots(
   agentId: string,
   limit?: number,
-): Promise<{ screenshots: Screenshot[] }> {
+): Promise<{ screenshots: import("./schemas/browser").Screenshot[] }> {
   const search = new URLSearchParams()
   if (limit) search.set("limit", String(limit))
   const qs = search.toString()
@@ -480,8 +302,8 @@ export async function getAgentScreenshots(
 export async function getAgentBrowserEvents(
   agentId: string,
   limit?: number,
-  types?: BrowserEventType[],
-): Promise<{ events: BrowserEvent[] }> {
+  types?: string[],
+): Promise<{ events: import("./schemas/browser").BrowserEvent[] }> {
   const search = new URLSearchParams()
   if (limit) search.set("limit", String(limit))
   if (types?.length) search.set("types", types.join(","))
