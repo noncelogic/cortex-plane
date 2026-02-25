@@ -58,6 +58,17 @@ export type JobStatus =
   | "RETRYING"
   | "DEAD_LETTER"
 
+export interface JobSummary {
+  id: string
+  agentId: string
+  status: JobStatus
+  type: string
+  createdAt: string
+  updatedAt?: string
+  completedAt?: string
+  error?: string
+}
+
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"
 
 export interface ApprovalRequest {
@@ -112,6 +123,15 @@ export interface SteerResponse {
   priority: "normal" | "high"
 }
 
+/** RFC 7807 Problem Details error body. */
+export interface ProblemDetail {
+  type: string
+  title: string
+  status: number
+  detail?: string
+  instance?: string
+}
+
 // ---------------------------------------------------------------------------
 // API Client
 // ---------------------------------------------------------------------------
@@ -145,23 +165,37 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
   })
 
   if (!res.ok) {
-    const errorBody = (await res.json().catch(() => ({ detail: res.statusText }))) as Record<
-      string,
-      string
-    >
-    throw new ApiError(res.status, errorBody.detail ?? errorBody.message ?? res.statusText)
+    const errorBody = await res.json().catch(() => null)
+    // Parse as RFC 7807 ProblemDetail if possible
+    if (errorBody && typeof errorBody === "object" && "type" in errorBody) {
+      const problem = errorBody as ProblemDetail
+      throw new ApiError(
+        res.status,
+        problem.detail ?? problem.title ?? res.statusText,
+        problem,
+      )
+    }
+    const detail =
+      (errorBody as Record<string, string> | null)?.detail ??
+      (errorBody as Record<string, string> | null)?.message ??
+      res.statusText
+    throw new ApiError(res.status, detail)
   }
 
   return res.json() as Promise<T>
 }
 
 export class ApiError extends Error {
+  public readonly problem?: ProblemDetail
+
   constructor(
     public status: number,
     message: string,
+    problem?: ProblemDetail,
   ) {
     super(message)
     this.name = "ApiError"
+    this.problem = problem
   }
 }
 
@@ -211,7 +245,7 @@ export async function listApprovals(params?: {
   jobId?: string
   limit?: number
   offset?: number
-}): Promise<{ approvals: ApprovalRequest[] }> {
+}): Promise<{ approvals: ApprovalRequest[]; pagination: Pagination }> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.jobId) search.set("jobId", params.jobId)
@@ -221,7 +255,7 @@ export async function listApprovals(params?: {
   return apiFetch(`/approvals${qs ? `?${qs}` : ""}`)
 }
 
-export async function decideApproval(
+export async function approveRequest(
   approvalId: string,
   decision: "APPROVED" | "REJECTED",
   decidedBy: string,
@@ -231,6 +265,33 @@ export async function decideApproval(
     method: "POST",
     body: { decision, decidedBy, channel: "dashboard", reason },
   })
+}
+
+export async function listJobs(params?: {
+  agentId?: string
+  status?: JobStatus
+  limit?: number
+  offset?: number
+}): Promise<{ jobs: JobSummary[]; pagination: Pagination }> {
+  const search = new URLSearchParams()
+  if (params?.agentId) search.set("agentId", params.agentId)
+  if (params?.status) search.set("status", params.status)
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/jobs${qs ? `?${qs}` : ""}`)
+}
+
+export async function searchMemory(params: {
+  agentId: string
+  query: string
+  limit?: number
+}): Promise<{ results: MemoryRecord[] }> {
+  const search = new URLSearchParams()
+  search.set("agentId", params.agentId)
+  search.set("query", params.query)
+  if (params.limit) search.set("limit", String(params.limit))
+  return apiFetch(`/memory/search?${search.toString()}`)
 }
 
 export async function syncMemory(
@@ -243,3 +304,6 @@ export async function syncMemory(
 }> {
   return apiFetch("/memory/sync", { method: "POST", body: { agentId, direction } })
 }
+
+// Re-export the old name for backward compat within this PR
+export { approveRequest as decideApproval }
