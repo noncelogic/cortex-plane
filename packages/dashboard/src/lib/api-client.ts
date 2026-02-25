@@ -344,5 +344,83 @@ export async function syncMemory(
   return apiFetch("/memory/sync", { method: "POST", body: { agentId, direction } })
 }
 
+// ---------------------------------------------------------------------------
+// Browser observation types
+// ---------------------------------------------------------------------------
+
+export type BrowserSessionStatus = "connecting" | "connected" | "disconnected" | "error"
+
+export type BrowserEventType = "GET" | "CLICK" | "CONSOLE" | "SNAPSHOT" | "NAVIGATE" | "ERROR"
+
+export interface BrowserTab {
+  id: string
+  title: string
+  url: string
+  favicon?: string
+  active: boolean
+}
+
+export interface BrowserSession {
+  id: string
+  agentId: string
+  vncUrl: string | null
+  status: BrowserSessionStatus
+  tabs: BrowserTab[]
+  latencyMs: number
+  lastHeartbeat?: string
+}
+
+export type BrowserEventSeverity = "info" | "warn" | "error"
+
+export interface BrowserEvent {
+  id: string
+  type: BrowserEventType
+  timestamp: string
+  url?: string
+  selector?: string
+  message?: string
+  durationMs?: number
+  severity?: BrowserEventSeverity
+}
+
+export interface Screenshot {
+  id: string
+  agentId: string
+  timestamp: string
+  thumbnailUrl: string
+  fullUrl: string
+  dimensions: { width: number; height: number }
+}
+
+// ---------------------------------------------------------------------------
+// Browser observation endpoint functions
+// ---------------------------------------------------------------------------
+
+export async function getAgentBrowser(agentId: string): Promise<BrowserSession> {
+  return apiFetch(`/agents/${agentId}/browser`)
+}
+
+export async function getAgentScreenshots(
+  agentId: string,
+  limit?: number,
+): Promise<{ screenshots: Screenshot[] }> {
+  const search = new URLSearchParams()
+  if (limit) search.set("limit", String(limit))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/browser/screenshots${qs ? `?${qs}` : ""}`)
+}
+
+export async function getAgentBrowserEvents(
+  agentId: string,
+  limit?: number,
+  types?: BrowserEventType[],
+): Promise<{ events: BrowserEvent[] }> {
+  const search = new URLSearchParams()
+  if (limit) search.set("limit", String(limit))
+  if (types?.length) search.set("types", types.join(","))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/browser/events${qs ? `?${qs}` : ""}`)
+}
+
 // Re-export the old name for backward compat within this PR
 export { approveRequest as decideApproval }
