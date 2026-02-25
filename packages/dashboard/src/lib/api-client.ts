@@ -69,6 +69,39 @@ export interface JobSummary {
   error?: string
 }
 
+export interface JobStep {
+  name: string
+  status: "COMPLETED" | "FAILED" | "RUNNING" | "PENDING"
+  startedAt?: string
+  completedAt?: string
+  durationMs?: number
+  worker?: string
+  error?: string
+}
+
+export interface JobMetrics {
+  cpuPercent: number
+  memoryMb: number
+  networkInBytes: number
+  networkOutBytes: number
+  threadCount: number
+}
+
+export interface JobLogEntry {
+  timestamp: string
+  level: "INFO" | "WARN" | "ERR" | "DEBUG"
+  message: string
+}
+
+export interface JobDetail extends JobSummary {
+  agentName?: string
+  agentVersion?: string
+  durationMs?: number
+  steps: JobStep[]
+  metrics?: JobMetrics
+  logs: JobLogEntry[]
+}
+
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"
 
 export interface ApprovalRequest {
@@ -276,6 +309,16 @@ export async function listJobs(params?: {
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
   return apiFetch(`/jobs${qs ? `?${qs}` : ""}`)
+}
+
+export async function getJob(jobId: string): Promise<JobDetail> {
+  return apiFetch(`/jobs/${jobId}`)
+}
+
+export async function retryJob(
+  jobId: string,
+): Promise<{ jobId: string; status: "retrying" }> {
+  return apiFetch(`/jobs/${jobId}/retry`, { method: "POST" })
 }
 
 export async function searchMemory(params: {
