@@ -1,16 +1,19 @@
+"use client"
+
 import type { AgentSummary } from "@/lib/api-client"
 
-import { AgentCard } from "./agent-card"
+import { AgentCard, type AgentMetrics } from "./agent-card"
 
-// Server Component — fetches agents at request time
-export function AgentGrid(): React.JSX.Element {
-  // TODO: fetch from control plane API
-  const agents: AgentSummary[] = []
+interface AgentGridProps {
+  agents: AgentSummary[]
+  metricsMap: Record<string, AgentMetrics>
+}
 
+export function AgentGrid({ agents, metricsMap }: AgentGridProps): React.JSX.Element {
   if (agents.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-700 p-8 text-center text-gray-500">
-        No agents registered. Start an agent to see it here.
+      <div className="rounded-xl border border-dashed border-slate-300 p-12 text-center text-slate-500 dark:border-slate-700">
+        No agents registered. Deploy a new agent to see it here.
       </div>
     )
   }
@@ -18,7 +21,7 @@ export function AgentGrid(): React.JSX.Element {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {agents.map((agent) => (
-        <AgentCard key={agent.id} agent={agent} />
+        <AgentCard key={agent.id} agent={agent} metrics={metricsMap[agent.id]} />
       ))}
     </div>
   )
