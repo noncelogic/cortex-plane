@@ -23,8 +23,10 @@ import {
   type CreateApprovalRequest,
   type ApprovalDecisionResult,
 } from "@cortex/shared"
-import type { Database, ApprovalRequest } from "../db/types.js"
+import { CortexAttributes, withSpan, injectTraceContext } from "@cortex/shared/tracing/spans"
+import type { Database, ApprovalRequest, ApprovalAuditLog } from "../db/types.js"
 import { generateApprovalToken, hashApprovalToken, isValidTokenFormat } from "./token.js"
+import { createAuditEntry, type AuditActorMetadata, type AuditEntry } from "./audit.js"
 
 export interface ApprovalServiceDeps {
   db: Kysely<Database>
@@ -58,65 +60,76 @@ export class ApprovalService {
    * 4. Returns the plaintext token for sending in notifications
    */
   async createRequest(req: CreateApprovalRequest): Promise<CreatedApproval> {
-    const { plaintext, hash } = generateApprovalToken()
-
-    const ttlSeconds = Math.min(
-      req.ttlSeconds ?? DEFAULT_APPROVAL_TTL_SECONDS,
-      MAX_APPROVAL_TTL_SECONDS,
-    )
-    const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
-
-    let approvalRequestId: string | undefined
-
-    await this.db.transaction().execute(async (tx) => {
-      // Insert approval_request
-      const inserted = await tx
-        .insertInto("approval_request")
-        .values({
-          job_id: req.jobId,
-          action_type: req.actionType,
-          action_summary: req.actionSummary,
-          action_detail: req.actionDetail,
-          token_hash: hash,
-          expires_at: expiresAt,
-          requested_by_agent_id: req.agentId,
-          approver_user_account_id: req.approverUserAccountId ?? null,
-        })
-        .returning("id")
-        .executeTakeFirstOrThrow()
-
-      approvalRequestId = inserted.id
-
-      // Transition job: RUNNING → WAITING_FOR_APPROVAL
-      await tx
-        .updateTable("job")
-        .set({
-          status: "WAITING_FOR_APPROVAL" as const,
-          approval_expires_at: expiresAt,
-        })
-        .where("id", "=", req.jobId)
-        .where("status", "=", "RUNNING")
-        .execute()
-    })
-
-    // Audit log (outside transaction for speed)
-    await this.writeAuditLog({
-      approvalRequestId: approvalRequestId!,
-      jobId: req.jobId,
-      eventType: "request_created",
-      details: {
-        action_type: req.actionType,
-        action_summary: req.actionSummary,
-        ttl_seconds: ttlSeconds,
-        expires_at: expiresAt.toISOString(),
+    return withSpan(
+      "cortex.approval.create",
+      {
+        [CortexAttributes.JOB_ID]: req.jobId,
+        [CortexAttributes.APPROVAL_TTL]: req.ttlSeconds ?? DEFAULT_APPROVAL_TTL_SECONDS,
       },
-    })
+      async (span) => {
+        const { plaintext, hash } = generateApprovalToken()
 
-    return {
-      approvalRequestId: approvalRequestId!,
-      plaintextToken: plaintext,
-      expiresAt,
-    }
+        const ttlSeconds = Math.min(
+          req.ttlSeconds ?? DEFAULT_APPROVAL_TTL_SECONDS,
+          MAX_APPROVAL_TTL_SECONDS,
+        )
+        const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
+
+        let approvalRequestId: string | undefined
+
+        await this.db.transaction().execute(async (tx) => {
+          // Insert approval_request
+          const inserted = await tx
+            .insertInto("approval_request")
+            .values({
+              job_id: req.jobId,
+              action_type: req.actionType,
+              action_summary: req.actionSummary,
+              action_detail: req.actionDetail,
+              token_hash: hash,
+              expires_at: expiresAt,
+              requested_by_agent_id: req.agentId,
+              approver_user_account_id: req.approverUserAccountId ?? null,
+            })
+            .returning("id")
+            .executeTakeFirstOrThrow()
+
+          approvalRequestId = inserted.id
+
+          // Transition job: RUNNING → WAITING_FOR_APPROVAL
+          await tx
+            .updateTable("job")
+            .set({
+              status: "WAITING_FOR_APPROVAL" as const,
+              approval_expires_at: expiresAt,
+            })
+            .where("id", "=", req.jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
+        })
+
+        span.setAttribute(CortexAttributes.APPROVAL_ID, approvalRequestId!)
+
+        // Audit log (outside transaction for speed)
+        await this.writeAuditLog({
+          approvalRequestId: approvalRequestId!,
+          jobId: req.jobId,
+          eventType: "request_created",
+          details: {
+            action_type: req.actionType,
+            action_summary: req.actionSummary,
+            ttl_seconds: ttlSeconds,
+            expires_at: expiresAt.toISOString(),
+          },
+        })
+
+        return {
+          approvalRequestId: approvalRequestId!,
+          plaintextToken: plaintext,
+          expiresAt,
+        }
+      },
+    )
   }
 
   /**
@@ -135,118 +148,150 @@ export class ApprovalService {
     decidedBy: string,
     channel: string,
     reason?: string,
+    actorMetadata?: AuditActorMetadata,
   ): Promise<ApprovalDecisionResult> {
-    // Fetch the request
-    const request = await this.db
-      .selectFrom("approval_request")
-      .selectAll()
-      .where("id", "=", approvalRequestId)
-      .executeTakeFirst()
-
-    if (!request) {
-      return { success: false, error: "not_found" }
-    }
-
-    if (request.status !== "PENDING") {
-      return { success: false, error: "already_decided" }
-    }
-
-    if (request.expires_at < new Date()) {
-      return { success: false, error: "expired" }
-    }
-
-    // Check authorization: if a specific approver is designated, only they can decide
-    if (
-      request.approver_user_account_id !== null &&
-      request.approver_user_account_id !== decidedBy
-    ) {
-      await this.writeAuditLog({
-        approvalRequestId,
-        jobId: request.job_id,
-        eventType: "unauthorized_attempt",
-        actorUserId: decidedBy,
-        actorChannel: channel,
-        details: { attempted_action: decision },
-      })
-      return { success: false, error: "not_authorized" }
-    }
-
-    let jobId: string | undefined
-
-    await this.db.transaction().execute(async (tx) => {
-      // Atomic single-use: only update if still PENDING
-      const updated = await tx
-        .updateTable("approval_request")
-        .set({
-          status: decision,
-          decided_at: new Date(),
-          decided_by: decidedBy,
-          decision_note: reason ?? null,
-        })
-        .where("id", "=", approvalRequestId)
-        .where("status", "=", "PENDING")
-        .executeTakeFirst()
-
-      if (!updated.numUpdatedRows || updated.numUpdatedRows === 0n) {
-        throw new Error("approval_already_decided")
-      }
-
-      jobId = request.job_id
-
-      if (decision === "APPROVED") {
-        // Transition job: WAITING_FOR_APPROVAL → RUNNING
-        await tx
-          .updateTable("job")
-          .set({
-            status: "RUNNING" as const,
-            approval_expires_at: null,
-          })
-          .where("id", "=", request.job_id)
-          .where("status", "=", "WAITING_FOR_APPROVAL")
-          .execute()
-      } else {
-        // Transition job: WAITING_FOR_APPROVAL → FAILED
-        const errorMessage = reason
-          ? `Approval rejected by ${decidedBy}: ${reason}`
-          : `Approval rejected by ${decidedBy}`
-
-        await tx
-          .updateTable("job")
-          .set({
-            status: "FAILED" as const,
-            approval_expires_at: null,
-            error: { message: errorMessage },
-            completed_at: new Date(),
-          })
-          .where("id", "=", request.job_id)
-          .where("status", "=", "WAITING_FOR_APPROVAL")
-          .execute()
-      }
-    })
-
-    // Enqueue agent resume outside transaction
-    if (decision === "APPROVED" && this.workerUtils && jobId) {
-      await this.workerUtils.addJob("agent_execute", { jobId }, { maxAttempts: 1 })
-    }
-
-    // Audit log
-    await this.writeAuditLog({
-      approvalRequestId,
-      jobId: request.job_id,
-      eventType: "request_decided",
-      actorUserId: decidedBy,
-      actorChannel: channel,
-      details: {
-        decision,
-        reason: reason ?? null,
+    return withSpan(
+      "cortex.approval.decide",
+      {
+        [CortexAttributes.APPROVAL_ID]: approvalRequestId,
+        [CortexAttributes.APPROVAL_DECISION]: decision,
+        [CortexAttributes.APPROVAL_ACTOR]: decidedBy,
       },
-    })
+      async () => {
+        // Fetch the request
+        const request = await this.db
+          .selectFrom("approval_request")
+          .selectAll()
+          .where("id", "=", approvalRequestId)
+          .executeTakeFirst()
 
-    return {
-      success: true,
-      approvalRequestId,
-      decision,
-    }
+        if (!request) {
+          return { success: false, error: "not_found" } as ApprovalDecisionResult
+        }
+
+        if (request.status !== "PENDING") {
+          return { success: false, error: "already_decided" } as ApprovalDecisionResult
+        }
+
+        if (request.expires_at < new Date()) {
+          return { success: false, error: "expired" } as ApprovalDecisionResult
+        }
+
+        // Check authorization: if a specific approver is designated, only they can decide
+        if (
+          request.approver_user_account_id !== null &&
+          request.approver_user_account_id !== decidedBy
+        ) {
+          await this.writeAuditLog({
+            approvalRequestId,
+            jobId: request.job_id,
+            eventType: "unauthorized_attempt",
+            actorUserId: decidedBy,
+            actorChannel: channel,
+            details: { attempted_action: decision },
+          })
+          return { success: false, error: "not_authorized" } as ApprovalDecisionResult
+        }
+
+        let jobId: string | undefined
+
+        await this.db.transaction().execute(async (tx) => {
+          // Atomic single-use: only update if still PENDING
+          const updated = await tx
+            .updateTable("approval_request")
+            .set({
+              status: decision,
+              decided_at: new Date(),
+              decided_by: decidedBy,
+              decision_note: reason ?? null,
+            })
+            .where("id", "=", approvalRequestId)
+            .where("status", "=", "PENDING")
+            .executeTakeFirst()
+
+          if (!updated.numUpdatedRows || updated.numUpdatedRows === 0n) {
+            throw new Error("approval_already_decided")
+          }
+
+          jobId = request.job_id
+
+          if (decision === "APPROVED") {
+            // Transition job: WAITING_FOR_APPROVAL → RUNNING
+            await tx
+              .updateTable("job")
+              .set({
+                status: "RUNNING" as const,
+                approval_expires_at: null,
+              })
+              .where("id", "=", request.job_id)
+              .where("status", "=", "WAITING_FOR_APPROVAL")
+              .execute()
+          } else {
+            // Transition job: WAITING_FOR_APPROVAL → FAILED
+            const errorMessage = reason
+              ? `Approval rejected by ${decidedBy}: ${reason}`
+              : `Approval rejected by ${decidedBy}`
+
+            await tx
+              .updateTable("job")
+              .set({
+                status: "FAILED" as const,
+                approval_expires_at: null,
+                error: { message: errorMessage },
+                completed_at: new Date(),
+              })
+              .where("id", "=", request.job_id)
+              .where("status", "=", "WAITING_FOR_APPROVAL")
+              .execute()
+          }
+        })
+
+        // Enqueue agent resume outside transaction — inject trace context for propagation
+        if (decision === "APPROVED" && this.workerUtils && jobId) {
+          const traceCtx = injectTraceContext()
+          await this.workerUtils.addJob(
+            "agent_execute",
+            { jobId, ...traceCtx },
+            { maxAttempts: 1 },
+          )
+        }
+
+        // Audit log with chained hash for tamper evidence
+        const auditDetails: Record<string, unknown> = {
+          decision,
+          reason: reason ?? null,
+        }
+        if (actorMetadata) {
+          auditDetails.actor = actorMetadata
+
+          // Build chained audit entry
+          const previousHash = await this.getLastAuditHash(approvalRequestId)
+          const auditEntry = createAuditEntry(
+            approvalRequestId,
+            decision,
+            actorMetadata,
+            previousHash,
+          )
+          auditDetails.entry_hash = auditEntry.entryHash
+          auditDetails.previous_hash = auditEntry.previousHash
+        }
+
+        await this.writeAuditLog({
+          approvalRequestId,
+          jobId: request.job_id,
+          eventType: "request_decided",
+          actorUserId: decidedBy,
+          actorChannel: channel,
+          details: auditDetails,
+        })
+
+        return {
+          success: true,
+          approvalRequestId,
+          decision,
+        } as ApprovalDecisionResult
+      },
+    )
   }
 
   /**
@@ -259,6 +304,7 @@ export class ApprovalService {
     decidedBy: string,
     channel: string,
     reason?: string,
+    actorMetadata?: AuditActorMetadata,
   ): Promise<ApprovalDecisionResult> {
     if (!isValidTokenFormat(plaintextToken)) {
       return { success: false, error: "invalid_token_format" }
@@ -277,7 +323,7 @@ export class ApprovalService {
       return { success: false, error: "not_found" }
     }
 
-    return this.decide(request.id, decision, decidedBy, channel, reason)
+    return this.decide(request.id, decision, decidedBy, channel, reason, actorMetadata)
   }
 
   /**
@@ -439,9 +485,44 @@ export class ApprovalService {
     return query.execute()
   }
 
+  /**
+   * Get the audit trail for an approval request.
+   * Returns all audit log entries ordered chronologically.
+   */
+  async getAuditTrail(approvalRequestId: string): Promise<ApprovalAuditLog[]> {
+    return this.db
+      .selectFrom("approval_audit_log")
+      .selectAll()
+      .where("approval_request_id", "=", approvalRequestId)
+      .orderBy("created_at", "asc")
+      .execute()
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Get the hash from the last audit entry for chaining.
+   */
+  private async getLastAuditHash(approvalRequestId: string): Promise<string | null> {
+    try {
+      const last = await this.db
+        .selectFrom("approval_audit_log")
+        .select("details")
+        .where("approval_request_id", "=", approvalRequestId)
+        .orderBy("created_at", "desc")
+        .executeTakeFirst()
+
+      if (last?.details && typeof last.details === "object") {
+        const hash = (last.details as Record<string, unknown>).entry_hash
+        if (typeof hash === "string") return hash
+      }
+    } catch {
+      // Non-fatal
+    }
+    return null
+  }
 
   private async writeAuditLog(entry: {
     approvalRequestId: string

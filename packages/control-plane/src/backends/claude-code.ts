@@ -27,6 +27,7 @@ import type {
   OutputUsageEvent,
   TokenUsage,
 } from "@cortex/shared"
+import { CortexAttributes, addSpanEvent, setSpanAttributes } from "@cortex/shared/tracing/spans"
 
 const execFile = promisify(execFileCb)
 
@@ -341,6 +342,19 @@ class ClaudeCodeHandle implements ExecutionHandle {
   private settleResult(result: ExecutionResult): void {
     if (!this.resultResolved) {
       this.resultResolved = true
+
+      // Record execution outcome on the active span
+      setSpanAttributes({
+        [CortexAttributes.EXECUTION_STATUS]: result.status,
+        [CortexAttributes.EXECUTION_DURATION_MS]: result.durationMs ?? 0,
+      })
+      if (result.tokenUsage) {
+        setSpanAttributes({
+          [CortexAttributes.TOKEN_INPUT]: result.tokenUsage.inputTokens,
+          [CortexAttributes.TOKEN_OUTPUT]: result.tokenUsage.outputTokens,
+        })
+      }
+
       this.resolveResult(result)
     }
   }

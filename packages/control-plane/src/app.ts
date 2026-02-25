@@ -9,6 +9,7 @@ import { ClaudeCodeBackend } from "./backends/claude-code.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
+import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { healthRoutes } from "./routes/health.js"
@@ -70,11 +71,14 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Approval service — core approval gate logic
   const approvalService = new ApprovalService({ db })
 
+  // Load auth configuration for approval gate endpoints
+  const authConfig = loadAuthConfig()
+
   await app.register(healthRoutes)
 
   // Register approval routes (always available)
   await app.register(
-    approvalRoutes({ approvalService, sseManager }),
+    approvalRoutes({ approvalService, sseManager, authConfig }),
   )
 
   // Register streaming + observation routes if lifecycle manager is provided

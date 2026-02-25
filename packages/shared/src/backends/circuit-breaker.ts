@@ -9,6 +9,8 @@
  * See: docs/issues/098-multi-provider-routing.md
  */
 
+import { addSpanEvent } from "../tracing/spans.js"
+
 // ──────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────
@@ -162,8 +164,14 @@ export class CircuitBreaker {
   }
 
   private transitionTo(newState: CircuitState): void {
+    const previousState = this.state
     this.state = newState
     this.lastStateChange = this.now()
+
+    addSpanEvent("cortex.circuit.state_change", {
+      "cortex.circuit.previous_state": previousState,
+      "cortex.circuit.new_state": newState,
+    })
 
     if (newState === "OPEN") {
       this.openedAt = this.now()
