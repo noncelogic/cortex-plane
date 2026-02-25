@@ -47,8 +47,13 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 
+  /* ── Console ────────────────────────────────────── */
+  --color-console-bg: #0a0a18;
+  --color-surface-border: #282839;
+
   /* ── Animations ──────────────────────────────────── */
   --animate-pulse-ring: pulse-ring 2s infinite;
+  --animate-spin-slow: spin 3s linear infinite;
 }
 
 @keyframes pulse-ring {
@@ -63,6 +68,15 @@
   100% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 oklch(0.45 0.31 264 / 0);
+  }
+}
+
+/* ── Utilities ───────────────────────────────────────── */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 

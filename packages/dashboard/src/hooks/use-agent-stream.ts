@@ -85,7 +85,11 @@ export function useAgentStream(
 ): UseAgentStreamReturn {
   const url = `/api/agents/${agentId}/stream`
 
-  const { events: rawEvents, connected, status } = useSSE({
+  const {
+    events: rawEvents,
+    connected,
+    status,
+  } = useSSE({
     url,
     eventTypes: [...AGENT_EVENT_TYPES],
     maxEvents: options?.maxEvents ?? 500,

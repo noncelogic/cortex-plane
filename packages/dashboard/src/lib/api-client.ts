@@ -165,15 +165,11 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
   })
 
   if (!res.ok) {
-    const errorBody = await res.json().catch(() => null)
+    const errorBody: unknown = await res.json().catch(() => null)
     // Parse as RFC 7807 ProblemDetail if possible
     if (errorBody && typeof errorBody === "object" && "type" in errorBody) {
       const problem = errorBody as ProblemDetail
-      throw new ApiError(
-        res.status,
-        problem.detail ?? problem.title ?? res.statusText,
-        problem,
-      )
+      throw new ApiError(res.status, problem.detail ?? problem.title ?? res.statusText, problem)
     }
     const detail =
       (errorBody as Record<string, string> | null)?.detail ??

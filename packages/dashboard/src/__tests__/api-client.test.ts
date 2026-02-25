@@ -2,13 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   ApiError,
+  approveRequest,
   getAgent,
   listAgents,
   listJobs,
+  type ProblemDetail,
   searchMemory,
   steerAgent,
-  approveRequest,
-  type ProblemDetail,
 } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -100,7 +100,10 @@ describe("API Client", () => {
     })
 
     it("listJobs passes query parameters", async () => {
-      mockFetchResponse({ jobs: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } })
+      mockFetchResponse({
+        jobs: [],
+        pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
+      })
 
       await listJobs({ agentId: "a1", status: "RUNNING" })
 

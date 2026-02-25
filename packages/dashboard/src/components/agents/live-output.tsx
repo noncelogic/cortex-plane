@@ -1,6 +1,6 @@
 "use client"
 
-import { useAgentStream, type AgentEventPayload } from "@/hooks/use-agent-stream"
+import { type AgentEventPayload, useAgentStream } from "@/hooks/use-agent-stream"
 
 interface LiveOutputProps {
   agentId: string
