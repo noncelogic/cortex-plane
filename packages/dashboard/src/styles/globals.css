@@ -1,6 +1,34 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens extracted from Stitch screens:
+ *   Desktop: cd57ff1caf454382b0376264b3e7c083
+ *   Mobile:  932880c8e94a4fad93e27a898ad6c8f7
+ */
+
 @theme {
+  /* ── Primary ─────────────────────────────────────── */
+  --color-primary: #2b2bee;
+  --color-primary-content: #ffffff;
+
+  /* ── Surfaces ────────────────────────────────────── */
+  --color-bg-light: #f6f6f8;
+  --color-bg-dark: #101022;
+  --color-surface-light: #ffffff;
+  --color-surface-dark: #1a1a2e;
+  --color-secondary: #f0f0f4;
+
+  /* ── Text ────────────────────────────────────────── */
+  --color-text-main: #111118;
+  --color-text-muted: #616189;
+
+  /* ── Status / Semantic ───────────────────────────── */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+
+  /* ── Legacy cortex scale (existing components) ──── */
   --color-cortex-50: #f0f7ff;
   --color-cortex-100: #e0effe;
   --color-cortex-200: #bae0fd;
@@ -13,7 +41,46 @@
   --color-cortex-900: #0b426e;
   --color-cortex-950: #072a49;
 
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  /* ── Typography ──────────────────────────────────── */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+
+  /* ── Animations ──────────────────────────────────── */
+  --animate-pulse-ring: pulse-ring 2s infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 oklch(0.45 0.31 264 / 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px oklch(0.45 0.31 264 / 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 oklch(0.45 0.31 264 / 0);
+  }
+}
+
+/* ── Base resets ─────────────────────────────────────── */
+@layer base {
+  html {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Light mode defaults */
+  body {
+    @apply bg-bg-light text-text-main;
+  }
+
+  /* Dark mode overrides */
+  .dark body {
+    @apply bg-bg-dark text-slate-100;
+  }
 }
