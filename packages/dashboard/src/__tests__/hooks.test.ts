@@ -14,8 +14,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { SSEClient } from "@/lib/sse-client"
 import { ApiError } from "@/lib/api-client"
+import { SSEClient } from "@/lib/sse-client"
 
 // Re-test that SSEClient cleans up on disconnect (the hook calls disconnect on unmount)
 describe("SSEClient cleanup (unmount simulation)", () => {
@@ -117,9 +117,9 @@ describe("SSEClient cleanup (unmount simulation)", () => {
 describe("useApi deduplication logic", () => {
   it("concurrent calls with same key share a single promise", async () => {
     let callCount = 0
-    const apiFn = async () => {
+    const apiFn = () => {
       callCount++
-      return { value: 42 }
+      return Promise.resolve({ value: 42 })
     }
 
     // Simulate two concurrent calls with the same dedup key

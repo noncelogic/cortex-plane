@@ -86,7 +86,7 @@ export class SSEClient {
     }
 
     for (const type of KNOWN_EVENT_TYPES) {
-      this.eventSource.addEventListener(type, (e) => this.dispatch(e as MessageEvent))
+      this.eventSource.addEventListener(type, (e) => this.dispatch(e))
     }
   }
 

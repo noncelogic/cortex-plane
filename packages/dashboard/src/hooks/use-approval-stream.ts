@@ -56,7 +56,11 @@ interface UseApprovalStreamReturn {
 }
 
 export function useApprovalStream(): UseApprovalStreamReturn {
-  const { events: rawEvents, connected, status } = useSSE({
+  const {
+    events: rawEvents,
+    connected,
+    status,
+  } = useSSE({
     url: "/api/approvals/stream",
     eventTypes: ["approval:created", "approval:decided", "approval:expired"],
   })

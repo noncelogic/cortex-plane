@@ -93,7 +93,10 @@ export function useApi<T>(
   const mutate = useCallback(
     (updater: T | ((prev: T | null) => T | null), revalidate = false) => {
       setState((prev) => {
-        const next = typeof updater === "function" ? (updater as (p: T | null) => T | null)(prev.data) : updater
+        const next =
+          typeof updater === "function"
+            ? (updater as (p: T | null) => T | null)(prev.data)
+            : updater
         return { ...prev, data: next }
       })
       if (revalidate) {
