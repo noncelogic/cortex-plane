@@ -9,6 +9,8 @@
  * See: docs/issues/098-multi-provider-routing.md
  */
 
+import { trace } from "@opentelemetry/api"
+
 // ──────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────
@@ -162,8 +164,18 @@ export class CircuitBreaker {
   }
 
   private transitionTo(newState: CircuitState): void {
+    const previousState = this.state
     this.state = newState
     this.lastStateChange = this.now()
+
+    // Record state transition as a span event on the active span (if any)
+    const span = trace.getActiveSpan()
+    if (span) {
+      span.addEvent("circuit_breaker.state_change", {
+        "cortex.circuit.previous_state": previousState,
+        "cortex.circuit.new_state": newState,
+      })
+    }
 
     if (newState === "OPEN") {
       this.openedAt = this.now()

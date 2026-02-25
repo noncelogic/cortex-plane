@@ -17,6 +17,13 @@ describe("loadConfig", () => {
       logLevel: "info",
       workerConcurrency: 5,
       qdrantUrl: "http://localhost:6333",
+      tracing: {
+        enabled: false,
+        endpoint: "http://localhost:4318/v1/traces",
+        sampleRate: 1.0,
+        serviceName: "cortex-control-plane",
+        exporterType: "otlp",
+      },
     })
   })
 
@@ -45,5 +52,64 @@ describe("loadConfig", () => {
       PORT: "not-a-number",
     })
     expect(config.port).toBe(4000)
+  })
+
+  describe("tracing config", () => {
+    it("defaults tracing to disabled", () => {
+      const config = loadConfig({ DATABASE_URL: "postgres://localhost/test" })
+      expect(config.tracing.enabled).toBe(false)
+    })
+
+    it("enables tracing when OTEL_TRACING_ENABLED is 'true'", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        OTEL_TRACING_ENABLED: "true",
+      })
+      expect(config.tracing.enabled).toBe(true)
+    })
+
+    it("reads tracing config from env", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        OTEL_TRACING_ENABLED: "true",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318/v1/traces",
+        OTEL_SAMPLE_RATE: "0.5",
+        OTEL_SERVICE_NAME: "my-service",
+        OTEL_EXPORTER_TYPE: "both",
+      })
+
+      expect(config.tracing).toEqual({
+        enabled: true,
+        endpoint: "http://collector:4318/v1/traces",
+        sampleRate: 0.5,
+        serviceName: "my-service",
+        exporterType: "both",
+      })
+    })
+
+    it("clamps sample rate to [0, 1]", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        OTEL_SAMPLE_RATE: "5.0",
+      })
+      expect(config.tracing.sampleRate).toBe(1.0)
+    })
+
+    it("falls back on invalid sample rate", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        OTEL_SAMPLE_RATE: "not-a-number",
+      })
+      expect(config.tracing.sampleRate).toBe(1.0)
+    })
+
+    it("throws on invalid exporter type", () => {
+      expect(() =>
+        loadConfig({
+          DATABASE_URL: "postgres://localhost/test",
+          OTEL_EXPORTER_TYPE: "invalid",
+        }),
+      ).toThrow('Invalid OTEL_EXPORTER_TYPE: invalid')
+    })
   })
 })

@@ -23,6 +23,7 @@ import {
   type CreateApprovalRequest,
   type ApprovalDecisionResult,
 } from "@cortex/shared"
+import { withSpan, CortexAttributes } from "@cortex/shared/tracing"
 import type { Database, ApprovalRequest, ApprovalAuditLog } from "../db/types.js"
 import { generateApprovalToken, hashApprovalToken, isValidTokenFormat } from "./token.js"
 import { createAuditEntry, type AuditActorMetadata, type AuditEntry } from "./audit.js"
@@ -59,6 +60,9 @@ export class ApprovalService {
    * 4. Returns the plaintext token for sending in notifications
    */
   async createRequest(req: CreateApprovalRequest): Promise<CreatedApproval> {
+    return withSpan("cortex.approval.create", async (span) => {
+      span.setAttribute(CortexAttributes.JOB_ID, req.jobId)
+      span.setAttribute(CortexAttributes.AGENT_ID, req.agentId)
     const { plaintext, hash } = generateApprovalToken()
 
     const ttlSeconds = Math.min(
@@ -118,6 +122,7 @@ export class ApprovalService {
       plaintextToken: plaintext,
       expiresAt,
     }
+    }) // end withSpan
   }
 
   /**
@@ -138,6 +143,9 @@ export class ApprovalService {
     reason?: string,
     actorMetadata?: AuditActorMetadata,
   ): Promise<ApprovalDecisionResult> {
+    return withSpan("cortex.approval.decide", async (span) => {
+      span.setAttribute(CortexAttributes.APPROVAL_REQUEST_ID, approvalRequestId)
+      span.setAttribute(CortexAttributes.APPROVAL_DECISION, decision)
     // Fetch the request
     const request = await this.db
       .selectFrom("approval_request")
@@ -265,6 +273,7 @@ export class ApprovalService {
       approvalRequestId,
       decision,
     }
+    }) // end withSpan
   }
 
   /**

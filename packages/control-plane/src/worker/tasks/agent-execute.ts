@@ -22,6 +22,7 @@ import type {
   OutputEvent,
 } from "@cortex/shared/backends"
 import type { BufferWriter } from "@cortex/shared/buffer"
+import { withSpan, injectTraceContext, CortexAttributes } from "@cortex/shared/tracing"
 import type { Database, Job } from "../../db/types.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
@@ -57,6 +58,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     const payload = rawPayload as AgentExecutePayload
     const { jobId } = payload
 
+    await withSpan("cortex.job.execute", async (rootSpan) => {
+      rootSpan.setAttribute(CortexAttributes.JOB_ID, jobId)
+
     // Load the job and validate it's in SCHEDULED state
     const job = await db.selectFrom("job").selectAll().where("id", "=", jobId).executeTakeFirst()
 
@@ -69,6 +73,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
       // This can happen if the job was cancelled or failed by another process.
       return
     }
+
+    rootSpan.setAttribute(CortexAttributes.AGENT_ID, job.agent_id)
 
     // Transition SCHEDULED → RUNNING
     await db
@@ -102,6 +108,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         throw new Error(`Agent ${agent.name} is ${agent.status}, cannot execute`)
       }
 
+      rootSpan.setAttribute(CortexAttributes.AGENT_NAME, agent.name)
+
       // ── Step 2: Check approval gate ──
       const agentConfig = agent.model_config as Record<string, unknown>
       if (agentConfig.requiresApproval === true) {
@@ -126,6 +134,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               reason: "Approval required before execution",
             })
           }
+          rootSpan.addEvent("approval_gate_waiting")
           return
         }
       }
@@ -133,12 +142,24 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
       // ── Step 3: Build ExecutionTask (needed for routing) ──
       const task = buildExecutionTask(job, agent, agentConfig)
 
+      // Inject trace context into task environment for downstream propagation
+      const traceHeaders = injectTraceContext()
+      if (traceHeaders.traceparent) {
+        task.context.environment = {
+          ...task.context.environment,
+          TRACEPARENT: traceHeaders.traceparent,
+        }
+      }
+
       // ── Step 4: Resolve backend via router (failover-aware) or direct lookup ──
       const preferredBackendId =
         typeof agentConfig.backendId === "string"
           ? agentConfig.backendId
           : undefined
       const { backend, providerId } = registry.routeTask(task, preferredBackendId)
+
+      rootSpan.setAttribute(CortexAttributes.BACKEND_ID, backend.backendId)
+      rootSpan.setAttribute(CortexAttributes.PROVIDER_ID, providerId)
 
       // ── Step 5: Acquire semaphore permit ──
       const permit = await registry.acquirePermit(backend.backendId, SEMAPHORE_TIMEOUT_MS)
@@ -190,6 +211,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           result.error?.classification,
         )
 
+        rootSpan.setAttribute(CortexAttributes.EXECUTION_STATUS, result.status)
+        rootSpan.setAttribute(CortexAttributes.EXECUTION_DURATION_MS, result.durationMs)
+
         // ── Step 11: Map status and persist result ──
         const jobStatus = mapExecutionStatus(result.status)
 
@@ -221,6 +245,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     } catch (err: unknown) {
       // Classify the error to determine retry behavior
       const classification = classifyError(err)
+
+      rootSpan.setAttribute(CortexAttributes.ERROR_CATEGORY, classification.category)
 
       if (classification.retryable && job.attempt < job.max_attempts) {
         // Transition RUNNING → FAILED (the trigger allows this),
@@ -291,9 +317,12 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           .where("status", "=", "RUNNING")
           .execute()
       }
+
+      throw err // re-throw so withSpan marks the span as errored
     } finally {
       heartbeat.stop()
     }
+    }) // end withSpan
   }
 }
 

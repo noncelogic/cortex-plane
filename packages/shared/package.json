@@ -21,6 +21,10 @@
     "./channels": {
       "import": "./dist/channels/index.js",
       "types": "./dist/channels/index.d.ts"
+    },
+    "./tracing": {
+      "import": "./dist/tracing/index.js",
+      "types": "./dist/tracing/index.d.ts"
     }
   },
   "scripts": {
@@ -31,12 +35,18 @@
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
     "@qdrant/js-client-rest": "^1.12.0",
     "chokidar": "^4.0.0",
     "uuid": "^11.0.0"
   },
   "devDependencies": {
     "@cortex/config": "workspace:*",
+    "@opentelemetry/sdk-trace-node": "^2.5.1",
     "@types/node": "^22.0.0",
     "@types/uuid": "^10.0.0",
     "vitest": "^3.0.0"
