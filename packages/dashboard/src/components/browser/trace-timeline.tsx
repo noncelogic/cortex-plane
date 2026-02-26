@@ -93,9 +93,9 @@ export function TraceTimeline({ events }: TraceTimelineProps): React.JSX.Element
   }
 
   return (
-    <div className="flex flex-col rounded-xl border border-[#2d2d3b] bg-[#1c1c27]">
+    <div className="flex flex-col rounded-xl border border-chrome-border bg-chrome-bg">
       {/* Filter bar */}
-      <div className="flex flex-wrap gap-1.5 border-b border-[#2d2d3b] px-3 py-2">
+      <div className="flex flex-wrap gap-1.5 border-b border-chrome-border px-3 py-2">
         {ALL_EVENT_TYPES.map((type) => {
           const config = EVENT_CONFIG[type]
           const isActive = activeFilters.has(type)
@@ -160,7 +160,7 @@ function EventItem({
     <div className="relative flex gap-3 pb-4 last:pb-0">
       {/* Vertical connector */}
       {!isLast && (
-        <div className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-[#2d2d3b]" />
+        <div className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-chrome-border" />
       )}
 
       {/* Icon dot */}

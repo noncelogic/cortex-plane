@@ -21,7 +21,7 @@ export function TabBar({ tabs, onSelectTab, onCloseTab }: TabBarProps): React.JS
 
   if (tabs.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-[#2d2d3b] bg-[#1c1c27] px-3 py-2">
+      <div className="flex items-center gap-2 rounded-lg border border-chrome-border bg-chrome-bg px-3 py-2">
         <span className="material-symbols-outlined text-sm text-slate-600">tab</span>
         <span className="text-xs text-slate-500">No tabs open</span>
       </div>
@@ -31,7 +31,7 @@ export function TabBar({ tabs, onSelectTab, onCloseTab }: TabBarProps): React.JS
   return (
     <div
       ref={scrollRef}
-      className="flex gap-1 overflow-x-auto rounded-lg border border-[#2d2d3b] bg-[#1c1c27] p-1 scrollbar-none"
+      className="flex gap-1 overflow-x-auto rounded-lg border border-chrome-border bg-chrome-bg p-1 scrollbar-none"
     >
       {tabs.map((tab) => (
         <button
@@ -41,8 +41,8 @@ export function TabBar({ tabs, onSelectTab, onCloseTab }: TabBarProps): React.JS
           onClick={() => onSelectTab?.(tab.id)}
           className={`group relative flex min-w-0 shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors ${
             tab.active
-              ? "bg-[#282839] text-white"
-              : "text-slate-400 hover:bg-[#282839]/50 hover:text-slate-200"
+              ? "bg-surface-border text-white"
+              : "text-slate-400 hover:bg-surface-border/50 hover:text-slate-200"
           }`}
         >
           {/* Favicon placeholder */}

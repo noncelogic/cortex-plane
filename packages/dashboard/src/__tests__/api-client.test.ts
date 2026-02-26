@@ -108,7 +108,7 @@ describe("API Client", () => {
     })
 
     it("steerAgent sends POST with body", async () => {
-      mockFetchResponse({ steerMessageId: "sm-1", status: "accepted" })
+      mockFetchResponse({ steerMessageId: "sm-1", status: "accepted", agentId: "agent-1", priority: "high" })
 
       await steerAgent("agent-1", { message: "focus on tests", priority: "high" })
 
