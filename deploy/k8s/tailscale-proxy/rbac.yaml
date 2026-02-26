@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tailscale-proxy
+  labels:
+    app: tailscale-proxy
+    app.kubernetes.io/name: tailscale-proxy
+    app.kubernetes.io/component: network-proxy
+    app.kubernetes.io/part-of: cortex-plane
+---
+# Tailscale stores node state in a Kubernetes secret.
+# This role grants the minimum permissions needed for that.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tailscale-proxy
+  labels:
+    app: tailscale-proxy
+    app.kubernetes.io/part-of: cortex-plane
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["tailscale-state"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tailscale-proxy
+  labels:
+    app: tailscale-proxy
+    app.kubernetes.io/part-of: cortex-plane
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tailscale-proxy
+subjects:
+  - kind: ServiceAccount
+    name: tailscale-proxy

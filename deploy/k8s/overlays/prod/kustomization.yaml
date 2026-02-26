@@ -5,6 +5,7 @@ namespace: cortex
 
 resources:
   - ../../base
+  - ../../tailscale-proxy
   - ingress.yaml
   # Secrets are NOT checked in for prod — create manually or via sealed-secrets:
   #   kubectl create secret generic control-plane-secrets \

@@ -173,7 +173,28 @@ curl -sf http://localhost:3000/          # → 200
 
 ---
 
-## Step 8: Configure ingress (optional)
+## Step 8: Configure access
+
+### Option A: Tailscale (recommended for demo)
+
+Expose services over your Tailscale network — internal-only, no public endpoints.
+
+```bash
+# Create Tailscale auth secret (get key from https://login.tailscale.com/admin/settings/keys)
+kubectl -n cortex create secret generic tailscale-auth \
+  --from-literal=TS_AUTHKEY='tskey-auth-XXXXX'
+
+# Deploy the Tailscale proxy
+kubectl apply -k deploy/k8s/tailscale-proxy/ -n cortex
+kubectl -n cortex rollout status deployment/tailscale-proxy --timeout=60s
+
+# Verify
+./scripts/tailscale-verify.sh cortex cortex-demo
+```
+
+Access at `https://cortex-demo.<tailnet>.ts.net/` from any device on your tailnet. Full setup: [tailscale-access.md](./tailscale-access.md).
+
+### Option B: Traefik ingress (public access)
 
 If the VM is network-accessible and you want external access:
 
@@ -272,4 +293,5 @@ k3s must have the `local-path` storage class. If missing, the k3s installation m
 - [ ] Migrations run successfully
 - [ ] Smoke tests pass
 - [ ] Rollback tested once (undo + re-deploy)
-- [ ] Ingress configured (if needed)
+- [ ] Access configured: Tailscale proxy (recommended) or Traefik ingress
+- [ ] Tailscale verification script passes (`./scripts/tailscale-verify.sh cortex`)

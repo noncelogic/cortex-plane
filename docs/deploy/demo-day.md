@@ -100,6 +100,27 @@ curl -sf http://localhost:3000/               # 200
 
 Open the dashboard in a browser at `http://localhost:3000` and confirm the page loads.
 
+### Verify Tailscale access (if using Tailscale proxy)
+
+```bash
+./scripts/tailscale-verify.sh cortex cortex-demo
+```
+
+Or manually from any machine on your tailnet:
+
+```bash
+curl -sf https://cortex-demo.<tailnet>.ts.net/healthz   # 200
+curl -sf https://cortex-demo.<tailnet>.ts.net/           # 200 (dashboard)
+```
+
+Full Tailscale setup and troubleshooting: [tailscale-access.md](./tailscale-access.md).
+
+---
+
+## Known Issues
+
+**Agents page shows "Control plane unavailable" (#147):** The Agents page may display a false error even when the API is healthy. This is a dashboard-side schema mismatch (not a connectivity issue). The `/healthz` and `/readyz` endpoints will still return 200. Fix is tracked in issue #147. Other pages (home, settings) are unaffected.
+
 ---
 
 ## 4. Common Failure Modes and Recovery

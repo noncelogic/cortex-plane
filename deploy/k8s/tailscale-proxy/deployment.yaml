@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tailscale-proxy
+  labels:
+    app: tailscale-proxy
+    app.kubernetes.io/name: tailscale-proxy
+    app.kubernetes.io/component: network-proxy
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  replicas: 1
+  # Only one Tailscale node per hostname — prevent split-brain
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tailscale-proxy
+  template:
+    metadata:
+      labels:
+        app: tailscale-proxy
+    spec:
+      serviceAccountName: tailscale-proxy
+      containers:
+        - name: tailscale
+          # Pin to a specific version for production reproducibility:
+          #   image: tailscale/tailscale:v1.78.1
+          image: tailscale/tailscale:latest
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: TS_AUTHKEY
+            - name: TS_HOSTNAME
+              value: cortex-demo
+            - name: TS_STATE_DIR
+              value: /var/lib/tailscale
+            - name: TS_KUBE_SECRET
+              value: tailscale-state
+            - name: TS_SERVE_CONFIG
+              value: /config/serve-config.json
+            - name: TS_USERSPACE
+              value: "false"
+          volumeMounts:
+            - name: serve-config
+              mountPath: /config
+              readOnly: true
+            - name: tailscale-state
+              mountPath: /var/lib/tailscale
+            - name: tun
+              mountPath: /dev/net/tun
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN", "NET_RAW"]
+          readinessProbe:
+            exec:
+              command: ["tailscale", "status", "--json"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: serve-config
+          configMap:
+            name: tailscale-serve-config
+            items:
+              - key: serve-config.json
+                path: serve-config.json
+        - name: tailscale-state
+          emptyDir: {}
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
