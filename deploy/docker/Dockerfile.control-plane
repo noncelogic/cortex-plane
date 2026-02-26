@@ -55,6 +55,7 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/control-plane/dist ./packages/control-plane/dist
+COPY --from=builder /app/packages/control-plane/migrations ./packages/control-plane/migrations
 
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
