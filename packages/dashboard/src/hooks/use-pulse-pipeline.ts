@@ -41,7 +41,16 @@ export function usePulsePipeline() {
   })
   const [publishingId, setPublishingId] = useState<string | null>(null)
 
-  const { data, isLoading, error, errorCode } = useApiQuery(() => listContent({ limit: 100 }), [])
+  const {
+    data,
+    isLoading,
+    error: rawError,
+    errorCode: rawErrorCode,
+  } = useApiQuery(() => listContent({ limit: 100 }), [])
+
+  // A 404 means the /content route isn't deployed — not a connection failure.
+  const error = rawErrorCode === "NOT_FOUND" ? null : rawError
+  const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
 
   const allPieces: ContentPiece[] = useMemo(() => {
     if (isMockEnabled()) return generateMockContent()
