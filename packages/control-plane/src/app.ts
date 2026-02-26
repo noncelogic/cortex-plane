@@ -6,6 +6,9 @@ import type pg from "pg"
 import { BackendRegistry } from "@cortex/shared/backends"
 import { ApprovalService } from "./approval/service.js"
 import { ClaudeCodeBackend } from "./backends/claude-code.js"
+import { AuthHandoffService } from "./browser/auth-handoff.js"
+import { ScreenshotModeService } from "./browser/screenshot-mode.js"
+import { TraceCaptureService } from "./browser/trace-capture.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
@@ -58,8 +61,11 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     concurrency: config.workerConcurrency,
   })
 
-  // Browser observation service
+  // Browser observation service + orchestration services
   const observationService = new BrowserObservationService()
+  const authHandoffService = new AuthHandoffService()
+  const traceCaptureService = new TraceCaptureService()
+  const screenshotModeService = new ScreenshotModeService(observationService)
 
   // WebSocket support (used by VNC proxy and future WS endpoints)
   await app.register(fastifyWebSocket)
@@ -91,6 +97,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
         sseManager,
         lifecycleManager: options.lifecycleManager,
         observationService,
+        authHandoffService,
+        traceCaptureService,
+        screenshotModeService,
+        authConfig,
       }),
     )
   }
@@ -98,9 +108,12 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Register graceful shutdown handlers (SIGTERM, SIGINT)
   registerShutdownHandlers({ fastify: app, runner, pool })
 
-  // Shut down SSE connections + observation service + backend registry on app close
+  // Shut down SSE connections + observation service + browser services + backend registry on app close
   app.addHook("onClose", async () => {
     sseManager.shutdown()
+    screenshotModeService.shutdown()
+    authHandoffService.shutdown()
+    traceCaptureService.shutdown()
     await observationService.shutdown()
     await registry.stopAll()
   })
