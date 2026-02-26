@@ -10,6 +10,7 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/dashboard/package.json ./packages/dashboard/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/config/package.json ./packages/config/
 
 RUN pnpm install --frozen-lockfile
 
@@ -25,10 +26,12 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
 COPY packages/dashboard/package.json ./packages/dashboard/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/config/package.json ./packages/config/
 
 RUN pnpm install --frozen-lockfile
 
 COPY tsconfig.base.json ./
+COPY packages/config/ ./packages/config/
 COPY packages/shared/ ./packages/shared/
 COPY packages/dashboard/ ./packages/dashboard/
 
