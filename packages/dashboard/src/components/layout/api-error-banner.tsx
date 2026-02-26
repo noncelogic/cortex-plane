@@ -29,6 +29,11 @@ const ERROR_CONFIG: Record<string, { icon: string; title: string; className: str
     title: "Server error",
     className: "border-red-500/20 bg-red-500/10 text-red-500",
   },
+  SCHEMA_MISMATCH: {
+    icon: "data_object",
+    title: "Unexpected API response",
+    className: "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  },
 }
 
 const DEFAULT_CONFIG = {

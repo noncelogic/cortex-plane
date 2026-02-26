@@ -41,10 +41,31 @@ export const AgentDetailSchema = AgentSummarySchema.extend({
   checkpoint: CheckpointSchema.optional(),
 })
 
-export const AgentListResponseSchema = z.object({
-  agents: z.array(AgentSummarySchema),
-  pagination: PaginationSchema,
-})
+/**
+ * Accept both the current server shape ({agents, count}) and the full
+ * pagination shape ({agents, pagination}). Normalize to {agents, pagination}.
+ */
+export const AgentListResponseSchema = z
+  .object({
+    agents: z.array(AgentSummarySchema),
+    pagination: PaginationSchema.optional(),
+    count: z.number().optional(),
+  })
+  .transform((data) => {
+    if (data.pagination) {
+      return { agents: data.agents, pagination: data.pagination }
+    }
+    const total = data.count ?? data.agents.length
+    return {
+      agents: data.agents,
+      pagination: {
+        total,
+        limit: total,
+        offset: 0,
+        hasMore: false,
+      },
+    }
+  })
 
 export type AgentStatus = z.infer<typeof AgentStatusSchema>
 export type AgentLifecycleState = z.infer<typeof AgentLifecycleStateSchema>

@@ -110,6 +110,44 @@ describe("API Client", () => {
       expect(fetchCall[0]).toContain("limit=10")
     })
 
+    it("listAgents normalizes {agents, count} response into pagination", async () => {
+      // The control-plane currently returns {agents, count} without a
+      // full pagination envelope. The schema should accept this and
+      // synthesize a pagination object.
+      const body = {
+        agents: [
+          {
+            id: "a1",
+            name: "Agent 1",
+            slug: "a1",
+            role: "test",
+            status: "ACTIVE",
+            lifecycleState: "READY",
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+        count: 1,
+      }
+      mockFetchResponse(body)
+
+      const result = await listAgents()
+
+      expect(result.agents).toHaveLength(1)
+      expect(result.pagination).toBeDefined()
+      expect(result.pagination.total).toBe(1)
+      expect(result.pagination.hasMore).toBe(false)
+    })
+
+    it("listAgents handles empty {agents:[], count:0} response", async () => {
+      mockFetchResponse({ agents: [], count: 0 })
+
+      const result = await listAgents()
+
+      expect(result.agents).toEqual([])
+      expect(result.pagination.total).toBe(0)
+      expect(result.pagination.hasMore).toBe(false)
+    })
+
     it("getAgent fetches by ID", async () => {
       mockFetchResponse({
         id: "agent-1",
@@ -370,6 +408,25 @@ describe("API Client", () => {
       } catch (err) {
         const apiErr = err as ApiError
         expect(apiErr.code).toBe("SERVER_ERROR")
+      }
+    })
+
+    it("classifies schema validation failure as SCHEMA_MISMATCH, not CONNECTION_REFUSED", async () => {
+      // Simulate the server returning a completely unexpected shape that
+      // fails Zod validation (e.g. missing both pagination and count,
+      // with wrong agents structure).
+      mockFetchResponse({ unexpected: "shape" })
+
+      try {
+        await listAgents()
+        expect.fail("should have thrown")
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiError)
+        const apiErr = err as ApiError
+        expect(apiErr.code).toBe("SCHEMA_MISMATCH")
+        expect(apiErr.code).not.toBe("CONNECTION_REFUSED")
+        expect(apiErr.isConnectionError).toBe(false)
+        expect(apiErr.message).toContain("Unexpected response format")
       }
     })
   })

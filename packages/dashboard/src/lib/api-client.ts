@@ -96,6 +96,7 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "SERVER_ERROR"
   | "TRANSIENT"
+  | "SCHEMA_MISMATCH"
   | "UNKNOWN"
 
 function classifyError(status: number): ApiErrorCode {
@@ -239,6 +240,17 @@ async function apiFetch<T>(
       externalSignal?.removeEventListener("abort", onExternalAbort)
 
       if (err instanceof ApiError) throw err
+
+      // Schema validation errors (e.g. ZodError) mean the API responded
+      // successfully but with an unexpected shape — not a connectivity issue.
+      if (err instanceof Error && err.name === "ZodError") {
+        throw new ApiError(
+          0,
+          "Unexpected response format from the control plane",
+          undefined,
+          "SCHEMA_MISMATCH",
+        )
+      }
 
       // Network errors and timeouts are retryable
       if (isNetworkError(err) && attempt < maxRetries) {
