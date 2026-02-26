@@ -9,6 +9,13 @@ export type {
   CreateApprovalRequest,
   JobStatus,
 } from "./types/index.js"
+
+export type {
+  ExecutionPlanDocument,
+  ExecutionPlanStep,
+  ExecutionPlanTimelineEvent,
+  PlanRunState,
+} from "./types/execution-plan.js"
 export {
   APPROVAL_TOKEN_PREFIX,
   APPROVAL_TOKEN_VERSION,

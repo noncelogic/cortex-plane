@@ -1,4 +1,4 @@
-import type { AgentStatus, ApprovalStatus, JobStatus } from "@cortex/shared"
+import type { AgentStatus, ApprovalStatus, JobStatus, PlanRunState } from "@cortex/shared"
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely"
 
 // ---------------------------------------------------------------------------
@@ -259,6 +259,69 @@ export type CredentialAuditLog = Selectable<CredentialAuditLogTable>
 export type NewCredentialAuditLog = Insertable<CredentialAuditLogTable>
 
 // ---------------------------------------------------------------------------
+// Table: execution_plan
+// ---------------------------------------------------------------------------
+export interface ExecutionPlanTable {
+  id: Generated<string>
+  key: string
+  title: string
+  description: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export interface ExecutionPlanVersionTable {
+  id: Generated<string>
+  plan_id: string
+  version_number: number
+  schema_version: string
+  plan_document: Record<string, unknown>
+  source_issue_number: number | null
+  source_pr_number: number | null
+  source_agent_run_id: string | null
+  source_job_id: string | null
+  source_session_id: string | null
+  created_by: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export interface ExecutionPlanRunTable {
+  id: Generated<string>
+  plan_version_id: string
+  state: ColumnType<PlanRunState, PlanRunState | undefined, PlanRunState>
+  current_step_id: string | null
+  last_checkpoint_key: string | null
+  approval_gate_step_id: string | null
+  approval_gate_status: ApprovalStatus | null
+  blocked_reason: string | null
+  metadata: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+  completed_at: Date | null
+}
+
+export interface ExecutionPlanEventTable {
+  id: Generated<string>
+  plan_run_id: string
+  from_state: PlanRunState | null
+  to_state: PlanRunState | null
+  step_id: string | null
+  checkpoint_key: string | null
+  event_type: string
+  event_payload: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  actor: string | null
+  occurred_at: ColumnType<Date, Date | undefined, never>
+}
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -272,4 +335,8 @@ export interface Database {
   dashboard_session: DashboardSessionTable
   provider_credential: ProviderCredentialTable
   credential_audit_log: CredentialAuditLogTable
+  execution_plan: ExecutionPlanTable
+  execution_plan_version: ExecutionPlanVersionTable
+  execution_plan_run: ExecutionPlanRunTable
+  execution_plan_event: ExecutionPlanEventTable
 }
