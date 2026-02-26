@@ -38,6 +38,6 @@ images:
   #     ghcr.io/noncelogic/cortex-control-plane=ghcr.io/noncelogic/cortex-control-plane:<SHA> \
   #     ghcr.io/noncelogic/cortex-dashboard=ghcr.io/noncelogic/cortex-dashboard:<SHA>
   - name: ghcr.io/noncelogic/cortex-control-plane
-    newTag: "8117302"
+    newTag: "95dc938"
   - name: ghcr.io/noncelogic/cortex-dashboard
-    newTag: "8117302"
+    newTag: "95dc938"

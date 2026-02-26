@@ -93,13 +93,13 @@ kubectl -n cortex create secret generic postgres-secrets \
 If using GHCR private images, create an image pull secret:
 
 ```bash
-kubectl -n cortex create secret docker-registry ghcr-creds \
+# IMPORTANT: The secret name must be "ghcr-secret" to match the
+# imagePullSecrets reference in deploy/k8s/dashboard/deployment.yaml.
+# Use a classic PAT (ghp_) with read:packages scope — NOT an OAuth token (gho_).
+kubectl -n cortex create secret docker-registry ghcr-secret \
   --docker-server=ghcr.io \
   --docker-username=YOUR_GH_USER \
   --docker-password=YOUR_GH_PAT
-
-kubectl -n cortex patch serviceaccount default \
-  -p '{"imagePullSecrets": [{"name": "ghcr-creds"}]}'
 ```
 
 ---
@@ -237,10 +237,39 @@ kubectl -n cortex rollout status deployment/dashboard
 ### Pods stuck in ImagePullBackOff
 
 ```bash
-kubectl -n cortex describe pod -l app=control-plane | grep -A5 Events
+kubectl -n cortex describe pod -l app=dashboard | grep -A10 Events
+# Look for the specific error: 401 Unauthorized, 403 Forbidden, or "manifest unknown"
 ```
 
-Fix: Verify the image tag exists in GHCR and the pull secret is configured. If GHCR packages are private, either make them public or use the local build workaround in Step 1.
+**Common causes and fixes:**
+
+1. **Expired or invalid `ghcr-secret` token (403 Forbidden):** GHCR packages are private and the image pull secret contains an expired token. GitHub OAuth tokens (`gho_` prefix) expire after a few hours. Classic PATs (`ghp_` prefix) do not expire unless revoked.
+
+   ```bash
+   # Recreate the pull secret with a valid PAT that has read:packages scope
+   kubectl -n cortex delete secret ghcr-secret
+   kubectl -n cortex create secret docker-registry ghcr-secret \
+     --docker-server=ghcr.io \
+     --docker-username=<GH_USERNAME> \
+     --docker-password=<GH_PAT_WITH_READ_PACKAGES>
+   ```
+
+2. **Image tag does not exist (manifest unknown):** The prod overlay references a SHA tag that was never pushed (e.g., CI failed for that commit). Verify the tag exists:
+
+   ```bash
+   # Check available tags
+   gh api /orgs/noncelogic/packages/container/cortex-dashboard/versions \
+     --jq '.[].metadata.container.tags[]' | head -10
+   # Or test pull directly on the k3s node
+   sudo k3s crictl pull ghcr.io/noncelogic/cortex-dashboard:<TAG>
+   ```
+
+3. **Prod overlay not updated after deploy:** The kustomization.yaml still points to an old SHA while a newer tag was applied via `kubectl set image`. Always update `deploy/k8s/overlays/prod/kustomization.yaml` to match what is deployed.
+
+**Prevention:**
+- Use classic PATs (`ghp_`) or fine-grained PATs for image pull secrets, never OAuth tokens (`gho_`)
+- After each CI build on `main`, update the prod overlay's `newTag` to the new SHA before deploying
+- Consider making GHCR packages public for demo environments to eliminate pull secret dependencies entirely
 
 ### control-plane CrashLoopBackOff
 
