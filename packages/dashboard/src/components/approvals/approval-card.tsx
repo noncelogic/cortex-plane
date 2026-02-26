@@ -40,15 +40,15 @@ function riskBarColor(level: RiskLevel): string {
 }
 
 function riskIconBg(level: RiskLevel): string {
-  if (level === "CRITICAL") return "bg-red-50 dark:bg-red-900/20"
-  if (level === "MEDIUM") return "bg-amber-50 dark:bg-amber-900/20"
-  return "bg-blue-50 dark:bg-blue-900/20"
+  if (level === "CRITICAL") return "bg-red-500/10"
+  if (level === "MEDIUM") return "bg-amber-500/10"
+  return "bg-blue-500/10"
 }
 
 function riskIconColor(level: RiskLevel): string {
-  if (level === "CRITICAL") return "text-red-600 dark:text-red-400"
-  if (level === "MEDIUM") return "text-amber-600 dark:text-amber-400"
-  return "text-blue-600 dark:text-blue-400"
+  if (level === "CRITICAL") return "text-red-500"
+  if (level === "MEDIUM") return "text-amber-500"
+  return "text-blue-500"
 }
 
 function riskIcon(level: RiskLevel): string {
@@ -105,11 +105,11 @@ function deriveTags(
 
 const tagVariants: Record<string, string> = {
   default:
-    "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+    "bg-secondary text-text-muted border-surface-border",
   purple:
-    "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800/30",
+    "bg-purple-500/10 text-purple-500 border-purple-500/20",
   danger:
-    "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800/30",
+    "bg-red-500/10 text-red-500 border-red-500/20",
 }
 
 // ---------------------------------------------------------------------------
@@ -174,8 +174,8 @@ export function ApprovalCard({
       className={`group relative flex flex-col overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md ${
         selected
           ? "border-primary/50 shadow-md"
-          : "border-slate-200 hover:border-primary/50 dark:border-slate-800"
-      } bg-surface-light dark:bg-surface-dark`}
+          : "border-surface-border hover:border-primary/50"
+      } bg-surface-light`}
       role="button"
       tabIndex={0}
       onClick={() => onSelect?.(approval.id)}
@@ -209,31 +209,31 @@ export function ApprovalCard({
               <div
                 className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 ${
                   risk === "CRITICAL" || urgent
-                    ? "border-red-100 bg-red-50 dark:border-red-900/30 dark:bg-red-900/10"
-                    : "border-slate-200 bg-bg-light dark:border-slate-700 dark:bg-bg-dark/50"
+                    ? "border-red-500/20 bg-red-500/10"
+                    : "border-surface-border bg-bg-light"
                 }`}
               >
                 <span
                   className={`material-symbols-outlined text-[16px] ${
                     risk === "CRITICAL" || urgent
-                      ? "text-red-500 dark:text-red-400"
+                      ? "text-red-500"
                       : "text-text-muted"
                   }`}
                 >
                   timer
                 </span>
                 {(risk === "CRITICAL" || urgent) && (
-                  <span className="text-[10px] font-bold uppercase text-red-400 dark:text-red-500">
+                  <span className="text-[10px] font-bold uppercase text-red-500">
                     Expires
                   </span>
                 )}
                 <span
                   className={`font-mono text-sm font-bold ${
                     expired
-                      ? "text-red-600 dark:text-red-400"
+                      ? "text-red-500"
                       : risk === "CRITICAL" || urgent
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-text-main dark:text-white"
+                        ? "text-red-500"
+                        : "text-text-main"
                   }`}
                 >
                   {expired ? "EXPIRED" : countdown}
@@ -243,13 +243,13 @@ export function ApprovalCard({
           </div>
 
           {/* Title */}
-          <h3 className="truncate text-lg font-bold text-text-main dark:text-white">
+          <h3 className="truncate text-lg font-bold text-text-main">
             {approval.actionSummary}
           </h3>
 
           {/* Description */}
           {typeof approval.actionDetail?.description === "string" && (
-            <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-text-muted dark:text-slate-400">
+            <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-text-muted">
               {approval.actionDetail.description}
             </p>
           )}
@@ -271,8 +271,8 @@ export function ApprovalCard({
 
           {/* Requester / Agent */}
           <div className="mt-3 flex items-center gap-2">
-            <div className="flex size-6 items-center justify-center rounded-full bg-blue-100 ring-2 ring-white dark:bg-blue-900 dark:ring-surface-dark">
-              <span className="text-[10px] font-bold text-primary dark:text-blue-300">
+            <div className="flex size-6 items-center justify-center rounded-full bg-blue-500/10 ring-2 ring-surface-light">
+              <span className="text-[10px] font-bold text-primary">
                 {getInitials(agentName)}
               </span>
             </div>
@@ -281,13 +281,13 @@ export function ApprovalCard({
               {approval.agentId ? (
                 <Link
                   href={`/agents/${approval.agentId}`}
-                  className="font-medium text-text-main hover:text-primary dark:text-white"
+                  className="font-medium text-text-main hover:text-primary"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {agentName}
                 </Link>
               ) : (
-                <span className="font-medium text-text-main dark:text-white">{agentName}</span>
+                <span className="font-medium text-text-main">{agentName}</span>
               )}
             </span>
           </div>
@@ -296,14 +296,14 @@ export function ApprovalCard({
 
       {/* Card footer with actions */}
       {isPending && (
-        <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-slate-200 bg-surface-light/90 px-5 py-3 backdrop-blur-md dark:border-slate-800 dark:bg-surface-dark/90">
+        <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-surface-border bg-surface-light/90 px-5 py-3 backdrop-blur-md">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               onRequestContext?.(approval.id)
             }}
-            className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-muted transition-colors hover:bg-bg-light dark:text-slate-400 dark:hover:bg-white/5"
+            className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-muted transition-colors hover:bg-secondary"
           >
             Request Context
           </button>
@@ -314,7 +314,7 @@ export function ApprovalCard({
                 e.stopPropagation()
                 onReject?.(approval.id)
               }}
-              className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-500 transition-colors hover:bg-red-500/10"
             >
               Reject
             </button>

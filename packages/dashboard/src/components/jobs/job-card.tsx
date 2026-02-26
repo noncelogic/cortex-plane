@@ -20,7 +20,7 @@ export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
 
   return (
     <div
-      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:shadow-md dark:border-primary/10 dark:bg-slate-900/50"
+      className="rounded-xl border border-surface-border bg-surface-light p-4 shadow-sm transition-all duration-200 hover:shadow-md"
       role="button"
       tabIndex={0}
       onClick={() => onSelect?.(job.id)}
@@ -39,22 +39,22 @@ export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
       {/* Agent + Type */}
       <div className="mb-3 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-lg text-slate-400">smart_toy</span>
-          <span className="text-sm text-slate-900 dark:text-slate-100">
+          <span className="material-symbols-outlined text-lg text-text-muted">smart_toy</span>
+          <span className="text-sm text-text-main">
             {truncateUuid(job.agentId)}
           </span>
         </div>
-        <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <span className="inline-block rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-text-muted">
           {job.type}
         </span>
       </div>
 
       {/* Footer: Duration + Time */}
-      <div className="flex items-center justify-between border-t border-slate-100 pt-3 dark:border-primary/5">
-        <span className="font-mono text-xs text-slate-500">
+      <div className="flex items-center justify-between border-t border-surface-border pt-3">
+        <span className="font-mono text-xs text-text-muted">
           {durationMs !== null ? duration(durationMs) : "—"}
         </span>
-        <span className="text-xs text-slate-400">{relativeTime(job.createdAt)}</span>
+        <span className="text-xs text-text-muted">{relativeTime(job.createdAt)}</span>
       </div>
 
       {/* Error preview */}

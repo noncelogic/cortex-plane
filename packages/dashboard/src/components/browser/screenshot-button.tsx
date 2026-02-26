@@ -11,7 +11,7 @@ export function ScreenshotButton({ agentId }: ScreenshotButtonProps): React.JSX.
   return (
     <button
       type="button"
-      className="rounded-md border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800"
+      className="rounded-md border border-surface-border px-3 py-1.5 text-sm text-text-muted hover:bg-secondary"
     >
       Screenshot
     </button>

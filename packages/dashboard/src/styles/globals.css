@@ -42,8 +42,9 @@
   --color-cortex-950: #072a49;
 
   /* ── Typography ──────────────────────────────────── */
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), "Space Grotesk", ui-sans-serif,
+    system-ui, sans-serif;
+  --font-body: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 
@@ -71,6 +72,15 @@
   }
 }
 
+/* ── Dark mode token overrides ────────────────────────── */
+.dark {
+  --color-bg-light: #101022;
+  --color-surface-light: #1a1a2e;
+  --color-secondary: #1e1e32;
+  --color-text-main: #e8e8ef;
+  --color-text-muted: #9494b8;
+}
+
 /* ── Utilities ───────────────────────────────────────── */
 @utility scrollbar-hide {
   -ms-overflow-style: none;
@@ -88,13 +98,8 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Light mode defaults */
   body {
-    @apply bg-bg-light text-text-main;
-  }
-
-  /* Dark mode overrides */
-  .dark body {
-    @apply bg-bg-dark text-slate-100;
+    background-color: var(--color-bg-light);
+    color: var(--color-text-main);
   }
 }

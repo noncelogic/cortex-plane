@@ -61,7 +61,7 @@ export function LifecycleTimeline({
   }
 
   return (
-    <div className="hidden rounded-xl border border-slate-200 bg-white px-6 py-5 dark:border-primary/10 dark:bg-primary/5 lg:block">
+    <div className="hidden rounded-xl border border-surface-border bg-surface-light px-6 py-5 lg:block">
       <div className="mx-auto flex max-w-4xl items-center">
         {LIFECYCLE_ORDER.map((state, idx) => {
           const status = getStepStatus(idx)
@@ -78,7 +78,7 @@ export function LifecycleTimeline({
                       ? "bg-primary text-white shadow-lg shadow-primary/20"
                       : status === "current"
                         ? "bg-primary text-white ring-4 ring-primary/20 shadow-lg shadow-primary/30"
-                        : "bg-slate-200 text-slate-400 dark:bg-slate-800"
+                        : "bg-secondary text-text-muted"
                   }`}
                 >
                   <span
@@ -94,7 +94,7 @@ export function LifecycleTimeline({
                     status === "current"
                       ? "text-primary"
                       : status === "completed"
-                        ? "text-slate-700 dark:text-slate-300"
+                        ? "text-text-main"
                         : "text-slate-400"
                   }`}
                 >
@@ -110,7 +110,7 @@ export function LifecycleTimeline({
                     className={`h-full rounded-full ${
                       status === "completed" || status === "current"
                         ? "bg-primary"
-                        : "bg-slate-200 dark:bg-primary/20"
+                        : "bg-secondary"
                     }`}
                   />
                 </div>

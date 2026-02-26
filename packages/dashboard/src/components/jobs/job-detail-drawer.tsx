@@ -144,13 +144,13 @@ function StepTimeline({ steps }: { steps: JobStep[] }): React.JSX.Element {
     if (status === "COMPLETED") return "bg-emerald-500"
     if (status === "FAILED") return "bg-red-500"
     if (status === "RUNNING") return "bg-blue-400 animate-pulse"
-    return "bg-slate-500"
+    return "bg-text-muted"
   }
 
   const lineColor = (status: JobStep["status"]) => {
     if (status === "COMPLETED") return "bg-emerald-500/30"
     if (status === "FAILED") return "bg-red-500/30"
-    return "bg-slate-700"
+    return "bg-surface-border"
   }
 
   return (
@@ -166,21 +166,21 @@ function StepTimeline({ steps }: { steps: JobStep[] }): React.JSX.Element {
 
           {/* Dot */}
           <div className="relative z-10 mt-1 flex-shrink-0">
-            <div className={`size-[18px] rounded-full border-2 border-slate-900 ${dotColor(step.status)}`} />
+            <div className={`size-[18px] rounded-full border-2 border-bg-light ${dotColor(step.status)}`} />
           </div>
 
           {/* Content */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-bold text-slate-100">{step.name}</span>
+              <span className="text-sm font-bold text-text-main">{step.name}</span>
               {step.durationMs !== undefined && (
-                <span className="font-mono text-xs text-slate-500">
+                <span className="font-mono text-xs text-text-muted">
                   {duration(step.durationMs)}
                 </span>
               )}
             </div>
             {step.worker && (
-              <span className="text-xs text-slate-500">{step.worker}</span>
+              <span className="text-xs text-text-muted">{step.worker}</span>
             )}
             {step.error && (
               <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
@@ -223,17 +223,17 @@ function MetricsGrid({ metrics }: { metrics: JobMetrics }): React.JSX.Element {
       {items.map((item) => (
         <div
           key={item.label}
-          className="rounded-lg border border-slate-800 bg-slate-800/50 p-3"
+          className="rounded-lg border border-surface-border bg-secondary p-3"
         >
           <div className="mb-1 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-sm text-slate-500">
+            <span className="material-symbols-outlined text-sm text-text-muted">
               {item.icon}
             </span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
               {item.label}
             </span>
           </div>
-          <span className="font-mono text-sm font-bold text-slate-100">{item.value}</span>
+          <span className="font-mono text-sm font-bold text-text-main">{item.value}</span>
         </div>
       ))}
     </div>
@@ -244,21 +244,21 @@ const logLevelColors: Record<JobLogEntry["level"], string> = {
   INFO: "text-blue-400",
   WARN: "text-yellow-400",
   ERR: "text-red-400",
-  DEBUG: "text-slate-500",
+  DEBUG: "text-text-muted",
 }
 
 function LogViewer({ logs }: { logs: JobLogEntry[] }): React.JSX.Element {
   return (
-    <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-800 bg-[#0d0d14] p-3 font-mono text-xs">
+    <div className="max-h-64 overflow-y-auto rounded-lg border border-surface-border bg-bg-light p-3 font-mono text-xs">
       {logs.map((log, i) => {
         const time = new Date(log.timestamp).toLocaleTimeString("en-US", { hour12: false })
         return (
           <div key={i} className="flex gap-2 py-0.5">
-            <span className="flex-shrink-0 text-slate-600">{time}</span>
+            <span className="flex-shrink-0 text-text-muted">{time}</span>
             <span className={`flex-shrink-0 font-bold ${logLevelColors[log.level]}`}>
               [{log.level}]
             </span>
-            <span className="text-slate-300">{log.message}</span>
+            <span className="text-text-main">{log.message}</span>
           </div>
         )
       })}
@@ -320,9 +320,9 @@ export function JobDetailDrawer({
       />
 
       {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col border-l border-slate-800 bg-[#111118] shadow-2xl">
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col border-l border-surface-border bg-bg-light shadow-2xl">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-800 p-6">
+        <div className="flex items-start justify-between border-b border-surface-border p-6">
           <div className="min-w-0 space-y-2">
             <div className="flex items-center gap-3">
               <span className="font-mono text-lg font-bold text-primary">
@@ -331,15 +331,15 @@ export function JobDetailDrawer({
               {job && <JobStatusBadge status={job.status} />}
             </div>
             {job && (
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-text-muted">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm">smart_toy</span>
                   {job.agentName ?? job.agentId.slice(0, 12)}
                   {job.agentVersion && (
-                    <span className="text-xs text-slate-600"> {job.agentVersion}</span>
+                    <span className="text-xs text-text-muted"> {job.agentVersion}</span>
                   )}
                 </span>
-                <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs">
+                <span className="rounded-md bg-secondary px-2 py-0.5 text-xs">
                   {job.type}
                 </span>
                 {durationMs !== null && (
@@ -352,7 +352,7 @@ export function JobDetailDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-text-main"
           >
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
@@ -364,7 +364,7 @@ export function JobDetailDrawer({
             <>
               {/* Execution Steps */}
               <section>
-                <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
                   <span className="material-symbols-outlined text-sm">timeline</span>
                   Execution Steps
                 </h3>
@@ -374,7 +374,7 @@ export function JobDetailDrawer({
               {/* Metrics */}
               {job.metrics && (
                 <section>
-                  <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
                     <span className="material-symbols-outlined text-sm">monitoring</span>
                     Resource Metrics
                   </h3>
@@ -385,7 +385,7 @@ export function JobDetailDrawer({
               {/* Logs */}
               {job.logs.length > 0 && (
                 <section>
-                  <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
                     <span className="material-symbols-outlined text-sm">article</span>
                     Recent Logs
                   </h3>
@@ -395,20 +395,20 @@ export function JobDetailDrawer({
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
-              <span className="material-symbols-outlined animate-spin text-3xl text-slate-500">
+              <span className="material-symbols-outlined animate-spin text-3xl text-text-muted">
                 sync
               </span>
-              <span className="mt-3 text-sm text-slate-500">Loading job details...</span>
+              <span className="mt-3 text-sm text-text-muted">Loading job details...</span>
             </div>
           )}
         </div>
 
         {/* Footer */}
         {job && (
-          <div className="flex items-center justify-between border-t border-slate-800 p-4">
+          <div className="flex items-center justify-between border-t border-surface-border p-4">
             <button
               type="button"
-              className="flex items-center gap-2 rounded-lg bg-[#282839] px-4 py-2 text-sm font-bold text-slate-300 transition-colors hover:bg-[#32324a]"
+              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-bold text-text-main transition-colors hover:bg-surface-border"
             >
               <span className="material-symbols-outlined text-lg">download</span>
               Download Logs

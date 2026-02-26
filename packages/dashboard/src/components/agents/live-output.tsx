@@ -27,18 +27,18 @@ export function LiveOutput({ agentId }: LiveOutputProps): React.JSX.Element {
   return (
     <section>
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-300">Live Output</h2>
+        <h2 className="text-sm font-semibold text-text-main">Live Output</h2>
         <span className={`text-xs ${connected ? "text-green-400" : "text-red-400"}`}>
           {connected ? "Connected" : "Disconnected"}
         </span>
       </div>
-      <div className="h-96 overflow-auto rounded-lg border border-gray-800 bg-black p-4 font-mono text-sm text-gray-300">
+      <div className="h-96 overflow-auto rounded-lg border border-surface-border bg-console-bg p-4 font-mono text-sm text-slate-300">
         {events.length === 0 ? (
-          <p className="text-gray-600">Waiting for output...</p>
+          <p className="text-text-muted">Waiting for output...</p>
         ) : (
           events.map((event, i) => (
             <div key={i} className="whitespace-pre-wrap">
-              <span className="mr-2 text-gray-600">[{event.type}]</span>
+              <span className="mr-2 text-text-muted">[{event.type}]</span>
               {formatEventData(event)}
             </div>
           ))

@@ -151,9 +151,9 @@ export function AgentConsole({ agentId }: AgentConsoleProps): React.JSX.Element 
         : "bg-slate-500"
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 dark:border-slate-800">
+    <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-surface-border">
       {/* Console header */}
-      <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/50 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="flex items-center justify-between border-b border-surface-border bg-console-bg px-4 py-2.5">
         <div className="flex items-center gap-3">
           {/* Traffic light dots */}
           <div className="flex items-center gap-1.5">
@@ -264,7 +264,7 @@ export function AgentConsole({ agentId }: AgentConsoleProps): React.JSX.Element 
       </div>
 
       {/* Console footer */}
-      <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900/50 px-4 py-2">
+      <div className="flex items-center justify-between border-t border-surface-border bg-console-bg px-4 py-2">
         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
           {events.length} events
         </span>

@@ -8,7 +8,7 @@ export function NotificationBell({ count }: NotificationBellProps): React.JSX.El
   return (
     <button
       type="button"
-      className="relative rounded-md p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+      className="relative rounded-md p-2 text-text-muted hover:bg-secondary hover:text-text-main"
       aria-label={`${count} pending approvals`}
     >
       <span className="text-lg">&#128276;</span>

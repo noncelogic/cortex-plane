@@ -60,12 +60,12 @@ export function ApprovalList({
   if (filtered.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="mb-6 flex size-48 items-center justify-center rounded-full border-2 border-dashed border-slate-200 dark:border-slate-700">
-          <span className="material-symbols-outlined text-6xl text-slate-200 dark:text-slate-700">
+        <div className="mb-6 flex size-48 items-center justify-center rounded-full border-2 border-dashed border-surface-border">
+          <span className="material-symbols-outlined text-6xl text-text-muted">
             verified_user
           </span>
         </div>
-        <h3 className="mb-2 text-lg font-bold text-text-main dark:text-white">All Clear</h3>
+        <h3 className="mb-2 text-lg font-bold text-text-main">All Clear</h3>
         <p className="max-w-sm text-text-muted">
           No approval requests match the current filters. Adjust your filters or check back later.
         </p>

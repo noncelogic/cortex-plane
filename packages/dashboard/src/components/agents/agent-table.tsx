@@ -26,7 +26,7 @@ function iconBgForState(state: string, hasError: boolean): string {
   if (state === "READY") return "bg-emerald-500/10 text-emerald-500"
   if (state === "EXECUTING") return "bg-primary/10 text-primary"
   if (state === "DRAINING") return "bg-orange-500/10 text-orange-500"
-  return "bg-slate-200 text-slate-400 dark:bg-slate-800"
+  return "bg-secondary text-text-muted"
 }
 
 function ResourceBars({
@@ -43,23 +43,23 @@ function ResourceBars({
     <div className={`flex w-32 flex-col gap-2 ${wrapperClass}`}>
       <div>
         <div className="mb-0.5 flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase text-slate-400">CPU</span>
-          <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100">
+          <span className="text-[10px] font-bold uppercase text-text-muted">CPU</span>
+          <span className="text-[10px] font-bold text-text-main">
             {cpuPercent}%
           </span>
         </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-secondary">
           <div className="h-full rounded-full bg-primary" style={{ width: `${cpuPercent}%` }} />
         </div>
       </div>
       <div>
         <div className="mb-0.5 flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase text-slate-400">MEM</span>
-          <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100">
+          <span className="text-[10px] font-bold uppercase text-text-muted">MEM</span>
+          <span className="text-[10px] font-bold text-text-main">
             {memPercent}%
           </span>
         </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-secondary">
           <div className="h-full rounded-full bg-primary" style={{ width: `${memPercent}%` }} />
         </div>
       </div>
@@ -70,35 +70,35 @@ function ResourceBars({
 export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.Element {
   if (agents.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 p-12 text-center text-slate-500 dark:border-slate-700">
+      <div className="rounded-xl border border-dashed border-surface-border p-12 text-center text-text-muted">
         No agents registered. Deploy a new agent to see it here.
       </div>
     )
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/20">
+    <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-light shadow-sm">
       <table className="w-full border-collapse text-left">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
-            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <tr className="border-b border-surface-border bg-secondary">
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">
               Agent Details
             </th>
-            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">
               Status
             </th>
-            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">
               Current Task
             </th>
-            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">
               Resources (CPU/Mem)
             </th>
-            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-text-muted">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+        <tbody className="divide-y divide-surface-border">
           {agents.map((agent) => {
             const m = metricsMap[agent.id]
             const hasError = agent.lifecycleState === "TERMINATED" && !!agent.currentJobId
@@ -117,10 +117,10 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                       {getInitials(agent.name)}
                     </div>
                     <div>
-                      <div className="font-bold text-slate-900 dark:text-slate-100">
+                      <div className="font-bold text-text-main">
                         {agent.name}
                       </div>
-                      <div className="font-mono text-xs text-slate-400">
+                      <div className="font-mono text-xs text-text-muted">
                         ID: {agent.id.slice(0, 12)}
                       </div>
                     </div>
@@ -136,17 +136,17 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                 <td className="px-6 py-4">
                   {m?.currentTask ? (
                     <>
-                      <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      <div className="text-sm font-medium text-text-main">
                         {m.currentTask}
                       </div>
                       {m.lastHeartbeat && (
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-text-muted">
                           {relativeTime(m.lastHeartbeat)}
                         </div>
                       )}
                     </>
                   ) : (
-                    <div className="text-sm text-slate-400">
+                    <div className="text-sm text-text-muted">
                       {agent.currentJobId ? `Job: ${agent.currentJobId.slice(0, 8)}` : "Idle"}
                     </div>
                   )}
@@ -162,8 +162,8 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                     />
                   ) : (
                     <div className="w-32 opacity-40">
-                      <div className="h-1 w-full rounded-full bg-slate-200 dark:bg-slate-700" />
-                      <div className="mt-2 h-1 w-full rounded-full bg-slate-200 dark:bg-slate-700" />
+                      <div className="h-1 w-full rounded-full bg-secondary" />
+                      <div className="mt-2 h-1 w-full rounded-full bg-secondary" />
                     </div>
                   )}
                 </td>
@@ -184,7 +184,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                     )}
                     <Link
                       href={`/agents/${agent.id}`}
-                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-primary dark:hover:bg-slate-700"
+                      className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
                       title="Logs"
                     >
                       <span className="material-symbols-outlined text-xl leading-none">
@@ -193,7 +193,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                     </Link>
                     <Link
                       href={`/agents/${agent.id}`}
-                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-primary dark:hover:bg-slate-700"
+                      className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
                       title="Terminal"
                     >
                       <span className="material-symbols-outlined text-xl leading-none">
@@ -202,7 +202,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                     </Link>
                     <Link
                       href={`/agents/${agent.id}`}
-                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-primary dark:hover:bg-slate-700"
+                      className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
                       title="More"
                     >
                       <span className="material-symbols-outlined text-xl leading-none">

@@ -51,7 +51,7 @@ export function JobRetryButton({
           type="button"
           onClick={() => setConfirming(false)}
           disabled={isLoading}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-400 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+          className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-bold text-text-muted transition-colors hover:bg-secondary"
         >
           Cancel
         </button>

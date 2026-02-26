@@ -12,7 +12,7 @@ export function RoutePlaceholder({ title, icon }: RoutePlaceholderProps) {
       {/* Header */}
       <div className="flex items-center gap-3">
         <span className="material-symbols-outlined text-[28px] text-primary">{icon}</span>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-text-main dark:text-white">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-text-main">
           {title}
         </h1>
       </div>
@@ -22,7 +22,7 @@ export function RoutePlaceholder({ title, icon }: RoutePlaceholderProps) {
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
-            className="rounded-xl border border-slate-200 dark:border-slate-800 bg-surface-light dark:bg-slate-900/40 p-6 space-y-3"
+            className="rounded-xl border border-surface-border bg-surface-light p-6 space-y-3"
           >
             <Skeleton className="h-3 w-20" />
             <Skeleton className="h-8 w-24" />

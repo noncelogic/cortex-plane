@@ -12,13 +12,13 @@ export function AgentControls({ agentId }: AgentControlsProps): React.JSX.Elemen
     <div className="flex items-center gap-3">
       <button
         type="button"
-        className="rounded-md border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800"
+        className="rounded-md border border-surface-border px-3 py-1.5 text-sm text-text-muted hover:bg-secondary"
       >
         Pause
       </button>
       <button
         type="button"
-        className="rounded-md border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800"
+        className="rounded-md border border-surface-border px-3 py-1.5 text-sm text-text-muted hover:bg-secondary"
       >
         Resume
       </button>
