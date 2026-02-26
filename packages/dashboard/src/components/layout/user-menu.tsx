@@ -40,7 +40,7 @@ export function UserMenu() {
         .toUpperCase()
     : "OP"
 
-  const displayName = user?.displayName ?? "Operator"
+  const displayName = user?.displayName ?? user?.email ?? "Operator"
   const role = user?.role ?? "operator"
 
   return (
