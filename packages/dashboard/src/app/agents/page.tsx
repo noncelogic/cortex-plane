@@ -66,11 +66,14 @@ export default function AgentsPage(): React.JSX.Element {
     [],
   )
 
-  // Real-time SSE for fleet-wide state updates
+  // Real-time SSE for fleet-wide state updates.
+  // The backend only exposes per-agent streams (/agents/:id/stream), so
+  // fleet-wide SSE is not available yet. Disable auto-connect to prevent
+  // a 400 loop from "stream" being parsed as a UUID path param.
   const { connected, events: sseEvents } = useSSE({
     url: resolveSSEUrl("/api/agents/stream"),
     eventTypes: ["agent:state"],
-    autoConnect: true,
+    autoConnect: false,
     maxEvents: 50,
   })
 
