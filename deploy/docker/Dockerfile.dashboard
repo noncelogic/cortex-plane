@@ -53,7 +53,7 @@ WORKDIR /app
 # Next.js standalone output includes everything needed
 COPY --from=builder /app/packages/dashboard/.next/standalone ./
 COPY --from=builder /app/packages/dashboard/.next/static ./packages/dashboard/.next/static
-COPY --from=builder /app/packages/dashboard/public ./packages/dashboard/public 2>/dev/null || true
+COPY --from=builder /app/packages/dashboard/public ./packages/dashboard/public
 
 USER cortex
 
