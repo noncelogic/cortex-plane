@@ -1,14 +1,25 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
 import { useTheme } from "@/components/theme-provider"
 
+/** Derive up to 2 uppercase initials from a display name. */
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
+}
+
 export function UserMenu() {
   const { theme, toggle } = useTheme()
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, isLoading, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -30,18 +41,31 @@ export function UserMenu() {
     }
   }, [open, close])
 
-  // Derive initials from display name or fallback
-  const initials = user?.displayName
-    ? user.displayName
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
-    : "OP"
+  // While checking auth, show a loading skeleton
+  if (isLoading) {
+    return <div className="size-8 animate-pulse rounded-full bg-text-muted/20" aria-hidden="true" />
+  }
 
-  const displayName = user?.displayName ?? user?.email ?? "Operator"
+  // Unauthenticated: show a clear "Sign in" link instead of the ambiguous OP circle
+  if (!isAuthenticated) {
+    return (
+      <Link
+        href="/login"
+        className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-text-muted transition-colors hover:bg-secondary hover:text-primary"
+      >
+        <span className="material-symbols-outlined text-[18px]">login</span>
+        <span>Sign in</span>
+      </Link>
+    )
+  }
+
+  // Authenticated: derive identity display values
+  const initials = user?.displayName
+    ? getInitials(user.displayName)
+    : (user?.email?.[0]?.toUpperCase() ?? "?")
+  const displayName = user?.displayName ?? user?.email ?? "User"
   const role = user?.role ?? "operator"
+  const avatarUrl = user?.avatarUrl ?? null
 
   return (
     <div ref={ref} className="relative">
@@ -49,11 +73,21 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-content transition-shadow hover:ring-2 hover:ring-primary/30"
+        className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-primary-content transition-shadow hover:ring-2 hover:ring-primary/30"
         aria-label="User menu"
         aria-expanded={open}
       >
-        {initials}
+        {avatarUrl ? (
+          <Image
+            src={avatarUrl}
+            alt={displayName}
+            width={32}
+            height={32}
+            className="size-full object-cover"
+          />
+        ) : (
+          initials
+        )}
       </button>
 
       {/* Dropdown */}
@@ -109,25 +143,14 @@ export function UserMenu() {
           <div className="mx-2 border-t border-surface-border" />
 
           {/* Sign out */}
-          {isAuthenticated ? (
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-main transition-colors hover:bg-secondary"
-            >
-              <span className="material-symbols-outlined text-[18px] text-text-muted">logout</span>
-              <span>Sign out</span>
-            </button>
-          ) : (
-            <Link
-              href="/login"
-              onClick={close}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-main transition-colors hover:bg-secondary"
-            >
-              <span className="material-symbols-outlined text-[18px] text-text-muted">login</span>
-              <span>Sign in</span>
-            </Link>
-          )}
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-main transition-colors hover:bg-secondary"
+          >
+            <span className="material-symbols-outlined text-[18px] text-text-muted">logout</span>
+            <span>Sign out</span>
+          </button>
         </div>
       )}
     </div>

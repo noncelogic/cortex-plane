@@ -6,6 +6,14 @@ const config: NextConfig = {
     ignoreDuringBuilds: true,
   },
 
+  // Allow external avatar images from OAuth providers
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "avatars.githubusercontent.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+    ],
+  },
+
   // Proxy API requests to the control plane in development
   async rewrites() {
     const apiUrl = process.env.CORTEX_API_URL ?? "http://localhost:4000"

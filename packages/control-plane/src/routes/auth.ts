@@ -26,6 +26,7 @@ import {
 import { findOrCreateOAuthUser, SessionService } from "../auth/session-service.js"
 import type { AuthOAuthConfig, OAuthProviderConfig } from "../config.js"
 import type { Database } from "../db/types.js"
+import { createRequireAuth, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
 
 // In-memory store for PKCE verifiers (keyed by state nonce).
@@ -41,6 +42,13 @@ interface AuthRouteDeps {
 
 export function authRoutes(deps: AuthRouteDeps) {
   const { db, authConfig, sessionService, credentialService } = deps
+
+  // Auth middleware for session-protected endpoints within the auth plugin.
+  // API key config is empty because these endpoints are session-only.
+  const requireAuth: PreHandler = createRequireAuth({
+    config: { apiKeys: [], requireAuth: true },
+    sessionService,
+  })
 
   return function register(app: FastifyInstance): void {
     const isSecure = authConfig.dashboardUrl.startsWith("https")
@@ -194,49 +202,69 @@ export function authRoutes(deps: AuthRouteDeps) {
     /**
      * GET /auth/session — get current session info (no secrets)
      */
-    app.get("/auth/session", async (request: FastifyRequest, reply: FastifyReply) => {
-      const principal = (request as AuthenticatedRequest).principal
-      if (!principal) {
-        reply.status(401).send({ error: "unauthorized", message: "Not authenticated" })
-        return
-      }
+    app.get(
+      "/auth/session",
+      { preHandler: [requireAuth] },
+      async (request: FastifyRequest, reply: FastifyReply) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (!principal) {
+          reply.status(401).send({ error: "unauthorized", message: "Not authenticated" })
+          return
+        }
 
-      return {
-        userId: principal.userId,
-        displayName: principal.displayName,
-        email: principal.email ?? null,
-        role: principal.userRole ?? null,
-        authMethod: principal.authMethod,
-      }
-    })
+        // For session-based auth, fetch avatar from the session data
+        let avatarUrl: string | null = null
+        if (principal.authMethod === "session") {
+          const cookieHeader = request.headers.cookie
+          const sessionId = SessionService.parseSessionCookie(cookieHeader)
+          if (sessionId) {
+            const sessionData = await sessionService.validateSession(sessionId)
+            avatarUrl = sessionData?.user.avatarUrl ?? null
+          }
+        }
+
+        return {
+          userId: principal.userId,
+          displayName: principal.displayName,
+          email: principal.email ?? null,
+          role: principal.userRole ?? null,
+          authMethod: principal.authMethod,
+          avatarUrl,
+        }
+      },
+    )
 
     /**
      * POST /auth/logout — destroy session
      */
-    app.post("/auth/logout", async (request: FastifyRequest, reply: FastifyReply) => {
-      const principal = (request as AuthenticatedRequest).principal
-      if (principal?.authMethod === "session") {
-        const cookieHeader = request.headers.cookie
-        const sessionId = SessionService.parseSessionCookie(cookieHeader)
-        if (sessionId) {
-          await sessionService.deleteSession(sessionId)
+    app.post(
+      "/auth/logout",
+      { preHandler: [requireAuth] },
+      async (request: FastifyRequest, reply: FastifyReply) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (principal?.authMethod === "session") {
+          const cookieHeader = request.headers.cookie
+          const sessionId = SessionService.parseSessionCookie(cookieHeader)
+          if (sessionId) {
+            await sessionService.deleteSession(sessionId)
 
-          await db
-            .insertInto("credential_audit_log")
-            .values({
-              user_account_id: principal.userId,
-              event_type: "logout",
-              details: { ip: request.ip },
-              ip_address: request.ip,
-            })
-            .execute()
+            await db
+              .insertInto("credential_audit_log")
+              .values({
+                user_account_id: principal.userId,
+                event_type: "logout",
+                details: { ip: request.ip },
+                ip_address: request.ip,
+              })
+              .execute()
+          }
         }
-      }
 
-      const cookie = SessionService.clearCookie(isSecure)
-      reply.header("Set-Cookie", cookie)
-      return { ok: true }
-    })
+        const cookie = SessionService.clearCookie(isSecure)
+        reply.header("Set-Cookie", cookie)
+        return { ok: true }
+      },
+    )
 
     /**
      * GET /auth/connect/:provider — initiate LLM provider OAuth (PKCE)
@@ -244,13 +272,8 @@ export function authRoutes(deps: AuthRouteDeps) {
      */
     app.get<{ Params: { provider: string } }>(
       "/auth/connect/:provider",
+      { preHandler: [requireAuth] },
       async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
-        const principal = (request as AuthenticatedRequest).principal
-        if (!principal) {
-          reply.status(401).send({ error: "unauthorized" })
-          return
-        }
-
         const { provider } = request.params
         const providerConfig = getConnectProviderConfig(provider, authConfig)
         if (!providerConfig) {

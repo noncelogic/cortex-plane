@@ -12,6 +12,7 @@ export interface SessionUser {
   email: string | null
   role: string | null
   authMethod: string
+  avatarUrl: string | null
 }
 
 interface AuthContextValue {
