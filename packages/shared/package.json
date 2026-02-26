@@ -37,6 +37,14 @@
     "./skills": {
       "import": "./dist/skills/index.js",
       "types": "./dist/skills/index.d.ts"
+    },
+    "./correction-strengthener": {
+      "import": "./dist/correction-strengthener/index.js",
+      "types": "./dist/correction-strengthener/index.d.ts"
+    },
+    "./proactive-detector": {
+      "import": "./dist/proactive-detector/index.js",
+      "types": "./dist/proactive-detector/index.d.ts"
     }
   },
   "scripts": {
