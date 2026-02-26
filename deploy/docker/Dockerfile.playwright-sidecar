@@ -20,8 +20,9 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user matching pod security context (uid 1000)
-# The playwright base image may already have uid 1000 (pwuser), so remove it first
-RUN (userdel -r pwuser 2>/dev/null || true) && \
+# The playwright base image already has uid 1000; remove all existing users/groups
+# with that UID/GID to avoid conflicts, then create our own.
+RUN for u in $(awk -F: '$3==1000{print $1}' /etc/passwd); do userdel -r "$u" 2>/dev/null || true; done && \
     groupadd -g 2000 playwright && \
     useradd -u 1000 -g 2000 -m -s /bin/sh playwright
 
