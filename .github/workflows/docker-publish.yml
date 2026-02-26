@@ -27,6 +27,8 @@ jobs:
             dockerfile: deploy/docker/Dockerfile.control-plane
           - service: dashboard
             dockerfile: deploy/docker/Dockerfile.dashboard
+          - service: playwright-sidecar
+            dockerfile: deploy/docker/Dockerfile.playwright-sidecar
 
     steps:
       - uses: actions/checkout@v4
@@ -58,3 +60,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true

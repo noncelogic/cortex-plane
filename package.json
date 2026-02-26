@@ -19,6 +19,7 @@
     "db:migrate": "pnpm --filter @cortex/control-plane run db:migrate",
     "db:migrate:create": "pnpm --filter @cortex/control-plane run db:migrate:create",
     "docker:up": "docker compose up -d",
+    "docker:up:app": "docker compose --profile app up -d",
     "docker:up:full": "docker compose --profile full up -d --build",
     "docker:down": "docker compose --profile full down --remove-orphans",
     "docker:logs": "docker compose --profile full logs -f",
