@@ -1,0 +1,68 @@
+# ==============================================================================
+# Stage 1: Install dependencies
+# ==============================================================================
+FROM node:22-slim AS deps
+
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+
+WORKDIR /app
+
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/dashboard/package.json ./packages/dashboard/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN pnpm install --frozen-lockfile
+
+# ==============================================================================
+# Stage 2: Build
+# ==============================================================================
+FROM node:22-slim AS builder
+
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+
+WORKDIR /app
+
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
+COPY packages/dashboard/package.json ./packages/dashboard/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN pnpm install --frozen-lockfile
+
+COPY tsconfig.base.json ./
+COPY packages/shared/ ./packages/shared/
+COPY packages/dashboard/ ./packages/dashboard/
+
+# Build shared first, then dashboard (turbo handles ordering)
+RUN pnpm turbo run build --filter=@cortex/dashboard...
+
+# ==============================================================================
+# Stage 3: Runtime (Next.js standalone)
+# ==============================================================================
+FROM node:22-slim AS runtime
+
+RUN groupadd -r cortex && useradd -r -g cortex -m cortex
+
+RUN apt-get update && apt-get install -y --no-install-recommends tini \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Next.js standalone output includes everything needed
+COPY --from=builder /app/packages/dashboard/.next/standalone ./
+COPY --from=builder /app/packages/dashboard/.next/static ./packages/dashboard/.next/static
+COPY --from=builder /app/packages/dashboard/public ./packages/dashboard/public 2>/dev/null || true
+
+USER cortex
+
+EXPOSE 3000
+
+ENV HOSTNAME="0.0.0.0"
+ENV PORT=3000
+ENV NODE_ENV=production
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/').then(r => { if (!r.ok) process.exit(1) })"
+
+ENTRYPOINT ["tini", "--"]
+
+CMD ["node", "packages/dashboard/server.js"]

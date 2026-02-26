@@ -1,21 +1,29 @@
-# Development environment — not for production
-# Usage: docker compose up -d
-#        pnpm dev  (runs control plane + dashboard with hot reload against these services)
+# Cortex Plane — local development + prod-like environment
+#
+# Usage:
+#   docker compose up -d                    # infra only (postgres + qdrant)
+#   docker compose --profile app up -d      # + control-plane
+#   docker compose --profile full up -d     # + control-plane + dashboard
+#   make up / make up-full
+#
+# Env vars: copy .env.example → .env and fill in required values.
 
 services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
   postgres:
     image: postgres:17-bookworm
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cortex
-      POSTGRES_PASSWORD: cortex_dev
-      POSTGRES_DB: cortex_plane
+      POSTGRES_USER: ${POSTGRES_USER:-cortex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cortex_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-cortex_plane}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cortex"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cortex}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -24,8 +32,8 @@ services:
     image: qdrant/qdrant:v1.13.2
     restart: unless-stopped
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -33,24 +41,36 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 5s
+
+  # ── Application ─────────────────────────────────────────────────────────────
 
   control-plane:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.control-plane
+    image: ${CONTROL_PLANE_IMAGE:-ghcr.io/noncelogic/cortex-control-plane:local}
     restart: unless-stopped
+    profiles:
+      - app
+      - full
     ports:
-      - "4000:4000"
+      - "${CONTROL_PLANE_PORT:-4000}:4000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgres://cortex:cortex_dev@postgres:5432/cortex_plane
+      DATABASE_URL: postgres://${POSTGRES_USER:-cortex}:${POSTGRES_PASSWORD:-cortex_dev}@postgres:5432/${POSTGRES_DB:-cortex_plane}
       QDRANT_URL: http://qdrant:6333
       PORT: "4000"
       HOST: "0.0.0.0"
-      NODE_ENV: development
-      LOG_LEVEL: debug
-      GRAPHILE_WORKER_CONCURRENCY: "5"
+      NODE_ENV: ${NODE_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      GRAPHILE_WORKER_CONCURRENCY: "${GRAPHILE_WORKER_CONCURRENCY:-5}"
     depends_on:
       postgres:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     healthcheck:
       test:
@@ -62,7 +82,39 @@ services:
         ]
       interval: 10s
       timeout: 3s
-      start_period: 10s
+      start_period: 15s
+      retries: 3
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.dashboard
+    image: ${DASHBOARD_IMAGE:-ghcr.io/noncelogic/cortex-dashboard:local}
+    restart: unless-stopped
+    profiles:
+      - full
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    environment:
+      CORTEX_API_URL: http://control-plane:4000
+      NEXT_PUBLIC_CORTEX_API_URL: ${NEXT_PUBLIC_CORTEX_API_URL:-http://localhost:4000}
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+      NODE_ENV: production
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/').then(r => { if (!r.ok) process.exit(1) })",
+        ]
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
       retries: 3
 
 volumes:

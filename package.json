@@ -19,7 +19,12 @@
     "db:migrate": "pnpm --filter @cortex/control-plane run db:migrate",
     "db:migrate:create": "pnpm --filter @cortex/control-plane run db:migrate:create",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:up:full": "docker compose --profile full up -d --build",
+    "docker:down": "docker compose --profile full down --remove-orphans",
+    "docker:logs": "docker compose --profile full logs -f",
+    "db:seed": "pnpm --filter @cortex/control-plane run db:seed",
+    "smoke": "./scripts/smoke-test.sh",
+    "preflight": "./scripts/preflight-deploy.sh"
   },
   "devDependencies": {
     "@cortex/config": "workspace:*",

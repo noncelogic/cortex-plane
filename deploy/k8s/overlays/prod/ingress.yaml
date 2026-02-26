@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cortex-ingress
+  labels:
+    app.kubernetes.io/part-of: cortex-plane
+  annotations:
+    # k3s ships traefik — these annotations work out of the box
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # For cert-manager TLS:
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  # Uncomment for cert-manager auto-TLS:
+  # tls:
+  #   - hosts:
+  #       - cortex.example.com
+  #     secretName: cortex-tls
+  rules:
+    - host: cortex.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 3000
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: control-plane
+                port:
+                  number: 4000
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: control-plane
+                port:
+                  number: 4000
+          - path: /readyz
+            pathType: Exact
+            backend:
+              service:
+                name: control-plane
+                port:
+                  number: 4000
