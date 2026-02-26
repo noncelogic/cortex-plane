@@ -53,6 +53,25 @@ The platform acts as a **control plane** — the persistent brain and orchestrat
 - **Durable execution.** PostgreSQL-backed state machine with Graphile Worker guarantees exactly-once job execution with automatic retries and exponential backoff.
 - **Human oversight.** Approval gates pause execution for high-risk operations; humans approve via API, dashboard, or Telegram inline buttons.
 
+### Scope Gates
+
+| Tier | Section(s) | Description |
+|------|-----------|-------------|
+| **Core (MVP)** | 4–13 | Control plane, state machine, orchestration, agent lifecycle, memory, checkpoints, security |
+| **Core (MVP)** | 17–19 | Memory extraction pipeline, PostgreSQL deployment, observability |
+| **Extended** | 14 | Browser orchestration (Playwright observe-think-act, VNC/noVNC) |
+| **Extended** | 15–16 | Multi-channel routing, voice/WebRTC integration |
+| **Extended** | 20–21 | LLM failover circuit breaker, hot-reload skills framework |
+| **Extended** | 22 | Dashboard (Phase 2 — Next.js + SSE) |
+| **Deferred** | — | HA PostgreSQL (CloudNativePG), Qdrant clustering, multi-node k3s |
+
+**Non-goals for demo milestone:**
+- Voice / WebRTC integration (section 16)
+- HA PostgreSQL failover (section 18 Phase 2)
+- LLM circuit breaker (section 20 Phase 2)
+- Multi-node k3s federation
+- Channel health supervision beyond liveness probes
+
 ---
 
 ## 2. Problem Statement
@@ -867,7 +886,7 @@ Adapters are npm packages (`@cortex-plane/adapter-telegram`, `@cortex-plane/adap
 
 The extraction pipeline transitions ephemeral conversational data into structured, permanent semantic knowledge in Qdrant (Tier 3).
 
-### 23.1 Trigger Mechanics
+### 17.1 Trigger Mechanics
 
 Hybrid threshold model — extraction runs asynchronously via a Graphile Worker background job, triggered when:
 
@@ -876,13 +895,13 @@ Hybrid threshold model — extraction runs asynchronously via a Graphile Worker 
 
 Batching allows the extraction model to observe conversational arcs and resolve ambiguities before committing to vector storage. The trade-off: facts from message 10 aren't in Qdrant until the 50-message threshold. Agents rely on the JSONL buffer for short-term recall.
 
-### 23.2 Model Selection
+### 17.2 Model Selection
 
 Extraction uses a **cheap intermediate model** (Claude Haiku / GPT-4o-mini), not the frontier reasoning model. The task requires JSON schema adherence and semantic filtering — well within intermediate model capabilities.
 
 **Cost model:** 50-message batch ≈ 15K input tokens ≈ $0.004 per extraction. Five agents × 100 extractions/day = <$15/month.
 
-### 23.3 Extraction Prompt
+### 17.3 Extraction Prompt
 
 ```
 You are the Cortex Plane Semantic Memory Extractor. Analyze the
@@ -902,14 +921,14 @@ CRITICAL INSTRUCTIONS:
 </existing_memories>
 ```
 
-### 23.4 Validation & Deduplication
+### 17.4 Validation & Deduplication
 
 1. **Schema validation:** Zod/AJV validates extraction output before embedding. Malformed output → retry with Graphile backoff.
 2. **Duplicate detection:** Cosine similarity >0.95 with identical semantic meaning → discard.
 3. **Supersession:** Similarity 0.85-0.95 with contradictory content → mark old memory as superseded, preserve chain.
 4. **Confidence threshold:** Extracted facts with confidence <0.5 are discarded.
 
-### 23.5 Extended MemoryRecord Schema
+### 17.5 Extended MemoryRecord Schema
 
 ```typescript
 interface MemoryRecord {

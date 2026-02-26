@@ -278,11 +278,11 @@ function MemoryContent({ content }: { content: string }): React.JSX.Element {
           return (
             <div key={i} className="my-4 overflow-hidden rounded-lg">
               {langLine && (
-                <div className="flex items-center justify-between bg-[#161b22] px-4 py-2 text-xs text-slate-400">
+                <div className="flex items-center justify-between bg-chrome-code-header px-4 py-2 text-xs text-slate-400">
                   <span>{langLine}</span>
                 </div>
               )}
-              <pre className="overflow-x-auto bg-[#0d1117] p-4">
+              <pre className="overflow-x-auto bg-chrome-code-bg p-4">
                 <code className="text-sm text-slate-300">{code}</code>
               </pre>
             </div>

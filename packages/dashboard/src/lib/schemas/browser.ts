@@ -47,6 +47,14 @@ export const ScreenshotSchema = z.object({
   }),
 })
 
+export const ScreenshotListResponseSchema = z.object({
+  screenshots: z.array(ScreenshotSchema),
+})
+
+export const BrowserEventListResponseSchema = z.object({
+  events: z.array(BrowserEventSchema),
+})
+
 export type BrowserSessionStatus = z.infer<typeof BrowserSessionStatusSchema>
 export type BrowserEventType = z.infer<typeof BrowserEventTypeSchema>
 export type BrowserEventSeverity = z.infer<typeof BrowserEventSeveritySchema>

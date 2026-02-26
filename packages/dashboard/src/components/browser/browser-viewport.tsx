@@ -36,12 +36,12 @@ export function BrowserViewport({
 
   return (
     <div
-      className={`flex flex-col overflow-hidden rounded-xl border border-[#2d2d3b] bg-black ${
+      className={`flex flex-col overflow-hidden rounded-xl border border-chrome-border bg-black ${
         isFullscreen ? "fixed inset-0 z-50" : "relative"
       }`}
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-[#2d2d3b] bg-[#1c1c27] px-3 py-2">
+      <div className="flex items-center justify-between border-b border-chrome-border bg-chrome-bg px-3 py-2">
         <ConnectionStatus status={status} latencyMs={latencyMs} onReconnect={onReconnect} />
 
         <div className="flex items-center gap-1">
@@ -67,7 +67,7 @@ export function BrowserViewport({
       </div>
 
       {/* Viewport area */}
-      <div className="relative aspect-video w-full overflow-auto bg-[#0a0a12]">
+      <div className="relative aspect-video w-full overflow-auto bg-chrome-deep">
         {canShowVnc ? (
           <>
             <iframe
@@ -117,7 +117,7 @@ export function BrowserViewport({
 function ScreenshotFallback({ screenshot }: { screenshot: Screenshot }): React.JSX.Element {
   return (
     <div className="flex size-full flex-col items-center justify-center gap-3 p-4">
-      <div className="relative overflow-hidden rounded-lg border border-[#2d2d3b]">
+      <div className="relative overflow-hidden rounded-lg border border-chrome-border">
         <img
           src={screenshot.fullUrl}
           alt={`Screenshot from ${new Date(screenshot.timestamp).toLocaleTimeString()}`}
@@ -147,7 +147,7 @@ function ViewportPlaceholder({
 }): React.JSX.Element {
   return (
     <div className="flex size-full flex-col items-center justify-center gap-4 p-8">
-      <div className="flex size-16 items-center justify-center rounded-2xl bg-[#1c1c27]">
+      <div className="flex size-16 items-center justify-center rounded-2xl bg-chrome-bg">
         <span className="material-symbols-outlined text-3xl text-slate-600">
           {status === "error" ? "error" : "desktop_windows"}
         </span>

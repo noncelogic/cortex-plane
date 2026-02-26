@@ -34,7 +34,7 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps): Reac
 
   if (screenshots.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-[#2d2d3b] bg-[#1c1c27] p-8">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-chrome-border bg-chrome-bg p-8">
         <span className="material-symbols-outlined mb-2 text-3xl text-slate-600">
           photo_library
         </span>
@@ -54,9 +54,9 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps): Reac
             key={screenshot.id}
             type="button"
             onClick={() => openLightbox(index)}
-            className="group relative overflow-hidden rounded-lg border border-[#2d2d3b] bg-[#1c1c27] transition-colors hover:border-primary/30"
+            className="group relative overflow-hidden rounded-lg border border-chrome-border bg-chrome-bg transition-colors hover:border-primary/30"
           >
-            <div className="aspect-video w-full bg-[#0a0a12]">
+            <div className="aspect-video w-full bg-chrome-deep">
               <img
                 src={screenshot.thumbnailUrl}
                 alt={`Screenshot at ${new Date(screenshot.timestamp).toLocaleTimeString()}`}

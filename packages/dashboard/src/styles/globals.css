@@ -52,6 +52,13 @@
   --color-console-bg: #0a0a18;
   --color-surface-border: #282839;
 
+  /* ── Chrome (browser observation surfaces) ─────── */
+  --color-chrome-bg: #1c1c27;
+  --color-chrome-border: #2d2d3b;
+  --color-chrome-deep: #0a0a12;
+  --color-chrome-code-header: #161b22;
+  --color-chrome-code-bg: #0d1117;
+
   /* ── Animations ──────────────────────────────────── */
   --animate-pulse-ring: pulse-ring 2s infinite;
   --animate-spin-slow: spin 3s linear infinite;

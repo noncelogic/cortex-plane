@@ -8,9 +8,23 @@
 
 import type { z } from "zod"
 
+import {
+  ApprovalDecisionResponseSchema,
+  ArchiveContentResponseSchema,
+  PauseResponseSchema,
+  PublishContentResponseSchema,
+  ResumeResponseSchema,
+  RetryJobResponseSchema,
+  SteerResponseSchema,
+  SyncMemoryResponseSchema,
+} from "./schemas/actions"
 import { AgentDetailSchema, AgentListResponseSchema } from "./schemas/agents"
 import { ApprovalListResponseSchema } from "./schemas/approvals"
-import { BrowserSessionSchema } from "./schemas/browser"
+import {
+  BrowserEventListResponseSchema,
+  BrowserSessionSchema,
+  ScreenshotListResponseSchema,
+} from "./schemas/browser"
 import { ContentListResponseSchema } from "./schemas/content"
 import { JobDetailSchema, JobListResponseSchema } from "./schemas/jobs"
 import { MemorySearchResponseSchema } from "./schemas/memory"
@@ -54,19 +68,12 @@ export type {
 export type { MemoryRecord } from "./schemas/memory"
 
 // ---------------------------------------------------------------------------
-// Types that remain local (request/response shapes not validated)
+// Request types (validated by schema on response side)
 // ---------------------------------------------------------------------------
 
 export interface SteerRequest {
   message: string
   priority?: "normal" | "high"
-}
-
-export interface SteerResponse {
-  steerMessageId: string
-  status: "accepted"
-  agentId: string
-  priority: "normal" | "high"
 }
 
 /** RFC 7807 Problem Details error body. */
@@ -320,22 +327,34 @@ export async function getAgent(agentId: string): Promise<import("./schemas/agent
   return apiFetch(`/agents/${agentId}`, { schema: AgentDetailSchema })
 }
 
-export async function steerAgent(agentId: string, request: SteerRequest): Promise<SteerResponse> {
-  return apiFetch(`/agents/${agentId}/steer`, { method: "POST", body: request })
+export async function steerAgent(agentId: string, request: SteerRequest) {
+  return apiFetch(`/agents/${agentId}/steer`, {
+    method: "POST",
+    body: request,
+    schema: SteerResponseSchema,
+  })
 }
 
 export async function pauseAgent(
   agentId: string,
   options?: { reason?: string; timeoutSeconds?: number },
-): Promise<{ agentId: string; status: "pausing" }> {
-  return apiFetch(`/agents/${agentId}/pause`, { method: "POST", body: options })
+) {
+  return apiFetch(`/agents/${agentId}/pause`, {
+    method: "POST",
+    body: options,
+    schema: PauseResponseSchema,
+  })
 }
 
 export async function resumeAgent(
   agentId: string,
   options?: { checkpointId?: string; instruction?: string },
-): Promise<{ agentId: string; status: "resuming"; fromCheckpoint?: string }> {
-  return apiFetch(`/agents/${agentId}/resume`, { method: "POST", body: options })
+) {
+  return apiFetch(`/agents/${agentId}/resume`, {
+    method: "POST",
+    body: options,
+    schema: ResumeResponseSchema,
+  })
 }
 
 export async function listApprovals(params?: {
@@ -361,10 +380,11 @@ export async function approveRequest(
   decision: "APPROVED" | "REJECTED",
   decidedBy: string,
   reason?: string,
-): Promise<{ approvalRequestId: string; decision: string; decidedAt: string }> {
+) {
   return apiFetch(`/approval/${approvalId}/decide`, {
     method: "POST",
     body: { decision, decidedBy, channel: "dashboard", reason },
+    schema: ApprovalDecisionResponseSchema,
   })
 }
 
@@ -390,8 +410,11 @@ export async function getJob(jobId: string): Promise<import("./schemas/jobs").Jo
   return apiFetch(`/jobs/${jobId}`, { schema: JobDetailSchema })
 }
 
-export async function retryJob(jobId: string): Promise<{ jobId: string; status: "retrying" }> {
-  return apiFetch(`/jobs/${jobId}/retry`, { method: "POST" })
+export async function retryJob(jobId: string) {
+  return apiFetch(`/jobs/${jobId}/retry`, {
+    method: "POST",
+    schema: RetryJobResponseSchema,
+  })
 }
 
 export async function searchMemory(params: {
@@ -409,12 +432,12 @@ export async function searchMemory(params: {
 export async function syncMemory(
   agentId: string,
   direction?: "file_to_qdrant" | "qdrant_to_file" | "bidirectional",
-): Promise<{
-  syncId: string
-  status: string
-  stats: { upserted: number; deleted: number; unchanged: number }
-}> {
-  return apiFetch("/memory/sync", { method: "POST", body: { agentId, direction } })
+) {
+  return apiFetch("/memory/sync", {
+    method: "POST",
+    body: { agentId, direction },
+    schema: SyncMemoryResponseSchema,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -441,20 +464,19 @@ export async function listContent(params?: {
   return apiFetch(`/content${qs ? `?${qs}` : ""}`, { schema: ContentListResponseSchema })
 }
 
-export async function publishContent(
-  contentId: string,
-  channel: string,
-): Promise<{ contentId: string; status: "published"; publishedAt: string }> {
+export async function publishContent(contentId: string, channel: string) {
   return apiFetch(`/content/${contentId}/publish`, {
     method: "POST",
     body: { channel },
+    schema: PublishContentResponseSchema,
   })
 }
 
-export async function archiveContent(
-  contentId: string,
-): Promise<{ contentId: string; status: "archived" }> {
-  return apiFetch(`/content/${contentId}/archive`, { method: "POST" })
+export async function archiveContent(contentId: string) {
+  return apiFetch(`/content/${contentId}/archive`, {
+    method: "POST",
+    schema: ArchiveContentResponseSchema,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -467,27 +489,26 @@ export async function getAgentBrowser(
   return apiFetch(`/agents/${agentId}/browser`, { schema: BrowserSessionSchema })
 }
 
-export async function getAgentScreenshots(
-  agentId: string,
-  limit?: number,
-): Promise<{ screenshots: import("./schemas/browser").Screenshot[] }> {
+export async function getAgentScreenshots(agentId: string, limit?: number) {
   const search = new URLSearchParams()
   if (limit) search.set("limit", String(limit))
   const qs = search.toString()
-  return apiFetch(`/agents/${agentId}/browser/screenshots${qs ? `?${qs}` : ""}`)
+  return apiFetch(`/agents/${agentId}/browser/screenshots${qs ? `?${qs}` : ""}`, {
+    schema: ScreenshotListResponseSchema,
+  })
 }
 
 export async function getAgentBrowserEvents(
   agentId: string,
   limit?: number,
   types?: string[],
-): Promise<{ events: import("./schemas/browser").BrowserEvent[] }> {
+) {
   const search = new URLSearchParams()
   if (limit) search.set("limit", String(limit))
   if (types?.length) search.set("types", types.join(","))
   const qs = search.toString()
-  return apiFetch(`/agents/${agentId}/browser/events${qs ? `?${qs}` : ""}`)
+  return apiFetch(`/agents/${agentId}/browser/events${qs ? `?${qs}` : ""}`, {
+    schema: BrowserEventListResponseSchema,
+  })
 }
 
-// Re-export the old name for backward compat within this PR
-export { approveRequest as decideApproval }

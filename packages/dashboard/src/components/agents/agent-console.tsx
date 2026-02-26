@@ -205,7 +205,7 @@ export function AgentConsole({ agentId }: AgentConsoleProps): React.JSX.Element 
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="scrollbar-hide relative flex-1 overflow-y-auto bg-[#111118] p-4 font-mono text-sm leading-relaxed"
+        className="scrollbar-hide relative flex-1 overflow-y-auto bg-console-bg p-4 font-mono text-sm leading-relaxed"
       >
         {events.length === 0 ? (
           <div className="flex h-full items-center justify-center">
