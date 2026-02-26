@@ -114,11 +114,7 @@ export default function JobsPage(): React.JSX.Element {
         <>
           {/* Desktop: Table view */}
           <div className="hidden md:block">
-            <JobTable
-              jobs={jobs}
-              onSelectJob={setSelectedJobId}
-              onRetried={handleRefresh}
-            />
+            <JobTable jobs={jobs} onSelectJob={setSelectedJobId} onRetried={handleRefresh} />
           </div>
 
           {/* Mobile: Card view */}

@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import { useCallback, useMemo } from "react"
 
@@ -6,7 +6,12 @@ import { useApiQuery } from "@/hooks/use-api"
 import type { ApiErrorCode } from "@/lib/api-client"
 import { listAgents, listApprovals, listJobs, searchMemory } from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
-import { getDashboardStats, getRecentJobs, type DashboardStats, type RecentJob } from "@/lib/mock/dashboard"
+import {
+  type DashboardStats,
+  getDashboardStats,
+  getRecentJobs,
+  type RecentJob,
+} from "@/lib/mock/dashboard"
 
 export interface DashboardData {
   stats: DashboardStats
@@ -18,17 +23,32 @@ export interface DashboardData {
 }
 
 export function useDashboard(): DashboardData {
-  const { data: agentData, isLoading: agentsLoading, error: agentsError, errorCode: agentsErrorCode, refetch: refetchAgents } =
-    useApiQuery(() => listAgents({ limit: 1 }), [])
+  const {
+    data: agentData,
+    isLoading: agentsLoading,
+    error: agentsError,
+    errorCode: agentsErrorCode,
+    refetch: refetchAgents,
+  } = useApiQuery(() => listAgents({ limit: 1 }), [])
 
-  const { data: jobData, isLoading: jobsLoading, error: jobsError, refetch: refetchJobs } =
-    useApiQuery(() => listJobs({ limit: 5 }), [])
+  const {
+    data: jobData,
+    isLoading: jobsLoading,
+    error: jobsError,
+    refetch: refetchJobs,
+  } = useApiQuery(() => listJobs({ limit: 5 }), [])
 
-  const { data: approvalData, isLoading: approvalsLoading, refetch: refetchApprovals } =
-    useApiQuery(() => listApprovals({ status: "PENDING", limit: 1 }), [])
+  const {
+    data: approvalData,
+    isLoading: approvalsLoading,
+    refetch: refetchApprovals,
+  } = useApiQuery(() => listApprovals({ status: "PENDING", limit: 1 }), [])
 
-  const { data: memoryData, isLoading: memoryLoading, refetch: refetchMemory } =
-    useApiQuery(() => searchMemory({ agentId: "*", query: "all", limit: 1 }), [])
+  const {
+    data: memoryData,
+    isLoading: memoryLoading,
+    refetch: refetchMemory,
+  } = useApiQuery(() => searchMemory({ agentId: "*", query: "all", limit: 1 }), [])
 
   const isLoading = agentsLoading || jobsLoading || approvalsLoading || memoryLoading
   const error = agentsError || jobsError

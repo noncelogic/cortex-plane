@@ -23,9 +23,7 @@ export function EmptyState({
         <span className="material-symbols-outlined text-[28px] text-primary">{icon}</span>
       </div>
       <h3 className="text-base font-bold text-text-main dark:text-white">{title}</h3>
-      {description && (
-        <p className="mt-1.5 max-w-sm text-sm text-text-muted">{description}</p>
-      )}
+      {description && <p className="mt-1.5 max-w-sm text-sm text-text-muted">{description}</p>}
       {actionLabel && actionHref && (
         <Link
           href={actionHref}

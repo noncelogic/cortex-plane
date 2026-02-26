@@ -18,7 +18,11 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps): Reac
 
     function handler(e: KeyboardEvent): void {
       if (e.key === "Escape") setLightboxIndex(null)
-      if (e.key === "ArrowRight" && lightboxIndex !== null && lightboxIndex < screenshots.length - 1)
+      if (
+        e.key === "ArrowRight" &&
+        lightboxIndex !== null &&
+        lightboxIndex < screenshots.length - 1
+      )
         setLightboxIndex(lightboxIndex + 1)
       if (e.key === "ArrowLeft" && lightboxIndex !== null && lightboxIndex > 0)
         setLightboxIndex(lightboxIndex - 1)

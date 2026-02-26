@@ -82,6 +82,8 @@ spec:
               mountPath: /qdrant/config/production.yaml
               subPath: production.yaml
               readOnly: true
+            - name: qdrant-snapshots
+              mountPath: /qdrant/snapshots
       terminationGracePeriodSeconds: 30
       volumes:
         - name: qdrant-data
@@ -90,3 +92,5 @@ spec:
         - name: qdrant-config
           configMap:
             name: qdrant-config
+        - name: qdrant-snapshots
+          emptyDir: {}

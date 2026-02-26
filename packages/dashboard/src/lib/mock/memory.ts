@@ -8,7 +8,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-a1b2c3d4-e5f6-7890-abcd-111111111111",
       type: "fact",
-      content: "Kubernetes cluster uses istio service mesh for inter-service communication.\n\nThe production cluster runs on GKE with 12 node pools spread across 3 zones. Istio is configured with mutual TLS for all east-west traffic.\n\n> Key config: istio-system namespace hosts the control plane with 3 replicas of istiod.\n\n```yaml\n# istio-config.yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: cortex-api\nspec:\n  hosts:\n    - cortex-api.prod.svc.cluster.local\n  http:\n    - route:\n        - destination:\n            host: cortex-api\n            port:\n              number: 8080\n```\n\nRetry policies are set to 3 attempts with exponential backoff.",
+      content:
+        "Kubernetes cluster uses istio service mesh for inter-service communication.\n\nThe production cluster runs on GKE with 12 node pools spread across 3 zones. Istio is configured with mutual TLS for all east-west traffic.\n\n> Key config: istio-system namespace hosts the control plane with 3 replicas of istiod.\n\n```yaml\n# istio-config.yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: cortex-api\nspec:\n  hosts:\n    - cortex-api.prod.svc.cluster.local\n  http:\n    - route:\n        - destination:\n            host: cortex-api\n            port:\n              number: 8080\n```\n\nRetry policies are set to 3 attempts with exponential backoff.",
       tags: ["kubernetes", "istio", "service-mesh", "infrastructure"],
       people: ["sarah-chen", "platform-team"],
       projects: ["cortex-infra"],
@@ -23,7 +24,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-b2c3d4e5-f6a7-8901-bcde-222222222222",
       type: "preference",
-      content: "Team prefers blue-green deployments over canary for stateful services.\n\nAfter the incident in Q3 2025, the SRE team decided that stateful services (databases, message queues) should use blue-green deployments to avoid split-brain scenarios during canary rollouts.",
+      content:
+        "Team prefers blue-green deployments over canary for stateful services.\n\nAfter the incident in Q3 2025, the SRE team decided that stateful services (databases, message queues) should use blue-green deployments to avoid split-brain scenarios during canary rollouts.",
       tags: ["deployment", "sre", "best-practices"],
       people: ["ops-team", "mike-wilson"],
       projects: ["cortex-deploy"],
@@ -38,7 +40,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-c3d4e5f6-a7b8-9012-cdef-333333333333",
       type: "event",
-      content: "Production outage on 2025-12-15: Redis cluster failover caused 4 minutes of elevated latency.\n\nRoot cause: The sentinel quorum was misconfigured after the last scaling event. The failover triggered correctly but took longer than expected due to stale DNS cache entries in the application pods.",
+      content:
+        "Production outage on 2025-12-15: Redis cluster failover caused 4 minutes of elevated latency.\n\nRoot cause: The sentinel quorum was misconfigured after the last scaling event. The failover triggered correctly but took longer than expected due to stale DNS cache entries in the application pods.",
       tags: ["incident", "redis", "outage", "post-mortem"],
       people: ["sarah-chen", "incident-response"],
       projects: ["cortex-infra"],
@@ -53,7 +56,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-d4e5f6a7-b8c9-0123-defa-444444444444",
       type: "system_rule",
-      content: "All agent-generated code changes must pass CI/CD pipeline with >80% test coverage before merging.\n\nThis rule applies to all autonomous code modifications. Human review is required for changes touching security-sensitive paths (auth/, crypto/, permissions/).",
+      content:
+        "All agent-generated code changes must pass CI/CD pipeline with >80% test coverage before merging.\n\nThis rule applies to all autonomous code modifications. Human review is required for changes touching security-sensitive paths (auth/, crypto/, permissions/).",
       tags: ["ci-cd", "code-quality", "guardrails"],
       people: [],
       projects: ["cortex-governance"],
@@ -68,7 +72,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-e5f6a7b8-c9d0-1234-efab-555555555555",
       type: "fact",
-      content: "The model inference service scales to a maximum of 24 GPU instances.\n\nEach instance runs 2x A100 80GB GPUs with NVLink. Auto-scaling is configured with a target GPU utilization of 70% and a cooldown period of 300 seconds.",
+      content:
+        "The model inference service scales to a maximum of 24 GPU instances.\n\nEach instance runs 2x A100 80GB GPUs with NVLink. Auto-scaling is configured with a target GPU utilization of 70% and a cooldown period of 300 seconds.",
       tags: ["gpu", "scaling", "inference", "resources"],
       people: ["ml-infra-team"],
       projects: ["cortex-ml"],
@@ -83,7 +88,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-f6a7b8c9-d0e1-2345-fabc-666666666666",
       type: "preference",
-      content: "Use structured logging with JSON format for all microservices.\n\nStandard fields: timestamp, level, service, traceId, spanId, message. Use Pino for Node.js services and structlog for Python services.",
+      content:
+        "Use structured logging with JSON format for all microservices.\n\nStandard fields: timestamp, level, service, traceId, spanId, message. Use Pino for Node.js services and structlog for Python services.",
       tags: ["logging", "observability", "standards"],
       people: ["platform-team"],
       projects: ["cortex-platform"],
@@ -98,7 +104,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-a7b8c9d0-e1f2-3456-abcd-777777777777",
       type: "event",
-      content: "Successfully migrated from PostgreSQL 14 to PostgreSQL 16 on 2026-01-20.\n\nThe migration was zero-downtime using pglogical replication. Total migration window was 45 minutes. Performance improved by ~12% for complex queries due to improved query planner.",
+      content:
+        "Successfully migrated from PostgreSQL 14 to PostgreSQL 16 on 2026-01-20.\n\nThe migration was zero-downtime using pglogical replication. Total migration window was 45 minutes. Performance improved by ~12% for complex queries due to improved query planner.",
       tags: ["migration", "postgresql", "database"],
       people: ["db-team", "alex-kumar"],
       projects: ["cortex-data"],
@@ -113,7 +120,8 @@ export function generateMockMemories(): MemoryRecord[] {
     {
       id: "mem-b8c9d0e1-f2a3-4567-bcde-888888888888",
       type: "system_rule",
-      content: "Agents must not create, modify, or delete IAM roles or security groups without human approval.\n\nThis is a critical safety guardrail. Any attempt to modify cloud IAM or network security must go through the approval queue. Auto-approve is explicitly disabled for these action types.",
+      content:
+        "Agents must not create, modify, or delete IAM roles or security groups without human approval.\n\nThis is a critical safety guardrail. Any attempt to modify cloud IAM or network security must go through the approval queue. Auto-approve is explicitly disabled for these action types.",
       tags: ["security", "iam", "guardrails", "compliance"],
       people: [],
       projects: ["cortex-governance"],

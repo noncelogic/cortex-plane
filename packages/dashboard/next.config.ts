@@ -2,6 +2,9 @@ import type { NextConfig } from "next"
 
 const config: NextConfig = {
   output: "standalone",
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 
   // Proxy API requests to the control plane in development
   async rewrites() {

@@ -1,8 +1,20 @@
 import { z } from "zod"
 
-export const BrowserSessionStatusSchema = z.enum(["connecting", "connected", "disconnected", "error"])
+export const BrowserSessionStatusSchema = z.enum([
+  "connecting",
+  "connected",
+  "disconnected",
+  "error",
+])
 
-export const BrowserEventTypeSchema = z.enum(["GET", "CLICK", "CONSOLE", "SNAPSHOT", "NAVIGATE", "ERROR"])
+export const BrowserEventTypeSchema = z.enum([
+  "GET",
+  "CLICK",
+  "CONSOLE",
+  "SNAPSHOT",
+  "NAVIGATE",
+  "ERROR",
+])
 
 export const BrowserEventSeveritySchema = z.enum(["info", "warn", "error"])
 

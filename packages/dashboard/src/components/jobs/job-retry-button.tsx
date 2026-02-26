@@ -44,9 +44,7 @@ export function JobRetryButton({
   if (confirming) {
     return (
       <div className="flex items-center gap-2">
-        {error && (
-          <span className="text-xs text-red-400">{error}</span>
-        )}
+        {error && <span className="text-xs text-red-400">{error}</span>}
         <button
           type="button"
           onClick={() => setConfirming(false)}

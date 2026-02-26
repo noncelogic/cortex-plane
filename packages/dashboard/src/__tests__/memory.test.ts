@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import {
-  ApiError,
-  type MemoryRecord,
-  searchMemory,
-  syncMemory,
-} from "@/lib/api-client"
+import { ApiError, type MemoryRecord, searchMemory, syncMemory } from "@/lib/api-client"
 import { truncateUuid } from "@/lib/format"
 
 // ---------------------------------------------------------------------------
@@ -236,7 +231,10 @@ describe("MemorySearch filter logic", () => {
   })
 
   it("combines query and type filter", () => {
-    const result = applyFilters(mockRecords, "deployment", { ...defaultFilters, type: "preference" })
+    const result = applyFilters(mockRecords, "deployment", {
+      ...defaultFilters,
+      type: "preference",
+    })
     expect(result).toHaveLength(1)
     expect(result[0]!.id).toBe("mem-2")
   })
@@ -408,9 +406,7 @@ describe("RelatedPanel rendering logic", () => {
   })
 
   it("related records are limited to grid display", () => {
-    const records = Array.from({ length: 10 }, (_, i) =>
-      createMockRecord({ id: `mem-${i}` }),
-    )
+    const records = Array.from({ length: 10 }, (_, i) => createMockRecord({ id: `mem-${i}` }))
     const displayRecords = records.slice(0, 4)
     expect(displayRecords).toHaveLength(4)
   })

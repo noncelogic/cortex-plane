@@ -5,25 +5,11 @@ import {
   AgentListResponseSchema,
   AgentSummarySchema,
 } from "@/lib/schemas/agents"
-import {
-  ApprovalListResponseSchema,
-  ApprovalRequestSchema,
-} from "@/lib/schemas/approvals"
-import {
-  BrowserEventSchema,
-  BrowserSessionSchema,
-  ScreenshotSchema,
-} from "@/lib/schemas/browser"
+import { ApprovalListResponseSchema, ApprovalRequestSchema } from "@/lib/schemas/approvals"
+import { BrowserEventSchema, BrowserSessionSchema, ScreenshotSchema } from "@/lib/schemas/browser"
 import { PaginationSchema } from "@/lib/schemas/common"
-import {
-  ContentListResponseSchema,
-  ContentPieceSchema,
-} from "@/lib/schemas/content"
-import {
-  JobDetailSchema,
-  JobListResponseSchema,
-  JobSummarySchema,
-} from "@/lib/schemas/jobs"
+import { ContentListResponseSchema, ContentPieceSchema } from "@/lib/schemas/content"
+import { JobDetailSchema, JobListResponseSchema, JobSummarySchema } from "@/lib/schemas/jobs"
 import { MemoryRecordSchema, MemorySearchResponseSchema } from "@/lib/schemas/memory"
 
 // ---------------------------------------------------------------------------
@@ -67,7 +53,12 @@ describe("AgentSummarySchema", () => {
   })
 
   it("accepts optional fields", () => {
-    const withOptional = { ...validAgent, description: "A test agent", currentJobId: "job-1", updatedAt: "2026-01-02T00:00:00Z" }
+    const withOptional = {
+      ...validAgent,
+      description: "A test agent",
+      currentJobId: "job-1",
+      updatedAt: "2026-01-02T00:00:00Z",
+    }
     expect(AgentSummarySchema.parse(withOptional)).toEqual(withOptional)
   })
 
@@ -104,7 +95,11 @@ describe("AgentDetailSchema", () => {
   })
 
   it("accepts config maps", () => {
-    const detail = { ...validAgent, modelConfig: { temperature: 0.7 }, skillConfig: { tools: ["web"] } }
+    const detail = {
+      ...validAgent,
+      modelConfig: { temperature: 0.7 },
+      skillConfig: { tools: ["web"] },
+    }
     expect(AgentDetailSchema.parse(detail)).toEqual(detail)
   })
 })
@@ -112,7 +107,17 @@ describe("AgentDetailSchema", () => {
 describe("AgentListResponseSchema", () => {
   it("accepts valid list response", () => {
     const data = {
-      agents: [{ id: "a1", name: "Agent", slug: "a", role: "r", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" }],
+      agents: [
+        {
+          id: "a1",
+          name: "Agent",
+          slug: "a",
+          role: "r",
+          status: "ACTIVE",
+          lifecycleState: "READY",
+          createdAt: "2026-01-01T00:00:00Z",
+        },
+      ],
       pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
     }
     expect(AgentListResponseSchema.parse(data).agents).toHaveLength(1)
@@ -137,7 +142,17 @@ describe("JobSummarySchema", () => {
   })
 
   it("accepts all job statuses", () => {
-    const statuses = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_FOR_APPROVAL", "COMPLETED", "FAILED", "TIMED_OUT", "RETRYING", "DEAD_LETTER"]
+    const statuses = [
+      "PENDING",
+      "SCHEDULED",
+      "RUNNING",
+      "WAITING_FOR_APPROVAL",
+      "COMPLETED",
+      "FAILED",
+      "TIMED_OUT",
+      "RETRYING",
+      "DEAD_LETTER",
+    ]
     for (const status of statuses) {
       expect(JobSummarySchema.parse({ ...validJob, status }).status).toBe(status)
     }
@@ -158,7 +173,13 @@ describe("JobDetailSchema", () => {
       createdAt: "2026-01-01T00:00:00Z",
       steps: [{ name: "init", status: "COMPLETED", durationMs: 100 }],
       logs: [{ timestamp: "2026-01-01T00:00:01Z", level: "INFO", message: "Started" }],
-      metrics: { cpuPercent: 50, memoryMb: 256, networkInBytes: 1024, networkOutBytes: 512, threadCount: 4 },
+      metrics: {
+        cpuPercent: 50,
+        memoryMb: 256,
+        networkInBytes: 1024,
+        networkOutBytes: 512,
+        threadCount: 4,
+      },
     }
     expect(JobDetailSchema.parse(detail).steps).toHaveLength(1)
   })
@@ -344,18 +365,29 @@ describe("BrowserSessionSchema", () => {
   })
 
   it("rejects invalid status", () => {
-    expect(() => BrowserSessionSchema.parse({
-      id: "b1", agentId: "a1", vncUrl: null, status: "ACTIVE", tabs: [], latencyMs: 0,
-    })).toThrow()
+    expect(() =>
+      BrowserSessionSchema.parse({
+        id: "b1",
+        agentId: "a1",
+        vncUrl: null,
+        status: "ACTIVE",
+        tabs: [],
+        latencyMs: 0,
+      }),
+    ).toThrow()
   })
 })
 
 describe("BrowserEventSchema", () => {
   it("accepts all event types", () => {
     for (const type of ["GET", "CLICK", "CONSOLE", "SNAPSHOT", "NAVIGATE", "ERROR"]) {
-      expect(BrowserEventSchema.parse({
-        id: "evt-1", type, timestamp: "2026-01-01T00:00:00Z",
-      }).type).toBe(type)
+      expect(
+        BrowserEventSchema.parse({
+          id: "evt-1",
+          type,
+          timestamp: "2026-01-01T00:00:00Z",
+        }).type,
+      ).toBe(type)
     }
   })
 
@@ -387,8 +419,14 @@ describe("ScreenshotSchema", () => {
   })
 
   it("rejects missing dimensions", () => {
-    expect(() => ScreenshotSchema.parse({
-      id: "ss-1", agentId: "a1", timestamp: "t", thumbnailUrl: "u", fullUrl: "u",
-    })).toThrow()
+    expect(() =>
+      ScreenshotSchema.parse({
+        id: "ss-1",
+        agentId: "a1",
+        timestamp: "t",
+        thumbnailUrl: "u",
+        fullUrl: "u",
+      }),
+    ).toThrow()
   })
 })

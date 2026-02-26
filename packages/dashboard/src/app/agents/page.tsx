@@ -61,7 +61,10 @@ export default function AgentsPage(): React.JSX.Element {
   const [metricsMap, setMetricsMap] = useState<Record<string, AgentMetrics>>({})
 
   // Fetch agent list
-  const { data, isLoading, error, errorCode, refetch } = useApiQuery(() => listAgents({ limit: 100 }), [])
+  const { data, isLoading, error, errorCode, refetch } = useApiQuery(
+    () => listAgents({ limit: 100 }),
+    [],
+  )
 
   // Real-time SSE for fleet-wide state updates
   const { connected, events: sseEvents } = useSSE({
@@ -276,8 +279,9 @@ export default function AgentsPage(): React.JSX.Element {
           {/* Count */}
           <div className="text-sm font-medium text-slate-500 dark:text-slate-400">
             Showing{" "}
-            <span className="font-bold text-slate-900 dark:text-slate-100">{filtered.length}</span> of{" "}
-            <span className="font-bold text-slate-900 dark:text-slate-100">{agents.length}</span> agents
+            <span className="font-bold text-slate-900 dark:text-slate-100">{filtered.length}</span>{" "}
+            of <span className="font-bold text-slate-900 dark:text-slate-100">{agents.length}</span>{" "}
+            agents
           </div>
 
           {/* Agent Views */}

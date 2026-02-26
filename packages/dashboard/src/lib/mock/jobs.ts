@@ -2,10 +2,34 @@ import type { JobStatus, JobSummary } from "@/lib/schemas/jobs"
 
 export function generateMockJobs(): JobSummary[] {
   const statuses: JobStatus[] = [
-    "COMPLETED","COMPLETED","COMPLETED","FAILED","RUNNING","PENDING","SCHEDULED","RETRYING","TIMED_OUT","WAITING_FOR_APPROVAL","DEAD_LETTER","COMPLETED","COMPLETED","FAILED","RUNNING","COMPLETED","COMPLETED","COMPLETED","FAILED","COMPLETED","RUNNING","PENDING","COMPLETED","COMPLETED","SCHEDULED",
+    "COMPLETED",
+    "COMPLETED",
+    "COMPLETED",
+    "FAILED",
+    "RUNNING",
+    "PENDING",
+    "SCHEDULED",
+    "RETRYING",
+    "TIMED_OUT",
+    "WAITING_FOR_APPROVAL",
+    "DEAD_LETTER",
+    "COMPLETED",
+    "COMPLETED",
+    "FAILED",
+    "RUNNING",
+    "COMPLETED",
+    "COMPLETED",
+    "COMPLETED",
+    "FAILED",
+    "COMPLETED",
+    "RUNNING",
+    "PENDING",
+    "COMPLETED",
+    "COMPLETED",
+    "SCHEDULED",
   ]
   const types = ["inference", "tool-call", "pipeline", "batch", "scheduled"]
-  const agents = ["agt-a1b2c3d4","agt-e5f6g7h8","agt-i9j0k1l2","agt-m3n4o5p6","agt-q7r8s9t0"]
+  const agents = ["agt-a1b2c3d4", "agt-e5f6g7h8", "agt-i9j0k1l2", "agt-m3n4o5p6", "agt-q7r8s9t0"]
   const now = Date.now()
 
   return statuses.map((status, i) => {

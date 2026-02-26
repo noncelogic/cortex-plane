@@ -1,16 +1,26 @@
-'use client'
+"use client"
 
 import { useMemo, useState } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
 import type { BrowserEvent, BrowserSession, BrowserTab, Screenshot } from "@/lib/api-client"
-import { getAgent, getAgentBrowser, getAgentBrowserEvents, getAgentScreenshots } from "@/lib/api-client"
+import {
+  getAgent,
+  getAgentBrowser,
+  getAgentBrowserEvents,
+  getAgentScreenshots,
+} from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
-import { mockBrowserEvents, mockBrowserSession, mockScreenshots, mockTabs } from "@/lib/mock/browser"
+import {
+  mockBrowserEvents,
+  mockBrowserSession,
+  mockScreenshots,
+  mockTabs,
+} from "@/lib/mock/browser"
 
 export function useBrowserObservation(agentId: string) {
   const mock = isMockEnabled()
-  const [tabs, setTabs] = useState<BrowserTab[]>(() => mock ? mockTabs() : [])
+  const [tabs, setTabs] = useState<BrowserTab[]>(() => (mock ? mockTabs() : []))
 
   const { data: agentData, error: agentError } = useApiQuery(() => getAgent(agentId), [agentId])
   const { data: sessionData, error: sessionError } = useApiQuery(
@@ -28,14 +38,16 @@ export function useBrowserObservation(agentId: string) {
 
   const session: BrowserSession = useMemo(() => {
     if (mock) return mockBrowserSession(agentId)
-    return sessionData ?? {
-      id: `session-${agentId}`,
-      agentId,
-      vncUrl: null,
-      status: sessionError ? "error" : "connecting",
-      tabs: [],
-      latencyMs: 0,
-    }
+    return (
+      sessionData ?? {
+        id: `session-${agentId}`,
+        agentId,
+        vncUrl: null,
+        status: sessionError ? "error" : "connecting",
+        tabs: [],
+        latencyMs: 0,
+      }
+    )
   }, [sessionData, sessionError, agentId, mock])
 
   const screenshots: Screenshot[] = useMemo(() => {
@@ -51,9 +63,7 @@ export function useBrowserObservation(agentId: string) {
   const agentName = agentData?.name ?? `Agent ${agentId.slice(0, 8)}`
 
   const handleSelectTab = (tabId: string) => {
-    setTabs((prev) =>
-      prev.map((t) => ({ ...t, active: t.id === tabId })),
-    )
+    setTabs((prev) => prev.map((t) => ({ ...t, active: t.id === tabId })))
   }
 
   const handleCloseTab = (tabId: string) => {

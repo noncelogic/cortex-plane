@@ -42,9 +42,7 @@ const KNOWN_EVENT_TYPES = [
  * built from that base; otherwise relative URLs go through the Next.js rewrite proxy.
  */
 export function resolveSSEUrl(path: string): string {
-  const base = typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_SSE_URL ?? "")
-    : ""
+  const base = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_SSE_URL ?? "") : ""
   if (!base) return path
   // Strip leading /api/ prefix when using a direct SSE URL since the
   // control-plane doesn't serve under /api

@@ -58,7 +58,9 @@ export function RelatedPanel({ records, onSelect }: RelatedPanelProps): React.JS
             >
               <div className="flex items-start gap-3">
                 {/* Icon */}
-                <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${config.bg}`}>
+                <div
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${config.bg}`}
+                >
                   <span className={`material-symbols-outlined text-xl ${config.color}`}>
                     {config.icon}
                   </span>
@@ -69,15 +71,15 @@ export function RelatedPanel({ records, onSelect }: RelatedPanelProps): React.JS
                   <p className="line-clamp-1 text-sm font-medium text-slate-200 group-hover:text-slate-100">
                     {extractTitle(record.content)}
                   </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">
-                    {record.content}
-                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">{record.content}</p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">
                       {typeLabel(record.type)}
                     </span>
                     {scorePercent !== null && (
-                      <span className={`text-xs ${scorePercent >= 85 ? "font-bold text-primary" : "text-slate-500"}`}>
+                      <span
+                        className={`text-xs ${scorePercent >= 85 ? "font-bold text-primary" : "text-slate-500"}`}
+                      >
                         {scorePercent}%
                       </span>
                     )}

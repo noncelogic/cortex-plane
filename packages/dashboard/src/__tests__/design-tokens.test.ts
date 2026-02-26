@@ -1,5 +1,6 @@
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 /**
@@ -42,6 +43,9 @@ describe("design token compliance", () => {
       }
     }
 
-    expect(violations, `Found hardcoded hex colors in components:\n${violations.join("\n")}`).toEqual([])
+    expect(
+      violations,
+      `Found hardcoded hex colors in components:\n${violations.join("\n")}`,
+    ).toEqual([])
   })
 })

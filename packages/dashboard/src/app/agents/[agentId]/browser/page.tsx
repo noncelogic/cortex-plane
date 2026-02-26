@@ -46,10 +46,7 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
     <div className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
       {/* Breadcrumb: Agents > [Agent Name] > Browser */}
       <nav className="flex items-center gap-2 text-sm">
-        <Link
-          href="/agents"
-          className="text-slate-400 transition-colors hover:text-primary"
-        >
+        <Link href="/agents" className="text-slate-400 transition-colors hover:text-primary">
           Agents
         </Link>
         <span className="material-symbols-outlined text-xs text-slate-600">chevron_right</span>
@@ -183,16 +180,10 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
                 <ScreenshotGallery screenshots={screenshots} />
               </div>
             )}
-            <TabBar
-              tabs={tabs}
-              onSelectTab={handleSelectTab}
-              onCloseTab={handleCloseTab}
-            />
+            <TabBar tabs={tabs} onSelectTab={handleSelectTab} onCloseTab={handleCloseTab} />
           </div>
         )}
-        {mobileTab === "Screenshots" && (
-          <ScreenshotGallery screenshots={screenshots} />
-        )}
+        {mobileTab === "Screenshots" && <ScreenshotGallery screenshots={screenshots} />}
         {mobileTab === "Trace" && <TraceTimeline events={events} />}
       </div>
     </div>

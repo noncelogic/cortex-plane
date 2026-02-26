@@ -87,9 +87,7 @@ export function PublishAction({
           </div>
         </div>
 
-        <p className="mb-4 truncate text-sm text-text-muted">
-          &ldquo;{contentTitle}&rdquo;
-        </p>
+        <p className="mb-4 truncate text-sm text-text-muted">&ldquo;{contentTitle}&rdquo;</p>
 
         {/* Channel selector */}
         <div className="mb-4 space-y-2">
@@ -140,7 +138,9 @@ export function PublishAction({
           >
             {state === "loading" ? (
               <>
-                <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                <span className="material-symbols-outlined animate-spin text-lg">
+                  progress_activity
+                </span>
                 Publishing...
               </>
             ) : (

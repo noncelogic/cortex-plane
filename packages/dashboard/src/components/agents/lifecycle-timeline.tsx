@@ -108,9 +108,7 @@ export function LifecycleTimeline({
                 <div className="mx-2 h-0.5 flex-1">
                   <div
                     className={`h-full rounded-full ${
-                      status === "completed" || status === "current"
-                        ? "bg-primary"
-                        : "bg-secondary"
+                      status === "completed" || status === "current" ? "bg-primary" : "bg-secondary"
                     }`}
                   />
                 </div>

@@ -71,9 +71,7 @@ export function ContentFilters({
           </span>
           <select
             value={filters.type}
-            onChange={(e) =>
-              onChange({ ...filters, type: e.target.value as ContentType | "ALL" })
-            }
+            onChange={(e) => onChange({ ...filters, type: e.target.value as ContentType | "ALL" })}
             className="cursor-pointer appearance-none rounded-lg border-none bg-secondary py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50"
           >
             {TYPE_OPTIONS.map((opt) => (

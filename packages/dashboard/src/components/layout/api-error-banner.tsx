@@ -37,7 +37,11 @@ const DEFAULT_CONFIG = {
   className: "border-red-500/20 bg-red-500/10 text-red-500",
 }
 
-export function ApiErrorBanner({ error, errorCode, onRetry }: ApiErrorBannerProps): React.JSX.Element {
+export function ApiErrorBanner({
+  error,
+  errorCode,
+  onRetry,
+}: ApiErrorBannerProps): React.JSX.Element {
   const config = (errorCode && ERROR_CONFIG[errorCode]) ?? DEFAULT_CONFIG
 
   return (

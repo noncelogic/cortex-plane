@@ -5,7 +5,7 @@
  * for creating backends by ID.
  */
 
-import type { ExecutionBackend } from "@cortex/shared"
+import type { ExecutionBackend } from "@cortex/shared/backends"
 
 import { ClaudeCodeBackend } from "./claude-code.js"
 import { EchoBackend } from "./echo-backend.js"

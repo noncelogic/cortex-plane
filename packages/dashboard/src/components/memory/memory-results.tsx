@@ -117,7 +117,8 @@ export function MemoryResults({
           <div className="space-y-1 p-2">
             {results.map((record) => {
               const isActive = record.id === selectedId
-              const scorePercent = record.score !== undefined ? Math.round(record.score * 100) : null
+              const scorePercent =
+                record.score !== undefined ? Math.round(record.score * 100) : null
 
               return (
                 <button

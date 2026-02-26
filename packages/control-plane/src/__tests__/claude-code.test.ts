@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChildProcess } from "node:child_process"
 import { EventEmitter, Readable } from "node:stream"
 
-import type { ExecutionTask, OutputEvent } from "@cortex/shared"
+import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
 
 // ──────────────────────────────────────────────────
 // Mock child_process before importing the module

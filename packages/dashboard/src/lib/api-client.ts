@@ -232,7 +232,7 @@ async function apiFetch<T>(
         throw err
       }
 
-      const data = await res.json()
+      const data: unknown = await res.json()
       return schema ? schema.parse(data) : (data as T)
     } catch (err) {
       clearTimeout(timeoutId)
@@ -498,11 +498,7 @@ export async function getAgentScreenshots(agentId: string, limit?: number) {
   })
 }
 
-export async function getAgentBrowserEvents(
-  agentId: string,
-  limit?: number,
-  types?: string[],
-) {
+export async function getAgentBrowserEvents(agentId: string, limit?: number, types?: string[]) {
   const search = new URLSearchParams()
   if (limit) search.set("limit", String(limit))
   if (types?.length) search.set("types", types.join(","))
@@ -511,4 +507,3 @@ export async function getAgentBrowserEvents(
     schema: BrowserEventListResponseSchema,
   })
 }
-

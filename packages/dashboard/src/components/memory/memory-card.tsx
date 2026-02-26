@@ -25,11 +25,13 @@ export function MemoryCard({ record }: MemoryCardProps): React.JSX.Element {
         </span>
         <span className="text-xs text-slate-500">importance: {record.importance}</span>
         {record.score !== undefined && (
-          <span className={`ml-auto rounded px-1.5 py-0.5 text-xs font-medium ${
-            record.score >= 0.85
-              ? "bg-primary/10 font-bold text-primary"
-              : "bg-slate-800 text-slate-400"
-          }`}>
+          <span
+            className={`ml-auto rounded px-1.5 py-0.5 text-xs font-medium ${
+              record.score >= 0.85
+                ? "bg-primary/10 font-bold text-primary"
+                : "bg-slate-800 text-slate-400"
+            }`}
+          >
             {Math.round(record.score * 100)}%
           </span>
         )}
@@ -38,10 +40,7 @@ export function MemoryCard({ record }: MemoryCardProps): React.JSX.Element {
       {record.tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {record.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
-            >
+            <span key={tag} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
               {tag}
             </span>
           ))}

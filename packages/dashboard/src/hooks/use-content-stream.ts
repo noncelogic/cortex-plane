@@ -1,7 +1,6 @@
-'use client'
+"use client"
 
 import { useMemo } from "react"
-
 import { z } from "zod"
 
 import { resolveSSEUrl, type SSEConnectionStatus } from "@/lib/sse-client"

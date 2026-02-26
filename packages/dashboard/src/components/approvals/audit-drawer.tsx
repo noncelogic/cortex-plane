@@ -125,9 +125,7 @@ export function AuditDrawer({ entries, onClose }: AuditDrawerProps): React.JSX.E
       <div className="flex-1 overflow-y-auto p-5 scrollbar-hide">
         {entries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <span className="material-symbols-outlined mb-2 text-4xl text-text-muted">
-              history
-            </span>
+            <span className="material-symbols-outlined mb-2 text-4xl text-text-muted">history</span>
             <p className="text-sm text-text-muted">No audit events yet.</p>
           </div>
         ) : (

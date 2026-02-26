@@ -30,9 +30,7 @@ export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
     >
       {/* Header: Job ID + Status */}
       <div className="mb-3 flex items-center justify-between">
-        <span className="font-mono text-sm font-bold text-primary">
-          {truncateUuid(job.id)}
-        </span>
+        <span className="font-mono text-sm font-bold text-primary">{truncateUuid(job.id)}</span>
         <JobStatusBadge status={job.status} />
       </div>
 
@@ -40,9 +38,7 @@ export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
       <div className="mb-3 space-y-1">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-lg text-text-muted">smart_toy</span>
-          <span className="text-sm text-text-main">
-            {truncateUuid(job.agentId)}
-          </span>
+          <span className="text-sm text-text-main">{truncateUuid(job.agentId)}</span>
         </div>
         <span className="inline-block rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-text-muted">
           {job.type}

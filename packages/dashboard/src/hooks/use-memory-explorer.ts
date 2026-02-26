@@ -1,15 +1,19 @@
-'use client'
+"use client"
 
 import { useCallback, useMemo, useState } from "react"
 
 import type { ActiveFilters } from "@/components/memory/memory-search"
 import { useApiQuery } from "@/hooks/use-api"
-import type { ApiErrorCode, MemoryRecord } from "@/lib/api-client"
+import type { MemoryRecord } from "@/lib/api-client"
 import { searchMemory, syncMemory } from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
 import { generateMockMemories, MOCK_AGENT_ID } from "@/lib/mock/memory"
 
-function applyFilters(records: MemoryRecord[], query: string, filters: ActiveFilters): MemoryRecord[] {
+function applyFilters(
+  records: MemoryRecord[],
+  query: string,
+  filters: ActiveFilters,
+): MemoryRecord[] {
   return records.filter((r) => {
     if (query) {
       const q = query.toLowerCase()
@@ -81,9 +85,7 @@ export function useMemoryExplorer() {
 
   const relatedRecords = useMemo(() => {
     if (!selectedRecord) return []
-    return allRecords
-      .filter((r) => r.id !== selectedId)
-      .slice(0, 4)
+    return allRecords.filter((r) => r.id !== selectedId).slice(0, 4)
   }, [allRecords, selectedId, selectedRecord])
 
   const handleSearch = useCallback((query: string, filters: ActiveFilters) => {
@@ -115,7 +117,7 @@ export function useMemoryExplorer() {
     handleSync,
     isLoading,
     error,
-    errorCode: errorCode as ApiErrorCode | null,
+    errorCode: errorCode,
     agentId: MOCK_AGENT_ID,
   }
 }

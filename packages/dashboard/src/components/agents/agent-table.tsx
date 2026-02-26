@@ -44,9 +44,7 @@ function ResourceBars({
       <div>
         <div className="mb-0.5 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase text-text-muted">CPU</span>
-          <span className="text-[10px] font-bold text-text-main">
-            {cpuPercent}%
-          </span>
+          <span className="text-[10px] font-bold text-text-main">{cpuPercent}%</span>
         </div>
         <div className="h-1 w-full overflow-hidden rounded-full bg-secondary">
           <div className="h-full rounded-full bg-primary" style={{ width: `${cpuPercent}%` }} />
@@ -55,9 +53,7 @@ function ResourceBars({
       <div>
         <div className="mb-0.5 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase text-text-muted">MEM</span>
-          <span className="text-[10px] font-bold text-text-main">
-            {memPercent}%
-          </span>
+          <span className="text-[10px] font-bold text-text-main">{memPercent}%</span>
         </div>
         <div className="h-1 w-full overflow-hidden rounded-full bg-secondary">
           <div className="h-full rounded-full bg-primary" style={{ width: `${memPercent}%` }} />
@@ -117,9 +113,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                       {getInitials(agent.name)}
                     </div>
                     <div>
-                      <div className="font-bold text-text-main">
-                        {agent.name}
-                      </div>
+                      <div className="font-bold text-text-main">{agent.name}</div>
                       <div className="font-mono text-xs text-text-muted">
                         ID: {agent.id.slice(0, 12)}
                       </div>
@@ -136,9 +130,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                 <td className="px-6 py-4">
                   {m?.currentTask ? (
                     <>
-                      <div className="text-sm font-medium text-text-main">
-                        {m.currentTask}
-                      </div>
+                      <div className="text-sm font-medium text-text-main">{m.currentTask}</div>
                       {m.lastHeartbeat && (
                         <div className="text-xs text-text-muted">
                           {relativeTime(m.lastHeartbeat)}

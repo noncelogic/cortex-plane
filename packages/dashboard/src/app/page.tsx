@@ -15,7 +15,12 @@ export default function DashboardPage(): React.JSX.Element {
   const cards = [
     { label: "Total Agents", value: stats.totalAgents, icon: "smart_toy", href: "/agents" },
     { label: "Active Jobs", value: stats.activeJobs, icon: "list_alt", href: "/jobs" },
-    { label: "Pending Approvals", value: stats.pendingApprovals, icon: "verified_user", href: "/approvals" },
+    {
+      label: "Pending Approvals",
+      value: stats.pendingApprovals,
+      icon: "verified_user",
+      href: "/approvals",
+    },
     { label: "Memory Records", value: stats.memoryRecords, icon: "memory", href: "/memory" },
   ] as const
 
@@ -24,9 +29,7 @@ export default function DashboardPage(): React.JSX.Element {
       {/* Header */}
       <div className="flex items-center gap-3">
         <span className="material-symbols-outlined text-[28px] text-primary">dashboard</span>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-text-main">
-          Dashboard
-        </h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-text-main">Dashboard</h1>
       </div>
 
       {/* Error banner */}

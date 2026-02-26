@@ -61,9 +61,7 @@ export function ApprovalList({
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <div className="mb-6 flex size-48 items-center justify-center rounded-full border-2 border-dashed border-surface-border">
-          <span className="material-symbols-outlined text-6xl text-text-muted">
-            verified_user
-          </span>
+          <span className="material-symbols-outlined text-6xl text-text-muted">verified_user</span>
         </div>
         <h3 className="mb-2 text-lg font-bold text-text-main">All Clear</h3>
         <p className="max-w-sm text-text-muted">

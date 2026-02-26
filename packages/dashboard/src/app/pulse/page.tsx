@@ -42,7 +42,8 @@ export default function PulsePage(): React.JSX.Element {
             AI Pulse
           </h1>
           <p className="max-w-lg text-slate-500 dark:text-slate-400">
-            Content pipeline powered by your AI agents. Review, approve, and publish across channels.
+            Content pipeline powered by your AI agents. Review, approve, and publish across
+            channels.
           </p>
         </div>
       </div>

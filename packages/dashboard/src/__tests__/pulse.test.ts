@@ -13,8 +13,13 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import type { ContentPiece, ContentPipelineStats, ContentStatus, ContentType } from "@/lib/api-client"
-import { ApiError, listContent, publishContent, archiveContent } from "@/lib/api-client"
+import type {
+  ContentPiece,
+  ContentPipelineStats,
+  ContentStatus,
+  ContentType,
+} from "@/lib/api-client"
+import { ApiError, archiveContent, listContent, publishContent } from "@/lib/api-client"
 import { duration, relativeTime } from "@/lib/format"
 
 // ---------------------------------------------------------------------------
@@ -56,12 +61,44 @@ function createMockPiece(overrides: Partial<ContentPiece> = {}): ContentPiece {
 function createPieceSet(): ContentPiece[] {
   return [
     createMockPiece({ id: "c1", title: "Draft Blog Post", status: "DRAFT", type: "blog" }),
-    createMockPiece({ id: "c2", title: "Draft Social Thread", status: "DRAFT", type: "social", agentName: "SocialPulse" }),
-    createMockPiece({ id: "c3", title: "Review: Newsletter", status: "IN_REVIEW", type: "newsletter" }),
-    createMockPiece({ id: "c4", title: "Review: Report Q4", status: "IN_REVIEW", type: "report", agentName: "AnalyticsBot" }),
+    createMockPiece({
+      id: "c2",
+      title: "Draft Social Thread",
+      status: "DRAFT",
+      type: "social",
+      agentName: "SocialPulse",
+    }),
+    createMockPiece({
+      id: "c3",
+      title: "Review: Newsletter",
+      status: "IN_REVIEW",
+      type: "newsletter",
+    }),
+    createMockPiece({
+      id: "c4",
+      title: "Review: Report Q4",
+      status: "IN_REVIEW",
+      type: "report",
+      agentName: "AnalyticsBot",
+    }),
     createMockPiece({ id: "c5", title: "Queued Blog", status: "QUEUED", type: "blog" }),
-    createMockPiece({ id: "c6", title: "Published Article", status: "PUBLISHED", type: "blog", publishedAt: "2026-02-25T08:00:00Z", channel: "website" }),
-    createMockPiece({ id: "c7", title: "Published Social", status: "PUBLISHED", type: "social", publishedAt: "2026-02-24T14:00:00Z", channel: "social", agentName: "SocialPulse" }),
+    createMockPiece({
+      id: "c6",
+      title: "Published Article",
+      status: "PUBLISHED",
+      type: "blog",
+      publishedAt: "2026-02-25T08:00:00Z",
+      channel: "website",
+    }),
+    createMockPiece({
+      id: "c7",
+      title: "Published Social",
+      status: "PUBLISHED",
+      type: "social",
+      publishedAt: "2026-02-24T14:00:00Z",
+      channel: "social",
+      agentName: "SocialPulse",
+    }),
   ]
 }
 

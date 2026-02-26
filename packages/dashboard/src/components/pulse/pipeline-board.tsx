@@ -141,7 +141,7 @@ export function PipelineBoard({
                 <p className="text-sm text-slate-500">{col.emptyText}</p>
               </div>
             ) : (
-              grouped[col.status]!.map((piece) => (
+              grouped[col.status].map((piece) => (
                 <ContentCard
                   key={piece.id}
                   piece={piece}
@@ -179,7 +179,10 @@ export function PipelineBoard({
               </div>
 
               {/* Column body */}
-              <div className="flex-1 space-y-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 340px)" }}>
+              <div
+                className="flex-1 space-y-3 overflow-y-auto"
+                style={{ maxHeight: "calc(100vh - 340px)" }}
+              >
                 {items.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-surface-border p-6 text-center">
                     <span className="material-symbols-outlined mb-2 text-2xl text-slate-400">

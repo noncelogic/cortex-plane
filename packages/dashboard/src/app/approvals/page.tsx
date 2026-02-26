@@ -138,7 +138,10 @@ export default function ApprovalsPage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Fetch approvals from API
-  const { data, isLoading, error, errorCode, refetch } = useApiQuery(() => listApprovals({ limit: 100 }), [])
+  const { data, isLoading, error, errorCode, refetch } = useApiQuery(
+    () => listApprovals({ limit: 100 }),
+    [],
+  )
 
   // Real-time stream
   const { events: streamEvents, connected, pendingCount } = useApprovalStream()

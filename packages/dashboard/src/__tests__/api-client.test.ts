@@ -31,7 +31,9 @@ function mockFetchNetworkError(): void {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
 }
 
-function mockFetchSequence(...responses: Array<{ body?: unknown; status?: number; error?: boolean }>): void {
+function mockFetchSequence(
+  ...responses: Array<{ body?: unknown; status?: number; error?: boolean }>
+): void {
   const mock = vi.fn()
   for (const [i, r] of responses.entries()) {
     if (r.error) {
@@ -83,7 +85,17 @@ describe("API Client", () => {
   describe("successful requests", () => {
     it("listAgents returns agents and pagination", async () => {
       const body = {
-        agents: [{ id: "a1", name: "Agent 1", slug: "a1", role: "test", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" }],
+        agents: [
+          {
+            id: "a1",
+            name: "Agent 1",
+            slug: "a1",
+            role: "test",
+            status: "ACTIVE",
+            lifecycleState: "READY",
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
         pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
       }
       mockFetchResponse(body)
@@ -99,7 +111,15 @@ describe("API Client", () => {
     })
 
     it("getAgent fetches by ID", async () => {
-      mockFetchResponse({ id: "agent-1", name: "Test Agent", slug: "test-agent", role: "tester", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" })
+      mockFetchResponse({
+        id: "agent-1",
+        name: "Test Agent",
+        slug: "test-agent",
+        role: "tester",
+        status: "ACTIVE",
+        lifecycleState: "READY",
+        createdAt: "2026-01-01T00:00:00Z",
+      })
 
       const result = await getAgent("agent-1")
 
@@ -108,7 +128,12 @@ describe("API Client", () => {
     })
 
     it("steerAgent sends POST with body", async () => {
-      mockFetchResponse({ steerMessageId: "sm-1", status: "accepted", agentId: "agent-1", priority: "high" })
+      mockFetchResponse({
+        steerMessageId: "sm-1",
+        status: "accepted",
+        agentId: "agent-1",
+        priority: "high",
+      })
 
       await steerAgent("agent-1", { message: "focus on tests", priority: "high" })
 
@@ -167,7 +192,15 @@ describe("API Client", () => {
   describe("API key header", () => {
     it("sends X-API-Key when env is set", async () => {
       vi.stubEnv("NEXT_PUBLIC_CORTEX_API_KEY", "test-key-123")
-      mockFetchResponse({ id: "a1", name: "A1", slug: "a1", role: "test", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" })
+      mockFetchResponse({
+        id: "a1",
+        name: "A1",
+        slug: "a1",
+        role: "test",
+        status: "ACTIVE",
+        lifecycleState: "READY",
+        createdAt: "2026-01-01T00:00:00Z",
+      })
 
       await getAgent("a1")
 
@@ -176,7 +209,15 @@ describe("API Client", () => {
     })
 
     it("omits X-API-Key when env is not set", async () => {
-      mockFetchResponse({ id: "a1", name: "A1", slug: "a1", role: "test", status: "ACTIVE", lifecycleState: "READY", createdAt: "2026-01-01T00:00:00Z" })
+      mockFetchResponse({
+        id: "a1",
+        name: "A1",
+        slug: "a1",
+        role: "test",
+        status: "ACTIVE",
+        lifecycleState: "READY",
+        createdAt: "2026-01-01T00:00:00Z",
+      })
 
       await getAgent("a1")
 
@@ -337,7 +378,10 @@ describe("API Client", () => {
     it("retries on 503 and succeeds on second attempt", async () => {
       mockFetchSequence(
         { body: { message: "Unavailable" }, status: 503 },
-        { body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } }, status: 200 },
+        {
+          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } },
+          status: 200,
+        },
       )
 
       const result = await listAgents()
@@ -349,7 +393,10 @@ describe("API Client", () => {
     it("retries on network errors and succeeds", async () => {
       mockFetchSequence(
         { error: true },
-        { body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } }, status: 200 },
+        {
+          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } },
+          status: 200,
+        },
       )
 
       const result = await listAgents()

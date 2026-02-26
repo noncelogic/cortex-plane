@@ -14,10 +14,12 @@ import { useSSE } from "./use-sse"
 const AgentOutputPayloadSchema = z.object({
   agentId: z.string(),
   timestamp: z.string(),
-  output: z.object({
-    type: z.string(),
-    content: z.string(),
-  }).passthrough(),
+  output: z
+    .object({
+      type: z.string(),
+      content: z.string(),
+    })
+    .passthrough(),
 })
 
 const AgentStatePayloadSchema = z.object({

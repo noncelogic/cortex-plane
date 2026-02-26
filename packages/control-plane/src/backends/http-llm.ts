@@ -20,7 +20,7 @@ import type {
   OutputTextEvent,
   OutputUsageEvent,
   TokenUsage,
-} from "@cortex/shared"
+} from "@cortex/shared/backends"
 
 type LlmProvider = "anthropic" | "openai"
 

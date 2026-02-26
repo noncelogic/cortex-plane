@@ -62,7 +62,7 @@ const DEFAULT_FILTERS: ActiveFilters = {
 // Component
 // ---------------------------------------------------------------------------
 
-export type { ActiveFilters, MemoryType, ImportanceLevel, TimeRange }
+export type { ActiveFilters, ImportanceLevel, MemoryType, TimeRange }
 
 export function MemorySearch({ onSearch, isLoading }: MemorySearchProps): React.JSX.Element {
   const [query, setQuery] = useState("")
@@ -83,9 +83,12 @@ export function MemorySearch({ onSearch, isLoading }: MemorySearchProps): React.
     }
   }, [query, filters])
 
-  const updateFilter = useCallback(<K extends keyof ActiveFilters>(key: K, value: ActiveFilters[K]) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }, [])
+  const updateFilter = useCallback(
+    <K extends keyof ActiveFilters>(key: K, value: ActiveFilters[K]) => {
+      setFilters((prev) => ({ ...prev, [key]: value }))
+    },
+    [],
+  )
 
   const clearFilter = useCallback((key: keyof ActiveFilters) => {
     setFilters((prev) => ({ ...prev, [key]: DEFAULT_FILTERS[key] }))
@@ -145,14 +148,19 @@ export function MemorySearch({ onSearch, isLoading }: MemorySearchProps): React.
               className="absolute inset-0 cursor-pointer opacity-0"
             >
               {TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </FilterChip>
 
           {/* Importance filter */}
           <FilterChip
-            label={IMPORTANCE_OPTIONS.find((o) => o.value === filters.importance)?.label ?? "Any Importance"}
+            label={
+              IMPORTANCE_OPTIONS.find((o) => o.value === filters.importance)?.label ??
+              "Any Importance"
+            }
             active={filters.importance !== "ALL"}
             onClear={() => clearFilter("importance")}
           >
@@ -162,14 +170,18 @@ export function MemorySearch({ onSearch, isLoading }: MemorySearchProps): React.
               className="absolute inset-0 cursor-pointer opacity-0"
             >
               {IMPORTANCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </FilterChip>
 
           {/* Score threshold */}
           <FilterChip
-            label={filters.scoreThreshold > 0 ? `Score ≥ ${filters.scoreThreshold}%` : "Score Threshold"}
+            label={
+              filters.scoreThreshold > 0 ? `Score ≥ ${filters.scoreThreshold}%` : "Score Threshold"
+            }
             active={filters.scoreThreshold > 0}
             onClear={() => clearFilter("scoreThreshold")}
           >
@@ -198,7 +210,9 @@ export function MemorySearch({ onSearch, isLoading }: MemorySearchProps): React.
               className="absolute inset-0 cursor-pointer opacity-0"
             >
               {TIME_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </FilterChip>

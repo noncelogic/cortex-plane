@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest"
 
-import { generateMockJobs } from "@/lib/mock/jobs"
-import { generateMockContent } from "@/lib/mock/content"
-import { generateMockMemories, MOCK_AGENT_ID } from "@/lib/mock/memory"
-import { mockBrowserSession, mockTabs, mockScreenshots, mockBrowserEvents } from "@/lib/mock/browser"
 import { isMockEnabled } from "@/lib/mock"
+import {
+  mockBrowserEvents,
+  mockBrowserSession,
+  mockScreenshots,
+  mockTabs,
+} from "@/lib/mock/browser"
+import { generateMockContent } from "@/lib/mock/content"
+import { generateMockJobs } from "@/lib/mock/jobs"
+import { generateMockMemories, MOCK_AGENT_ID } from "@/lib/mock/memory"
 
 // ---------------------------------------------------------------------------
 // Mock data generators

@@ -17,9 +17,7 @@ export function PageHeader({ title, backHref }: PageHeaderProps): React.JSX.Elem
           Back
         </Link>
       )}
-      <h1 className="font-display text-2xl font-bold tracking-tight text-text-main">
-        {title}
-      </h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight text-text-main">{title}</h1>
     </div>
   )
 }

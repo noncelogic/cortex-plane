@@ -108,9 +108,7 @@ export function DocumentViewer({
         </div>
 
         {/* Title */}
-        <h2 className="text-3xl font-bold text-slate-100">
-          {extractTitle(record.content)}
-        </h2>
+        <h2 className="text-3xl font-bold text-slate-100">{extractTitle(record.content)}</h2>
 
         {/* Source & time */}
         <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-400">
@@ -154,26 +152,14 @@ export function DocumentViewer({
 
         {/* Metadata section */}
         <div className="mt-8 grid grid-cols-2 gap-4 rounded-xl border border-slate-800 bg-surface-dark p-4 sm:grid-cols-3">
-          <MetadataItem
-            icon={typeIcon(record.type)}
-            label="Type"
-            value={typeLabel(record.type)}
-          />
-          <MetadataItem
-            icon="star"
-            label="Importance"
-            value={importanceStars(record.importance)}
-          />
+          <MetadataItem icon={typeIcon(record.type)} label="Type" value={typeLabel(record.type)} />
+          <MetadataItem icon="star" label="Importance" value={importanceStars(record.importance)} />
           <MetadataItem
             icon="speed"
             label="Confidence"
             value={`${Math.round(record.confidence * 100)}%`}
           />
-          <MetadataItem
-            icon="visibility"
-            label="Access Count"
-            value={String(record.accessCount)}
-          />
+          <MetadataItem icon="visibility" label="Access Count" value={String(record.accessCount)} />
           <MetadataItem
             icon="schedule"
             label="Last Accessed"
@@ -204,7 +190,10 @@ export function DocumentViewer({
                 <p className="mb-1 text-xs text-slate-500">People</p>
                 <div className="flex flex-wrap gap-1">
                   {record.people.map((p) => (
-                    <span key={p} className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                    <span
+                      key={p}
+                      className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300"
+                    >
                       {p}
                     </span>
                   ))}
@@ -216,7 +205,10 @@ export function DocumentViewer({
                 <p className="mb-1 text-xs text-slate-500">Projects</p>
                 <div className="flex flex-wrap gap-1">
                   {record.projects.map((p) => (
-                    <span key={p} className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                    <span
+                      key={p}
+                      className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300"
+                    >
                       {p}
                     </span>
                   ))}
@@ -291,16 +283,27 @@ function MemoryContent({ content }: { content: string }): React.JSX.Element {
 
         // Heading detection
         if (trimmed.startsWith("# ")) {
-          return <h3 key={i} className="mb-2 mt-6 text-lg font-bold text-slate-100">{trimmed.slice(2)}</h3>
+          return (
+            <h3 key={i} className="mb-2 mt-6 text-lg font-bold text-slate-100">
+              {trimmed.slice(2)}
+            </h3>
+          )
         }
         if (trimmed.startsWith("## ")) {
-          return <h4 key={i} className="mb-2 mt-4 text-base font-bold text-slate-200">{trimmed.slice(3)}</h4>
+          return (
+            <h4 key={i} className="mb-2 mt-4 text-base font-bold text-slate-200">
+              {trimmed.slice(3)}
+            </h4>
+          )
         }
 
         // Callout / blockquote detection
         if (trimmed.startsWith("> ")) {
           return (
-            <div key={i} className="my-3 rounded-lg border-l-4 border-primary/40 bg-primary/5 px-4 py-3">
+            <div
+              key={i}
+              className="my-3 rounded-lg border-l-4 border-primary/40 bg-primary/5 px-4 py-3"
+            >
               <p className="text-sm text-slate-300">{trimmed.slice(2)}</p>
             </div>
           )

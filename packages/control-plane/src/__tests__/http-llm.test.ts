@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import type { ExecutionTask, OutputEvent } from "@cortex/shared"
+import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
 
 import { HttpLlmBackend } from "../backends/http-llm.js"
 

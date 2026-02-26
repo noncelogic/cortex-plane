@@ -76,21 +76,15 @@ export function ContentCard({
         <div className="min-w-0 flex-1">
           {/* Title + status */}
           <div className="mb-1 flex items-start justify-between gap-2">
-            <h3 className="truncate text-sm font-bold text-text-main">
-              {piece.title}
-            </h3>
+            <h3 className="truncate text-sm font-bold text-text-main">{piece.title}</h3>
             <div className="flex flex-shrink-0 items-center gap-1.5">
               <div className={`size-2 rounded-full ${status.color}`} />
-              <span className="text-[10px] font-medium text-text-muted">
-                {status.label}
-              </span>
+              <span className="text-[10px] font-medium text-text-muted">{status.label}</span>
             </div>
           </div>
 
           {/* Preview snippet */}
-          <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-text-muted">
-            {piece.body}
-          </p>
+          <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-text-muted">{piece.body}</p>
 
           {/* Agent + type tag + word count */}
           <div className="mb-3 flex flex-wrap items-center gap-2">

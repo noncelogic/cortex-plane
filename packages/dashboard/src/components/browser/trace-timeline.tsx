@@ -121,19 +121,13 @@ export function TraceTimeline({ events }: TraceTimelineProps): React.JSX.Element
       <div ref={scrollRef} className="max-h-[400px] overflow-y-auto p-3">
         {filteredEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8">
-            <span className="material-symbols-outlined mb-2 text-2xl text-slate-600">
-              timeline
-            </span>
+            <span className="material-symbols-outlined mb-2 text-2xl text-slate-600">timeline</span>
             <p className="text-xs text-slate-500">No events to display</p>
           </div>
         ) : (
           <div className="space-y-0">
             {filteredEvents.map((event, i) => (
-              <EventItem
-                key={event.id}
-                event={event}
-                isLast={i === filteredEvents.length - 1}
-              />
+              <EventItem key={event.id} event={event} isLast={i === filteredEvents.length - 1} />
             ))}
           </div>
         )}
@@ -146,13 +140,7 @@ export function TraceTimeline({ events }: TraceTimelineProps): React.JSX.Element
 // Event item
 // ---------------------------------------------------------------------------
 
-function EventItem({
-  event,
-  isLast,
-}: {
-  event: BrowserEvent
-  isLast: boolean
-}): React.JSX.Element {
+function EventItem({ event, isLast }: { event: BrowserEvent; isLast: boolean }): React.JSX.Element {
   const config = EVENT_CONFIG[event.type]
   const time = new Date(event.timestamp).toLocaleTimeString("en-US", { hour12: false })
 

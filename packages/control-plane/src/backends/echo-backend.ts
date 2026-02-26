@@ -17,7 +17,7 @@ import type {
   OutputEvent,
   OutputTextEvent,
   TokenUsage,
-} from "@cortex/shared"
+} from "@cortex/shared/backends"
 
 const ZERO_TOKEN_USAGE: TokenUsage = {
   inputTokens: 0,

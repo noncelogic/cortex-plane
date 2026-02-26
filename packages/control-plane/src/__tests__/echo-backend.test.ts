@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { ExecutionTask, OutputEvent } from "@cortex/shared"
+import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
 
 import { EchoBackend } from "../backends/echo-backend.js"
 

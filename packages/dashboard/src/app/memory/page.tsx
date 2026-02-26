@@ -1,12 +1,12 @@
 "use client"
 
-import { DocumentViewer } from "@/components/memory/document-viewer"
 import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { EmptyState } from "@/components/layout/empty-state"
+import { Skeleton } from "@/components/layout/skeleton"
+import { DocumentViewer } from "@/components/memory/document-viewer"
 import { MemoryResults } from "@/components/memory/memory-results"
 import { MemorySearch } from "@/components/memory/memory-search"
 import { SyncStatus } from "@/components/memory/sync-status"
-import { Skeleton } from "@/components/layout/skeleton"
 import { useMemoryExplorer } from "@/hooks/use-memory-explorer"
 
 // ---------------------------------------------------------------------------

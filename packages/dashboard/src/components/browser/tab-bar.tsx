@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 import type { BrowserTab } from "@/lib/api-client"
 
@@ -47,11 +47,7 @@ export function TabBar({ tabs, onSelectTab, onCloseTab }: TabBarProps): React.JS
         >
           {/* Favicon placeholder */}
           {tab.favicon ? (
-            <img
-              src={tab.favicon}
-              alt=""
-              className="size-3.5 shrink-0 rounded-sm"
-            />
+            <img src={tab.favicon} alt="" className="size-3.5 shrink-0 rounded-sm" />
           ) : (
             <span className="material-symbols-outlined shrink-0 text-sm text-slate-500">
               language

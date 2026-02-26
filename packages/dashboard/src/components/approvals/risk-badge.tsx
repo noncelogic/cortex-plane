@@ -10,20 +10,17 @@ const config: Record<RiskLevel, { label: string; icon: string; classes: string }
   CRITICAL: {
     label: "CRITICAL RISK",
     icon: "gpp_maybe",
-    classes:
-      "bg-red-500/10 text-red-500 border-red-500/20",
+    classes: "bg-red-500/10 text-red-500 border-red-500/20",
   },
   MEDIUM: {
     label: "MEDIUM RISK",
     icon: "warning",
-    classes:
-      "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    classes: "bg-amber-500/10 text-amber-500 border-amber-500/20",
   },
   LOW: {
     label: "LOW RISK",
     icon: "info",
-    classes:
-      "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    classes: "bg-blue-500/10 text-blue-500 border-blue-500/20",
   },
 }
 

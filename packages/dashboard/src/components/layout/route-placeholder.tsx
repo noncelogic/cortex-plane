@@ -12,9 +12,7 @@ export function RoutePlaceholder({ title, icon }: RoutePlaceholderProps) {
       {/* Header */}
       <div className="flex items-center gap-3">
         <span className="material-symbols-outlined text-[28px] text-primary">{icon}</span>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-text-main">
-          {title}
-        </h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-text-main">{title}</h1>
       </div>
 
       {/* KPI skeleton row */}

@@ -186,10 +186,7 @@ export function JobTable({ jobs, onSelectJob, onRetried }: JobTableProps): React
           <tbody className="divide-y divide-surface-border">
             {paginated.length === 0 ? (
               <tr>
-                <td
-                  className="px-6 py-12 text-center text-sm text-text-muted"
-                  colSpan={7}
-                >
+                <td className="px-6 py-12 text-center text-sm text-text-muted" colSpan={7}>
                   No jobs match the current filters.
                 </td>
               </tr>
@@ -226,9 +223,7 @@ export function JobTable({ jobs, onSelectJob, onRetried }: JobTableProps): React
                         <span className="material-symbols-outlined text-lg text-text-muted">
                           smart_toy
                         </span>
-                        <span className="text-sm text-text-main">
-                          {truncateUuid(job.agentId)}
-                        </span>
+                        <span className="text-sm text-text-main">{truncateUuid(job.agentId)}</span>
                       </div>
                     </td>
 
@@ -248,9 +243,7 @@ export function JobTable({ jobs, onSelectJob, onRetried }: JobTableProps): React
 
                     {/* Started */}
                     <td className="px-6 py-4">
-                      <span className="text-sm text-text-muted">
-                        {relativeTime(job.createdAt)}
-                      </span>
+                      <span className="text-sm text-text-muted">{relativeTime(job.createdAt)}</span>
                     </td>
 
                     {/* Actions */}
@@ -303,9 +296,7 @@ export function JobTable({ jobs, onSelectJob, onRetried }: JobTableProps): React
                 type="button"
                 onClick={() => setPage(i)}
                 className={`size-8 rounded-lg text-xs font-bold transition-colors ${
-                  i === safePage
-                    ? "bg-primary text-white"
-                    : "text-text-muted hover:bg-secondary"
+                  i === safePage ? "bg-primary text-white" : "text-text-muted hover:bg-secondary"
                 }`}
               >
                 {i + 1}

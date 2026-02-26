@@ -187,7 +187,7 @@ export class AgentLifecycleManager {
     // Update job status to WAITING_FOR_APPROVAL
     await this.db
       .updateTable("job")
-      .set({ status: "WAITING_FOR_APPROVAL", updated_at: new Date() })
+      .set({ status: "WAITING_FOR_APPROVAL" })
       .where("id", "=", ctx.jobId)
       .execute()
 
@@ -206,7 +206,7 @@ export class AgentLifecycleManager {
 
     await this.db
       .updateTable("job")
-      .set({ status: "RUNNING", updated_at: new Date() })
+      .set({ status: "RUNNING" })
       .where("id", "=", ctx.jobId)
       .execute()
 

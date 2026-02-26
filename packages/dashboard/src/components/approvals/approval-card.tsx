@@ -104,12 +104,9 @@ function deriveTags(
 }
 
 const tagVariants: Record<string, string> = {
-  default:
-    "bg-secondary text-text-muted border-surface-border",
-  purple:
-    "bg-purple-500/10 text-purple-500 border-purple-500/20",
-  danger:
-    "bg-red-500/10 text-red-500 border-red-500/20",
+  default: "bg-secondary text-text-muted border-surface-border",
+  purple: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  danger: "bg-red-500/10 text-red-500 border-red-500/20",
 }
 
 // ---------------------------------------------------------------------------
@@ -172,9 +169,7 @@ export function ApprovalCard({
   return (
     <div
       className={`group relative flex flex-col overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md ${
-        selected
-          ? "border-primary/50 shadow-md"
-          : "border-surface-border hover:border-primary/50"
+        selected ? "border-primary/50 shadow-md" : "border-surface-border hover:border-primary/50"
       } bg-surface-light`}
       role="button"
       tabIndex={0}
@@ -215,17 +210,13 @@ export function ApprovalCard({
               >
                 <span
                   className={`material-symbols-outlined text-[16px] ${
-                    risk === "CRITICAL" || urgent
-                      ? "text-red-500"
-                      : "text-text-muted"
+                    risk === "CRITICAL" || urgent ? "text-red-500" : "text-text-muted"
                   }`}
                 >
                   timer
                 </span>
                 {(risk === "CRITICAL" || urgent) && (
-                  <span className="text-[10px] font-bold uppercase text-red-500">
-                    Expires
-                  </span>
+                  <span className="text-[10px] font-bold uppercase text-red-500">Expires</span>
                 )}
                 <span
                   className={`font-mono text-sm font-bold ${
@@ -243,9 +234,7 @@ export function ApprovalCard({
           </div>
 
           {/* Title */}
-          <h3 className="truncate text-lg font-bold text-text-main">
-            {approval.actionSummary}
-          </h3>
+          <h3 className="truncate text-lg font-bold text-text-main">{approval.actionSummary}</h3>
 
           {/* Description */}
           {typeof approval.actionDetail?.description === "string" && (
@@ -272,9 +261,7 @@ export function ApprovalCard({
           {/* Requester / Agent */}
           <div className="mt-3 flex items-center gap-2">
             <div className="flex size-6 items-center justify-center rounded-full bg-blue-500/10 ring-2 ring-surface-light">
-              <span className="text-[10px] font-bold text-primary">
-                {getInitials(agentName)}
-              </span>
+              <span className="text-[10px] font-bold text-primary">{getInitials(agentName)}</span>
             </div>
             <span className="text-xs text-text-muted">
               Requested by{" "}

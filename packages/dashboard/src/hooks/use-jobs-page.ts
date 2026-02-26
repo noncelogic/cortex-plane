@@ -1,9 +1,9 @@
-'use client'
+"use client"
 
 import { useCallback, useMemo, useState } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
-import type { ApiErrorCode, JobSummary } from "@/lib/api-client"
+import type { JobSummary } from "@/lib/api-client"
 import { listJobs } from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
 import { generateMockJobs } from "@/lib/mock/jobs"
@@ -50,7 +50,7 @@ export function useJobsPage() {
     setSelectedJobId,
     isLoading,
     error,
-    errorCode: errorCode as ApiErrorCode | null,
+    errorCode: errorCode,
     handleRefresh,
   }
 }

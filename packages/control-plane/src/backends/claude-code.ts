@@ -26,7 +26,7 @@ import type {
   OutputTextEvent,
   OutputUsageEvent,
   TokenUsage,
-} from "@cortex/shared"
+} from "@cortex/shared/backends"
 import { trace } from "@opentelemetry/api"
 import { CortexAttributes } from "@cortex/shared/tracing"
 

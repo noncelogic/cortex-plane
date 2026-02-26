@@ -12,12 +12,7 @@ export interface PanelProps extends HTMLAttributes<HTMLDivElement> {
   variant?: PanelVariant
 }
 
-export function Panel({
-  variant = "surface",
-  className = "",
-  children,
-  ...props
-}: PanelProps) {
+export function Panel({ variant = "surface", className = "", children, ...props }: PanelProps) {
   return (
     <div className={`${variantClasses[variant]} ${className}`} {...props}>
       {children}

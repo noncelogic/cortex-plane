@@ -1,17 +1,14 @@
-import { forwardRef, type ButtonHTMLAttributes } from "react"
+import { type ButtonHTMLAttributes, forwardRef } from "react"
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger"
 type ButtonSize = "sm" | "md" | "lg"
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary:
-    "bg-primary text-primary-content hover:bg-primary/90 focus-visible:ring-primary/50",
-  secondary:
-    "bg-secondary text-text-main hover:bg-secondary/80 focus-visible:ring-secondary/50",
+  primary: "bg-primary text-primary-content hover:bg-primary/90 focus-visible:ring-primary/50",
+  secondary: "bg-secondary text-text-main hover:bg-secondary/80 focus-visible:ring-secondary/50",
   ghost:
     "bg-transparent text-text-muted hover:bg-secondary hover:text-text-main focus-visible:ring-secondary/50",
-  danger:
-    "bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/50",
+  danger: "bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/50",
 }
 
 const sizeClasses: Record<ButtonSize, string> = {

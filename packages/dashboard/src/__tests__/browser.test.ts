@@ -7,10 +7,10 @@ import {
   type BrowserSession,
   type BrowserSessionStatus,
   type BrowserTab,
-  type Screenshot,
   getAgentBrowser,
   getAgentBrowserEvents,
   getAgentScreenshots,
+  type Screenshot,
 } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -45,22 +45,14 @@ const API_BASE = "http://localhost:4000"
 // ---------------------------------------------------------------------------
 
 describe("ConnectionStatus states", () => {
-  const STATUS_CONFIG: Record<
-    BrowserSessionStatus,
-    { label: string; hasReconnect: boolean }
-  > = {
+  const STATUS_CONFIG: Record<BrowserSessionStatus, { label: string; hasReconnect: boolean }> = {
     connecting: { label: "Connecting", hasReconnect: false },
     connected: { label: "Live", hasReconnect: false },
     disconnected: { label: "Disconnected", hasReconnect: true },
     error: { label: "Error", hasReconnect: true },
   }
 
-  const ALL_STATUSES: BrowserSessionStatus[] = [
-    "connecting",
-    "connected",
-    "disconnected",
-    "error",
-  ]
+  const ALL_STATUSES: BrowserSessionStatus[] = ["connecting", "connected", "disconnected", "error"]
 
   it("covers all 4 BrowserSessionStatus values", () => {
     expect(ALL_STATUSES).toHaveLength(4)

@@ -1,10 +1,10 @@
-'use client'
+"use client"
 
 import { useCallback, useMemo, useState } from "react"
 
 import type { ContentFilterState } from "@/components/pulse/content-filters"
 import { useApiQuery } from "@/hooks/use-api"
-import type { ApiErrorCode, ContentPiece, ContentPipelineStats } from "@/lib/api-client"
+import type { ContentPiece, ContentPipelineStats } from "@/lib/api-client"
 import { archiveContent, listContent, publishContent } from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
 import { generateMockContent } from "@/lib/mock/content"
@@ -76,19 +76,13 @@ export function usePulsePipeline() {
     [allPieces, publishingId],
   )
 
-  const handlePublish = useCallback(
-    async (contentId: string, channel: string): Promise<void> => {
-      await publishContent(contentId, channel)
-    },
-    [],
-  )
+  const handlePublish = useCallback(async (contentId: string, channel: string): Promise<void> => {
+    await publishContent(contentId, channel)
+  }, [])
 
-  const handleArchive = useCallback(
-    async (contentId: string): Promise<void> => {
-      await archiveContent(contentId)
-    },
-    [],
-  )
+  const handleArchive = useCallback(async (contentId: string): Promise<void> => {
+    await archiveContent(contentId)
+  }, [])
 
   return {
     pieces: allPieces,
@@ -104,6 +98,6 @@ export function usePulsePipeline() {
     handleArchive,
     isLoading,
     error,
-    errorCode: errorCode as ApiErrorCode | null,
+    errorCode: errorCode,
   }
 }
