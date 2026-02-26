@@ -38,7 +38,7 @@ interface SteerBody {
 
 export interface StreamRouteDeps {
   sseManager: SSEConnectionManager
-  lifecycleManager: AgentLifecycleManager
+  lifecycleManager?: AgentLifecycleManager
 }
 
 export function streamRoutes(deps: StreamRouteDeps) {
@@ -68,9 +68,9 @@ export function streamRoutes(deps: StreamRouteDeps) {
       async (request: FastifyRequest<{ Params: StreamParams }>, reply: FastifyReply) => {
         const { agentId } = request.params
 
-        // Verify agent is alive
-        const agentState = lifecycleManager.getAgentState(agentId)
-        if (!agentState) {
+        // Verify agent is alive (if lifecycle manager is available)
+        const agentState = lifecycleManager?.getAgentState(agentId)
+        if (lifecycleManager && !agentState) {
           return reply.status(404).send({
             error: "not_found",
             message: `Agent ${agentId} is not managed by this control plane`,
@@ -103,7 +103,7 @@ export function streamRoutes(deps: StreamRouteDeps) {
         sseManager.broadcast(agentId, "agent:state", {
           agentId,
           timestamp: new Date().toISOString(),
-          state: agentState,
+          state: agentState ?? "UNKNOWN",
         })
 
         // Don't let Fastify try to send a response — we've taken over
@@ -143,22 +143,6 @@ export function streamRoutes(deps: StreamRouteDeps) {
         const { message, priority } = request.body
         const authContext = (request as AuthenticatedRequest).authContext
 
-        // Verify agent is executing
-        const agentState = lifecycleManager.getAgentState(agentId)
-        if (!agentState) {
-          return reply.status(404).send({
-            error: "not_found",
-            message: `Agent ${agentId} is not managed by this control plane`,
-          })
-        }
-
-        if (agentState !== "EXECUTING") {
-          return reply.status(409).send({
-            error: "conflict",
-            message: `Cannot steer agent ${agentId}: agent is in ${agentState} state, must be EXECUTING`,
-          })
-        }
-
         const steerMessageId = randomUUID()
         const steerPriority = priority ?? "normal"
 
@@ -167,22 +151,37 @@ export function streamRoutes(deps: StreamRouteDeps) {
           "Steering message received",
         )
 
-        // Route the steering message through the lifecycle manager
-        // This notifies any registered listeners (e.g. execution backends)
-        try {
-          lifecycleManager.steer({
-            id: steerMessageId,
-            agentId,
-            message,
-            priority: steerPriority,
-            timestamp: new Date(),
-          })
-        } catch (error) {
-          // State may have changed between our check and the steer call
-          return reply.status(409).send({
-            error: "conflict",
-            message: error instanceof Error ? error.message : "Failed to deliver steering message",
-          })
+        // Route the steering message through the lifecycle manager (if available)
+        if (lifecycleManager) {
+          const agentState = lifecycleManager.getAgentState(agentId)
+          if (!agentState) {
+            return reply.status(404).send({
+              error: "not_found",
+              message: `Agent ${agentId} is not managed by this control plane`,
+            })
+          }
+
+          if (agentState !== "EXECUTING") {
+            return reply.status(409).send({
+              error: "conflict",
+              message: `Cannot steer agent ${agentId}: agent is in ${agentState} state, must be EXECUTING`,
+            })
+          }
+
+          try {
+            lifecycleManager.steer({
+              id: steerMessageId,
+              agentId,
+              message,
+              priority: steerPriority,
+              timestamp: new Date(),
+            })
+          } catch (error) {
+            return reply.status(409).send({
+              error: "conflict",
+              message: error instanceof Error ? error.message : "Failed to deliver steering message",
+            })
+          }
         }
 
         // Broadcast steer acknowledgment to SSE clients

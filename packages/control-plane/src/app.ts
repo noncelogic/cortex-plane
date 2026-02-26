@@ -1,11 +1,14 @@
 import Fastify, { type FastifyInstance } from "fastify"
+import fastifyCors from "@fastify/cors"
 import fastifyWebSocket from "@fastify/websocket"
 import type { Kysely } from "kysely"
 import type pg from "pg"
+import { makeWorkerUtils, type WorkerUtils } from "graphile-worker"
 
 import { BackendRegistry } from "@cortex/shared/backends"
 import { ApprovalService } from "./approval/service.js"
 import { ClaudeCodeBackend } from "./backends/claude-code.js"
+import { HttpLlmBackend } from "./backends/http-llm.js"
 import { AuthHandoffService } from "./browser/auth-handoff.js"
 import { ScreenshotModeService } from "./browser/screenshot-mode.js"
 import { TraceCaptureService } from "./browser/trace-capture.js"
@@ -14,6 +17,7 @@ import type { Database } from "./db/types.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
+import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { healthRoutes } from "./routes/health.js"
 import { observationRoutes } from "./routes/observation.js"
@@ -46,6 +50,13 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     },
   })
 
+  // CORS support for dashboard origin
+  await app.register(fastifyCors, {
+    origin: process.env.DASHBOARD_ORIGIN ?? true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+  })
+
   // Initialize backend registry
   const registry = options.registry ?? await createDefaultRegistry()
 
@@ -60,6 +71,9 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     streamManager: sseManager,
     concurrency: config.workerConcurrency,
   })
+
+  // Worker utils for job enqueueing from routes
+  const workerUtils: WorkerUtils = await makeWorkerUtils({ pgPool: pool })
 
   // Browser observation service + orchestration services
   const observationService = new BrowserObservationService()
@@ -87,23 +101,33 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     approvalRoutes({ approvalService, sseManager, authConfig }),
   )
 
-  // Register streaming + observation routes if lifecycle manager is provided
-  if (options.lifecycleManager) {
-    await app.register(
-      streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }),
-    )
-    await app.register(
-      observationRoutes({
-        sseManager,
-        lifecycleManager: options.lifecycleManager,
-        observationService,
-        authHandoffService,
-        traceCaptureService,
-        screenshotModeService,
-        authConfig,
-      }),
-    )
-  }
+  // Register agent CRUD + job routes
+  await app.register(
+    agentRoutes({
+      db,
+      authConfig,
+      enqueueJob: async (jobId: string) => {
+        await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
+      },
+    }),
+  )
+
+  // Always register streaming + observation routes
+  // (lifecycleManager is optional — routes handle its absence gracefully)
+  await app.register(
+    streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }),
+  )
+  await app.register(
+    observationRoutes({
+      sseManager,
+      lifecycleManager: options.lifecycleManager,
+      observationService,
+      authHandoffService,
+      traceCaptureService,
+      screenshotModeService,
+      authConfig,
+    }),
+  )
 
   // Register graceful shutdown handlers (SIGTERM, SIGINT)
   registerShutdownHandlers({ fastify: app, runner, pool })
@@ -115,6 +139,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     authHandoffService.shutdown()
     traceCaptureService.shutdown()
     await observationService.shutdown()
+    await workerUtils.release()
     await registry.stopAll()
   })
 
@@ -122,12 +147,13 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
 }
 
 /**
- * Create a default BackendRegistry with the Claude Code backend.
- * The backend starts in a degraded state if the `claude` binary is unavailable.
+ * Create a default BackendRegistry with the Claude Code and HTTP LLM backends.
+ * Backends start in a degraded state if configuration is unavailable.
  */
 async function createDefaultRegistry(): Promise<BackendRegistry> {
   const registry = new BackendRegistry()
 
+  // Claude Code backend (CLI-based)
   const claudeBackend = new ClaudeCodeBackend()
   try {
     await registry.register(
@@ -138,6 +164,23 @@ async function createDefaultRegistry(): Promise<BackendRegistry> {
   } catch {
     // Backend registration failed (e.g. binary not found).
     // The registry remains empty — jobs will fail with a clear error.
+  }
+
+  // HTTP LLM backend (API-based)
+  const llmBackend = new HttpLlmBackend()
+  try {
+    await registry.register(
+      llmBackend,
+      {
+        provider: process.env.LLM_PROVIDER ?? "anthropic",
+        apiKey: process.env.LLM_API_KEY,
+        model: process.env.LLM_MODEL,
+        baseUrl: process.env.LLM_BASE_URL,
+      },
+      parseInt(process.env.LLM_MAX_CONCURRENT ?? "5", 10),
+    )
+  } catch {
+    // LLM backend registration failed (e.g. no API key).
   }
 
   return registry
