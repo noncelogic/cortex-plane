@@ -73,6 +73,13 @@ export interface TaskContext {
 
   /** Environment variables to expose. */
   environment: Record<string, string>
+
+  /**
+   * Skill instructions injected via progressive disclosure.
+   * Contains summaries of available skills and full instructions
+   * for selected skills. Empty string when no skills are loaded.
+   */
+  skillInstructions?: string
 }
 
 export interface TaskConstraints {

@@ -10,9 +10,6 @@
  * cancellation and approval gates.
  */
 
-import type { JobHelpers, Task } from "graphile-worker"
-import type { Kysely } from "kysely"
-
 import type {
   BackendRegistry,
   ExecutionHandle,
@@ -22,7 +19,11 @@ import type {
   OutputEvent,
 } from "@cortex/shared/backends"
 import type { BufferWriter } from "@cortex/shared/buffer"
-import { withSpan, injectTraceContext, CortexAttributes } from "@cortex/shared/tracing"
+import type { ResolvedSkills } from "@cortex/shared/skills"
+import { CortexAttributes, injectTraceContext, withSpan } from "@cortex/shared/tracing"
+import type { JobHelpers, Task } from "graphile-worker"
+import type { Kysely } from "kysely"
+
 import type { Database, Job } from "../../db/types.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
@@ -39,6 +40,8 @@ export interface AgentExecuteDeps {
   registry: BackendRegistry
   streamManager?: SSEConnectionManager
   sessionBufferFactory?: (jobId: string, agentId: string) => BufferWriter
+  /** Optional skill index for dynamic skill loading. */
+  skillIndex?: import("@cortex/shared/skills").SkillIndex
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -52,7 +55,7 @@ const SEMAPHORE_TIMEOUT_MS = 60_000
  * Accepts dependencies via closure for dependency injection.
  */
 export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
-  const { db, registry, streamManager, sessionBufferFactory } = deps
+  const { db, registry, streamManager, sessionBufferFactory, skillIndex } = deps
 
   return async (rawPayload: unknown, _helpers: JobHelpers): Promise<void> => {
     const payload = rawPayload as AgentExecutePayload
@@ -61,267 +64,275 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     await withSpan("cortex.job.execute", async (rootSpan) => {
       rootSpan.setAttribute(CortexAttributes.JOB_ID, jobId)
 
-    // Load the job and validate it's in SCHEDULED state
-    const job = await db.selectFrom("job").selectAll().where("id", "=", jobId).executeTakeFirst()
+      // Load the job and validate it's in SCHEDULED state
+      const job = await db.selectFrom("job").selectAll().where("id", "=", jobId).executeTakeFirst()
 
-    if (!job) {
-      throw new Error(`Job ${jobId} not found`)
-    }
-
-    if (job.status !== "SCHEDULED") {
-      // Job is not in the expected state — skip silently.
-      // This can happen if the job was cancelled or failed by another process.
-      return
-    }
-
-    rootSpan.setAttribute(CortexAttributes.AGENT_ID, job.agent_id)
-
-    // Transition SCHEDULED → RUNNING
-    await db
-      .updateTable("job")
-      .set({
-        status: "RUNNING",
-        started_at: new Date(),
-        heartbeat_at: new Date(),
-        attempt: job.attempt + 1,
-      })
-      .where("id", "=", jobId)
-      .where("status", "=", "SCHEDULED")
-      .execute()
-
-    // Start heartbeat writer (updates heartbeat_at every 30s)
-    const heartbeat = startHeartbeat(jobId, db)
-
-    try {
-      // ── Step 1: Load agent definition ──
-      const agent = await db
-        .selectFrom("agent")
-        .selectAll()
-        .where("id", "=", job.agent_id)
-        .executeTakeFirst()
-
-      if (!agent) {
-        throw new Error(`Agent ${job.agent_id} not found for job ${jobId}`)
+      if (!job) {
+        throw new Error(`Job ${jobId} not found`)
       }
 
-      if (agent.status !== "ACTIVE") {
-        throw new Error(`Agent ${agent.name} is ${agent.status}, cannot execute`)
+      if (job.status !== "SCHEDULED") {
+        // Job is not in the expected state — skip silently.
+        // This can happen if the job was cancelled or failed by another process.
+        return
       }
 
-      rootSpan.setAttribute(CortexAttributes.AGENT_NAME, agent.name)
+      rootSpan.setAttribute(CortexAttributes.AGENT_ID, job.agent_id)
 
-      // ── Step 2: Check approval gate ──
-      const agentConfig = agent.model_config as Record<string, unknown>
-      if (agentConfig.requiresApproval === true) {
-        const approved = await checkApprovalGate(db, job)
-        if (!approved) {
-          // Transition RUNNING → WAITING_FOR_APPROVAL
+      // Transition SCHEDULED → RUNNING
+      await db
+        .updateTable("job")
+        .set({
+          status: "RUNNING",
+          started_at: new Date(),
+          heartbeat_at: new Date(),
+          attempt: job.attempt + 1,
+        })
+        .where("id", "=", jobId)
+        .where("status", "=", "SCHEDULED")
+        .execute()
+
+      // Start heartbeat writer (updates heartbeat_at every 30s)
+      const heartbeat = startHeartbeat(jobId, db)
+
+      try {
+        // ── Step 1: Load agent definition ──
+        const agent = await db
+          .selectFrom("agent")
+          .selectAll()
+          .where("id", "=", job.agent_id)
+          .executeTakeFirst()
+
+        if (!agent) {
+          throw new Error(`Agent ${job.agent_id} not found for job ${jobId}`)
+        }
+
+        if (agent.status !== "ACTIVE") {
+          throw new Error(`Agent ${agent.name} is ${agent.status}, cannot execute`)
+        }
+
+        rootSpan.setAttribute(CortexAttributes.AGENT_NAME, agent.name)
+
+        // ── Step 2: Check approval gate ──
+        const agentConfig = agent.model_config
+        if (agentConfig.requiresApproval === true) {
+          const approved = await checkApprovalGate(db, job)
+          if (!approved) {
+            // Transition RUNNING → WAITING_FOR_APPROVAL
+            await db
+              .updateTable("job")
+              .set({
+                status: "WAITING_FOR_APPROVAL",
+                approval_expires_at: new Date(Date.now() + 3600_000), // 1 hour
+              })
+              .where("id", "=", jobId)
+              .where("status", "=", "RUNNING")
+              .execute()
+
+            if (streamManager) {
+              streamManager.broadcast(agent.id, "agent:state", {
+                agentId: agent.id,
+                timestamp: new Date().toISOString(),
+                state: "waiting_for_approval",
+                reason: "Approval required before execution",
+              })
+            }
+            rootSpan.addEvent("approval_gate_waiting")
+            return
+          }
+        }
+
+        // ── Step 3: Resolve skills (if skill index is available) ──
+        let resolvedSkills: ResolvedSkills | null = null
+
+        if (skillIndex) {
+          try {
+            await skillIndex.refresh()
+            const { loadResolvedSkillsFromIndex } =
+              await import("../../lifecycle/skill-resolver.js")
+            resolvedSkills = await loadResolvedSkillsFromIndex(skillIndex, agent, job)
+          } catch {
+            // Skill loading is non-fatal — proceed without.
+          }
+        }
+
+        // ── Step 4: Build ExecutionTask (needed for routing) ──
+        const task = buildExecutionTask(job, agent, agentConfig, resolvedSkills)
+
+        // Inject trace context into task environment for downstream propagation
+        const traceHeaders = injectTraceContext()
+        if (traceHeaders.traceparent) {
+          task.context.environment = {
+            ...task.context.environment,
+            TRACEPARENT: traceHeaders.traceparent,
+          }
+        }
+
+        // ── Step 5: Resolve backend via router (failover-aware) or direct lookup ──
+        const preferredBackendId =
+          typeof agentConfig.backendId === "string" ? agentConfig.backendId : undefined
+        const { backend, providerId } = registry.routeTask(task, preferredBackendId)
+
+        rootSpan.setAttribute(CortexAttributes.BACKEND_ID, backend.backendId)
+        rootSpan.setAttribute(CortexAttributes.PROVIDER_ID, providerId)
+
+        // ── Step 6: Acquire semaphore permit ──
+        const permit = await registry.acquirePermit(backend.backendId, SEMAPHORE_TIMEOUT_MS)
+
+        let handle: ExecutionHandle | undefined
+        let bufferWriter: BufferWriter | undefined
+
+        try {
+          // ── Step 7: Initialize JSONL session buffer ──
+          if (sessionBufferFactory) {
+            bufferWriter = sessionBufferFactory(jobId, agent.id)
+          }
+
+          // ── Step 8: Execute task ──
+          handle = await backend.executeTask(task)
+
+          // ── Step 9: Stream events ──
+          const cancelChecker = startCancelChecker(db, jobId, handle)
+
+          try {
+            for await (const event of handle.events()) {
+              // Write to JSONL session buffer
+              if (bufferWriter) {
+                writeEventToBuffer(bufferWriter, event, jobId, job.session_id ?? "", agent.id)
+              }
+
+              // Broadcast to SSE clients
+              if (streamManager) {
+                const ssePayload: AgentOutputPayload = {
+                  agentId: agent.id,
+                  timestamp: event.timestamp,
+                  output: event,
+                }
+                streamManager.broadcast(agent.id, "agent:output", ssePayload)
+              }
+            }
+          } finally {
+            cancelChecker.stop()
+          }
+
+          // ── Step 10: Await final result ──
+          const result = await handle.result()
+
+          // ── Step 11: Record outcome for circuit breaker ──
+          const success = result.status === "completed"
+          registry.recordOutcome(providerId, success, result.error?.classification)
+
+          rootSpan.setAttribute(CortexAttributes.EXECUTION_STATUS, result.status)
+          rootSpan.setAttribute(CortexAttributes.EXECUTION_DURATION_MS, result.durationMs)
+
+          // ── Step 12: Map status and persist result ──
+          const jobStatus = mapExecutionStatus(result.status)
+
           await db
             .updateTable("job")
             .set({
-              status: "WAITING_FOR_APPROVAL",
-              approval_expires_at: new Date(Date.now() + 3600_000), // 1 hour
+              status: jobStatus,
+              completed_at: new Date(),
+              result: executionResultToJson(result),
             })
             .where("id", "=", jobId)
             .where("status", "=", "RUNNING")
             .execute()
 
+          // Broadcast completion via SSE
           if (streamManager) {
-            streamManager.broadcast(agent.id, "agent:state", {
+            streamManager.broadcast(agent.id, "agent:complete", {
               agentId: agent.id,
               timestamp: new Date().toISOString(),
-              state: "waiting_for_approval",
-              reason: "Approval required before execution",
+              summary: result.summary,
             })
           }
-          rootSpan.addEvent("approval_gate_waiting")
-          return
-        }
-      }
-
-      // ── Step 3: Build ExecutionTask (needed for routing) ──
-      const task = buildExecutionTask(job, agent, agentConfig)
-
-      // Inject trace context into task environment for downstream propagation
-      const traceHeaders = injectTraceContext()
-      if (traceHeaders.traceparent) {
-        task.context.environment = {
-          ...task.context.environment,
-          TRACEPARENT: traceHeaders.traceparent,
-        }
-      }
-
-      // ── Step 4: Resolve backend via router (failover-aware) or direct lookup ──
-      const preferredBackendId =
-        typeof agentConfig.backendId === "string"
-          ? agentConfig.backendId
-          : undefined
-      const { backend, providerId } = registry.routeTask(task, preferredBackendId)
-
-      rootSpan.setAttribute(CortexAttributes.BACKEND_ID, backend.backendId)
-      rootSpan.setAttribute(CortexAttributes.PROVIDER_ID, providerId)
-
-      // ── Step 5: Acquire semaphore permit ──
-      const permit = await registry.acquirePermit(backend.backendId, SEMAPHORE_TIMEOUT_MS)
-
-      let handle: ExecutionHandle | undefined
-      let bufferWriter: BufferWriter | undefined
-
-      try {
-        // ── Step 6: Initialize JSONL session buffer ──
-        if (sessionBufferFactory) {
-          bufferWriter = sessionBufferFactory(jobId, agent.id)
-        }
-
-        // ── Step 7: Execute task ──
-        handle = await backend.executeTask(task)
-
-        // ── Step 8: Stream events ──
-        const cancelChecker = startCancelChecker(db, jobId, handle)
-
-        try {
-          for await (const event of handle.events()) {
-            // Write to JSONL session buffer
-            if (bufferWriter) {
-              writeEventToBuffer(bufferWriter, event, jobId, job.session_id ?? "", agent.id)
-            }
-
-            // Broadcast to SSE clients
-            if (streamManager) {
-              const ssePayload: AgentOutputPayload = {
-                agentId: agent.id,
-                timestamp: event.timestamp,
-                output: event,
-              }
-              streamManager.broadcast(agent.id, "agent:output", ssePayload)
-            }
-          }
         } finally {
-          cancelChecker.stop()
+          permit.release()
+          if (bufferWriter) {
+            bufferWriter.close()
+          }
+        }
+      } catch (err: unknown) {
+        // Classify the error to determine retry behavior
+        const classification = classifyError(err)
+
+        rootSpan.setAttribute(CortexAttributes.ERROR_CATEGORY, classification.category)
+
+        if (classification.retryable && job.attempt < job.max_attempts) {
+          // Transition RUNNING → FAILED (the trigger allows this),
+          // then FAILED → RETRYING will be handled by retry scheduling
+          await db
+            .updateTable("job")
+            .set({
+              status: "FAILED",
+              error: {
+                category: classification.category,
+                message: classification.message,
+                attempt: job.attempt + 1,
+              },
+            })
+            .where("id", "=", jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
+
+          // Transition FAILED → RETRYING
+          await db
+            .updateTable("job")
+            .set({ status: "RETRYING" })
+            .where("id", "=", jobId)
+            .where("status", "=", "FAILED")
+            .execute()
+
+          // Re-enqueue via Graphile Worker with backoff delay
+          const runAt = calculateRunAt(job.attempt)
+          await _helpers.addJob("agent_execute", { jobId }, { runAt, maxAttempts: 1 })
+
+          // Transition RETRYING → SCHEDULED
+          await db
+            .updateTable("job")
+            .set({ status: "SCHEDULED" })
+            .where("id", "=", jobId)
+            .where("status", "=", "RETRYING")
+            .execute()
+        } else if (classification.category === "TIMEOUT") {
+          await db
+            .updateTable("job")
+            .set({
+              status: "TIMED_OUT",
+              error: {
+                category: classification.category,
+                message: classification.message,
+                attempt: job.attempt + 1,
+              },
+              completed_at: new Date(),
+            })
+            .where("id", "=", jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
+        } else {
+          // Permanent failure or retries exhausted
+          await db
+            .updateTable("job")
+            .set({
+              status: "FAILED",
+              error: {
+                category: classification.category,
+                message: classification.message,
+                attempt: job.attempt + 1,
+                retriesExhausted: job.attempt >= job.max_attempts,
+              },
+              completed_at: new Date(),
+            })
+            .where("id", "=", jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
         }
 
-        // ── Step 9: Await final result ──
-        const result = await handle.result()
-
-        // ── Step 10: Record outcome for circuit breaker ──
-        const success = result.status === "completed"
-        registry.recordOutcome(
-          providerId,
-          success,
-          result.error?.classification,
-        )
-
-        rootSpan.setAttribute(CortexAttributes.EXECUTION_STATUS, result.status)
-        rootSpan.setAttribute(CortexAttributes.EXECUTION_DURATION_MS, result.durationMs)
-
-        // ── Step 11: Map status and persist result ──
-        const jobStatus = mapExecutionStatus(result.status)
-
-        await db
-          .updateTable("job")
-          .set({
-            status: jobStatus,
-            completed_at: new Date(),
-            result: executionResultToJson(result),
-          })
-          .where("id", "=", jobId)
-          .where("status", "=", "RUNNING")
-          .execute()
-
-        // Broadcast completion via SSE
-        if (streamManager) {
-          streamManager.broadcast(agent.id, "agent:complete", {
-            agentId: agent.id,
-            timestamp: new Date().toISOString(),
-            summary: result.summary,
-          })
-        }
+        throw err // re-throw so withSpan marks the span as errored
       } finally {
-        permit.release()
-        if (bufferWriter) {
-          bufferWriter.close()
-        }
+        heartbeat.stop()
       }
-    } catch (err: unknown) {
-      // Classify the error to determine retry behavior
-      const classification = classifyError(err)
-
-      rootSpan.setAttribute(CortexAttributes.ERROR_CATEGORY, classification.category)
-
-      if (classification.retryable && job.attempt < job.max_attempts) {
-        // Transition RUNNING → FAILED (the trigger allows this),
-        // then FAILED → RETRYING will be handled by retry scheduling
-        await db
-          .updateTable("job")
-          .set({
-            status: "FAILED",
-            error: {
-              category: classification.category,
-              message: classification.message,
-              attempt: job.attempt + 1,
-            },
-          })
-          .where("id", "=", jobId)
-          .where("status", "=", "RUNNING")
-          .execute()
-
-        // Transition FAILED → RETRYING
-        await db
-          .updateTable("job")
-          .set({ status: "RETRYING" })
-          .where("id", "=", jobId)
-          .where("status", "=", "FAILED")
-          .execute()
-
-        // Re-enqueue via Graphile Worker with backoff delay
-        const runAt = calculateRunAt(job.attempt)
-        await _helpers.addJob("agent_execute", { jobId }, { runAt, maxAttempts: 1 })
-
-        // Transition RETRYING → SCHEDULED
-        await db
-          .updateTable("job")
-          .set({ status: "SCHEDULED" })
-          .where("id", "=", jobId)
-          .where("status", "=", "RETRYING")
-          .execute()
-      } else if (classification.category === "TIMEOUT") {
-        await db
-          .updateTable("job")
-          .set({
-            status: "TIMED_OUT",
-            error: {
-              category: classification.category,
-              message: classification.message,
-              attempt: job.attempt + 1,
-            },
-            completed_at: new Date(),
-          })
-          .where("id", "=", jobId)
-          .where("status", "=", "RUNNING")
-          .execute()
-      } else {
-        // Permanent failure or retries exhausted
-        await db
-          .updateTable("job")
-          .set({
-            status: "FAILED",
-            error: {
-              category: classification.category,
-              message: classification.message,
-              attempt: job.attempt + 1,
-              retriesExhausted: job.attempt >= job.max_attempts,
-            },
-            completed_at: new Date(),
-          })
-          .where("id", "=", jobId)
-          .where("status", "=", "RUNNING")
-          .execute()
-      }
-
-      throw err // re-throw so withSpan marks the span as errored
-    } finally {
-      heartbeat.stop()
-    }
     }) // end withSpan
   }
 }
@@ -342,10 +353,60 @@ function buildExecutionTask(
   job: Job,
   agent: AgentRecord,
   agentConfig: Record<string, unknown>,
+  resolvedSkills?: ResolvedSkills | null,
 ): ExecutionTask {
-  const payload = job.payload as Record<string, unknown>
-  const skillConfig = agent.skill_config as Record<string, unknown>
-  const resourceLimits = agent.resource_limits as Record<string, unknown>
+  const payload = job.payload
+  const skillConfig = agent.skill_config
+  const resourceLimits = agent.resource_limits
+
+  // Base agent constraints from skill_config
+  let allowedTools: string[] = Array.isArray(skillConfig.allowedTools)
+    ? (skillConfig.allowedTools as string[])
+    : []
+  let deniedTools: string[] = Array.isArray(skillConfig.deniedTools)
+    ? (skillConfig.deniedTools as string[])
+    : []
+  let networkAccess: boolean =
+    typeof skillConfig.networkAccess === "boolean" ? skillConfig.networkAccess : false
+  let shellAccess: boolean =
+    typeof skillConfig.shellAccess === "boolean" ? skillConfig.shellAccess : true
+
+  // Apply resolved skill constraints (narrowing only)
+  let skillInstructions: string | undefined
+  if (resolvedSkills && resolvedSkills.selected.length > 0) {
+    const merged = resolvedSkills.mergedConstraints
+
+    // Narrow allowedTools: intersect if both specify
+    if (merged.allowedTools.length > 0 && allowedTools.length > 0) {
+      const skillSet = new Set(merged.allowedTools)
+      allowedTools = allowedTools.filter((t) => skillSet.has(t))
+    } else if (merged.allowedTools.length > 0) {
+      allowedTools = [...merged.allowedTools]
+    }
+
+    // Widen deniedTools: union
+    const deniedSet = new Set([...deniedTools, ...merged.deniedTools])
+    deniedTools = [...deniedSet]
+
+    // AND boolean flags
+    networkAccess = networkAccess && merged.networkAccess
+    shellAccess = shellAccess && merged.shellAccess
+
+    // Build skill instructions for progressive disclosure
+    const parts: string[] = []
+    if (resolvedSkills.summaries.length > 0) {
+      const summaryLines = resolvedSkills.summaries.map(
+        (s) => `- ${s.title} [${s.tags.join(", ")}]: ${s.summary}`,
+      )
+      parts.push(`Available skills:\n${summaryLines.join("\n")}`)
+    }
+    for (const skill of resolvedSkills.selected) {
+      parts.push(`## Skill: ${skill.metadata.title}\n\n${skill.content.trim()}`)
+    }
+    if (parts.length > 0) {
+      skillInstructions = parts.join("\n\n")
+    }
+  }
 
   return {
     id: job.id,
@@ -353,46 +414,45 @@ function buildExecutionTask(
     agentId: agent.id,
     instruction: {
       prompt: typeof payload.prompt === "string" ? payload.prompt : JSON.stringify(payload),
-      goalType: typeof payload.goalType === "string"
-        ? (payload.goalType as ExecutionTask["instruction"]["goalType"])
-        : "code_edit",
-      targetFiles: Array.isArray(payload.targetFiles) ? payload.targetFiles as string[] : undefined,
+      goalType:
+        typeof payload.goalType === "string"
+          ? (payload.goalType as ExecutionTask["instruction"]["goalType"])
+          : "code_edit",
+      targetFiles: Array.isArray(payload.targetFiles)
+        ? (payload.targetFiles as string[])
+        : undefined,
       conversationHistory: Array.isArray(payload.conversationHistory)
         ? (payload.conversationHistory as ExecutionTask["instruction"]["conversationHistory"])
         : undefined,
     },
     context: {
-      workspacePath: typeof agentConfig.workspacePath === "string"
-        ? agentConfig.workspacePath
-        : "/workspace",
-      systemPrompt: typeof agentConfig.systemPrompt === "string"
-        ? agentConfig.systemPrompt
-        : `You are ${agent.name}, a ${agent.role} agent.${agent.description ? ` ${agent.description}` : ""}`,
-      memories: Array.isArray(payload.memories) ? payload.memories as string[] : [],
-      relevantFiles: typeof payload.relevantFiles === "object" && payload.relevantFiles !== null
-        ? (payload.relevantFiles as Record<string, string>)
-        : {},
-      environment: typeof agentConfig.environment === "object" && agentConfig.environment !== null
-        ? (agentConfig.environment as Record<string, string>)
-        : {},
+      workspacePath:
+        typeof agentConfig.workspacePath === "string" ? agentConfig.workspacePath : "/workspace",
+      systemPrompt:
+        typeof agentConfig.systemPrompt === "string"
+          ? agentConfig.systemPrompt
+          : `You are ${agent.name}, a ${agent.role} agent.${agent.description ? ` ${agent.description}` : ""}`,
+      memories: Array.isArray(payload.memories) ? (payload.memories as string[]) : [],
+      relevantFiles:
+        typeof payload.relevantFiles === "object" && payload.relevantFiles !== null
+          ? (payload.relevantFiles as Record<string, string>)
+          : {},
+      environment:
+        typeof agentConfig.environment === "object" && agentConfig.environment !== null
+          ? (agentConfig.environment as Record<string, string>)
+          : {},
+      skillInstructions,
     },
     constraints: {
       timeoutMs: job.timeout_seconds * 1000,
       maxTokens: typeof resourceLimits.maxTokens === "number" ? resourceLimits.maxTokens : 200_000,
-      model: typeof agentConfig.model === "string" ? agentConfig.model : "claude-sonnet-4-5-20250514",
-      allowedTools: Array.isArray(skillConfig.allowedTools)
-        ? skillConfig.allowedTools as string[]
-        : [],
-      deniedTools: Array.isArray(skillConfig.deniedTools)
-        ? skillConfig.deniedTools as string[]
-        : [],
+      model:
+        typeof agentConfig.model === "string" ? agentConfig.model : "claude-sonnet-4-5-20250514",
+      allowedTools,
+      deniedTools,
       maxTurns: typeof resourceLimits.maxTurns === "number" ? resourceLimits.maxTurns : 25,
-      networkAccess: typeof skillConfig.networkAccess === "boolean"
-        ? skillConfig.networkAccess
-        : false,
-      shellAccess: typeof skillConfig.shellAccess === "boolean"
-        ? skillConfig.shellAccess
-        : true,
+      networkAccess,
+      shellAccess,
     },
   }
 }

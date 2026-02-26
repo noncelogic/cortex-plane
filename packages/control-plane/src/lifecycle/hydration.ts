@@ -6,12 +6,17 @@
  * are independent PostgreSQL queries. Qdrant follows because it depends on
  * the job payload / checkpoint context for its query.
  *
+ * Skills loading parallelizes with checkpoint + identity since it reads from
+ * the filesystem and is independent of both.
+ *
  * Hydration order rationale (spike #34, Q5):
  * - Checkpoint tells the agent where it is in execution.
  * - Qdrant query needs job context from checkpoint to be meaningful.
  * - Identity loading is independent and parallelizes with checkpoint.
+ * - Skill index refresh is independent and parallelizes with both.
  */
 
+import type { ResolvedSkills, SkillIndex } from "@cortex/shared/skills"
 import type { Kysely } from "kysely"
 
 import type { Database } from "../db/types.js"
@@ -52,6 +57,7 @@ export interface HydrationResult {
   checkpoint: CheckpointData
   identity: AgentIdentity
   qdrantContext: QdrantContext | null
+  resolvedSkills: ResolvedSkills | null
 }
 
 export interface QdrantClient {
@@ -88,11 +94,11 @@ export async function loadCheckpoint(jobId: string, db: Kysely<Database>): Promi
   }
 
   return {
-    checkpoint: job.checkpoint as Record<string, unknown> | null,
+    checkpoint: job.checkpoint,
     checkpointCrc: job.checkpoint_crc,
     jobStatus: job.status,
     attempt: job.attempt,
-    payload: job.payload as Record<string, unknown>,
+    payload: job.payload,
   }
 }
 
@@ -129,9 +135,9 @@ export async function loadIdentity(agentId: string, db: Kysely<Database>): Promi
     slug: agent.slug,
     role: agent.role,
     description: agent.description,
-    modelConfig: agent.model_config as Record<string, unknown>,
-    skillConfig: agent.skill_config as Record<string, unknown>,
-    resourceLimits: agent.resource_limits as Record<string, unknown>,
+    modelConfig: agent.model_config,
+    skillConfig: agent.skill_config,
+    resourceLimits: agent.resource_limits,
   }
 }
 
@@ -182,23 +188,32 @@ export async function loadQdrantContext(
 
 /**
  * Run the complete hydration pipeline:
- * 1. (Parallel) Load checkpoint + Load identity
+ * 1. (Parallel) Load checkpoint + Load identity + Refresh skill index
  * 2. (Sequential) Load Qdrant context (depends on job context from step 1)
+ * 3. (Sequential) Resolve skills (depends on identity from step 1)
  *
  * Qdrant failure is non-fatal — the agent proceeds without memory context.
+ * Skill index failure is non-fatal — the agent proceeds without skills.
  */
 export async function hydrateAgent(options: {
   jobId: string
   agentId: string
   db: Kysely<Database>
   qdrantClient?: QdrantClient
+  skillIndex?: SkillIndex
 }): Promise<HydrationResult> {
-  const { jobId, agentId, db, qdrantClient } = options
+  const { jobId, agentId, db, qdrantClient, skillIndex } = options
 
-  // Step 1: Parallel — checkpoint + identity are independent PG queries.
+  // Step 1: Parallel — checkpoint, identity, and skill index refresh are independent.
   const [checkpoint, identity] = await Promise.all([
     loadCheckpoint(jobId, db),
     loadIdentity(agentId, db),
+    // Skill index refresh is fire-and-forget in parallel
+    skillIndex
+      ? skillIndex.refresh().catch(() => {
+          /* non-fatal */
+        })
+      : Promise.resolve(),
   ])
 
   // Step 2: Qdrant context — depends on payload from checkpoint.
@@ -214,7 +229,18 @@ export async function hydrateAgent(options: {
     }
   }
 
-  return { checkpoint, identity, qdrantContext }
+  // Step 3: Resolve skills — depends on identity for skill selection.
+  let resolvedSkills: ResolvedSkills | null = null
+
+  if (skillIndex) {
+    try {
+      resolvedSkills = await loadResolvedSkills(skillIndex, identity, checkpoint.payload)
+    } catch {
+      // Skills are optional — proceed without.
+    }
+  }
+
+  return { checkpoint, identity, qdrantContext, resolvedSkills }
 }
 
 /**
@@ -235,4 +261,78 @@ function buildQdrantQuery(payload: Record<string, unknown>, identity: AgentIdent
   }
 
   return parts.join(". ")
+}
+
+// ---------------------------------------------------------------------------
+// Skill resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve skills for the current task context.
+ *
+ * Skill selection strategy:
+ * 1. If the job payload specifies `skills` (string[]), use those explicitly.
+ * 2. If the job payload specifies `skillTags` (string[]), match by tags.
+ * 3. Otherwise, load all available skills (up to token budget).
+ *
+ * Returns summaries of all indexed skills and full content of selected skills,
+ * plus merged constraints and estimated token count.
+ */
+async function loadResolvedSkills(
+  skillIndex: SkillIndex,
+  identity: AgentIdentity,
+  payload: Record<string, unknown>,
+): Promise<ResolvedSkills> {
+  const {
+    mergeSkillConstraints,
+    selectWithinBudget,
+    estimateContentTokens,
+    DEFAULT_SKILL_TOKEN_BUDGET,
+  } = await import("@cortex/shared/skills")
+
+  const allSkills = skillIndex.getAll()
+
+  // Build summaries from the lightweight index
+  const summaries = allSkills.map((s) => ({
+    name: s.name,
+    title: s.title,
+    summary: s.summary,
+    tags: s.tags,
+  }))
+
+  // Determine which skills to fully load
+  let skillNames: string[]
+
+  if (Array.isArray(payload.skills)) {
+    // Explicit skill names from the job payload
+    skillNames = payload.skills.filter((s): s is string => typeof s === "string")
+  } else if (Array.isArray(payload.skillTags)) {
+    // Match by tags
+    const tags = payload.skillTags.filter((t): t is string => typeof t === "string")
+    skillNames = skillIndex.getByTags(tags).map((s) => s.name)
+  } else {
+    // Default: all available skills
+    skillNames = allSkills.map((s) => s.name)
+  }
+
+  // Load full definitions for selected skills
+  const fullSkills = await skillIndex.resolve(skillNames)
+
+  // Apply token budget
+  const budget =
+    typeof identity.resourceLimits.skillTokenBudget === "number"
+      ? identity.resourceLimits.skillTokenBudget
+      : DEFAULT_SKILL_TOKEN_BUDGET
+  const selected = selectWithinBudget(fullSkills, budget)
+
+  // Merge constraints from selected skills
+  const mergedConstraints = mergeSkillConstraints(selected.map((s) => s.metadata.constraints))
+  const estimatedTokens = estimateContentTokens(selected)
+
+  return {
+    summaries,
+    selected,
+    mergedConstraints,
+    estimatedTokens,
+  }
 }
