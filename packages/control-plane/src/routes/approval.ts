@@ -10,14 +10,20 @@
  * GET  /approvals/stream            — SSE stream for real-time approval events (requires: auth)
  */
 
-import type { FastifyInstance, FastifyRequest, FastifyReply, preHandlerHookHandler } from "fastify"
-
-import type { ApprovalService } from "../approval/service.js"
-import { buildActorMetadata } from "../approval/audit.js"
-import type { SSEConnectionManager } from "../streaming/manager.js"
 import type { ApprovalStatus } from "@cortex/shared"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+
+import { buildActorMetadata } from "../approval/audit.js"
+import type { ApprovalService } from "../approval/service.js"
+import type { SessionService } from "../auth/session-service.js"
+import {
+  type AuthMiddlewareOptions,
+  createRequireAuth,
+  createRequireRole,
+  type PreHandler,
+} from "../middleware/auth.js"
 import type { AuthConfig, AuthenticatedRequest } from "../middleware/types.js"
-import { createRequireAuth, createRequireRole } from "../middleware/auth.js"
+import type { SSEConnectionManager } from "../streaming/manager.js"
 
 // ---------------------------------------------------------------------------
 // Route types
@@ -69,14 +75,16 @@ export interface ApprovalRouteDeps {
   approvalService: ApprovalService
   sseManager?: SSEConnectionManager
   authConfig: AuthConfig
+  sessionService?: SessionService
 }
 
 export function approvalRoutes(deps: ApprovalRouteDeps) {
-  const { approvalService, sseManager, authConfig } = deps
+  const { approvalService, sseManager, authConfig, sessionService } = deps
 
-  const requireAuth: preHandlerHookHandler = createRequireAuth(authConfig)
-  const requireApprover: preHandlerHookHandler = createRequireRole("approver")
-  const requireOperator: preHandlerHookHandler = createRequireRole("operator")
+  const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
+  const requireAuth: PreHandler = createRequireAuth(authOpts)
+  const requireApprover: PreHandler = createRequireRole("approver")
+  const requireOperator: PreHandler = createRequireRole("operator")
 
   return function register(app: FastifyInstance): void {
     // -----------------------------------------------------------------
@@ -258,10 +266,7 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Body: TokenDecideBody }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Body: TokenDecideBody }>, reply: FastifyReply) => {
         const { token, decision, channel, reason } = request.body
         const principal = (request as AuthenticatedRequest).principal
 
@@ -324,10 +329,7 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Querystring: ListQuery }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Querystring: ListQuery }>, reply: FastifyReply) => {
         const requests = await approvalService.list({
           status: request.query.status,
           jobId: request.query.jobId,
@@ -358,10 +360,7 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Params: { id: string } }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
         const req = await approvalService.getRequest(request.params.id)
         if (!req) {
           return reply.status(404).send({ error: "not_found" })
@@ -388,10 +387,7 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Params: { id: string } }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
         const auditEntries = await approvalService.getAuditTrail(request.params.id)
         return reply.status(200).send({ audit: auditEntries })
       },

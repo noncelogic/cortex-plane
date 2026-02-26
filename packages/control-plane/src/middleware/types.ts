@@ -1,17 +1,23 @@
 /**
- * Auth types for the approval gate middleware.
+ * Auth types for middleware.
  *
- * Principal represents an authenticated actor.
+ * Principal represents an authenticated actor (via API key or session).
  * AuthConfig controls how API keys are loaded and validated.
  */
 
 import type { FastifyRequest } from "fastify"
 
+import type { UserRole } from "../db/types.js"
+
 export interface Principal {
   userId: string
   roles: string[]
   displayName: string
-  authMethod: "api_key" | "bearer_token"
+  authMethod: "api_key" | "bearer_token" | "session"
+  /** Email (populated for session-based auth). */
+  email?: string
+  /** Dashboard user role (populated for session-based auth). */
+  userRole?: UserRole
 }
 
 export interface ApiKeyRecord {

@@ -2,6 +2,21 @@ import type { AgentStatus, ApprovalStatus, JobStatus } from "@cortex/shared"
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely"
 
 // ---------------------------------------------------------------------------
+// Enum: user_role
+// ---------------------------------------------------------------------------
+export type UserRole = "operator" | "approver" | "admin"
+
+// ---------------------------------------------------------------------------
+// Enum: credential_type
+// ---------------------------------------------------------------------------
+export type CredentialType = "oauth" | "api_key"
+
+// ---------------------------------------------------------------------------
+// Enum: credential_status
+// ---------------------------------------------------------------------------
+export type CredentialStatus = "active" | "expired" | "revoked" | "error"
+
+// ---------------------------------------------------------------------------
 // Table: agent
 // ---------------------------------------------------------------------------
 export interface AgentTable {
@@ -45,11 +60,19 @@ export type AgentUpdate = Updateable<AgentTable>
 export interface UserAccountTable {
   id: Generated<string>
   display_name: string | null
+  email: string | null
+  avatar_url: string | null
+  role: ColumnType<UserRole, UserRole | undefined, UserRole>
+  oauth_provider: string | null
+  oauth_provider_id: string | null
+  encryption_key_enc: string | null
   created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
 }
 
 export type UserAccount = Selectable<UserAccountTable>
 export type NewUserAccount = Insertable<UserAccountTable>
+export type UserAccountUpdate = Updateable<UserAccountTable>
 
 // ---------------------------------------------------------------------------
 // Table: channel_mapping
@@ -171,6 +194,71 @@ export type ApprovalAuditLog = Selectable<ApprovalAuditLogTable>
 export type NewApprovalAuditLog = Insertable<ApprovalAuditLogTable>
 
 // ---------------------------------------------------------------------------
+// Table: dashboard_session
+// ---------------------------------------------------------------------------
+export interface DashboardSessionTable {
+  id: Generated<string>
+  user_account_id: string
+  csrf_token: string
+  expires_at: Date
+  refresh_token: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  last_active_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type DashboardSession = Selectable<DashboardSessionTable>
+export type NewDashboardSession = Insertable<DashboardSessionTable>
+
+// ---------------------------------------------------------------------------
+// Table: provider_credential
+// ---------------------------------------------------------------------------
+export interface ProviderCredentialTable {
+  id: Generated<string>
+  user_account_id: string
+  provider: string
+  credential_type: CredentialType
+  access_token_enc: string | null
+  refresh_token_enc: string | null
+  api_key_enc: string | null
+  token_expires_at: Date | null
+  scopes: string[] | null
+  account_id: string | null
+  display_label: string | null
+  status: ColumnType<CredentialStatus, CredentialStatus | undefined, CredentialStatus>
+  last_used_at: Date | null
+  last_refresh_at: Date | null
+  error_count: ColumnType<number, number | undefined, number>
+  last_error: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type ProviderCredential = Selectable<ProviderCredentialTable>
+export type NewProviderCredential = Insertable<ProviderCredentialTable>
+export type ProviderCredentialUpdate = Updateable<ProviderCredentialTable>
+
+// ---------------------------------------------------------------------------
+// Table: credential_audit_log
+// ---------------------------------------------------------------------------
+export interface CredentialAuditLogTable {
+  id: Generated<string>
+  user_account_id: string | null
+  provider_credential_id: string | null
+  event_type: string
+  provider: string | null
+  details: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  ip_address: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type CredentialAuditLog = Selectable<CredentialAuditLogTable>
+export type NewCredentialAuditLog = Insertable<CredentialAuditLogTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -181,4 +269,7 @@ export interface Database {
   job: JobTable
   approval_request: ApprovalRequestTable
   approval_audit_log: ApprovalAuditLogTable
+  dashboard_session: DashboardSessionTable
+  provider_credential: ProviderCredentialTable
+  credential_audit_log: CredentialAuditLogTable
 }

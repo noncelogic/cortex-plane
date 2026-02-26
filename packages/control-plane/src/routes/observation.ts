@@ -28,22 +28,32 @@
  */
 
 import { randomUUID } from "node:crypto"
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 
 import type { AnnotationPayload } from "@cortex/shared/browser"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+
+import type { SessionService } from "../auth/session-service.js"
 import type { AuthHandoffService } from "../browser/auth-handoff.js"
 import type { ScreenshotModeService } from "../browser/screenshot-mode.js"
 import { annotationToAction, annotationToPrompt } from "../browser/steering.js"
 import type { TraceCaptureService } from "../browser/trace-capture.js"
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
-import { createRequireAuth, createRequireRole } from "../middleware/auth.js"
+import {
+  type AuthMiddlewareOptions,
+  createRequireAuth,
+  createRequireRole,
+} from "../middleware/auth.js"
 import type { AuthConfig, AuthenticatedRequest as PrincipalRequest } from "../middleware/types.js"
 import type { BrowserObservationService } from "../observation/service.js"
-import type { AnnotationEvent, ScreenshotRequest, TraceRecordingOptions } from "../observation/types.js"
+import type {
+  AnnotationEvent,
+  ScreenshotRequest,
+  TraceRecordingOptions,
+} from "../observation/types.js"
 import {
-  SSEConnectionManager,
-  createStreamAuth,
   type AuthenticatedRequest,
+  createStreamAuth,
+  SSEConnectionManager,
 } from "../streaming/index.js"
 
 // ---------------------------------------------------------------------------
@@ -57,9 +67,14 @@ interface AgentParams {
 interface AuthHandoffBody {
   targetUrl: string
   cookies?: Array<{
-    name: string; value: string; domain: string
-    path?: string; secure?: boolean; httpOnly?: boolean
-    sameSite?: "Strict" | "Lax" | "None"; expires?: number
+    name: string
+    value: string
+    domain: string
+    path?: string
+    secure?: boolean
+    httpOnly?: boolean
+    sameSite?: "Strict" | "Lax" | "None"
+    expires?: number
   }>
   localStorage?: Record<string, string>
   sessionToken?: string
@@ -83,6 +98,7 @@ export interface ObservationRouteDeps {
   traceCaptureService?: TraceCaptureService
   screenshotModeService?: ScreenshotModeService
   authConfig?: AuthConfig
+  sessionService?: SessionService
 }
 
 export function observationRoutes(deps: ObservationRouteDeps) {
@@ -100,10 +116,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     const authHook = createStreamAuth(app.db)
 
     // Helper: verify agent exists and is alive (if lifecycle manager is available)
-    function getAgentOrFail(
-      agentId: string,
-      reply: FastifyReply,
-    ): boolean {
+    function getAgentOrFail(agentId: string, reply: FastifyReply): boolean {
       if (!lifecycleManager) return true // No lifecycle manager — allow passthrough
       const state = lifecycleManager.getAgentState(agentId)
       if (!state) {
@@ -209,7 +222,10 @@ export function observationRoutes(deps: ObservationRouteDeps) {
           },
         },
       },
-      async (request: FastifyRequest<{ Params: AgentParams; Body: ScreenshotRequest }>, reply: FastifyReply) => {
+      async (
+        request: FastifyRequest<{ Params: AgentParams; Body: ScreenshotRequest }>,
+        reply: FastifyReply,
+      ) => {
         const { agentId } = request.params
         if (!getAgentOrFail(agentId, reply)) return
 
@@ -318,7 +334,10 @@ export function observationRoutes(deps: ObservationRouteDeps) {
           },
         },
       },
-      async (request: FastifyRequest<{ Params: AgentParams; Body: TraceRecordingOptions }>, reply: FastifyReply) => {
+      async (
+        request: FastifyRequest<{ Params: AgentParams; Body: TraceRecordingOptions }>,
+        reply: FastifyReply,
+      ) => {
         const { agentId } = request.params
         if (!getAgentOrFail(agentId, reply)) return
 
@@ -415,7 +434,10 @@ export function observationRoutes(deps: ObservationRouteDeps) {
           },
         },
       },
-      async (request: FastifyRequest<{ Params: AgentParams; Body: AnnotationEvent }>, reply: FastifyReply) => {
+      async (
+        request: FastifyRequest<{ Params: AgentParams; Body: AnnotationEvent }>,
+        reply: FastifyReply,
+      ) => {
         const { agentId } = request.params
         if (!getAgentOrFail(agentId, reply)) return
 
@@ -430,8 +452,9 @@ export function observationRoutes(deps: ObservationRouteDeps) {
         const event = request.body
 
         // Generate a coordinate-based prompt for the agent
-        const prompt = event.prompt
-          ?? `User clicked at coordinates (${event.x}, ${event.y})${event.selector ? ` on element "${event.selector}"` : ""}. Investigate this element.`
+        const prompt =
+          event.prompt ??
+          `User clicked at coordinates (${event.x}, ${event.y})${event.selector ? ` on element "${event.selector}"` : ""}. Investigate this element.`
 
         // Forward annotation to the observation service
         const result = await observationService.forwardAnnotation(agentId, event)
@@ -501,7 +524,10 @@ export function observationRoutes(deps: ObservationRouteDeps) {
           },
         },
       },
-      async (request: FastifyRequest<{ Params: AgentParams; Body: AnnotationPayload }>, reply: FastifyReply) => {
+      async (
+        request: FastifyRequest<{ Params: AgentParams; Body: AnnotationPayload }>,
+        reply: FastifyReply,
+      ) => {
         const { agentId } = request.params
         if (!getAgentOrFail(agentId, reply)) return
 
@@ -560,7 +586,11 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     // -----------------------------------------------------------------
 
     if (authHandoffService && authConfig) {
-      const requireAuth = createRequireAuth(authConfig)
+      const authOpts: AuthMiddlewareOptions = {
+        config: authConfig,
+        sessionService: deps.sessionService,
+      }
+      const requireAuth = createRequireAuth(authOpts)
       const requireApprover = createRequireRole("approver")
 
       app.post<{ Params: AgentParams; Body: AuthHandoffBody }>(
@@ -601,7 +631,10 @@ export function observationRoutes(deps: ObservationRouteDeps) {
             },
           },
         },
-        async (request: FastifyRequest<{ Params: AgentParams; Body: AuthHandoffBody }>, reply: FastifyReply) => {
+        async (
+          request: FastifyRequest<{ Params: AgentParams; Body: AuthHandoffBody }>,
+          reply: FastifyReply,
+        ) => {
           const { agentId } = request.params
           if (!getAgentOrFail(agentId, reply)) return
 
@@ -685,7 +718,13 @@ export function observationRoutes(deps: ObservationRouteDeps) {
             },
           },
         },
-        async (request: FastifyRequest<{ Params: AgentParams; Body: TraceRecordingOptions & { jobId?: string } }>, reply: FastifyReply) => {
+        async (
+          request: FastifyRequest<{
+            Params: AgentParams
+            Body: TraceRecordingOptions & { jobId?: string }
+          }>,
+          reply: FastifyReply,
+        ) => {
           const { agentId } = request.params
           if (!getAgentOrFail(agentId, reply)) return
 
@@ -735,7 +774,10 @@ export function observationRoutes(deps: ObservationRouteDeps) {
             },
           },
         },
-        async (request: FastifyRequest<{ Params: AgentParams; Body: { jobId?: string } }>, reply: FastifyReply) => {
+        async (
+          request: FastifyRequest<{ Params: AgentParams; Body: { jobId?: string } }>,
+          reply: FastifyReply,
+        ) => {
           const { agentId } = request.params
           if (!getAgentOrFail(agentId, reply)) return
 
@@ -802,7 +844,10 @@ export function observationRoutes(deps: ObservationRouteDeps) {
             },
           },
         },
-        async (request: FastifyRequest<{ Params: AgentParams; Querystring: ScreenshotStreamBody }>, reply: FastifyReply) => {
+        async (
+          request: FastifyRequest<{ Params: AgentParams; Querystring: ScreenshotStreamBody }>,
+          reply: FastifyReply,
+        ) => {
           const { agentId } = request.params
           if (!getAgentOrFail(agentId, reply)) return
 

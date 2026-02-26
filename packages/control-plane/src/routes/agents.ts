@@ -11,13 +11,20 @@
  */
 
 import { randomUUID } from "node:crypto"
-import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from "fastify"
-import type { Kysely } from "kysely"
 
 import type { AgentStatus, JobStatus } from "@cortex/shared"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import type { Kysely } from "kysely"
+
+import type { SessionService } from "../auth/session-service.js"
 import type { Database } from "../db/types.js"
+import {
+  type AuthMiddlewareOptions,
+  createRequireAuth,
+  createRequireRole,
+  type PreHandler,
+} from "../middleware/auth.js"
 import type { AuthConfig } from "../middleware/types.js"
-import { createRequireAuth, createRequireRole } from "../middleware/auth.js"
 
 // ---------------------------------------------------------------------------
 // Route types
@@ -79,13 +86,15 @@ export interface AgentRouteDeps {
   db: Kysely<Database>
   authConfig: AuthConfig
   enqueueJob: (jobId: string) => Promise<void>
+  sessionService?: SessionService
 }
 
 export function agentRoutes(deps: AgentRouteDeps) {
-  const { db, authConfig, enqueueJob } = deps
+  const { db, authConfig, enqueueJob, sessionService } = deps
 
-  const requireAuth: preHandlerHookHandler = createRequireAuth(authConfig)
-  const requireOperator: preHandlerHookHandler = createRequireRole("operator")
+  const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
+  const requireAuth: PreHandler = createRequireAuth(authOpts)
+  const requireOperator: PreHandler = createRequireRole("operator")
 
   return function register(app: FastifyInstance): void {
     // -----------------------------------------------------------------
@@ -105,10 +114,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Querystring: ListAgentsQuery }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Querystring: ListAgentsQuery }>, reply: FastifyReply) => {
         const { status, limit = 50, offset = 0 } = request.query
 
         let query = db.selectFrom("agent").selectAll()
@@ -143,10 +149,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Params: AgentParams }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) => {
         const agent = await db
           .selectFrom("agent")
           .selectAll()
@@ -195,12 +198,14 @@ export function agentRoutes(deps: AgentRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Body: CreateAgentBody }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Body: CreateAgentBody }>, reply: FastifyReply) => {
         const body = request.body
-        const slug = body.slug ?? body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
+        const slug =
+          body.slug ??
+          body.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "")
 
         const agent = await db
           .insertInto("agent")
@@ -267,7 +272,8 @@ export function agentRoutes(deps: AgentRouteDeps) {
         if (body.model_config !== undefined) updateValues.model_config = body.model_config
         if (body.skill_config !== undefined) updateValues.skill_config = body.skill_config
         if (body.resource_limits !== undefined) updateValues.resource_limits = body.resource_limits
-        if (body.channel_permissions !== undefined) updateValues.channel_permissions = body.channel_permissions
+        if (body.channel_permissions !== undefined)
+          updateValues.channel_permissions = body.channel_permissions
         if (body.status !== undefined) updateValues.status = body.status
 
         if (Object.keys(updateValues).length === 0) {
@@ -307,10 +313,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
           },
         },
       },
-      async (
-        request: FastifyRequest<{ Params: AgentParams }>,
-        reply: FastifyReply,
-      ) => {
+      async (request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) => {
         const updated = await db
           .updateTable("agent")
           .set({ status: "ARCHIVED" as AgentStatus })
@@ -346,9 +349,15 @@ export function agentRoutes(deps: AgentRouteDeps) {
               status: {
                 type: "string",
                 enum: [
-                  "PENDING", "SCHEDULED", "RUNNING",
-                  "WAITING_FOR_APPROVAL", "COMPLETED",
-                  "FAILED", "TIMED_OUT", "RETRYING", "DEAD_LETTER",
+                  "PENDING",
+                  "SCHEDULED",
+                  "RUNNING",
+                  "WAITING_FOR_APPROVAL",
+                  "COMPLETED",
+                  "FAILED",
+                  "TIMED_OUT",
+                  "RETRYING",
+                  "DEAD_LETTER",
                 ],
               },
               limit: { type: "number", minimum: 1, maximum: 100 },
@@ -375,20 +384,13 @@ export function agentRoutes(deps: AgentRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Agent not found" })
         }
 
-        let query = db
-          .selectFrom("job")
-          .selectAll()
-          .where("agent_id", "=", id)
+        let query = db.selectFrom("job").selectAll().where("agent_id", "=", id)
 
         if (status) {
           query = query.where("status", "=", status)
         }
 
-        const jobs = await query
-          .orderBy("created_at", "desc")
-          .limit(limit)
-          .offset(offset)
-          .execute()
+        const jobs = await query.orderBy("created_at", "desc").limit(limit).offset(offset).execute()
 
         return reply.status(200).send({ jobs, count: jobs.length })
       },
@@ -459,7 +461,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
         const payload: Record<string, unknown> = {
           prompt: body.prompt,
           goal_type: body.goal_type ?? "research",
-          model: body.model ?? (agent.model_config as Record<string, unknown>).model ?? undefined,
+          model: body.model ?? agent.model_config.model ?? undefined,
           ...(body.payload ?? {}),
         }
 

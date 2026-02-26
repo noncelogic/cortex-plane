@@ -1,12 +1,14 @@
-import Fastify, { type FastifyInstance } from "fastify"
+import { BackendRegistry } from "@cortex/shared/backends"
 import fastifyCors from "@fastify/cors"
 import fastifyWebSocket from "@fastify/websocket"
+import Fastify, { type FastifyInstance } from "fastify"
+import { makeWorkerUtils, type WorkerUtils } from "graphile-worker"
 import type { Kysely } from "kysely"
 import type pg from "pg"
-import { makeWorkerUtils, type WorkerUtils } from "graphile-worker"
 
-import { BackendRegistry } from "@cortex/shared/backends"
 import { ApprovalService } from "./approval/service.js"
+import { CredentialService } from "./auth/credential-service.js"
+import { SessionService } from "./auth/session-service.js"
 import { ClaudeCodeBackend } from "./backends/claude-code.js"
 import { HttpLlmBackend } from "./backends/http-llm.js"
 import { AuthHandoffService } from "./browser/auth-handoff.js"
@@ -19,6 +21,8 @@ import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
+import { authRoutes } from "./routes/auth.js"
+import { credentialRoutes } from "./routes/credentials.js"
 import { healthRoutes } from "./routes/health.js"
 import { observationRoutes } from "./routes/observation.js"
 import { streamRoutes } from "./routes/stream.js"
@@ -58,7 +62,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   })
 
   // Initialize backend registry
-  const registry = options.registry ?? await createDefaultRegistry()
+  const registry = options.registry ?? (await createDefaultRegistry())
 
   // SSE connection manager for agent streaming
   const sseManager = new SSEConnectionManager()
@@ -94,29 +98,53 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Load auth configuration for approval gate endpoints
   const authConfig = loadAuthConfig()
 
+  // Session service + credential service (if OAuth is configured)
+  let sessionService: SessionService | undefined
+  let credentialService: CredentialService | undefined
+
+  if (config.auth) {
+    sessionService = new SessionService(db, config.auth.sessionMaxAge)
+    credentialService = new CredentialService(db, config.auth)
+
+    // Clean up expired sessions on startup
+    sessionService.cleanupExpired().catch(() => {
+      // Non-critical, log and continue
+    })
+  }
+
+  // Decorate the Fastify instance with auth services for use in route plugins
+  if (sessionService) {
+    app.decorate("sessionService", sessionService)
+  }
+
   await app.register(healthRoutes)
 
   // Register approval routes (always available)
-  await app.register(
-    approvalRoutes({ approvalService, sseManager, authConfig }),
-  )
+  await app.register(approvalRoutes({ approvalService, sseManager, authConfig, sessionService }))
 
   // Register agent CRUD + job routes
   await app.register(
     agentRoutes({
       db,
       authConfig,
+      sessionService,
       enqueueJob: async (jobId: string) => {
         await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
       },
     }),
   )
 
+  // Register auth + credential management routes (if OAuth configured)
+  if (config.auth && sessionService && credentialService) {
+    await app.register(
+      authRoutes({ db, authConfig: config.auth, sessionService, credentialService }),
+    )
+    await app.register(credentialRoutes({ credentialService }))
+  }
+
   // Always register streaming + observation routes
   // (lifecycleManager is optional — routes handle its absence gracefully)
-  await app.register(
-    streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }),
-  )
+  await app.register(streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }))
   await app.register(
     observationRoutes({
       sseManager,
@@ -126,6 +154,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       traceCaptureService,
       screenshotModeService,
       authConfig,
+      sessionService,
     }),
   )
 
