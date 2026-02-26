@@ -3,21 +3,22 @@
 import Link from "next/link"
 
 import { JobStatusBadge } from "@/components/jobs/job-status-badge"
+import { ApiErrorBanner } from "@/components/layout/api-error-banner"
+import { EmptyState } from "@/components/layout/empty-state"
+import { Skeleton } from "@/components/layout/skeleton"
+import { useDashboard } from "@/hooks/use-dashboard"
 import { relativeTime } from "@/lib/format"
-import { getDashboardStats, getRecentJobs } from "@/lib/mock/dashboard"
-
-/* ── Stat cards ──────────────────────────────────────── */
-const stats = getDashboardStats()
-const recentJobs = getRecentJobs()
-
-const cards = [
-  { label: "Total Agents", value: stats.totalAgents, icon: "smart_toy", href: "/agents" },
-  { label: "Active Jobs", value: stats.activeJobs, icon: "list_alt", href: "/jobs" },
-  { label: "Pending Approvals", value: stats.pendingApprovals, icon: "verified_user", href: "/approvals" },
-  { label: "Memory Records", value: stats.memoryRecords, icon: "memory", href: "/memory" },
-] as const
 
 export default function DashboardPage(): React.JSX.Element {
+  const { stats, recentJobs, isLoading, error, errorCode, refetch } = useDashboard()
+
+  const cards = [
+    { label: "Total Agents", value: stats.totalAgents, icon: "smart_toy", href: "/agents" },
+    { label: "Active Jobs", value: stats.activeJobs, icon: "list_alt", href: "/jobs" },
+    { label: "Pending Approvals", value: stats.pendingApprovals, icon: "verified_user", href: "/approvals" },
+    { label: "Memory Records", value: stats.memoryRecords, icon: "memory", href: "/memory" },
+  ] as const
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -27,6 +28,9 @@ export default function DashboardPage(): React.JSX.Element {
           Dashboard
         </h1>
       </div>
+
+      {/* Error banner */}
+      {error && <ApiErrorBanner error={error} errorCode={errorCode} onRetry={refetch} />}
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -44,7 +48,11 @@ export default function DashboardPage(): React.JSX.Element {
                 {icon}
               </span>
             </div>
-            <p className="mt-2 text-3xl font-bold text-text-main">{value}</p>
+            {isLoading ? (
+              <Skeleton className="mt-2 h-9 w-16" />
+            ) : (
+              <p className="mt-2 text-3xl font-bold text-text-main">{value}</p>
+            )}
           </Link>
         ))}
       </div>
@@ -56,27 +64,41 @@ export default function DashboardPage(): React.JSX.Element {
           <h2 className="mb-4 font-display text-lg font-bold tracking-tight text-text-main">
             Recent Activity
           </h2>
-          <div className="rounded-xl border border-surface-border bg-surface-light overflow-hidden">
-            <div className="divide-y divide-surface-border">
-              {recentJobs.map((job) => (
-                <div key={job.id} className="flex items-center gap-4 px-5 py-3.5">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <span className="material-symbols-outlined text-[18px] text-primary">
-                      smart_toy
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-main truncate">
-                      {job.agentName}
-                      <span className="ml-2 text-text-muted font-normal">{job.type}</span>
-                    </p>
-                    <p className="text-xs text-text-muted">{relativeTime(job.createdAt)}</p>
-                  </div>
-                  <JobStatusBadge status={job.status} />
-                </div>
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
-          </div>
+          ) : recentJobs.length === 0 ? (
+            <EmptyState
+              icon="list_alt"
+              title="No jobs yet"
+              description="Once agents begin executing tasks, recent activity will appear here."
+            />
+          ) : (
+            <div className="rounded-xl border border-surface-border bg-surface-light overflow-hidden">
+              <div className="divide-y divide-surface-border">
+                {recentJobs.map((job) => (
+                  <div key={job.id} className="flex items-center gap-4 px-5 py-3.5">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                      <span className="material-symbols-outlined text-[18px] text-primary">
+                        smart_toy
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-text-main truncate">
+                        {job.agentName}
+                        <span className="ml-2 text-text-muted font-normal">{job.type}</span>
+                      </p>
+                      <p className="text-xs text-text-muted">{relativeTime(job.createdAt)}</p>
+                    </div>
+                    <JobStatusBadge status={job.status} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}

@@ -3,6 +3,8 @@
 import { JobCard } from "@/components/jobs/job-card"
 import { JobDetailDrawer } from "@/components/jobs/job-detail-drawer"
 import { JobTable } from "@/components/jobs/job-table"
+import { ApiErrorBanner } from "@/components/layout/api-error-banner"
+import { EmptyState } from "@/components/layout/empty-state"
 import { Skeleton } from "@/components/layout/skeleton"
 import { useJobsPage } from "@/hooks/use-jobs-page"
 
@@ -18,6 +20,7 @@ export default function JobsPage(): React.JSX.Element {
     setSelectedJobId,
     isLoading,
     error,
+    errorCode,
     handleRefresh,
   } = useJobsPage()
 
@@ -98,34 +101,41 @@ export default function JobsPage(): React.JSX.Element {
       </div>
 
       {/* Error */}
-      {error && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-4 text-sm text-red-500">
-          Failed to load jobs: {error}
-        </div>
-      )}
+      {error && <ApiErrorBanner error={error} errorCode={errorCode} onRetry={handleRefresh} />}
 
-      {/* Desktop: Table view */}
-      <div className="hidden md:block">
-        <JobTable
-          jobs={jobs}
-          onSelectJob={setSelectedJobId}
-          onRetried={handleRefresh}
+      {/* Empty state */}
+      {!isLoading && !error && jobs.length === 0 ? (
+        <EmptyState
+          icon="list_alt"
+          title="No jobs yet"
+          description="Jobs will appear here when agents begin executing tasks."
         />
-      </div>
+      ) : (
+        <>
+          {/* Desktop: Table view */}
+          <div className="hidden md:block">
+            <JobTable
+              jobs={jobs}
+              onSelectJob={setSelectedJobId}
+              onRetried={handleRefresh}
+            />
+          </div>
 
-      {/* Mobile: Card view */}
-      <div className="grid grid-cols-1 gap-3 md:hidden">
-        {jobs.map((job) => (
-          <JobCard key={job.id} job={job} onSelect={setSelectedJobId} />
-        ))}
-      </div>
+          {/* Mobile: Card view */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {jobs.map((job) => (
+              <JobCard key={job.id} job={job} onSelect={setSelectedJobId} />
+            ))}
+          </div>
 
-      {/* Detail Drawer */}
-      <JobDetailDrawer
-        jobId={selectedJobId}
-        onClose={() => setSelectedJobId(null)}
-        onRetried={handleRefresh}
-      />
+          {/* Detail Drawer */}
+          <JobDetailDrawer
+            jobId={selectedJobId}
+            onClose={() => setSelectedJobId(null)}
+            onRetried={handleRefresh}
+          />
+        </>
+      )}
     </div>
   )
 }

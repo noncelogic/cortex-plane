@@ -1,5 +1,7 @@
 "use client"
 
+import { ApiErrorBanner } from "@/components/layout/api-error-banner"
+import { EmptyState } from "@/components/layout/empty-state"
 import { ContentFilters } from "@/components/pulse/content-filters"
 import { PipelineBoard } from "@/components/pulse/pipeline-board"
 import { PipelineStats } from "@/components/pulse/pipeline-stats"
@@ -21,6 +23,9 @@ export default function PulsePage(): React.JSX.Element {
     publishingPiece,
     handlePublish,
     error,
+    errorCode,
+    isLoading,
+    pieces,
   } = usePulsePipeline()
 
   return (
@@ -54,25 +59,32 @@ export default function PulsePage(): React.JSX.Element {
       />
 
       {/* Error */}
-      {error && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-4 text-sm text-red-500">
-          Failed to load content: {error}
-        </div>
-      )}
+      {error && <ApiErrorBanner error={error} errorCode={errorCode} />}
+
+      {/* Empty state */}
+      {!isLoading && !error && pieces.length === 0 ? (
+        <EmptyState
+          icon="hub"
+          title="No content yet"
+          description="Content pieces will appear here as agents generate drafts, newsletters, and reports."
+        />
+      ) : null}
 
       {/* Kanban board */}
-      <PipelineBoard
-        pieces={filteredPieces}
-        onEdit={(id) => {
-          // Edit action — future implementation
-          console.log("Edit:", id)
-        }}
-        onPublish={setPublishingId}
-        onArchive={(id) => {
-          // Archive action — future implementation
-          console.log("Archive:", id)
-        }}
-      />
+      {pieces.length > 0 && (
+        <PipelineBoard
+          pieces={filteredPieces}
+          onEdit={(id) => {
+            // Edit action — future implementation
+            console.log("Edit:", id)
+          }}
+          onPublish={setPublishingId}
+          onArchive={(id) => {
+            // Archive action — future implementation
+            console.log("Archive:", id)
+          }}
+        />
+      )}
 
       {/* Publish dialog */}
       {publishingPiece && (

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 
-import type { SSEConnectionStatus, SSEEvent } from "@/lib/sse-client"
+import { resolveSSEUrl, type SSEConnectionStatus, type SSEEvent } from "@/lib/sse-client"
 
 import { useSSE } from "./use-sse"
 
@@ -83,7 +83,7 @@ export function useAgentStream(
   agentId: string,
   options?: UseAgentStreamOptions,
 ): UseAgentStreamReturn {
-  const url = `/api/agents/${agentId}/stream`
+  const url = resolveSSEUrl(`/api/agents/${agentId}/stream`)
 
   const {
     events: rawEvents,

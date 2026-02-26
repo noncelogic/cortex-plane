@@ -6,11 +6,14 @@ import type { AgentMetrics } from "@/components/agents/agent-card"
 import { AgentGrid } from "@/components/agents/agent-grid"
 import { AgentTable } from "@/components/agents/agent-table"
 import { type ViewMode, ViewToggle } from "@/components/agents/view-toggle"
+import { ApiErrorBanner } from "@/components/layout/api-error-banner"
+import { EmptyState } from "@/components/layout/empty-state"
 import { Skeleton } from "@/components/layout/skeleton"
 import { useApiQuery } from "@/hooks/use-api"
 import { useSSE } from "@/hooks/use-sse"
 import type { AgentLifecycleState, AgentSummary } from "@/lib/api-client"
 import { listAgents } from "@/lib/api-client"
+import { resolveSSEUrl } from "@/lib/sse-client"
 
 // ---------------------------------------------------------------------------
 // Status filter options
@@ -58,11 +61,11 @@ export default function AgentsPage(): React.JSX.Element {
   const [metricsMap, setMetricsMap] = useState<Record<string, AgentMetrics>>({})
 
   // Fetch agent list
-  const { data, isLoading, error, refetch } = useApiQuery(() => listAgents({ limit: 100 }), [])
+  const { data, isLoading, error, errorCode, refetch } = useApiQuery(() => listAgents({ limit: 100 }), [])
 
   // Real-time SSE for fleet-wide state updates
   const { connected, events: sseEvents } = useSSE({
-    url: "/api/agents/stream",
+    url: resolveSSEUrl("/api/agents/stream"),
     eventTypes: ["agent:state"],
     autoConnect: true,
     maxEvents: 50,
@@ -257,33 +260,42 @@ export default function AgentsPage(): React.JSX.Element {
       </div>
 
       {/* Error */}
-      {error && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-4 text-sm text-red-500">
-          Failed to load agents: {error}
-        </div>
+      {error && <ApiErrorBanner error={error} errorCode={errorCode} onRetry={handleRefresh} />}
+
+      {/* Empty state */}
+      {!isLoading && !error && agents.length === 0 ? (
+        <EmptyState
+          icon="smart_toy"
+          title="No agents configured"
+          description="Deploy your first autonomous agent to get started."
+          actionLabel="Deploy New Agent"
+          actionHref="/agents"
+        />
+      ) : (
+        <>
+          {/* Count */}
+          <div className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            Showing{" "}
+            <span className="font-bold text-slate-900 dark:text-slate-100">{filtered.length}</span> of{" "}
+            <span className="font-bold text-slate-900 dark:text-slate-100">{agents.length}</span> agents
+          </div>
+
+          {/* Agent Views */}
+          {/* Desktop: table or grid based on toggle */}
+          <div className="hidden md:block">
+            {viewMode === "table" ? (
+              <AgentTable agents={filtered} metricsMap={metricsMap} />
+            ) : (
+              <AgentGrid agents={filtered} metricsMap={metricsMap} />
+            )}
+          </div>
+
+          {/* Mobile: always card grid */}
+          <div className="md:hidden">
+            <AgentGrid agents={filtered} metricsMap={metricsMap} />
+          </div>
+        </>
       )}
-
-      {/* Count */}
-      <div className="text-sm font-medium text-slate-500 dark:text-slate-400">
-        Showing{" "}
-        <span className="font-bold text-slate-900 dark:text-slate-100">{filtered.length}</span> of{" "}
-        <span className="font-bold text-slate-900 dark:text-slate-100">{agents.length}</span> agents
-      </div>
-
-      {/* Agent Views */}
-      {/* Desktop: table or grid based on toggle */}
-      <div className="hidden md:block">
-        {viewMode === "table" ? (
-          <AgentTable agents={filtered} metricsMap={metricsMap} />
-        ) : (
-          <AgentGrid agents={filtered} metricsMap={metricsMap} />
-        )}
-      </div>
-
-      {/* Mobile: always card grid */}
-      <div className="md:hidden">
-        <AgentGrid agents={filtered} metricsMap={metricsMap} />
-      </div>
     </div>
   )
 }

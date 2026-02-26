@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
-import type { JobSummary } from "@/lib/api-client"
+import type { ApiErrorCode, JobSummary } from "@/lib/api-client"
 import { listJobs } from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
 import { generateMockJobs } from "@/lib/mock/jobs"
@@ -23,18 +23,19 @@ function statusCounts(jobs: JobSummary[]): { running: number; failed: number; co
 export function useJobsPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
-  const { data, isLoading, error, refetch } = useApiQuery(
+  const { data, isLoading, error, errorCode, refetch } = useApiQuery(
     () => listJobs({ limit: 100 }),
     [],
   )
 
   const jobs: JobSummary[] = useMemo(() => {
-    if (data?.jobs && data.jobs.length > 0) return data.jobs
-    if (error || isMockEnabled() || (!isLoading && (!data?.jobs || data.jobs.length === 0))) {
-      return generateMockJobs()
-    }
-    return data?.jobs ?? []
-  }, [data, error, isLoading])
+    // Mock mode: always return mock data
+    if (isMockEnabled()) return generateMockJobs()
+    // Live mode: return API data (may be empty array)
+    if (data?.jobs) return data.jobs
+    // Still loading or errored in live mode: return empty
+    return []
+  }, [data])
 
   const counts = useMemo(() => statusCounts(jobs), [jobs])
 
@@ -49,6 +50,7 @@ export function useJobsPage() {
     setSelectedJobId,
     isLoading,
     error,
+    errorCode: errorCode as ApiErrorCode | null,
     handleRefresh,
   }
 }

@@ -4,7 +4,7 @@ import { useMemo } from "react"
 
 import { z } from "zod"
 
-import type { SSEConnectionStatus } from "@/lib/sse-client"
+import { resolveSSEUrl, type SSEConnectionStatus } from "@/lib/sse-client"
 
 import { useSSE } from "./use-sse"
 
@@ -35,7 +35,7 @@ export function useContentStream(options?: { maxEvents?: number }): UseContentSt
     connected,
     status,
   } = useSSE({
-    url: "/api/content/stream",
+    url: resolveSSEUrl("/api/content/stream"),
     eventTypes: ["content:created", "content:updated", "content:published", "content:archived"],
     maxEvents: options?.maxEvents ?? 500,
   })

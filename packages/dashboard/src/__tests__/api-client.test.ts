@@ -31,16 +31,37 @@ function mockFetchNetworkError(): void {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
 }
 
+function mockFetchSequence(...responses: Array<{ body?: unknown; status?: number; error?: boolean }>): void {
+  const mock = vi.fn()
+  for (const [i, r] of responses.entries()) {
+    if (r.error) {
+      mock.mockRejectedValueOnce(new TypeError("Failed to fetch"))
+    } else {
+      const status = r.status ?? 200
+      mock.mockResolvedValueOnce({
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: statusForCode(status),
+        json: () => Promise.resolve(r.body),
+      })
+    }
+  }
+  vi.stubGlobal("fetch", mock)
+}
+
 function statusForCode(code: number): string {
   const map: Record<number, string> = {
     200: "OK",
     202: "Accepted",
     400: "Bad Request",
     401: "Unauthorized",
+    403: "Forbidden",
     404: "Not Found",
     409: "Conflict",
     429: "Too Many Requests",
     500: "Internal Server Error",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
   }
   return map[code] ?? "Unknown"
 }
@@ -205,15 +226,14 @@ describe("API Client", () => {
     })
 
     it("throws ApiError with statusText when body is unparseable", async () => {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn().mockResolvedValue({
-          ok: false,
-          status: 502,
-          statusText: "Bad Gateway",
-          json: () => Promise.reject(new Error("invalid json")),
-        }),
-      )
+      // 502 is retryable, so mock 3 attempts (initial + 2 retries)
+      const mockRes = {
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: () => Promise.reject(new Error("invalid json")),
+      }
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockRes))
 
       try {
         await getAgent("a1")
@@ -226,10 +246,19 @@ describe("API Client", () => {
       }
     })
 
-    it("propagates network errors as-is", async () => {
+    it("wraps network errors as ApiError with CONNECTION_REFUSED code", async () => {
       mockFetchNetworkError()
 
-      await expect(listAgents()).rejects.toThrow("Failed to fetch")
+      try {
+        await listAgents()
+        expect.fail("should have thrown")
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiError)
+        const apiErr = err as ApiError
+        expect(apiErr.status).toBe(0)
+        expect(apiErr.code).toBe("CONNECTION_REFUSED")
+        expect(apiErr.isConnectionError).toBe(true)
+      }
     })
 
     it("handles 409 Conflict responses", async () => {
@@ -249,6 +278,134 @@ describe("API Client", () => {
         expect(apiErr.status).toBe(409)
         expect(apiErr.message).toContain("READY state")
       }
+    })
+  })
+
+  describe("error classification", () => {
+    it("classifies 401 as AUTH_ERROR", async () => {
+      mockFetchResponse({ message: "Unauthorized" }, 401)
+
+      try {
+        await getAgent("a1")
+        expect.fail("should have thrown")
+      } catch (err) {
+        const apiErr = err as ApiError
+        expect(apiErr.code).toBe("AUTH_ERROR")
+        expect(apiErr.isAuth).toBe(true)
+      }
+    })
+
+    it("classifies 403 as AUTH_ERROR", async () => {
+      mockFetchResponse({ message: "Forbidden" }, 403)
+
+      try {
+        await getAgent("a1")
+        expect.fail("should have thrown")
+      } catch (err) {
+        const apiErr = err as ApiError
+        expect(apiErr.code).toBe("AUTH_ERROR")
+        expect(apiErr.isAuth).toBe(true)
+      }
+    })
+
+    it("classifies 404 as NOT_FOUND", async () => {
+      mockFetchResponse({ message: "Not Found" }, 404)
+
+      try {
+        await getAgent("a1")
+        expect.fail("should have thrown")
+      } catch (err) {
+        const apiErr = err as ApiError
+        expect(apiErr.code).toBe("NOT_FOUND")
+      }
+    })
+
+    it("classifies 500 as SERVER_ERROR", async () => {
+      mockFetchResponse({ message: "Internal error" }, 500)
+
+      try {
+        await listAgents()
+        expect.fail("should have thrown")
+      } catch (err) {
+        const apiErr = err as ApiError
+        expect(apiErr.code).toBe("SERVER_ERROR")
+      }
+    })
+  })
+
+  describe("retry logic", () => {
+    it("retries on 503 and succeeds on second attempt", async () => {
+      mockFetchSequence(
+        { body: { message: "Unavailable" }, status: 503 },
+        { body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } }, status: 200 },
+      )
+
+      const result = await listAgents()
+
+      expect(result.agents).toEqual([])
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(2)
+    })
+
+    it("retries on network errors and succeeds", async () => {
+      mockFetchSequence(
+        { error: true },
+        { body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } }, status: 200 },
+      )
+
+      const result = await listAgents()
+
+      expect(result.agents).toEqual([])
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(2)
+    })
+
+    it("does not retry on 401", async () => {
+      mockFetchResponse({ message: "Unauthorized" }, 401)
+
+      try {
+        await getAgent("a1")
+        expect.fail("should have thrown")
+      } catch (err) {
+        const apiErr = err as ApiError
+        expect(apiErr.code).toBe("AUTH_ERROR")
+      }
+
+      // Only one call — no retries
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(1)
+    })
+
+    it("does not retry on 404", async () => {
+      mockFetchResponse({ message: "Not found" }, 404)
+
+      try {
+        await getAgent("a1")
+        expect.fail("should have thrown")
+      } catch (err) {
+        const apiErr = err as ApiError
+        expect(apiErr.code).toBe("NOT_FOUND")
+      }
+
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(1)
+    })
+
+    it("exhausts retries on persistent 503 and throws TRANSIENT", async () => {
+      mockFetchSequence(
+        { body: { message: "Unavailable" }, status: 503 },
+        { body: { message: "Unavailable" }, status: 503 },
+        { body: { message: "Unavailable" }, status: 503 },
+      )
+
+      try {
+        await listAgents()
+        expect.fail("should have thrown")
+      } catch (err) {
+        const apiErr = err as ApiError
+        expect(apiErr.status).toBe(503)
+        expect(apiErr.code).toBe("TRANSIENT")
+        expect(apiErr.isTransient).toBe(true)
+      }
+
+      // Initial + 2 retries = 3 calls
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(3)
     })
   })
 })

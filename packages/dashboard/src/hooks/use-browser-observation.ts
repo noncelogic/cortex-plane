@@ -9,7 +9,8 @@ import { isMockEnabled } from "@/lib/mock"
 import { mockBrowserEvents, mockBrowserSession, mockScreenshots, mockTabs } from "@/lib/mock/browser"
 
 export function useBrowserObservation(agentId: string) {
-  const [tabs, setTabs] = useState<BrowserTab[]>(() => mockTabs())
+  const mock = isMockEnabled()
+  const [tabs, setTabs] = useState<BrowserTab[]>(() => mock ? mockTabs() : [])
 
   const { data: agentData, error: agentError } = useApiQuery(() => getAgent(agentId), [agentId])
   const { data: sessionData, error: sessionError } = useApiQuery(
@@ -25,17 +26,29 @@ export function useBrowserObservation(agentId: string) {
     [agentId],
   )
 
-  const session: BrowserSession = sessionData ?? (sessionError || isMockEnabled() ? mockBrowserSession(agentId) : mockBrowserSession(agentId))
-  const screenshots: Screenshot[] = useMemo(
-    () => screenshotData?.screenshots ?? (screenshotError || isMockEnabled() ? mockScreenshots(agentId) : mockScreenshots(agentId)),
-    [screenshotData, screenshotError, agentId],
-  )
-  const events: BrowserEvent[] = useMemo(
-    () => eventData?.events ?? (eventError || isMockEnabled() ? mockBrowserEvents() : mockBrowserEvents()),
-    [eventData, eventError],
-  )
+  const session: BrowserSession = useMemo(() => {
+    if (mock) return mockBrowserSession(agentId)
+    return sessionData ?? {
+      id: `session-${agentId}`,
+      agentId,
+      vncUrl: null,
+      status: sessionError ? "error" : "connecting",
+      tabs: [],
+      latencyMs: 0,
+    }
+  }, [sessionData, sessionError, agentId, mock])
 
-  const agentName = agentData?.name ?? (agentError ? `Agent ${agentId.slice(0, 8)}` : `Agent ${agentId.slice(0, 8)}`)
+  const screenshots: Screenshot[] = useMemo(() => {
+    if (mock) return mockScreenshots(agentId)
+    return screenshotData?.screenshots ?? []
+  }, [screenshotData, agentId, mock])
+
+  const events: BrowserEvent[] = useMemo(() => {
+    if (mock) return mockBrowserEvents()
+    return eventData?.events ?? []
+  }, [eventData, mock])
+
+  const agentName = agentData?.name ?? `Agent ${agentId.slice(0, 8)}`
 
   const handleSelectTab = (tabId: string) => {
     setTabs((prev) =>
