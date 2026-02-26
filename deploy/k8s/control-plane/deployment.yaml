@@ -25,6 +25,8 @@ spec:
         app.kubernetes.io/component: orchestrator
         app.kubernetes.io/part-of: cortex-plane
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -78,5 +80,11 @@ spec:
               port: http
             periodSeconds: 5
             failureThreshold: 12
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
       # 65s matches Graphile Worker drain (45s) + pool close + buffer
       terminationGracePeriodSeconds: 65
+      volumes:
+        - name: tmp
+          emptyDir: {}

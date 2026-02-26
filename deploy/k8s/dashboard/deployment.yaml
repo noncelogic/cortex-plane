@@ -25,6 +25,8 @@ spec:
         app.kubernetes.io/component: frontend
         app.kubernetes.io/part-of: cortex-plane
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -76,4 +78,14 @@ spec:
               port: http
             periodSeconds: 5
             failureThreshold: 12
+          volumeMounts:
+            - name: nextjs-cache
+              mountPath: /app/.next/cache
+            - name: tmp
+              mountPath: /tmp
       terminationGracePeriodSeconds: 30
+      volumes:
+        - name: nextjs-cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
