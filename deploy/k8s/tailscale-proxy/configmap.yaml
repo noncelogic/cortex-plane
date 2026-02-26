@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tailscale-serve-config
+  labels:
+    app: tailscale-proxy
+    app.kubernetes.io/name: tailscale-proxy
+    app.kubernetes.io/component: network-proxy
+    app.kubernetes.io/part-of: cortex-plane
+data:
+  # Tailscale Serve reverse-proxy configuration.
+  # Routes all Tailscale traffic to the internal k8s services.
+  # HTTPS mode — requires "Enable HTTPS certificates" in Tailscale admin console.
+  # For HTTP-only fallback, see docs/deploy/tailscale-access.md.
+  serve-config.json: |
+    {
+      "TCP": {
+        "443": {
+          "HTTPS": true
+        }
+      },
+      "Web": {
+        "${TS_CERT_DOMAIN}:443": {
+          "Handlers": {
+            "/": {
+              "Proxy": "http://dashboard.cortex.svc.cluster.local:3000"
+            },
+            "/api": {
+              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
+            },
+            "/healthz": {
+              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
+            },
+            "/readyz": {
+              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
+            }
+          }
+        }
+      }
+    }
+  # HTTP-only alternative (no HTTPS cert setup required).
+  # To use: rename this to serve-config.json and remove the HTTPS version above.
+  serve-config-http.json: |
+    {
+      "TCP": {
+        "80": {
+          "HTTP": true
+        }
+      },
+      "Web": {
+        "${TS_CERT_DOMAIN}:80": {
+          "Handlers": {
+            "/": {
+              "Proxy": "http://dashboard.cortex.svc.cluster.local:3000"
+            },
+            "/api": {
+              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
+            },
+            "/healthz": {
+              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
+            },
+            "/readyz": {
+              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
+            }
+          }
+        }
+      }
+    }
