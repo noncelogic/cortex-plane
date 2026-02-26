@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { ApiError } from "@/lib/api-client"
+import { ApiError, type ApiErrorCode } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
 // Request deduplication cache
@@ -41,6 +41,8 @@ interface UseApiState<T> {
   data: T | null
   isLoading: boolean
   error: string | null
+  /** Typed error code for rendering specific error UI */
+  errorCode: ApiErrorCode | null
 }
 
 interface UseApiReturn<T> extends UseApiState<T> {
@@ -62,6 +64,7 @@ export function useApi<T>(
     data: null,
     isLoading: false,
     error: null,
+    errorCode: null,
   })
 
   // Keep the latest apiFn for use inside callbacks without re-creating them
@@ -74,16 +77,17 @@ export function useApi<T>(
   const execute = useCallback(
     async (...args: unknown[]): Promise<T | null> => {
       lastArgsRef.current = args
-      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+      setState((prev) => ({ ...prev, isLoading: true, error: null, errorCode: null }))
 
       try {
         const key = dedupKey ?? `useApi:${apiFnRef.current.name}:${JSON.stringify(args)}`
         const data = await deduped(key, () => apiFnRef.current(...args))
-        setState({ data, isLoading: false, error: null })
+        setState({ data, isLoading: false, error: null, errorCode: null })
         return data
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "An error occurred"
-        setState((prev) => ({ ...prev, isLoading: false, error: message }))
+        const errorCode = err instanceof ApiError ? err.code : ("UNKNOWN" as ApiErrorCode)
+        setState((prev) => ({ ...prev, isLoading: false, error: message, errorCode }))
         return null
       }
     },
@@ -108,7 +112,7 @@ export function useApi<T>(
   )
 
   const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null })
+    setState({ data: null, isLoading: false, error: null, errorCode: null })
   }, [])
 
   return { ...state, loading: state.isLoading, execute, mutate, reset }

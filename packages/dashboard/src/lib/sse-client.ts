@@ -37,6 +37,21 @@ const KNOWN_EVENT_TYPES = [
   "browser:annotation:ack",
 ] as const
 
+/**
+ * Resolves an SSE URL. When NEXT_PUBLIC_SSE_URL is set, absolute URLs are
+ * built from that base; otherwise relative URLs go through the Next.js rewrite proxy.
+ */
+export function resolveSSEUrl(path: string): string {
+  const base = typeof window !== "undefined"
+    ? (process.env.NEXT_PUBLIC_SSE_URL ?? "")
+    : ""
+  if (!base) return path
+  // Strip leading /api/ prefix when using a direct SSE URL since the
+  // control-plane doesn't serve under /api
+  const cleaned = path.startsWith("/api/") ? path.slice(4) : path
+  return `${base.replace(/\/$/, "")}${cleaned}`
+}
+
 export class SSEClient {
   private eventSource: EventSource | null = null
   private lastEventId: string | null = null

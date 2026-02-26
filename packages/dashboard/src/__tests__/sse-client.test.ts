@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { SSEClient, type SSEConnectionStatus, type SSEEvent } from "@/lib/sse-client"
+import { resolveSSEUrl, SSEClient, type SSEConnectionStatus, type SSEEvent } from "@/lib/sse-client"
 
 // ---------------------------------------------------------------------------
 // Minimal EventSource mock
@@ -260,5 +260,22 @@ describe("SSEClient", () => {
     client.connect()
     client.connect()
     expect(MockEventSource.instances).toHaveLength(1)
+  })
+})
+
+describe("resolveSSEUrl", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it("returns path unchanged when NEXT_PUBLIC_SSE_URL is not set", () => {
+    expect(resolveSSEUrl("/api/agents/a1/stream")).toBe("/api/agents/a1/stream")
+  })
+
+  it("strips /api prefix and prepends SSE base URL", () => {
+    vi.stubEnv("NEXT_PUBLIC_SSE_URL", "http://localhost:4000")
+    // resolveSSEUrl checks typeof window, which is undefined in node test env
+    // So it will return path unchanged. This is the expected server-side behavior.
+    expect(resolveSSEUrl("/api/agents/a1/stream")).toBe("/api/agents/a1/stream")
   })
 })

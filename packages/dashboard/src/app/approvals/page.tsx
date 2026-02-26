@@ -6,6 +6,8 @@ import { ApprovalActions } from "@/components/approvals/approval-actions"
 import { ApprovalList } from "@/components/approvals/approval-list"
 import type { AuditEntry } from "@/components/approvals/audit-drawer"
 import { AuditDrawer } from "@/components/approvals/audit-drawer"
+import { ApiErrorBanner } from "@/components/layout/api-error-banner"
+import { EmptyState } from "@/components/layout/empty-state"
 import { useApi, useApiQuery } from "@/hooks/use-api"
 import { useApprovalStream } from "@/hooks/use-approval-stream"
 import type { ApprovalRequest, ApprovalStatus } from "@/lib/api-client"
@@ -136,7 +138,7 @@ export default function ApprovalsPage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Fetch approvals from API
-  const { data, isLoading, error, refetch } = useApiQuery(() => listApprovals({ limit: 100 }), [])
+  const { data, isLoading, error, errorCode, refetch } = useApiQuery(() => listApprovals({ limit: 100 }), [])
 
   // Real-time stream
   const { events: streamEvents, connected, pendingCount } = useApprovalStream()
@@ -349,17 +351,13 @@ export default function ApprovalsPage(): React.JSX.Element {
             {isLoading ? (
               <LoadingSkeleton />
             ) : error ? (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-center">
-                <span className="material-symbols-outlined mb-2 text-3xl text-red-500">error</span>
-                <p className="text-sm text-red-500">{error}</p>
-                <button
-                  type="button"
-                  onClick={() => void refetch()}
-                  className="mt-3 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600"
-                >
-                  Retry
-                </button>
-              </div>
+              <ApiErrorBanner error={error} errorCode={errorCode} onRetry={() => void refetch()} />
+            ) : approvals.length === 0 ? (
+              <EmptyState
+                icon="verified_user"
+                title="All clear"
+                description="No approval requests at the moment. When agents need authorization, requests will appear here."
+              />
             ) : (
               <ApprovalList
                 approvals={approvals}

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react"
 
 import type { ContentFilterState } from "@/components/pulse/content-filters"
 import { useApiQuery } from "@/hooks/use-api"
-import type { ContentPiece, ContentPipelineStats } from "@/lib/api-client"
+import type { ApiErrorCode, ContentPiece, ContentPipelineStats } from "@/lib/api-client"
 import { archiveContent, listContent, publishContent } from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
 import { generateMockContent } from "@/lib/mock/content"
@@ -41,15 +41,13 @@ export function usePulsePipeline() {
   })
   const [publishingId, setPublishingId] = useState<string | null>(null)
 
-  const { data, isLoading, error } = useApiQuery(() => listContent({ limit: 100 }), [])
+  const { data, isLoading, error, errorCode } = useApiQuery(() => listContent({ limit: 100 }), [])
 
   const allPieces: ContentPiece[] = useMemo(() => {
-    if (data?.content && data.content.length > 0) return data.content
-    if (error || isMockEnabled() || (!isLoading && (!data?.content || data.content.length === 0))) {
-      return generateMockContent()
-    }
-    return data?.content ?? []
-  }, [data, error, isLoading])
+    if (isMockEnabled()) return generateMockContent()
+    if (data?.content) return data.content
+    return []
+  }, [data])
 
   const filteredPieces = useMemo(() => {
     return allPieces.filter((p) => {
@@ -106,5 +104,6 @@ export function usePulsePipeline() {
     handleArchive,
     isLoading,
     error,
+    errorCode: errorCode as ApiErrorCode | null,
   }
 }

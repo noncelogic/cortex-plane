@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react"
 
 import type { ActiveFilters } from "@/components/memory/memory-search"
 import { useApiQuery } from "@/hooks/use-api"
-import type { MemoryRecord } from "@/lib/api-client"
+import type { ApiErrorCode, MemoryRecord } from "@/lib/api-client"
 import { searchMemory, syncMemory } from "@/lib/api-client"
 import { isMockEnabled } from "@/lib/mock"
 import { generateMockMemories, MOCK_AGENT_ID } from "@/lib/mock/memory"
@@ -58,18 +58,16 @@ export function useMemoryExplorer() {
     timeRange: "ALL",
   })
 
-  const { data, isLoading, error } = useApiQuery(
+  const { data, isLoading, error, errorCode } = useApiQuery(
     () => searchMemory({ agentId: MOCK_AGENT_ID, query: searchQuery || "all", limit: 50 }),
     [searchQuery],
   )
 
   const allRecords: MemoryRecord[] = useMemo(() => {
-    if (data?.results && data.results.length > 0) return data.results
-    if (error || isMockEnabled() || (!isLoading && (!data?.results || data.results.length === 0))) {
-      return generateMockMemories()
-    }
-    return data?.results ?? []
-  }, [data, error, isLoading])
+    if (isMockEnabled()) return generateMockMemories()
+    if (data?.results) return data.results
+    return []
+  }, [data])
 
   const filteredRecords = useMemo(
     () => applyFilters(allRecords, searchQuery, activeFilters),
@@ -117,6 +115,7 @@ export function useMemoryExplorer() {
     handleSync,
     isLoading,
     error,
+    errorCode: errorCode as ApiErrorCode | null,
     agentId: MOCK_AGENT_ID,
   }
 }

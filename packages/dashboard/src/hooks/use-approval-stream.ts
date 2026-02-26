@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 
-import type { SSEConnectionStatus, SSEEvent } from "@/lib/sse-client"
+import { resolveSSEUrl, type SSEConnectionStatus, type SSEEvent } from "@/lib/sse-client"
 
 import { useSSE } from "./use-sse"
 
@@ -61,7 +61,7 @@ export function useApprovalStream(): UseApprovalStreamReturn {
     connected,
     status,
   } = useSSE({
-    url: "/api/approvals/stream",
+    url: resolveSSEUrl("/api/approvals/stream"),
     eventTypes: ["approval:created", "approval:decided", "approval:expired"],
   })
 

@@ -1,6 +1,8 @@
 "use client"
 
 import { DocumentViewer } from "@/components/memory/document-viewer"
+import { ApiErrorBanner } from "@/components/layout/api-error-banner"
+import { EmptyState } from "@/components/layout/empty-state"
 import { MemoryResults } from "@/components/memory/memory-results"
 import { MemorySearch } from "@/components/memory/memory-search"
 import { SyncStatus } from "@/components/memory/sync-status"
@@ -23,6 +25,7 @@ export default function MemoryPage(): React.JSX.Element {
     handleSelectResult,
     isLoading,
     error,
+    errorCode,
     agentId,
     allRecords,
   } = useMemoryExplorer()
@@ -78,31 +81,36 @@ export default function MemoryPage(): React.JSX.Element {
       <MemorySearch onSearch={handleSearch} isLoading={isLoading} />
 
       {/* Error */}
-      {error && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-4 text-sm text-red-500">
-          Failed to search memories: {error}
-        </div>
-      )}
+      {error && <ApiErrorBanner error={error} errorCode={errorCode} />}
 
-      {/* Split view: Results (left) | Document Viewer (right) */}
-      <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-800 lg:flex-row">
-        {/* Left: Results */}
-        <div className="border-b border-slate-800 lg:border-b-0 lg:border-r">
-          <MemoryResults
-            results={filteredRecords}
-            selectedId={selectedId}
-            onSelect={handleSelectResult}
-            isLoading={isLoading}
+      {/* Empty state */}
+      {!isLoading && !error && allRecords.length === 0 ? (
+        <EmptyState
+          icon="memory"
+          title="No memory records"
+          description="Memory records will appear here once agents begin extracting and storing knowledge."
+        />
+      ) : (
+        /* Split view: Results (left) | Document Viewer (right) */
+        <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-800 lg:flex-row">
+          {/* Left: Results */}
+          <div className="border-b border-slate-800 lg:border-b-0 lg:border-r">
+            <MemoryResults
+              results={filteredRecords}
+              selectedId={selectedId}
+              onSelect={handleSelectResult}
+              isLoading={isLoading}
+            />
+          </div>
+
+          {/* Right: Document Viewer */}
+          <DocumentViewer
+            record={selectedRecord}
+            relatedRecords={relatedRecords}
+            onSelectRelated={handleSelectResult}
           />
         </div>
-
-        {/* Right: Document Viewer */}
-        <DocumentViewer
-          record={selectedRecord}
-          relatedRecords={relatedRecords}
-          onSelectRelated={handleSelectResult}
-        />
-      </div>
+      )}
     </div>
   )
 }

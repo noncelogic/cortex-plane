@@ -2,7 +2,8 @@
  * Typed REST client for the Cortex Plane Control API.
  *
  * Types mirror the OpenAPI 3.1 specification (docs/openapi.yaml).
- * Implementation is a thin wrapper around fetch() with auth headers.
+ * Implementation is a thin wrapper around fetch() with auth headers,
+ * retry logic for transient errors, and request timeouts.
  */
 
 import type { z } from "zod"
@@ -65,19 +66,70 @@ export interface ProblemDetail {
 }
 
 // ---------------------------------------------------------------------------
+// Error classification
+// ---------------------------------------------------------------------------
+
+export type ApiErrorCode =
+  | "CONNECTION_REFUSED"
+  | "TIMEOUT"
+  | "AUTH_ERROR"
+  | "NOT_FOUND"
+  | "SERVER_ERROR"
+  | "TRANSIENT"
+  | "UNKNOWN"
+
+function classifyError(status: number): ApiErrorCode {
+  if (status === 401 || status === 403) return "AUTH_ERROR"
+  if (status === 404) return "NOT_FOUND"
+  if (status === 503 || status === 502 || status === 504) return "TRANSIENT"
+  if (status >= 500) return "SERVER_ERROR"
+  return "UNKNOWN"
+}
+
+function classifyNetworkError(err: unknown): ApiErrorCode {
+  const msg = err instanceof Error ? err.message.toLowerCase() : ""
+  if (msg.includes("aborted") || msg.includes("timeout")) return "TIMEOUT"
+  return "CONNECTION_REFUSED"
+}
+
+// ---------------------------------------------------------------------------
 // API Client
 // ---------------------------------------------------------------------------
 
 const API_BASE = process.env.NEXT_PUBLIC_CORTEX_API_URL ?? "http://localhost:4000"
 
+const DEFAULT_TIMEOUT_MS = 10_000
+const MAX_RETRIES = 2
+const RETRY_DELAY_MS = 1_000
+const RETRYABLE_STATUSES = new Set([502, 503, 504])
+
 interface FetchOptions {
   method?: string
   body?: unknown
   signal?: AbortSignal
+  /** Request timeout in ms (default: 10 000) */
+  timeoutMs?: number
+  /** Max retry attempts for transient errors (default: 2) */
+  maxRetries?: number
+}
+
+function isRetryable(status: number): boolean {
+  return RETRYABLE_STATUSES.has(status)
+}
+
+function isNetworkError(err: unknown): boolean {
+  return err instanceof TypeError || (err instanceof DOMException && err.name === "AbortError")
 }
 
 async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.ZodType<T> } = {}): Promise<T> {
-  const { method = "GET", body, signal, schema } = options
+  const {
+    method = "GET",
+    body,
+    signal: externalSignal,
+    schema,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    maxRetries = MAX_RETRIES,
+  } = options
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -89,42 +141,128 @@ async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.Zo
     headers["X-API-Key"] = apiKey
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    signal,
-  })
+  let lastError: unknown = null
 
-  if (!res.ok) {
-    const errorBody: unknown = await res.json().catch(() => null)
-    // Parse as RFC 7807 ProblemDetail if possible
-    if (errorBody && typeof errorBody === "object" && "type" in errorBody) {
-      const problem = errorBody as ProblemDetail
-      throw new ApiError(res.status, problem.detail ?? problem.title ?? res.statusText, problem)
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Combine external signal with timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+    if (externalSignal?.aborted) {
+      clearTimeout(timeoutId)
+      throw new ApiError(0, "Request aborted", undefined, "TIMEOUT")
     }
-    const detail =
-      (errorBody as Record<string, string> | null)?.detail ??
-      (errorBody as Record<string, string> | null)?.message ??
-      res.statusText
-    throw new ApiError(res.status, detail)
+
+    // Abort our controller if the external signal fires
+    const onExternalAbort = () => controller.abort()
+    externalSignal?.addEventListener("abort", onExternalAbort, { once: true })
+
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+      externalSignal?.removeEventListener("abort", onExternalAbort)
+
+      if (!res.ok) {
+        const errorBody: unknown = await res.json().catch(() => null)
+        const code = classifyError(res.status)
+
+        // Parse as RFC 7807 ProblemDetail if possible
+        if (errorBody && typeof errorBody === "object" && "type" in errorBody) {
+          const problem = errorBody as ProblemDetail
+          const err = new ApiError(res.status, problem.detail ?? problem.title ?? res.statusText, problem, code)
+          if (isRetryable(res.status) && attempt < maxRetries) {
+            lastError = err
+            await delay(RETRY_DELAY_MS * (attempt + 1))
+            continue
+          }
+          throw err
+        }
+
+        const detail =
+          (errorBody as Record<string, string> | null)?.detail ??
+          (errorBody as Record<string, string> | null)?.message ??
+          res.statusText
+        const err = new ApiError(res.status, detail, undefined, code)
+        if (isRetryable(res.status) && attempt < maxRetries) {
+          lastError = err
+          await delay(RETRY_DELAY_MS * (attempt + 1))
+          continue
+        }
+        throw err
+      }
+
+      const data = await res.json()
+      return schema ? schema.parse(data) as T : data as T
+    } catch (err) {
+      clearTimeout(timeoutId)
+      externalSignal?.removeEventListener("abort", onExternalAbort)
+
+      if (err instanceof ApiError) throw err
+
+      // Network errors and timeouts are retryable
+      if (isNetworkError(err) && attempt < maxRetries) {
+        lastError = err
+        await delay(RETRY_DELAY_MS * (attempt + 1))
+        continue
+      }
+
+      const code = classifyNetworkError(err)
+      throw new ApiError(
+        0,
+        code === "TIMEOUT" ? "Request timed out" : "Could not connect to the control plane",
+        undefined,
+        code,
+      )
+    }
   }
 
-  const data = await res.json()
-  return schema ? schema.parse(data) as T : data as T
+  // All retries exhausted — throw the last error
+  if (lastError instanceof ApiError) throw lastError
+  const code = classifyNetworkError(lastError)
+  throw new ApiError(
+    0,
+    code === "TIMEOUT" ? "Request timed out" : "Could not connect to the control plane",
+    undefined,
+    code,
+  )
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export class ApiError extends Error {
   public readonly problem?: ProblemDetail
+  public readonly code: ApiErrorCode
 
   constructor(
     public status: number,
     message: string,
     problem?: ProblemDetail,
+    code?: ApiErrorCode,
   ) {
     super(message)
     this.name = "ApiError"
     this.problem = problem
+    this.code = code ?? classifyError(status)
+  }
+
+  get isAuth(): boolean {
+    return this.code === "AUTH_ERROR"
+  }
+
+  get isConnectionError(): boolean {
+    return this.code === "CONNECTION_REFUSED" || this.code === "TIMEOUT"
+  }
+
+  get isTransient(): boolean {
+    return this.code === "TRANSIENT"
   }
 }
 

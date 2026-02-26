@@ -4,7 +4,7 @@ import { useMemo } from "react"
 
 import { z } from "zod"
 
-import type { SSEConnectionStatus } from "@/lib/sse-client"
+import { resolveSSEUrl, type SSEConnectionStatus } from "@/lib/sse-client"
 
 import { useSSE } from "./use-sse"
 
@@ -34,7 +34,7 @@ export function useJobStream(options?: { maxEvents?: number }): UseJobStreamRetu
     connected,
     status,
   } = useSSE({
-    url: "/api/jobs/stream",
+    url: resolveSSEUrl("/api/jobs/stream"),
     eventTypes: ["job:created", "job:updated", "job:completed", "job:failed"],
     maxEvents: options?.maxEvents ?? 500,
   })
