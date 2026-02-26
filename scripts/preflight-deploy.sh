@@ -78,6 +78,7 @@ printf "\n${BOLD}Container Images (for k8s/prod deploy)${RESET}\n"
 IMAGES=(
   "noncelogic/cortex-control-plane:latest"
   "noncelogic/cortex-dashboard:latest"
+  "noncelogic/cortex-playwright-sidecar:latest"
 )
 for img in "${IMAGES[@]}"; do
   if docker image inspect "$img" &>/dev/null 2>&1; then

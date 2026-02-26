@@ -5,11 +5,12 @@ COMPOSE  := docker compose
 PROFILES := --profile full
 REGISTRY ?= ghcr.io/noncelogic
 TAG      ?= $(shell git rev-parse --short HEAD)
+NS       ?= cortex
 
 .PHONY: help up up-app up-full down logs ps \
         build dev test lint typecheck format \
         db-migrate db-seed \
-        smoke preflight docker-build docker-push clean
+        smoke smoke-cluster preflight rollback docker-build docker-push clean
 
 # ---------------------------------------------------------------------------
 # Docker Compose
@@ -90,8 +91,14 @@ docker-push: ## Push all images to registry
 smoke: ## Run smoke tests against running compose stack
 	./scripts/smoke-test.sh
 
+smoke-cluster: ## Run smoke tests against k8s/k3s cluster (NS=cortex)
+	./scripts/smoke-test-cluster.sh $(NS)
+
 preflight: ## Run pre-deploy checks (config, secrets, images)
 	./scripts/preflight-deploy.sh
+
+rollback: ## Rollback app deployments on k8s/k3s (NS=cortex)
+	./scripts/rollback-cluster.sh --namespace $(NS)
 
 clean: ## Remove build artifacts, volumes, caches
 	pnpm clean
