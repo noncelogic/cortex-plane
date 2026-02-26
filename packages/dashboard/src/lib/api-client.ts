@@ -311,6 +311,11 @@ export class ApiError extends Error {
   get isTransient(): boolean {
     return this.code === "TRANSIENT"
   }
+
+  /** True when the endpoint itself doesn't exist (feature not deployed). */
+  get isFeatureUnavailable(): boolean {
+    return this.code === "NOT_FOUND"
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -23,10 +23,18 @@ function statusCounts(jobs: JobSummary[]): { running: number; failed: number; co
 export function useJobsPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
-  const { data, isLoading, error, errorCode, refetch } = useApiQuery(
-    () => listJobs({ limit: 100 }),
-    [],
-  )
+  const {
+    data,
+    isLoading,
+    error: rawError,
+    errorCode: rawErrorCode,
+    refetch,
+  } = useApiQuery(() => listJobs({ limit: 100 }), [])
+
+  // A 404 means the /jobs route isn't deployed — not a connection failure.
+  // Suppress it so the page shows the empty state instead of an error banner.
+  const error = rawErrorCode === "NOT_FOUND" ? null : rawError
+  const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
 
   const jobs: JobSummary[] = useMemo(() => {
     // Mock mode: always return mock data

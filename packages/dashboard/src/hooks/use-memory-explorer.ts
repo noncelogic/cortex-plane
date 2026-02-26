@@ -62,10 +62,19 @@ export function useMemoryExplorer() {
     timeRange: "ALL",
   })
 
-  const { data, isLoading, error, errorCode } = useApiQuery(
+  const {
+    data,
+    isLoading,
+    error: rawError,
+    errorCode: rawErrorCode,
+  } = useApiQuery(
     () => searchMemory({ agentId: MOCK_AGENT_ID, query: searchQuery || "all", limit: 50 }),
     [searchQuery],
   )
+
+  // A 404 means the /memory/search route isn't deployed — not a connection failure.
+  const error = rawErrorCode === "NOT_FOUND" ? null : rawError
+  const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
 
   const allRecords: MemoryRecord[] = useMemo(() => {
     if (isMockEnabled()) return generateMockMemories()
