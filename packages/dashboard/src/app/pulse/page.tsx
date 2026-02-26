@@ -75,15 +75,9 @@ export default function PulsePage(): React.JSX.Element {
       {pieces.length > 0 && (
         <PipelineBoard
           pieces={filteredPieces}
-          onEdit={(id) => {
-            // Edit action — future implementation
-            console.log("Edit:", id)
-          }}
+          onEdit={() => {}}
           onPublish={setPublishingId}
-          onArchive={(id) => {
-            // Archive action — future implementation
-            console.log("Archive:", id)
-          }}
+          onArchive={() => {}}
         />
       )}
 

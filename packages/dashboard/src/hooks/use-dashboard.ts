@@ -55,17 +55,17 @@ export function useDashboard(): DashboardData {
   const errorCode = agentsErrorCode
 
   const stats = useMemo<DashboardStats>(() => {
-    if (isMockEnabled() || (error && !agentData)) return getDashboardStats()
+    if (isMockEnabled()) return getDashboardStats()
     return {
       totalAgents: agentData?.pagination?.total ?? 0,
       activeJobs: jobData?.pagination?.total ?? 0,
       pendingApprovals: approvalData?.pagination?.total ?? 0,
       memoryRecords: memoryData?.results?.length ?? 0,
     }
-  }, [agentData, jobData, approvalData, memoryData, error])
+  }, [agentData, jobData, approvalData, memoryData])
 
   const recentJobs = useMemo<RecentJob[]>(() => {
-    if (isMockEnabled() || (error && !jobData)) return getRecentJobs()
+    if (isMockEnabled()) return getRecentJobs()
     if (!jobData?.jobs || jobData.jobs.length === 0) return []
     return jobData.jobs.map((j) => ({
       id: j.id,
@@ -74,7 +74,7 @@ export function useDashboard(): DashboardData {
       type: j.type,
       createdAt: j.createdAt,
     }))
-  }, [jobData, error])
+  }, [jobData])
 
   const refetch = useCallback(() => {
     void refetchAgents()

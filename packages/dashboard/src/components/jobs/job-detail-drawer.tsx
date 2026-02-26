@@ -11,155 +11,6 @@ import { JobRetryButton } from "./job-retry-button"
 import { JobStatusBadge } from "./job-status-badge"
 
 // ---------------------------------------------------------------------------
-// Mock data factory (until API is wired up)
-// ---------------------------------------------------------------------------
-
-function mockJobDetail(jobId: string): JobDetail {
-  const statuses = ["COMPLETED", "FAILED", "RUNNING"] as const
-  const status = statuses[Math.abs(hashCode(jobId)) % statuses.length]!
-  const now = Date.now()
-  const createdAt = new Date(now - 3_600_000 - Math.random() * 7_200_000).toISOString()
-  const durationMs = 45_000 + Math.floor(Math.random() * 120_000)
-
-  const steps: JobStep[] = [
-    {
-      name: "Initialize Context",
-      status: "COMPLETED",
-      startedAt: createdAt,
-      completedAt: new Date(new Date(createdAt).getTime() + 2_300).toISOString(),
-      durationMs: 2_300,
-      worker: "worker-01",
-    },
-    {
-      name: "Load Agent State",
-      status: "COMPLETED",
-      startedAt: new Date(new Date(createdAt).getTime() + 2_300).toISOString(),
-      completedAt: new Date(new Date(createdAt).getTime() + 5_100).toISOString(),
-      durationMs: 2_800,
-      worker: "worker-01",
-    },
-    {
-      name: "Execute Inference",
-      status: status === "FAILED" ? "FAILED" : "COMPLETED",
-      startedAt: new Date(new Date(createdAt).getTime() + 5_100).toISOString(),
-      completedAt:
-        status === "RUNNING"
-          ? undefined
-          : new Date(new Date(createdAt).getTime() + 38_000).toISOString(),
-      durationMs: status === "RUNNING" ? undefined : 32_900,
-      worker: "worker-02",
-      error:
-        status === "FAILED"
-          ? "Model inference timeout after 30s — upstream provider returned 504 Gateway Timeout"
-          : undefined,
-    },
-    {
-      name: "Post-Process Results",
-      status: status === "FAILED" ? "PENDING" : status === "RUNNING" ? "PENDING" : "COMPLETED",
-      durationMs: status === "COMPLETED" ? 1_200 : undefined,
-      worker: status === "COMPLETED" ? "worker-01" : undefined,
-    },
-    {
-      name: "Persist Checkpoint",
-      status: status === "FAILED" ? "PENDING" : status === "RUNNING" ? "PENDING" : "COMPLETED",
-      durationMs: status === "COMPLETED" ? 800 : undefined,
-      worker: status === "COMPLETED" ? "worker-01" : undefined,
-    },
-  ]
-
-  const metrics: JobMetrics = {
-    cpuPercent: 34 + Math.floor(Math.random() * 40),
-    memoryMb: 256 + Math.floor(Math.random() * 512),
-    networkInBytes: 1_200_000 + Math.floor(Math.random() * 5_000_000),
-    networkOutBytes: 400_000 + Math.floor(Math.random() * 2_000_000),
-    threadCount: 4 + Math.floor(Math.random() * 12),
-  }
-
-  const logs: JobLogEntry[] = [
-    {
-      timestamp: createdAt,
-      level: "INFO",
-      message: "Job started — initializing execution context",
-    },
-    {
-      timestamp: new Date(new Date(createdAt).getTime() + 1_000).toISOString(),
-      level: "INFO",
-      message: "Agent state loaded from checkpoint crc32=0x4a2b1c3d",
-    },
-    {
-      timestamp: new Date(new Date(createdAt).getTime() + 2_500).toISOString(),
-      level: "DEBUG",
-      message: "Resolved tool bindings: [web_search, code_exec, file_read]",
-    },
-    {
-      timestamp: new Date(new Date(createdAt).getTime() + 5_200).toISOString(),
-      level: "INFO",
-      message: "Inference request dispatched to model provider",
-    },
-    {
-      timestamp: new Date(new Date(createdAt).getTime() + 12_000).toISOString(),
-      level: "WARN",
-      message: "Inference latency exceeds p95 threshold (12.4s > 8.0s)",
-    },
-    ...(status === "FAILED"
-      ? [
-          {
-            timestamp: new Date(new Date(createdAt).getTime() + 30_000).toISOString(),
-            level: "ERR" as const,
-            message:
-              "Model inference timeout after 30s — upstream provider returned 504 Gateway Timeout",
-          },
-          {
-            timestamp: new Date(new Date(createdAt).getTime() + 30_100).toISOString(),
-            level: "ERR" as const,
-            message: "Job failed — marking as FAILED and scheduling for retry evaluation",
-          },
-        ]
-      : [
-          {
-            timestamp: new Date(new Date(createdAt).getTime() + 35_000).toISOString(),
-            level: "INFO" as const,
-            message: "Inference completed successfully — 2,847 tokens generated",
-          },
-          {
-            timestamp: new Date(new Date(createdAt).getTime() + 38_000).toISOString(),
-            level: "INFO" as const,
-            message: "Checkpoint persisted — job completed",
-          },
-        ]),
-  ]
-
-  return {
-    id: jobId,
-    agentId: "agt-" + jobId.slice(0, 8),
-    agentName: ["Atlas Navigator", "CodeWeaver", "DataSentinel", "TaskRunner"][
-      Math.abs(hashCode(jobId)) % 4
-    ],
-    agentVersion: "v1." + (Math.abs(hashCode(jobId)) % 10),
-    status,
-    type: ["inference", "tool-call", "pipeline", "batch"][Math.abs(hashCode(jobId)) % 4]!,
-    createdAt,
-    updatedAt: new Date(new Date(createdAt).getTime() + durationMs).toISOString(),
-    completedAt:
-      status === "RUNNING"
-        ? undefined
-        : new Date(new Date(createdAt).getTime() + durationMs).toISOString(),
-    durationMs,
-    steps,
-    metrics,
-    logs,
-  }
-}
-
-function hashCode(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
-  }
-  return h
-}
-
-// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -298,14 +149,12 @@ export function JobDetailDrawer({
   onClose,
   onRetried,
 }: JobDetailDrawerProps): React.JSX.Element | null {
-  // Attempt real API fetch; fall back to mock
   const { data: apiData, error: apiError } = useApiQuery(
     () => (jobId ? getJob(jobId) : Promise.reject(new Error("no job"))),
     [jobId],
   )
 
-  // Use mock when API is not available
-  const job: JobDetail | null = apiData ?? (jobId && apiError ? mockJobDetail(jobId) : apiData)
+  const job: JobDetail | null = apiData ?? null
 
   // Close on Escape
   useEffect(() => {
@@ -404,6 +253,16 @@ export function JobDetailDrawer({
                 </section>
               )}
             </>
+          ) : apiError ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <span className="material-symbols-outlined text-3xl text-text-muted">
+                error_outline
+              </span>
+              <span className="mt-3 text-sm font-semibold text-text-main">
+                Unable to load job details
+              </span>
+              <span className="mt-1 text-xs text-text-muted">{apiError}</span>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <span className="material-symbols-outlined animate-spin text-3xl text-text-muted">
