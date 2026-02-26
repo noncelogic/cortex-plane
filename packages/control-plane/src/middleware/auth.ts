@@ -122,7 +122,8 @@ export function createRequireAuth(configOrOptions: AuthConfig | AuthMiddlewareOp
  * Must run after requireAuth (expects `request.principal` to exist).
  */
 export function createRequireRole(role: string): PreHandler {
-  return function requireRole(request: FastifyRequest, reply: FastifyReply): void {
+  // eslint-disable-next-line @typescript-eslint/require-await -- Fastify needs Promise return to avoid waiting for done() callback
+  return async function requireRole(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const principal = (request as AuthenticatedRequest).principal
     if (!principal) {
       reply.status(401).send({ error: "unauthorized", message: "No principal attached" })
