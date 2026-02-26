@@ -29,6 +29,10 @@
     "./memory": {
       "import": "./dist/memory/index.js",
       "types": "./dist/memory/index.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser/index.js",
+      "types": "./dist/browser/index.d.ts"
     }
   },
   "scripts": {

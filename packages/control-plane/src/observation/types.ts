@@ -145,8 +145,12 @@ export interface AnnotationResult {
 export type BrowserObservationEventType =
   | "browser:screenshot"
   | "browser:tabs"
+  | "browser:tab:event"
   | "browser:trace:state"
   | "browser:annotation:ack"
+  | "browser:steer:action"
+  | "browser:auth:handoff"
+  | "browser:screenshot:frame"
 
 // ---------------------------------------------------------------------------
 // Observation service configuration
