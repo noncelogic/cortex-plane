@@ -8,14 +8,9 @@
 
 import type { z } from "zod"
 
-import {
-  AgentDetailSchema,
-  AgentListResponseSchema,
-} from "./schemas/agents"
+import { AgentDetailSchema, AgentListResponseSchema } from "./schemas/agents"
 import { ApprovalListResponseSchema } from "./schemas/approvals"
-import {
-  BrowserSessionSchema,
-} from "./schemas/browser"
+import { BrowserSessionSchema } from "./schemas/browser"
 import { ContentListResponseSchema } from "./schemas/content"
 import { JobDetailSchema, JobListResponseSchema } from "./schemas/jobs"
 import { MemorySearchResponseSchema } from "./schemas/memory"
@@ -24,21 +19,39 @@ import { MemorySearchResponseSchema } from "./schemas/memory"
 // Re-export types from schemas for backward compatibility
 // ---------------------------------------------------------------------------
 
-export type { AgentStatus, AgentLifecycleState, AgentSummary, AgentDetail, Checkpoint } from "./schemas/agents"
-export type { JobStatus, JobSummary, JobStep, JobMetrics, JobLogEntry, JobDetail } from "./schemas/jobs"
-export type { ApprovalStatus, ApprovalRequest } from "./schemas/approvals"
-export type { Pagination } from "./schemas/common"
-export type { MemoryRecord } from "./schemas/memory"
-export type { ContentStatus, ContentType, ContentPiece, ContentPipelineStats } from "./schemas/content"
 export type {
-  BrowserSessionStatus,
-  BrowserEventType,
-  BrowserEventSeverity,
-  BrowserTab,
-  BrowserSession,
+  AgentDetail,
+  AgentLifecycleState,
+  AgentStatus,
+  AgentSummary,
+  Checkpoint,
+} from "./schemas/agents"
+export type { ApprovalRequest, ApprovalStatus } from "./schemas/approvals"
+export type {
   BrowserEvent,
+  BrowserEventSeverity,
+  BrowserEventType,
+  BrowserSession,
+  BrowserSessionStatus,
+  BrowserTab,
   Screenshot,
 } from "./schemas/browser"
+export type { Pagination } from "./schemas/common"
+export type {
+  ContentPiece,
+  ContentPipelineStats,
+  ContentStatus,
+  ContentType,
+} from "./schemas/content"
+export type {
+  JobDetail,
+  JobLogEntry,
+  JobMetrics,
+  JobStatus,
+  JobStep,
+  JobSummary,
+} from "./schemas/jobs"
+export type { MemoryRecord } from "./schemas/memory"
 
 // ---------------------------------------------------------------------------
 // Types that remain local (request/response shapes not validated)
@@ -121,7 +134,10 @@ function isNetworkError(err: unknown): boolean {
   return err instanceof TypeError || (err instanceof DOMException && err.name === "AbortError")
 }
 
-async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.ZodType<T> } = {}): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  options: FetchOptions & { schema?: z.ZodType<T> } = {},
+): Promise<T> {
   const {
     method = "GET",
     body,
@@ -135,7 +151,13 @@ async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.Zo
     "Content-Type": "application/json",
   }
 
-  // API key auth for initial scaffold (session tokens later)
+  // Session-based CSRF token (stored by auth flow)
+  const csrf = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("cortex_csrf") : null
+  if (csrf) {
+    headers["x-csrf-token"] = csrf
+  }
+
+  // API key auth fallback
   const apiKey = process.env.NEXT_PUBLIC_CORTEX_API_KEY
   if (apiKey) {
     headers["X-API-Key"] = apiKey
@@ -163,6 +185,7 @@ async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.Zo
         headers,
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
+        credentials: "include",
       })
 
       clearTimeout(timeoutId)
@@ -175,7 +198,12 @@ async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.Zo
         // Parse as RFC 7807 ProblemDetail if possible
         if (errorBody && typeof errorBody === "object" && "type" in errorBody) {
           const problem = errorBody as ProblemDetail
-          const err = new ApiError(res.status, problem.detail ?? problem.title ?? res.statusText, problem, code)
+          const err = new ApiError(
+            res.status,
+            problem.detail ?? problem.title ?? res.statusText,
+            problem,
+            code,
+          )
           if (isRetryable(res.status) && attempt < maxRetries) {
             lastError = err
             await delay(RETRY_DELAY_MS * (attempt + 1))
@@ -198,7 +226,7 @@ async function apiFetch<T>(path: string, options: FetchOptions & { schema?: z.Zo
       }
 
       const data = await res.json()
-      return schema ? schema.parse(data) as T : data as T
+      return schema ? schema.parse(data) : (data as T)
     } catch (err) {
       clearTimeout(timeoutId)
       externalSignal?.removeEventListener("abort", onExternalAbort)
@@ -275,7 +303,10 @@ export async function listAgents(params?: {
   lifecycleState?: string
   limit?: number
   offset?: number
-}): Promise<{ agents: import("./schemas/agents").AgentSummary[]; pagination: import("./schemas/common").Pagination }> {
+}): Promise<{
+  agents: import("./schemas/agents").AgentSummary[]
+  pagination: import("./schemas/common").Pagination
+}> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.lifecycleState) search.set("lifecycleState", params.lifecycleState)
@@ -312,7 +343,10 @@ export async function listApprovals(params?: {
   jobId?: string
   limit?: number
   offset?: number
-}): Promise<{ approvals: import("./schemas/approvals").ApprovalRequest[]; pagination: import("./schemas/common").Pagination }> {
+}): Promise<{
+  approvals: import("./schemas/approvals").ApprovalRequest[]
+  pagination: import("./schemas/common").Pagination
+}> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.jobId) search.set("jobId", params.jobId)
@@ -339,7 +373,10 @@ export async function listJobs(params?: {
   status?: string
   limit?: number
   offset?: number
-}): Promise<{ jobs: import("./schemas/jobs").JobSummary[]; pagination: import("./schemas/common").Pagination }> {
+}): Promise<{
+  jobs: import("./schemas/jobs").JobSummary[]
+  pagination: import("./schemas/common").Pagination
+}> {
   const search = new URLSearchParams()
   if (params?.agentId) search.set("agentId", params.agentId)
   if (params?.status) search.set("status", params.status)
@@ -353,9 +390,7 @@ export async function getJob(jobId: string): Promise<import("./schemas/jobs").Jo
   return apiFetch(`/jobs/${jobId}`, { schema: JobDetailSchema })
 }
 
-export async function retryJob(
-  jobId: string,
-): Promise<{ jobId: string; status: "retrying" }> {
+export async function retryJob(jobId: string): Promise<{ jobId: string; status: "retrying" }> {
   return apiFetch(`/jobs/${jobId}/retry`, { method: "POST" })
 }
 
@@ -392,7 +427,10 @@ export async function listContent(params?: {
   agentId?: string
   limit?: number
   offset?: number
-}): Promise<{ content: import("./schemas/content").ContentPiece[]; pagination: import("./schemas/common").Pagination }> {
+}): Promise<{
+  content: import("./schemas/content").ContentPiece[]
+  pagination: import("./schemas/common").Pagination
+}> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.type) search.set("type", params.type)
@@ -423,7 +461,9 @@ export async function archiveContent(
 // Browser observation endpoint functions
 // ---------------------------------------------------------------------------
 
-export async function getAgentBrowser(agentId: string): Promise<import("./schemas/browser").BrowserSession> {
+export async function getAgentBrowser(
+  agentId: string,
+): Promise<import("./schemas/browser").BrowserSession> {
   return apiFetch(`/agents/${agentId}/browser`, { schema: BrowserSessionSchema })
 }
 

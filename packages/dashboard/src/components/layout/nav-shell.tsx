@@ -167,9 +167,18 @@ function BottomTabs() {
   )
 }
 
+/* ── Paths that render without the shell chrome ──────── */
+const CHROMELESS_PATHS = ["/login", "/auth/complete"]
+
 /* ── Shell ────────────────────────────────────────────── */
 export function NavShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+
+  // Auth-related pages render without sidebar/nav
+  if (CHROMELESS_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    return <>{children}</>
+  }
 
   return (
     <div className="flex min-h-screen">

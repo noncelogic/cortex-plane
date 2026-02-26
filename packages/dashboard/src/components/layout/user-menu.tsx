@@ -1,11 +1,14 @@
 "use client"
 
+import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import { useAuth } from "@/components/auth-provider"
 import { useTheme } from "@/components/theme-provider"
 
 export function UserMenu() {
   const { theme, toggle } = useTheme()
+  const { user, isAuthenticated, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -27,6 +30,19 @@ export function UserMenu() {
     }
   }, [open, close])
 
+  // Derive initials from display name or fallback
+  const initials = user?.displayName
+    ? user.displayName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "OP"
+
+  const displayName = user?.displayName ?? "Operator"
+  const role = user?.role ?? "operator"
+
   return (
     <div ref={ref} className="relative">
       {/* Trigger — avatar circle */}
@@ -37,7 +53,7 @@ export function UserMenu() {
         aria-label="User menu"
         aria-expanded={open}
       >
-        OP
+        {initials}
       </button>
 
       {/* Dropdown */}
@@ -45,9 +61,10 @@ export function UserMenu() {
         <div className="absolute right-0 top-full z-50 mt-2 w-56 origin-top-right rounded-xl border border-surface-border bg-surface-light p-1 shadow-lg animate-in fade-in">
           {/* Identity */}
           <div className="px-3 py-2.5">
-            <p className="text-sm font-semibold text-text-main">Operator</p>
+            <p className="text-sm font-semibold text-text-main">{displayName}</p>
+            {user?.email && <p className="text-xs text-text-muted truncate">{user.email}</p>}
             <span className="mt-0.5 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-              Admin
+              {role}
             </span>
           </div>
 
@@ -79,27 +96,38 @@ export function UserMenu() {
             </span>
           </button>
 
-          {/* Settings (placeholder) */}
-          <button
-            type="button"
-            disabled
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-muted opacity-50 cursor-not-allowed"
+          {/* Settings */}
+          <Link
+            href="/settings"
+            onClick={close}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-main transition-colors hover:bg-secondary"
           >
-            <span className="material-symbols-outlined text-[18px]">settings</span>
+            <span className="material-symbols-outlined text-[18px] text-text-muted">settings</span>
             <span>Settings</span>
-          </button>
+          </Link>
 
           <div className="mx-2 border-t border-surface-border" />
 
-          {/* Sign out (placeholder) */}
-          <button
-            type="button"
-            disabled
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-muted opacity-50 cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-[18px]">logout</span>
-            <span>Sign out</span>
-          </button>
+          {/* Sign out */}
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-main transition-colors hover:bg-secondary"
+            >
+              <span className="material-symbols-outlined text-[18px] text-text-muted">logout</span>
+              <span>Sign out</span>
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              onClick={close}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-main transition-colors hover:bg-secondary"
+            >
+              <span className="material-symbols-outlined text-[18px] text-text-muted">login</span>
+              <span>Sign in</span>
+            </Link>
+          )}
         </div>
       )}
     </div>

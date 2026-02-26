@@ -3,6 +3,7 @@ import "@/styles/globals.css"
 import type { Metadata } from "next"
 import { Inter, Space_Grotesk } from "next/font/google"
 
+import { AuthProvider } from "@/components/auth-provider"
 import { NavShell } from "@/components/layout/nav-shell"
 import { ThemeProvider } from "@/components/theme-provider"
 
@@ -43,7 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
       </head>
       <body className="antialiased">
         <ThemeProvider>
-          <NavShell>{children}</NavShell>
+          <AuthProvider>
+            <NavShell>{children}</NavShell>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
