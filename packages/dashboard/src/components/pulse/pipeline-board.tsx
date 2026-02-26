@@ -29,8 +29,8 @@ const COLUMNS: ColumnDef[] = [
     emptyIcon: "draft",
     emptyText: "No drafts yet",
     borderColor: "border-t-slate-400",
-    badgeBg: "bg-slate-100 dark:bg-slate-800",
-    badgeText: "text-slate-600 dark:text-slate-300",
+    badgeBg: "bg-secondary",
+    badgeText: "text-text-muted",
   },
   {
     status: "IN_REVIEW",
@@ -39,8 +39,8 @@ const COLUMNS: ColumnDef[] = [
     emptyIcon: "preview",
     emptyText: "Nothing in review",
     borderColor: "border-t-amber-400",
-    badgeBg: "bg-amber-100 dark:bg-amber-900/20",
-    badgeText: "text-amber-700 dark:text-amber-300",
+    badgeBg: "bg-amber-500/10",
+    badgeText: "text-amber-500",
   },
   {
     status: "QUEUED",
@@ -49,8 +49,8 @@ const COLUMNS: ColumnDef[] = [
     emptyIcon: "hourglass_empty",
     emptyText: "Queue is empty",
     borderColor: "border-t-blue-400",
-    badgeBg: "bg-blue-100 dark:bg-blue-900/20",
-    badgeText: "text-blue-700 dark:text-blue-300",
+    badgeBg: "bg-blue-500/10",
+    badgeText: "text-blue-500",
   },
   {
     status: "PUBLISHED",
@@ -59,8 +59,8 @@ const COLUMNS: ColumnDef[] = [
     emptyIcon: "check_circle",
     emptyText: "No published content",
     borderColor: "border-t-emerald-400",
-    badgeBg: "bg-emerald-100 dark:bg-emerald-900/20",
-    badgeText: "text-emerald-700 dark:text-emerald-300",
+    badgeBg: "bg-emerald-500/10",
+    badgeText: "text-emerald-500",
   },
 ]
 
@@ -104,7 +104,7 @@ export function PipelineBoard({
   return (
     <>
       {/* Mobile: Tab switcher */}
-      <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 lg:hidden dark:bg-slate-800">
+      <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg bg-secondary p-1 lg:hidden">
         {COLUMNS.map((col) => {
           const count = grouped[col.status]?.length ?? 0
           return (
@@ -114,8 +114,8 @@ export function PipelineBoard({
               onClick={() => setActiveTab(col.status)}
               className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-all ${
                 activeTab === col.status
-                  ? "bg-white text-text-main shadow-sm dark:bg-slate-700 dark:text-white"
-                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                  ? "bg-surface-light text-text-main shadow-sm"
+                  : "text-text-muted hover:text-text-main"
               }`}
             >
               {col.label}
@@ -134,7 +134,7 @@ export function PipelineBoard({
         {COLUMNS.filter((col) => col.status === activeTab).map((col) => (
           <div key={col.status} className="space-y-3">
             {(grouped[col.status]?.length ?? 0) === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
+              <div className="rounded-xl border border-dashed border-surface-border p-8 text-center">
                 <span className="material-symbols-outlined mb-2 text-3xl text-slate-400">
                   {col.emptyIcon}
                 </span>
@@ -169,7 +169,7 @@ export function PipelineBoard({
                   <span className="material-symbols-outlined text-lg text-slate-500">
                     {col.icon}
                   </span>
-                  <h3 className="text-sm font-bold text-text-main dark:text-white">{col.label}</h3>
+                  <h3 className="text-sm font-bold text-text-main">{col.label}</h3>
                 </div>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.badgeBg} ${col.badgeText}`}
@@ -181,7 +181,7 @@ export function PipelineBoard({
               {/* Column body */}
               <div className="flex-1 space-y-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 340px)" }}>
                 {items.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
+                  <div className="rounded-xl border border-dashed border-surface-border p-6 text-center">
                     <span className="material-symbols-outlined mb-2 text-2xl text-slate-400">
                       {col.emptyIcon}
                     </span>

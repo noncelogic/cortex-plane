@@ -61,26 +61,24 @@ function ConfirmDialog({
       />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-md rounded-xl border border-slate-200 bg-surface-light p-6 shadow-xl dark:border-slate-700 dark:bg-surface-dark">
+      <div className="relative w-full max-w-md rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
         {/* Icon */}
         <div className="mb-4 flex items-center gap-3">
           <div
             className={`flex size-10 items-center justify-center rounded-full ${
-              isApprove ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"
+              isApprove ? "bg-emerald-500/10" : "bg-red-500/10"
             }`}
           >
             <span
               className={`material-symbols-outlined text-[20px] ${
-                isApprove
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-red-600 dark:text-red-400"
+                isApprove ? "text-emerald-500" : "text-red-500"
               }`}
             >
               {isApprove ? "check_circle" : "cancel"}
             </span>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-text-main dark:text-white">
+            <h3 className="text-lg font-bold text-text-main">
               {isApprove ? "Approve Request" : "Reject Request"}
             </h3>
             <p className="text-sm text-text-muted">
@@ -95,7 +93,7 @@ function ConfirmDialog({
         <div className="mb-4">
           <label
             htmlFor="decision-reason"
-            className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400"
+            className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-text-muted"
           >
             Reason {isApprove ? "(optional)" : "(recommended)"}
           </label>
@@ -108,7 +106,7 @@ function ConfirmDialog({
               isApprove ? "Approved per standard review..." : "Denied due to security concerns..."
             }
             rows={3}
-            className="w-full rounded-lg border border-slate-200 bg-bg-light px-3 py-2 text-sm text-text-main placeholder-text-muted transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-bg-dark dark:text-white dark:placeholder-slate-500"
+            className="w-full rounded-lg border border-surface-border bg-bg-light px-3 py-2 text-sm text-text-main placeholder-text-muted transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
 
@@ -118,7 +116,7 @@ function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={submitting}
-            className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-muted transition-colors hover:bg-bg-light disabled:opacity-50 dark:hover:bg-white/5"
+            className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-muted transition-colors hover:bg-secondary disabled:opacity-50"
           >
             Cancel
           </button>
@@ -183,7 +181,7 @@ export function ApprovalActions({
         <button
           type="button"
           onClick={() => setDialog("reject")}
-          className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+          className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-500 transition-colors hover:bg-red-500/10"
         >
           Reject
         </button>

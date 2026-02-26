@@ -36,7 +36,7 @@ function iconBgForState(state: string, hasError: boolean): string {
   if (state === "READY") return "bg-emerald-500/10 text-emerald-500"
   if (state === "EXECUTING") return "bg-primary/10 text-primary"
   if (state === "DRAINING") return "bg-orange-500/10 text-orange-500"
-  return "bg-slate-200 text-slate-400 dark:bg-slate-800"
+  return "bg-secondary text-text-muted"
 }
 
 /** Tiny bar-chart sparkline using CSS. */
@@ -60,10 +60,10 @@ function ResourceBar({ label, percent }: { label: string; percent: number }): Re
   return (
     <div className="flex flex-col gap-0.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase text-slate-400">{label}</span>
-        <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100">{percent}%</span>
+        <span className="text-[10px] font-bold uppercase text-text-muted">{label}</span>
+        <span className="text-[10px] font-bold text-text-main">{percent}%</span>
       </div>
-      <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-secondary">
         <div
           className="h-full rounded-full bg-primary transition-all"
           style={{ width: `${percent}%` }}
@@ -78,7 +78,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
   const hasError = agent.lifecycleState === "TERMINATED" && !!agent.currentJobId
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-primary/10 dark:bg-slate-900/50">
+    <div className="rounded-xl border border-surface-border bg-surface-light p-4 shadow-sm">
       {/* Header: icon, name, badge */}
       <div className="mb-3 flex items-start justify-between">
         <div className="flex gap-3">
@@ -88,8 +88,8 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
             {getInitials(agent.name)}
           </div>
           <div className="min-w-0">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100">{agent.name}</h3>
-            <p className="truncate font-mono text-xs tracking-tight text-slate-500">
+            <h3 className="font-bold text-text-main">{agent.name}</h3>
+            <p className="truncate font-mono text-xs tracking-tight text-text-muted">
               ID: {agent.id.slice(0, 8)}
             </p>
           </div>
@@ -102,8 +102,8 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
         {metrics?.cpuHistory && metrics.cpuHistory.length > 0 ? (
           <Sparkline samples={metrics.cpuHistory} />
         ) : (
-          <div className="flex h-8 w-full items-center justify-center rounded bg-slate-100 dark:bg-slate-800/50">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          <div className="flex h-8 w-full items-center justify-center rounded bg-secondary">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
               No recent telemetry
             </span>
           </div>
@@ -120,12 +120,12 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
 
       {/* Current task */}
       {metrics?.currentTask && (
-        <p className="mb-3 truncate text-sm italic text-slate-400">{metrics.currentTask}</p>
+        <p className="mb-3 truncate text-sm italic text-text-muted">{metrics.currentTask}</p>
       )}
 
       {/* Footer: heartbeat + actions */}
-      <div className="flex items-center justify-between border-t border-slate-100 pt-3 dark:border-primary/5">
-        <span className="text-[10px] font-medium text-slate-400">
+      <div className="flex items-center justify-between border-t border-surface-border pt-3">
+        <span className="text-[10px] font-medium text-text-muted">
           {metrics?.lastHeartbeat ? relativeTime(metrics.lastHeartbeat) : agent.role}
         </span>
 
@@ -133,21 +133,21 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
         <div className="hidden gap-1.5 sm:flex">
           <Link
             href={`/agents/${agent.id}`}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-primary dark:hover:bg-slate-700"
+            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
             title="Open"
           >
             <span className="material-symbols-outlined text-lg leading-none">launch</span>
           </Link>
           <Link
             href={`/agents/${agent.id}`}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-primary dark:hover:bg-slate-700"
+            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
             title="Stream"
           >
             <span className="material-symbols-outlined text-lg leading-none">terminal</span>
           </Link>
           <Link
             href={`/agents/${agent.id}`}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-200 hover:text-primary dark:hover:bg-slate-700"
+            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
             title="Observe"
           >
             <span className="material-symbols-outlined text-lg leading-none">monitoring</span>
@@ -167,7 +167,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
           </button>
 
           {actionsOpen && (
-            <div className="absolute bottom-full right-0 z-10 mb-2 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+            <div className="absolute bottom-full right-0 z-10 mb-2 w-48 rounded-xl border border-surface-border bg-surface-light p-2 shadow-lg">
               <Link
                 href={`/agents/${agent.id}`}
                 className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-primary/5"
@@ -175,7 +175,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
                 <span className="material-symbols-outlined text-primary">launch</span>
                 <div className="text-left">
                   <span className="block text-sm font-bold">Open</span>
-                  <span className="text-xs text-slate-500">View details</span>
+                  <span className="text-xs text-text-muted">View details</span>
                 </div>
               </Link>
               <Link
@@ -185,7 +185,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
                 <span className="material-symbols-outlined text-emerald-500">stream</span>
                 <div className="text-left">
                   <span className="block text-sm font-bold">Stream</span>
-                  <span className="text-xs text-slate-500">Live logs</span>
+                  <span className="text-xs text-text-muted">Live logs</span>
                 </div>
               </Link>
               <Link
@@ -195,7 +195,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
                 <span className="material-symbols-outlined text-amber-500">monitoring</span>
                 <div className="text-left">
                   <span className="block text-sm font-bold">Observe</span>
-                  <span className="text-xs text-slate-500">Metrics</span>
+                  <span className="text-xs text-text-muted">Metrics</span>
                 </div>
               </Link>
             </div>

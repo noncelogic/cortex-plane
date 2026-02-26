@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 
-import { useTheme } from "@/components/theme-provider"
+import { UserMenu } from "@/components/layout/user-menu"
 
 /* ── Navigation items ────────────────────────────────── */
 const navItems = [
@@ -47,7 +47,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
   return (
     <nav
-      className={`hidden lg:flex flex-col shrink-0 border-r border-slate-200 dark:border-slate-800 bg-surface-light dark:bg-bg-dark transition-all duration-200 ${
+      className={`hidden lg:flex flex-col shrink-0 border-r border-surface-border bg-surface-light transition-all duration-200 ${
         collapsed ? "w-[68px]" : "w-64"
       }`}
     >
@@ -57,7 +57,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           <span className="text-sm font-bold text-primary-content">CP</span>
         </div>
         {!collapsed && (
-          <span className="font-display text-sm font-bold tracking-tight text-text-main dark:text-white">
+          <span className="font-display text-sm font-bold tracking-tight text-text-main">
             Cortex Plane
           </span>
         )}
@@ -75,7 +75,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 active
                   ? "bg-primary/10 text-primary border border-primary/20"
-                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent"
+                  : "text-text-muted hover:bg-secondary border border-transparent"
               }`}
             >
               <NavIcon name={icon} filled={active} />
@@ -89,7 +89,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       <button
         type="button"
         onClick={onToggle}
-        className="mx-3 mb-4 flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        className="mx-3 mb-4 flex items-center justify-center rounded-lg p-2 text-text-muted hover:bg-secondary transition-colors"
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         <NavIcon name={collapsed ? "chevron_right" : "chevron_left"} />
@@ -100,16 +100,14 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
 /* ── Top nav header ──────────────────────────────────── */
 function TopNav() {
-  const { theme, toggle } = useTheme()
-
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-surface-light/80 dark:bg-bg-dark/80 backdrop-blur-md px-4 lg:px-8">
+    <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-surface-border bg-surface-light/80 backdrop-blur-md px-4 lg:px-8">
       {/* Left: mobile brand */}
       <div className="flex items-center gap-3 lg:hidden">
         <div className="flex size-7 items-center justify-center rounded-lg bg-primary">
           <span className="text-xs font-bold text-primary-content">CP</span>
         </div>
-        <span className="font-display text-sm font-bold tracking-tight text-text-main dark:text-white">
+        <span className="font-display text-sm font-bold tracking-tight text-text-main">
           Cortex Plane
         </span>
       </div>
@@ -118,33 +116,23 @@ function TopNav() {
       <div className="hidden lg:flex items-center gap-2">
         <span className="inline-flex items-center gap-1.5">
           <span className="size-1.5 rounded-full bg-success animate-pulse" />
-          <span className="text-[10px] text-slate-500 font-medium uppercase">System Online</span>
+          <span className="text-[10px] text-text-muted font-medium uppercase">System Online</span>
         </span>
       </div>
 
       {/* Right actions */}
       <div className="flex items-center gap-2">
-        {/* Theme toggle */}
-        <button
-          type="button"
-          onClick={toggle}
-          className="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors"
-          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-        >
-          <NavIcon name={theme === "dark" ? "light_mode" : "dark_mode"} />
-        </button>
-
         {/* Notifications placeholder */}
         <button
           type="button"
-          className="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors"
+          className="flex size-8 items-center justify-center rounded-lg text-text-muted hover:bg-secondary hover:text-primary transition-colors"
           aria-label="Notifications"
         >
           <NavIcon name="notifications" />
         </button>
 
-        {/* User menu placeholder */}
-        <div className="size-8 rounded-full bg-slate-200 dark:bg-slate-700" />
+        {/* User menu with theme toggle */}
+        <UserMenu />
       </div>
     </header>
   )
@@ -155,7 +143,7 @@ function BottomTabs() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-between border-t border-slate-200 dark:border-slate-800 bg-surface-light/95 dark:bg-bg-dark/95 backdrop-blur-md px-6 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-between border-t border-surface-border bg-surface-light/95 backdrop-blur-md px-6 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden">
       {navItems.map(({ href, label, icon }) => {
         const active = isActive(pathname, href)
         return (

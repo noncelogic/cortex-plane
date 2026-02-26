@@ -60,7 +60,7 @@ export function ContentFilters({
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
             placeholder="Search content..."
-            className="rounded-lg border-none bg-slate-100 py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/50 dark:bg-slate-800"
+            className="rounded-lg border-none bg-secondary py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/50"
           />
         </div>
 
@@ -74,7 +74,7 @@ export function ContentFilters({
             onChange={(e) =>
               onChange({ ...filters, type: e.target.value as ContentType | "ALL" })
             }
-            className="cursor-pointer appearance-none rounded-lg border-none bg-slate-100 py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50 dark:bg-slate-800"
+            className="cursor-pointer appearance-none rounded-lg border-none bg-secondary py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50"
           >
             {TYPE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -92,7 +92,7 @@ export function ContentFilters({
           <select
             value={filters.agent}
             onChange={(e) => onChange({ ...filters, agent: e.target.value })}
-            className="cursor-pointer appearance-none rounded-lg border-none bg-slate-100 py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50 dark:bg-slate-800"
+            className="cursor-pointer appearance-none rounded-lg border-none bg-secondary py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50"
           >
             <option value="ALL">All Agents</option>
             {agentNames.map((name) => (
@@ -104,8 +104,8 @@ export function ContentFilters({
         </div>
 
         {/* Result count */}
-        <div className="ml-auto text-sm text-slate-500 dark:text-slate-400">
-          <span className="font-bold text-slate-900 dark:text-slate-100">{totalCount}</span>{" "}
+        <div className="ml-auto text-sm text-text-muted">
+          <span className="font-bold text-text-main">{totalCount}</span>{" "}
           {totalCount === 1 ? "piece" : "pieces"}
         </div>
       </div>

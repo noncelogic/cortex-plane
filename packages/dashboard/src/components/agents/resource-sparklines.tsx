@@ -31,7 +31,7 @@ function Sparkline({
   if (data.length < 2) {
     return (
       <div
-        className="flex items-center justify-center rounded bg-slate-200 dark:bg-primary/20"
+        className="flex items-center justify-center rounded bg-secondary"
         style={{ width, height }}
       >
         <span className="text-[9px] text-slate-400">No data</span>
@@ -108,7 +108,7 @@ export function ResourceSparklines({ metrics }: ResourceSparklinesProps): React.
       {metrics.map((metric) => (
         <div
           key={metric.label}
-          className="rounded-xl border border-slate-200 bg-white p-4 dark:border-primary/10 dark:bg-primary/5"
+          className="rounded-xl border border-surface-border bg-surface-light p-4"
         >
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
@@ -128,7 +128,7 @@ export function ResourceSparklines({ metrics }: ResourceSparklinesProps): React.
             )}
           </div>
           <div className="mb-2 flex items-baseline gap-1">
-            <span className="text-xl font-bold text-slate-900 dark:text-white">{metric.value}</span>
+            <span className="text-xl font-bold text-text-main">{metric.value}</span>
             <span className="text-sm font-normal text-slate-400">{metric.unit}</span>
           </div>
           <Sparkline samples={metric.samples} width={140} height={28} />
