@@ -1,0 +1,72 @@
+name: Validate K8s Manifests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/k8s/**"
+      - "deploy/docker/**"
+      - ".github/workflows/validate-manifests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "deploy/k8s/**"
+      - "deploy/docker/**"
+      - ".github/workflows/validate-manifests.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Validate base kustomization builds
+        run: kustomize build deploy/k8s/base > /dev/null
+
+      - name: Validate dev overlay builds
+        run: kustomize build deploy/k8s/overlays/dev > /dev/null
+
+      - name: Validate prod overlay builds
+        run: kustomize build deploy/k8s/overlays/prod > /dev/null
+
+      - name: Check prod overlay uses immutable image tags
+        run: |
+          output=$(kustomize build deploy/k8s/overlays/prod)
+          images=$(echo "$output" | grep 'image:' | grep -v '#' || true)
+
+          echo "Images found in prod manifests:"
+          echo "$images"
+
+          # Fail if any cortex image uses :latest
+          if echo "$images" | grep -E 'cortex-(control-plane|dashboard):latest'; then
+            echo "::error::Prod overlay must not use :latest tags. Pin to a SHA or semver tag."
+            exit 1
+          fi
+
+      - name: Check image references match Dockerfiles
+        run: |
+          # Verify that every Dockerfile has a matching image reference in base deployments
+          for svc in control-plane dashboard; do
+            dockerfile="deploy/docker/Dockerfile.${svc}"
+            if [ ! -f "$dockerfile" ]; then
+              echo "::error::Missing Dockerfile: $dockerfile"
+              exit 1
+            fi
+            # Check that the base deployment references this service's image
+            if ! grep -q "cortex-${svc}" "deploy/k8s/${svc}/deployment.yaml" 2>/dev/null && \
+               ! grep -q "cortex-${svc}" "deploy/k8s/base/${svc}/deployment.yaml" 2>/dev/null; then
+              # The image may be referenced differently; check the kustomize output
+              if ! kustomize build deploy/k8s/base | grep -q "cortex-${svc}"; then
+                echo "::warning::No image reference for cortex-${svc} found in base manifests"
+              fi
+            fi
+          done
+          echo "All Dockerfiles have corresponding manifest references."

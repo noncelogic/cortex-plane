@@ -25,7 +25,9 @@
     "docker:logs": "docker compose --profile full logs -f",
     "db:seed": "pnpm --filter @cortex/control-plane run db:seed",
     "smoke": "./scripts/smoke-test.sh",
-    "preflight": "./scripts/preflight-deploy.sh"
+    "smoke:cluster": "./scripts/smoke-test-cluster.sh",
+    "preflight": "./scripts/preflight-deploy.sh",
+    "rollback": "./scripts/rollback-cluster.sh"
   },
   "devDependencies": {
     "@cortex/config": "workspace:*",

@@ -8,11 +8,11 @@ Step-by-step runbook: blank Ubuntu VM to a healthy Cortex Plane cluster on k3s.
 
 Minimum specs for a single-node deployment:
 
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
-| vCPU     | 4       | 6           |
-| RAM      | 8 GB    | 16 GB       |
-| Disk     | 40 GB   | 80 GB       |
+| Resource | Minimum          | Recommended      |
+| -------- | ---------------- | ---------------- |
+| vCPU     | 4                | 6                |
+| RAM      | 8 GB             | 16 GB            |
+| Disk     | 40 GB            | 80 GB            |
 | OS       | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
 
 ```bash
@@ -177,6 +177,7 @@ kubectl apply -k deploy/k8s/qdrant/ -n cortex-plane
 ```
 
 This creates:
+
 - `qdrant-data` PVC (10Gi, `local-path` storage class)
 - `qdrant-config` ConfigMap (production.yaml tuning)
 - Deployment (`qdrant/qdrant:v1.13.2` with liveness/readiness probes on port 6333)
@@ -199,6 +200,7 @@ kubectl apply -k deploy/k8s/control-plane/ -n cortex-plane
 ```
 
 This creates:
+
 - `control-plane-config` ConfigMap (PORT, HOST, NODE_ENV, LOG_LEVEL, QDRANT_URL, GRAPHILE_WORKER_CONCURRENCY)
 - Deployment (`noncelogic/cortex-control-plane:latest`, port 4000)
 - Service (ClusterIP, port 4000)
@@ -229,6 +231,7 @@ kubectl apply -k deploy/k8s/dashboard/ -n cortex-plane
 ```
 
 This creates:
+
 - `dashboard-config` ConfigMap (HOSTNAME, PORT, NODE_ENV, CORTEX_API_URL, NEXT_PUBLIC_CORTEX_API_URL)
 - Deployment (`noncelogic/cortex-dashboard:latest`, port 3000)
 - Service (ClusterIP, port 3000)
@@ -337,16 +340,20 @@ kubectl apply -f cluster-issuer.yaml -f ingress.yaml
 
 ## 11. Verify with Smoke Test
 
-Port-forward if you do not have ingress set up yet:
+Run the cluster smoke test (uses kubectl port-forward internally):
+
+```bash
+./scripts/smoke-test-cluster.sh cortex-plane
+# or: make smoke-cluster NS=cortex-plane
+```
+
+This checks pod readiness, API health, dashboard reachability, DB connectivity, and image tag immutability.
+
+Alternatively, port-forward manually and run the compose-oriented smoke test:
 
 ```bash
 kubectl -n cortex-plane port-forward svc/control-plane 4000:4000 &
 kubectl -n cortex-plane port-forward svc/dashboard 3000:3000 &
-```
-
-Run the smoke test from the repo root:
-
-```bash
 ./scripts/smoke-test.sh http://localhost:4000
 ```
 
@@ -365,10 +372,10 @@ curl -sf http://localhost:3000/          # expect 200
 
 k3s ships with the `local-path` provisioner by default. This stores PV data on the node filesystem under `/var/lib/rancher/k3s/storage/`.
 
-| PVC           | Default Size | Storage Class | Mount Path             |
-|---------------|-------------|---------------|------------------------|
-| `qdrant-data` | 10Gi        | `local-path`  | `/qdrant/storage`      |
-| `postgres-data` (if in-cluster) | 10Gi | `local-path` | `/var/lib/postgresql/data` |
+| PVC                             | Default Size | Storage Class | Mount Path                 |
+| ------------------------------- | ------------ | ------------- | -------------------------- |
+| `qdrant-data`                   | 10Gi         | `local-path`  | `/qdrant/storage`          |
+| `postgres-data` (if in-cluster) | 10Gi         | `local-path`  | `/var/lib/postgresql/data` |
 
 **Backup strategy:** Snapshot the Proxmox VM disk, or use `kubectl exec` to run `pg_dump` and copy Qdrant snapshots.
 
@@ -378,8 +385,8 @@ For production, consider a CSI driver with proper backup support (e.g., Longhorn
 
 ## 13. Resource Requirements Summary
 
-| Component      | CPU Request | CPU Limit | Memory Request | Memory Limit |
-|---------------|-------------|-----------|----------------|--------------|
+| Component     | CPU Request | CPU Limit | Memory Request | Memory Limit |
+| ------------- | ----------- | --------- | -------------- | ------------ |
 | control-plane | 250m        | 1000m     | 256Mi          | 512Mi        |
 | dashboard     | 100m        | 500m      | 128Mi          | 256Mi        |
 | qdrant        | 500m        | 1000m     | 1Gi            | 2Gi          |
@@ -390,7 +397,39 @@ The 4 vCPU / 8 GB minimum leaves headroom for k3s system components and the ingr
 
 ---
 
-## 14. Common Troubleshooting
+## 14. Rollback
+
+Roll back control-plane and dashboard to their previous revision:
+
+```bash
+./scripts/rollback-cluster.sh --namespace cortex-plane
+# or: make rollback NS=cortex-plane
+```
+
+Roll to a specific known-good image tag:
+
+```bash
+./scripts/rollback-cluster.sh --namespace cortex-plane --tag <SHA>
+```
+
+Always run smoke tests after a rollback:
+
+```bash
+./scripts/smoke-test-cluster.sh cortex-plane
+```
+
+> **Note:** Infrastructure deployments (Postgres, Qdrant) are not rolled back by this script.
+> Rolling those back requires manual intervention and may cause data loss.
+
+---
+
+## 15. First Deploy Guide
+
+For a complete step-by-step first deployment with the full command sequence, see [first-deploy.md](./first-deploy.md).
+
+---
+
+## 16. Common Troubleshooting
 
 ### Pod stuck in CrashLoopBackOff
 

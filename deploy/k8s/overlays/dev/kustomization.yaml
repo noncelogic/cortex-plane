@@ -21,7 +21,9 @@ patches:
         value: "development"
 
 images:
-  - name: noncelogic/cortex-control-plane
+  # Dev overlay: "latest" is acceptable here for local iteration.
+  # For reproducible dev clusters, switch to a SHA tag.
+  - name: ghcr.io/noncelogic/cortex-control-plane
     newTag: latest
-  - name: noncelogic/cortex-dashboard
+  - name: ghcr.io/noncelogic/cortex-dashboard
     newTag: latest
