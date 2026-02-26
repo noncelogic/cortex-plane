@@ -17,10 +17,13 @@
     "db:migrate": "tsx src/db/migrate.ts up",
     "db:migrate:down": "tsx src/db/migrate.ts down",
     "db:migrate:down-all": "tsx src/db/migrate.ts down-all",
-    "db:migrate:create": "tsx src/db/migrate-create.ts"
+    "db:migrate:create": "tsx src/db/migrate-create.ts",
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@cortex/shared": "workspace:*",
+    "@fastify/cors": "^11.2.0",
     "@fastify/env": "^5.0.0",
     "@fastify/websocket": "^11.0.0",
     "@kubernetes/client-node": "^1.4.0",
@@ -29,6 +32,7 @@
     "fastify": "^5.2.0",
     "graphile-worker": "^0.16.0",
     "kysely": "^0.27.0",
+    "openai": "^6.25.0",
     "pg": "^8.13.0",
     "pino": "^9.6.0",
     "ws": "^8.19.0",

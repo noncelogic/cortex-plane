@@ -77,7 +77,7 @@ interface ScreenshotStreamBody {
 
 export interface ObservationRouteDeps {
   sseManager: SSEConnectionManager
-  lifecycleManager: AgentLifecycleManager
+  lifecycleManager?: AgentLifecycleManager
   observationService: BrowserObservationService
   authHandoffService?: AuthHandoffService
   traceCaptureService?: TraceCaptureService
@@ -99,11 +99,12 @@ export function observationRoutes(deps: ObservationRouteDeps) {
   return function register(app: FastifyInstance): void {
     const authHook = createStreamAuth(app.db)
 
-    // Helper: verify agent exists and is alive
+    // Helper: verify agent exists and is alive (if lifecycle manager is available)
     function getAgentOrFail(
       agentId: string,
       reply: FastifyReply,
     ): boolean {
+      if (!lifecycleManager) return true // No lifecycle manager — allow passthrough
       const state = lifecycleManager.getAgentState(agentId)
       if (!state) {
         reply.status(404).send({
@@ -166,9 +167,9 @@ export function observationRoutes(deps: ObservationRouteDeps) {
       },
       async (socket, request) => {
         const { agentId } = request.params
-        const state = lifecycleManager.getAgentState(agentId)
+        const state = lifecycleManager?.getAgentState(agentId)
 
-        if (!state || state === "TERMINATED") {
+        if (lifecycleManager && (!state || state === "TERMINATED")) {
           socket.close(1008, "Agent not available")
           return
         }
@@ -418,8 +419,8 @@ export function observationRoutes(deps: ObservationRouteDeps) {
         const { agentId } = request.params
         if (!getAgentOrFail(agentId, reply)) return
 
-        const agentState = lifecycleManager.getAgentState(agentId)
-        if (agentState !== "EXECUTING") {
+        const agentState = lifecycleManager?.getAgentState(agentId)
+        if (lifecycleManager && agentState !== "EXECUTING") {
           return reply.status(409).send({
             error: "conflict",
             message: `Cannot forward annotation: agent is in ${agentState} state, must be EXECUTING`,
@@ -438,7 +439,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
         // Inject as a steering message via lifecycle manager
         const steerMessageId = randomUUID()
         try {
-          lifecycleManager.steer({
+          lifecycleManager?.steer({
             id: steerMessageId,
             agentId,
             message: `[ANNOTATION] ${prompt}`,
@@ -504,8 +505,8 @@ export function observationRoutes(deps: ObservationRouteDeps) {
         const { agentId } = request.params
         if (!getAgentOrFail(agentId, reply)) return
 
-        const agentState = lifecycleManager.getAgentState(agentId)
-        if (agentState !== "EXECUTING") {
+        const agentState = lifecycleManager?.getAgentState(agentId)
+        if (lifecycleManager && agentState !== "EXECUTING") {
           return reply.status(409).send({
             error: "conflict",
             message: `Cannot steer: agent is in ${agentState} state, must be EXECUTING`,
@@ -524,7 +525,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
         // Inject as a steering message
         const steerMessageId = randomUUID()
         try {
-          lifecycleManager.steer({
+          lifecycleManager?.steer({
             id: steerMessageId,
             agentId,
             message: `[STEER] ${prompt}`,
