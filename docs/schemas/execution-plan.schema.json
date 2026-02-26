@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cortex-plane.dev/schemas/execution-plan.schema.json",
+  "title": "Execution Plan Document",
+  "type": "object",
+  "required": ["schema_version", "plan_id", "title", "steps"],
+  "properties": {
+    "schema_version": { "const": "v1" },
+    "plan_id": { "type": "string" },
+    "title": { "type": "string", "minLength": 1 },
+    "metadata": { "type": "object", "additionalProperties": true },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string" },
+            "uniqueItems": true
+          },
+          "checkpoint_key": { "type": "string" },
+          "rollback_hint": { "type": "string" },
+          "approval_gate": {
+            "type": "object",
+            "required": ["required"],
+            "properties": {
+              "required": { "type": "boolean" },
+              "approver_roles": {
+                "type": "array",
+                "items": { "type": "string" },
+                "uniqueItems": true
+              },
+              "timeout_seconds": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
