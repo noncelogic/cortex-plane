@@ -76,6 +76,8 @@ export interface ChannelAdapter {
   start(): Promise<void>
   stop(): Promise<void>
   healthCheck(): Promise<boolean>
+  /** Optional last channel heartbeat/activity timestamp for stale-connection detection. */
+  getLastHeartbeatAt?(): Date | undefined
 
   sendMessage(chatId: string, message: OutboundMessage): Promise<string>
   sendApprovalRequest(chatId: string, request: ApprovalNotification): Promise<string>
