@@ -89,6 +89,9 @@ const ANTIGRAVITY_TOKEN_URL = "https://oauth2.googleapis.com/token"
 const OPENAI_CODEX_AUTH_URL = "https://auth.openai.com/oauth/authorize"
 const OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 
+const ANTHROPIC_AUTH_URL = "https://claude.ai/oauth/authorize"
+const ANTHROPIC_TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
+
 export interface OAuthUrls {
   authUrl: string
   tokenUrl: string
@@ -118,6 +121,11 @@ function getProviderUrls(provider: string, config?: OAuthProviderConfig): OAuthU
       return {
         authUrl: config?.authUrl ?? OPENAI_CODEX_AUTH_URL,
         tokenUrl: config?.tokenUrl ?? OPENAI_CODEX_TOKEN_URL,
+      }
+    case "anthropic":
+      return {
+        authUrl: config?.authUrl ?? ANTHROPIC_AUTH_URL,
+        tokenUrl: config?.tokenUrl ?? ANTHROPIC_TOKEN_URL,
       }
     default:
       throw new Error(`Unknown OAuth provider: ${provider}`)
@@ -163,7 +171,8 @@ export function buildAuthorizeUrl(params: AuthorizeUrlParams): string {
     case "google-antigravity":
       url.searchParams.set(
         "scope",
-        scopes?.join(" ") ?? "openid email https://www.googleapis.com/auth/cloud-platform",
+        scopes?.join(" ") ??
+          "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs",
       )
       url.searchParams.set("access_type", "offline")
       url.searchParams.set("prompt", "consent")
@@ -175,8 +184,19 @@ export function buildAuthorizeUrl(params: AuthorizeUrlParams): string {
     case "openai-codex":
       url.searchParams.set(
         "scope",
-        scopes?.join(" ") ?? "openid profile email model.read model.request",
+        scopes?.join(" ") ?? "openid profile email offline_access",
       )
+      if (codeChallenge) {
+        url.searchParams.set("code_challenge", codeChallenge)
+        url.searchParams.set("code_challenge_method", "S256")
+      }
+      break
+    case "anthropic":
+      url.searchParams.set(
+        "scope",
+        scopes?.join(" ") ?? "org:create_api_key user:profile user:inference",
+      )
+      url.searchParams.set("code", "true")
       if (codeChallenge) {
         url.searchParams.set("code_challenge", codeChallenge)
         url.searchParams.set("code_challenge_method", "S256")
@@ -214,6 +234,31 @@ export interface TokenExchangeParams {
 export async function exchangeCodeForTokens(params: TokenExchangeParams): Promise<TokenResponse> {
   const { provider, config, code, callbackUrl, codeVerifier } = params
   const urls = getProviderUrls(provider, config)
+
+  // Anthropic uses JSON body for token exchange
+  if (provider === "anthropic") {
+    const jsonBody: Record<string, string> = {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: callbackUrl,
+      client_id: config.clientId,
+    }
+    if (config.clientSecret) jsonBody.client_secret = config.clientSecret
+    if (codeVerifier) jsonBody.code_verifier = codeVerifier
+
+    const res = await fetch(urls.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jsonBody),
+    })
+
+    if (!res.ok) {
+      const errorBody = await res.text()
+      throw new Error(`Token exchange failed for ${provider}: ${res.status} ${errorBody}`)
+    }
+
+    return (await res.json()) as TokenResponse
+  }
 
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -263,6 +308,29 @@ export interface RefreshTokenParams {
 export async function refreshAccessToken(params: RefreshTokenParams): Promise<TokenResponse> {
   const { provider, config, refreshToken } = params
   const urls = getProviderUrls(provider, config)
+
+  // Anthropic uses JSON body for token refresh
+  if (provider === "anthropic") {
+    const jsonBody: Record<string, string> = {
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: config.clientId,
+    }
+    if (config.clientSecret) jsonBody.client_secret = config.clientSecret
+
+    const res = await fetch(urls.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jsonBody),
+    })
+
+    if (!res.ok) {
+      const errorBody = await res.text()
+      throw new Error(`Token refresh failed for ${provider}: ${res.status} ${errorBody}`)
+    }
+
+    return (await res.json()) as TokenResponse
+  }
 
   const body = new URLSearchParams({
     grant_type: "refresh_token",

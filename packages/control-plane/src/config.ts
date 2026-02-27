@@ -33,6 +33,7 @@ export interface AuthOAuthConfig {
   github?: OAuthProviderConfig
   googleAntigravity?: OAuthProviderConfig
   openaiCodex?: OAuthProviderConfig
+  anthropic?: OAuthProviderConfig
 }
 
 export interface Config {
@@ -88,6 +89,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       github: parseOAuthProvider(env, "GITHUB"),
       googleAntigravity: parseOAuthProvider(env, "GOOGLE_ANTIGRAVITY"),
       openaiCodex: parseOAuthProvider(env, "OPENAI_CODEX"),
+      anthropic: parseOAuthProvider(env, "ANTHROPIC"),
     }
   }
 

@@ -31,6 +31,7 @@ import {
   generateUserKey,
   maskApiKey,
 } from "./credential-encryption.js"
+import { CODE_PASTE_PROVIDERS } from "./oauth-providers.js"
 import { refreshAccessToken, type TokenResponse } from "./oauth-service.js"
 
 /** Provider metadata for the "Connected Providers" UI. */
@@ -57,8 +58,8 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
   {
     id: "anthropic",
     name: "Anthropic",
-    authType: "api_key",
-    description: "Claude models via direct API key",
+    authType: "oauth",
+    description: "Claude models via OAuth",
   },
   {
     id: "openai",
@@ -443,6 +444,20 @@ export class CredentialService {
         return this.authConfig.googleAntigravity
       case "openai-codex":
         return this.authConfig.openaiCodex
+      case "anthropic": {
+        // Anthropic config comes from hardcoded registry (or env override)
+        if (this.authConfig.anthropic) return this.authConfig.anthropic
+        const reg = CODE_PASTE_PROVIDERS["anthropic"]
+        if (reg) {
+          return {
+            clientId: reg.clientId,
+            clientSecret: reg.clientSecret,
+            authUrl: reg.authUrl,
+            tokenUrl: reg.tokenUrl,
+          }
+        }
+        return undefined
+      }
       default:
         return undefined
     }
