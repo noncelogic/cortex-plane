@@ -60,11 +60,11 @@ export class DiscordAdapter implements ChannelAdapter {
     this.started = false
   }
 
-  async healthCheck(): Promise<boolean> {
+  healthCheck(): Promise<boolean> {
     try {
-      return this.client.ws.ping >= 0
+      return Promise.resolve(this.client.ws.ping >= 0)
     } catch {
-      return false
+      return Promise.resolve(false)
     }
   }
 
@@ -160,12 +160,12 @@ export class DiscordAdapter implements ChannelAdapter {
   // Voice channel presence (stub for future integration)
   // ──────────────────────────────────────────────────
 
-  async joinVoiceChannel(_channelId: string): Promise<void> {
-    throw new Error("Voice channel support is not yet implemented")
+  joinVoiceChannel(_channelId: string): Promise<void> {
+    return Promise.reject(new Error("Voice channel support is not yet implemented"))
   }
 
-  async leaveVoiceChannel(_channelId: string): Promise<void> {
-    throw new Error("Voice channel support is not yet implemented")
+  leaveVoiceChannel(_channelId: string): Promise<void> {
+    return Promise.reject(new Error("Voice channel support is not yet implemented"))
   }
 
   // ──────────────────────────────────────────────────

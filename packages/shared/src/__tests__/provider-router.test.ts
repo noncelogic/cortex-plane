@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { CircuitBreakerConfig } from "../backends/circuit-breaker.js"
 import {
-  ProviderRouter,
   type ProviderEntry,
+  ProviderRouter,
   type RoutingEvent,
 } from "../backends/provider-router.js"
 import type {
@@ -128,7 +128,7 @@ describe("ProviderRouter — primary selection", () => {
 
 describe("ProviderRouter — failover on circuit-open", () => {
   it("skips provider with OPEN circuit and routes to next", () => {
-    let time = 0
+    const time = 0
     const router = createRouter(() => time)
     addProvider(router, "primary", 1, { failureThreshold: 1, openDurationMs: 30_000 })
     const fallback = addProvider(router, "fallback", 2)
@@ -142,7 +142,7 @@ describe("ProviderRouter — failover on circuit-open", () => {
   })
 
   it("emits route_skipped event when skipping OPEN circuit", () => {
-    let time = 0
+    const time = 0
     const router = createRouter(() => time)
     addProvider(router, "primary", 1, { failureThreshold: 1, openDurationMs: 30_000 })
     addProvider(router, "fallback", 2)
@@ -193,7 +193,7 @@ describe("ProviderRouter — failover on circuit-open", () => {
 
 describe("ProviderRouter — all circuits open", () => {
   it("throws when all circuits are open", () => {
-    let time = 0
+    const time = 0
     const router = createRouter(() => time)
     addProvider(router, "a", 1, { failureThreshold: 1, openDurationMs: 30_000 })
     addProvider(router, "b", 2, { failureThreshold: 1, openDurationMs: 30_000 })
@@ -205,7 +205,7 @@ describe("ProviderRouter — all circuits open", () => {
   })
 
   it("emits route_exhausted event when all circuits open", () => {
-    let time = 0
+    const time = 0
     const router = createRouter(() => time)
     addProvider(router, "a", 1, { failureThreshold: 1, openDurationMs: 30_000 })
 
@@ -274,7 +274,7 @@ describe("ProviderRouter — routeWithFailover", () => {
   })
 
   it("emits failover event when falling back", () => {
-    let time = 0
+    const time = 0
     const router = createRouter(() => time)
     addProvider(router, "primary", 1, { failureThreshold: 1, openDurationMs: 30_000 })
     addProvider(router, "secondary", 2)

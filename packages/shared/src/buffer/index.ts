@@ -1,3 +1,5 @@
+export { BufferReader, scanBuffer } from "./reader.js"
+export { recoverFromBuffer } from "./recovery.js"
 export type {
   BufferEvent,
   BufferScanResult,
@@ -6,5 +8,3 @@ export type {
   SessionMetadata,
 } from "./types.js"
 export { BufferWriter } from "./writer.js"
-export { BufferReader, scanBuffer } from "./reader.js"
-export { recoverFromBuffer } from "./recovery.js"

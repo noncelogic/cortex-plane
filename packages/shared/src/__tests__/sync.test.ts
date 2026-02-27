@@ -1,12 +1,13 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
 import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { QdrantMemoryClient } from "../memory/client.js"
-import type { MemoryRecord } from "../memory/types.js"
-import { batchImport, deleteFile, syncFile, type EmbeddingFn } from "../memory/sync/sync.js"
 import { loadState, type SyncState } from "../memory/sync/state.js"
+import { batchImport, deleteFile, type EmbeddingFn, syncFile } from "../memory/sync/sync.js"
+import type { MemoryRecord } from "../memory/types.js"
 
 /** Create a mock QdrantMemoryClient. */
 function mockQdrant(): QdrantMemoryClient {
@@ -64,7 +65,7 @@ describe("syncFile", () => {
     expect(upsertCall[1]).toHaveLength(2)
 
     // All records should have source = 'markdown_sync'
-    for (const record of upsertCall[0] as MemoryRecord[]) {
+    for (const record of upsertCall[0]) {
       expect(record.source).toBe("markdown_sync")
       expect(record.confidence).toBe(1.0)
     }
@@ -133,13 +134,13 @@ describe("syncFile", () => {
     writeFileSync(join(tempDir, "test.md"), content)
 
     const first = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, { entries: {} })
-    const firstRecords = vi.mocked(qdrant.upsert).mock.calls[0]![0] as MemoryRecord[]
+    const firstRecords = vi.mocked(qdrant.upsert).mock.calls[0]![0]
     const firstId = firstRecords[0]!.id
 
     // Reset mock and sync again from empty state — should produce same ID
     vi.mocked(qdrant.upsert).mockClear()
     const second = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, { entries: {} })
-    const secondRecords = vi.mocked(qdrant.upsert).mock.calls[0]![0] as MemoryRecord[]
+    const secondRecords = vi.mocked(qdrant.upsert).mock.calls[0]![0]
     const secondId = secondRecords[0]!.id
 
     expect(firstId).toBe(secondId)

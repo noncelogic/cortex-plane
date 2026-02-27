@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
-import { watch, type FSWatcher } from "chokidar"
+import { type FSWatcher, watch } from "chokidar"
 
 export interface WatcherConfig {
   /** Glob patterns to watch, relative to watchDir. Default: ['*.md', 'memory/*.md'] */

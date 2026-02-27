@@ -5,9 +5,9 @@
  * Initialization is idempotent — calling initTracing() multiple times is safe.
  */
 
-import { DiagConsoleLogger, DiagLogLevel, diag } from "@opentelemetry/api"
+import { diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api"
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http"
 import { Resource } from "@opentelemetry/resources"
-import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions"
 import {
   BasicTracerProvider,
   BatchSpanProcessor,
@@ -15,11 +15,11 @@ import {
   SimpleSpanProcessor,
   type SpanExporter,
 } from "@opentelemetry/sdk-trace-base"
-import { TraceIdRatioBasedSampler, AlwaysOnSampler } from "@opentelemetry/sdk-trace-base"
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http"
+import { AlwaysOnSampler, TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-base"
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions"
 
-export { CortexAttributes, withSpan, injectTraceContext, extractTraceContext } from "./spans.js"
-export { TracingLogger, type LogLevel, type TracingLoggerOptions } from "./logger.js"
+export { type LogLevel, TracingLogger, type TracingLoggerOptions } from "./logger.js"
+export { CortexAttributes, extractTraceContext, injectTraceContext, withSpan } from "./spans.js"
 
 // ──────────────────────────────────────────────────
 // Config types

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   CircuitBreaker,
-  DEFAULT_CIRCUIT_BREAKER_CONFIG,
   type CircuitBreakerConfig,
+  DEFAULT_CIRCUIT_BREAKER_CONFIG,
 } from "../backends/circuit-breaker.js"
 
 // ──────────────────────────────────────────────────
@@ -156,7 +156,7 @@ describe("CircuitBreaker — sliding window", () => {
   })
 
   it("successes in window count toward total calls", () => {
-    let time = 0
+    const time = 0
     const breaker = createBreaker({ failureThreshold: 10, windowMs: 5000 }, () => time)
 
     breaker.recordSuccess()
@@ -455,7 +455,7 @@ describe("CircuitBreaker — full lifecycle", () => {
 
 describe("CircuitBreaker — getStats()", () => {
   it("reports correct stats after various operations", () => {
-    let time = 1000
+    const time = 1000
     const breaker = createBreaker({ failureThreshold: 10, windowMs: 60_000 }, () => time)
 
     breaker.recordSuccess()

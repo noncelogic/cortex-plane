@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import {
   initTracing,
-  shutdownTracing,
   isTracingInitialized,
   resetTracing,
+  shutdownTracing,
 } from "../tracing/index.js"
 
 describe("initTracing", () => {

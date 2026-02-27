@@ -4,13 +4,13 @@
  * Uses NodeTracerProvider which registers an AsyncHooks context manager,
  * enabling proper context propagation needed by startActiveSpan.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { trace, SpanStatusCode } from "@opentelemetry/api"
+import { SpanStatusCode, trace } from "@opentelemetry/api"
 import {
-  NodeTracerProvider,
   InMemorySpanExporter,
+  NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 import { CortexAttributes, extractTraceContext } from "../tracing/spans.js"
 

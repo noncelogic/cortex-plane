@@ -1,13 +1,13 @@
 export {
   CircuitBreaker,
-  DEFAULT_CIRCUIT_BREAKER_CONFIG,
   type CircuitBreakerConfig,
   type CircuitState,
   type CircuitStats,
+  DEFAULT_CIRCUIT_BREAKER_CONFIG,
 } from "./circuit-breaker.js"
 export {
-  ProviderRouter,
   type ProviderEntry,
+  ProviderRouter,
   type RouteResult,
   type RoutingEvent,
   type RoutingEventListener,

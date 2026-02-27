@@ -1,8 +1,8 @@
 import { glob, readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
-import type { MemoryRecord } from "../types.js"
 import type { QdrantMemoryClient } from "../client.js"
+import type { MemoryRecord } from "../types.js"
 import { chunkMarkdown, type MarkdownChunk } from "./chunker.js"
 import { applyDiff, diff, loadState, saveState, type SyncState } from "./state.js"
 import { createWatcher, type ManagedWatcher } from "./watcher.js"

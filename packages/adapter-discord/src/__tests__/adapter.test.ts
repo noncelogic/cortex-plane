@@ -7,7 +7,7 @@ import type { DiscordConfig } from "../config.js"
 // Mock discord.js before importing DiscordAdapter
 // ──────────────────────────────────────────────────
 
-type EventHandler = (...args: unknown[]) => void
+type EventHandler = (...args: unknown[]) => void | Promise<void>
 
 const mockLogin = vi.fn().mockResolvedValue("token")
 const mockDestroy = vi.fn().mockResolvedValue(undefined)
@@ -58,12 +58,12 @@ vi.mock("discord.js", () => {
       return this
     }
 
-    login(token: string) {
-      return mockLogin(token)
+    login(token: string): Promise<string> {
+      return mockLogin(token) as Promise<string>
     }
 
-    destroy() {
-      return mockDestroy()
+    destroy(): Promise<void> {
+      return mockDestroy() as Promise<void>
     }
   }
 
@@ -72,7 +72,7 @@ vi.mock("discord.js", () => {
 
     addComponents(...args: unknown[]) {
       if (Array.isArray(args[0])) {
-        this.components.push(...args[0])
+        this.components.push(...(args[0] as unknown[]))
       } else {
         this.components.push(...args)
       }

@@ -22,5 +22,11 @@
       "cache": false
     }
   },
-  "globalEnv": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"]
+  "globalEnv": [
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_ALLOWED_USERS",
+    "DISCORD_BOT_TOKEN",
+    "DISCORD_APPLICATION_ID",
+    "DISCORD_ALLOWED_GUILDS"
+  ]
 }

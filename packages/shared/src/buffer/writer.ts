@@ -1,10 +1,10 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
   fdatasyncSync,
   mkdirSync,
   openSync,
-  closeSync,
   writeFileSync,
 } from "node:fs"
 import { join } from "node:path"

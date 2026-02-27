@@ -1,13 +1,13 @@
 /**
  * Tests for the structured TracingLogger.
  */
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { trace } from "@opentelemetry/api"
 import {
-  NodeTracerProvider,
   InMemorySpanExporter,
+  NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { TracingLogger } from "../tracing/logger.js"
 
