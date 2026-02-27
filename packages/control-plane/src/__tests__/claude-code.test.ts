@@ -443,6 +443,82 @@ describe("ClaudeCodeBackend", () => {
       expect(prompt).toContain("Focus on these files: src/auth.ts")
       expect(prompt).toContain("Fix auth")
     })
+
+    it("enforces process env allowlist and blocks sensitive control-plane vars", async () => {
+      const mockProc = createMockProcess({ exitCode: 0, stdout: [] })
+      mockSpawn.mockReturnValue(mockProc)
+
+      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+
+      const originalEnv = {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        NODE_PATH: process.env.NODE_PATH,
+        LANG: process.env.LANG,
+        TERM: process.env.TERM,
+        DATABASE_URL: process.env.DATABASE_URL,
+        REDIS_URL: process.env.REDIS_URL,
+        INTERNAL_API_KEY: process.env.INTERNAL_API_KEY,
+      }
+
+      process.env.PATH = "/usr/bin:/bin"
+      process.env.HOME = "/home/control-plane"
+      process.env.NODE_PATH = "/opt/node_modules"
+      process.env.LANG = "en_US.UTF-8"
+      process.env.TERM = "xterm-256color"
+      process.env.DATABASE_URL = "postgres://secret"
+      process.env.REDIS_URL = "redis://secret"
+      process.env.INTERNAL_API_KEY = "internal-secret"
+
+      try {
+        const backend = new ClaudeCodeBackend()
+        await backend.start({})
+
+        const task = makeTask({
+          context: {
+            ...makeTask().context,
+            environment: {
+              ANTHROPIC_API_KEY: "sk-task-level",
+              TASK_ONLY_FLAG: "enabled",
+            },
+          },
+        })
+
+        await backend.executeTask(task)
+
+        const spawnOptions = (mockSpawn.mock.calls[0] as unknown[])[2] as { env: NodeJS.ProcessEnv }
+        const env = spawnOptions.env
+
+        expect(env.PATH).toBe("/usr/bin:/bin")
+        expect(env.HOME).toBe("/home/control-plane")
+        expect(env.NODE_PATH).toBe("/opt/node_modules")
+        expect(env.LANG).toBe("en_US.UTF-8")
+        expect(env.TERM).toBe("xterm-256color")
+
+        expect(env.ANTHROPIC_API_KEY).toBe("sk-task-level")
+        expect(env.TASK_ONLY_FLAG).toBe("enabled")
+
+        expect(env.DATABASE_URL).toBeUndefined()
+        expect(env.REDIS_URL).toBeUndefined()
+        expect(env.INTERNAL_API_KEY).toBeUndefined()
+
+        expect(debugSpy).toHaveBeenCalledWith(
+          "[backend-env] injected env keys for backend process",
+          expect.objectContaining({
+            keys: expect.arrayContaining(["ANTHROPIC_API_KEY", "PATH", "TASK_ONLY_FLAG"]),
+          }),
+        )
+      } finally {
+        debugSpy.mockRestore()
+        for (const [key, value] of Object.entries(originalEnv)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+    })
   })
 
   describe("cancel()", () => {

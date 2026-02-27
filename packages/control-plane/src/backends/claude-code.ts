@@ -27,8 +27,10 @@ import type {
   OutputUsageEvent,
   TokenUsage,
 } from "@cortex/shared/backends"
-import { trace } from "@opentelemetry/api"
 import { CortexAttributes } from "@cortex/shared/tracing"
+import { trace } from "@opentelemetry/api"
+
+import { buildBackendSpawnEnv } from "./env-policy.js"
 
 const execFile = promisify(execFileCb)
 
@@ -133,10 +135,7 @@ export class ClaudeCodeBackend implements ExecutionBackend {
 
     const subprocess = spawn(this.binaryPath, [...args, prompt], {
       cwd: task.context.workspacePath,
-      env: {
-        ...process.env,
-        ...task.context.environment,
-      },
+      env: buildBackendSpawnEnv(task.context.environment),
       stdio: ["pipe", "pipe", "pipe"],
     })
 
@@ -413,7 +412,10 @@ class ClaudeCodeHandle implements ExecutionHandle {
         activeSpan.setAttribute(CortexAttributes.TOKEN_INPUT, tokenUsage.inputTokens)
         activeSpan.setAttribute(CortexAttributes.TOKEN_OUTPUT, tokenUsage.outputTokens)
         activeSpan.setAttribute(CortexAttributes.TOKEN_CACHE_READ, tokenUsage.cacheReadTokens)
-        activeSpan.setAttribute(CortexAttributes.TOKEN_CACHE_CREATION, tokenUsage.cacheCreationTokens)
+        activeSpan.setAttribute(
+          CortexAttributes.TOKEN_CACHE_CREATION,
+          tokenUsage.cacheCreationTokens,
+        )
         activeSpan.setAttribute(CortexAttributes.TOKEN_COST_USD, tokenUsage.costUsd)
       }
 
