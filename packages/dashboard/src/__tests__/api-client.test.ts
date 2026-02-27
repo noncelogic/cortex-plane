@@ -72,8 +72,8 @@ function statusForCode(code: number): string {
 // Tests
 // ---------------------------------------------------------------------------
 
-// API_BASE is evaluated at module load time, defaulting to localhost:4000
-const API_BASE = "http://localhost:4000"
+// API_BASE is evaluated at module load time, defaulting to /api
+const API_BASE = "/api"
 
 describe("API Client", () => {
   afterEach(() => {

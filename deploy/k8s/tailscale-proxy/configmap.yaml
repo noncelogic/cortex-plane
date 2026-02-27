@@ -24,15 +24,6 @@ data:
           "Handlers": {
             "/": {
               "Proxy": "http://dashboard.cortex.svc.cluster.local:3000"
-            },
-            "/api": {
-              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
-            },
-            "/healthz": {
-              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
-            },
-            "/readyz": {
-              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
             }
           }
         }
@@ -52,15 +43,6 @@ data:
           "Handlers": {
             "/": {
               "Proxy": "http://dashboard.cortex.svc.cluster.local:3000"
-            },
-            "/api": {
-              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
-            },
-            "/healthz": {
-              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
-            },
-            "/readyz": {
-              "Proxy": "http://control-plane.cortex.svc.cluster.local:4000"
             }
           }
         }

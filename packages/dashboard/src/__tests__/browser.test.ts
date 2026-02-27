@@ -38,7 +38,7 @@ function statusForCode(code: number): string {
   return map[code] ?? "Unknown"
 }
 
-const API_BASE = "http://localhost:4000"
+const API_BASE = "/api"
 
 // ---------------------------------------------------------------------------
 // ConnectionStatus logic tests
