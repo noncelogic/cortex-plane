@@ -6,8 +6,6 @@ import type { ContentFilterState } from "@/components/pulse/content-filters"
 import { useApiQuery } from "@/hooks/use-api"
 import type { ContentPiece, ContentPipelineStats } from "@/lib/api-client"
 import { archiveContent, listContent, publishContent } from "@/lib/api-client"
-import { isMockEnabled } from "@/lib/mock"
-import { generateMockContent } from "@/lib/mock/content"
 
 function computeStats(pieces: ContentPiece[]): ContentPipelineStats {
   const now = Date.now()
@@ -53,7 +51,6 @@ export function usePulsePipeline() {
   const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
 
   const allPieces: ContentPiece[] = useMemo(() => {
-    if (isMockEnabled()) return generateMockContent()
     if (data?.content) return data.content
     return []
   }, [data])

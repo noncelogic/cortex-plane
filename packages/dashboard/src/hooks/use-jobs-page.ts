@@ -5,8 +5,6 @@ import { useCallback, useMemo, useState } from "react"
 import { useApiQuery } from "@/hooks/use-api"
 import type { JobSummary } from "@/lib/api-client"
 import { listJobs } from "@/lib/api-client"
-import { isMockEnabled } from "@/lib/mock"
-import { generateMockJobs } from "@/lib/mock/jobs"
 
 function statusCounts(jobs: JobSummary[]): { running: number; failed: number; completed: number } {
   let running = 0
@@ -37,11 +35,7 @@ export function useJobsPage() {
   const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
 
   const jobs: JobSummary[] = useMemo(() => {
-    // Mock mode: always return mock data
-    if (isMockEnabled()) return generateMockJobs()
-    // Live mode: return API data (may be empty array)
     if (data?.jobs) return data.jobs
-    // Still loading or errored in live mode: return empty
     return []
   }, [data])
 
