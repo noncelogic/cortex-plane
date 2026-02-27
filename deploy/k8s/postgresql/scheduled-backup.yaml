@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgresql-daily
+  labels:
+    app.kubernetes.io/name: postgresql-daily-backup
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  immediate: true
+  cluster:
+    name: postgresql

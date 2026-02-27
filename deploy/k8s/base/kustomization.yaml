@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
-  - ../postgres
+  - ../postgresql
   - ../qdrant
   - ../control-plane
   - ../dashboard

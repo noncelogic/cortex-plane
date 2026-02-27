@@ -9,13 +9,17 @@ resources:
   - ingress.yaml
   # Secrets are NOT checked in for prod — create manually or via sealed-secrets:
   #   kubectl create secret generic control-plane-secrets \
-  #     --from-literal=DATABASE_URL=... \
+  #     --from-literal=DATABASE_URL='postgres://cortex:<password>@postgresql-rw-pooler:5432/cortex_plane' \
   #     --from-literal=CREDENTIAL_MASTER_KEY=... \
   #     -n cortex
-  #   kubectl create secret generic postgres-secrets \
-  #     --from-literal=POSTGRES_USER=cortex \
-  #     --from-literal=POSTGRES_PASSWORD=<strong-password> \
-  #     --from-literal=POSTGRES_DB=cortex_plane \
+  #   kubectl create secret generic postgresql-app \
+  #     --type=kubernetes.io/basic-auth \
+  #     --from-literal=username=cortex \
+  #     --from-literal=password=<strong-password> \
+  #     -n cortex
+  #   kubectl create secret generic postgresql-backup-s3 \
+  #     --from-literal=ACCESS_KEY_ID=<s3-access-key> \
+  #     --from-literal=SECRET_ACCESS_KEY=<s3-secret-key> \
   #     -n cortex
 
 patches:
