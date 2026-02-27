@@ -6,8 +6,8 @@ import type { ActiveFilters } from "@/components/memory/memory-search"
 import { useApiQuery } from "@/hooks/use-api"
 import type { MemoryRecord } from "@/lib/api-client"
 import { searchMemory, syncMemory } from "@/lib/api-client"
-import { isMockEnabled } from "@/lib/mock"
-import { generateMockMemories, MOCK_AGENT_ID } from "@/lib/mock/memory"
+
+const DEFAULT_AGENT_ID = "*"
 
 function applyFilters(
   records: MemoryRecord[],
@@ -68,7 +68,7 @@ export function useMemoryExplorer() {
     error: rawError,
     errorCode: rawErrorCode,
   } = useApiQuery(
-    () => searchMemory({ agentId: MOCK_AGENT_ID, query: searchQuery || "all", limit: 50 }),
+    () => searchMemory({ agentId: DEFAULT_AGENT_ID, query: searchQuery || "all", limit: 50 }),
     [searchQuery],
   )
 
@@ -77,7 +77,6 @@ export function useMemoryExplorer() {
   const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
 
   const allRecords: MemoryRecord[] = useMemo(() => {
-    if (isMockEnabled()) return generateMockMemories()
     if (data?.results) return data.results
     return []
   }, [data])
@@ -107,7 +106,7 @@ export function useMemoryExplorer() {
   }, [])
 
   const handleSync = useCallback(async () => {
-    await syncMemory(MOCK_AGENT_ID)
+    await syncMemory(DEFAULT_AGENT_ID)
   }, [])
 
   return {
@@ -127,6 +126,6 @@ export function useMemoryExplorer() {
     isLoading,
     error,
     errorCode: errorCode,
-    agentId: MOCK_AGENT_ID,
+    agentId: DEFAULT_AGENT_ID,
   }
 }

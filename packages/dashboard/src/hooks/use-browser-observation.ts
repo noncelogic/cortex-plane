@@ -1,43 +1,68 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
+import type {
+  ApiErrorCode,
+  BrowserEvent,
+  BrowserSession,
+  BrowserTab,
+  Screenshot,
+} from "@/lib/api-client"
 import { useApiQuery } from "@/hooks/use-api"
-import type { BrowserEvent, BrowserSession, BrowserTab, Screenshot } from "@/lib/api-client"
 import {
   getAgent,
   getAgentBrowser,
   getAgentBrowserEvents,
   getAgentScreenshots,
 } from "@/lib/api-client"
-import { isMockEnabled } from "@/lib/mock"
-import {
-  mockBrowserEvents,
-  mockBrowserSession,
-  mockScreenshots,
-  mockTabs,
-} from "@/lib/mock/browser"
 
 export function useBrowserObservation(agentId: string) {
-  const mock = isMockEnabled()
-  const [tabs, setTabs] = useState<BrowserTab[]>(() => (mock ? mockTabs() : []))
+  const [tabs, setTabs] = useState<BrowserTab[]>([])
 
-  const { data: agentData, error: agentError } = useApiQuery(() => getAgent(agentId), [agentId])
-  const { data: sessionData, error: sessionError } = useApiQuery(
+  const {
+    data: agentData,
+    isLoading: agentLoading,
+    error: agentError,
+    errorCode: agentErrorCode,
+    refetch: refetchAgent,
+  } = useApiQuery(() => getAgent(agentId), [agentId])
+  const {
+    data: sessionData,
+    isLoading: sessionLoading,
+    error: sessionError,
+    errorCode: sessionErrorCode,
+    refetch: refetchSession,
+  } = useApiQuery(
     () => getAgentBrowser(agentId),
     [agentId],
   )
-  const { data: screenshotData, error: screenshotError } = useApiQuery(
+  const {
+    data: screenshotData,
+    isLoading: screenshotLoading,
+    error: screenshotError,
+    errorCode: screenshotErrorCode,
+    refetch: refetchScreenshots,
+  } = useApiQuery(
     () => getAgentScreenshots(agentId),
     [agentId],
   )
-  const { data: eventData, error: eventError } = useApiQuery(
+  const {
+    data: eventData,
+    isLoading: eventLoading,
+    error: eventError,
+    errorCode: eventErrorCode,
+    refetch: refetchEvents,
+  } = useApiQuery(
     () => getAgentBrowserEvents(agentId),
     [agentId],
   )
 
+  useEffect(() => {
+    setTabs(sessionData?.tabs ?? [])
+  }, [sessionData])
+
   const session: BrowserSession = useMemo(() => {
-    if (mock) return mockBrowserSession(agentId)
     return (
       sessionData ?? {
         id: `session-${agentId}`,
@@ -48,19 +73,21 @@ export function useBrowserObservation(agentId: string) {
         latencyMs: 0,
       }
     )
-  }, [sessionData, sessionError, agentId, mock])
+  }, [sessionData, sessionError, agentId])
 
   const screenshots: Screenshot[] = useMemo(() => {
-    if (mock) return mockScreenshots(agentId)
     return screenshotData?.screenshots ?? []
-  }, [screenshotData, agentId, mock])
+  }, [screenshotData])
 
   const events: BrowserEvent[] = useMemo(() => {
-    if (mock) return mockBrowserEvents()
     return eventData?.events ?? []
-  }, [eventData, mock])
+  }, [eventData])
 
   const agentName = agentData?.name ?? `Agent ${agentId.slice(0, 8)}`
+  const isLoading = agentLoading || sessionLoading || screenshotLoading || eventLoading
+  const error = agentError || sessionError || screenshotError || eventError
+  const errorCode: ApiErrorCode | null =
+    agentErrorCode || sessionErrorCode || screenshotErrorCode || eventErrorCode || null
 
   const handleSelectTab = (tabId: string) => {
     setTabs((prev) => prev.map((t) => ({ ...t, active: t.id === tabId })))
@@ -77,7 +104,10 @@ export function useBrowserObservation(agentId: string) {
   }
 
   const handleReconnect = () => {
-    // In production this would re-establish the VNC connection
+    void refetchAgent()
+    void refetchSession()
+    void refetchScreenshots()
+    void refetchEvents()
   }
 
   const latestScreenshot = screenshots.length > 0 ? screenshots[0]! : null
@@ -89,6 +119,9 @@ export function useBrowserObservation(agentId: string) {
     events,
     agentName,
     latestScreenshot,
+    isLoading,
+    error,
+    errorCode,
     handleSelectTab,
     handleCloseTab,
     handleReconnect,

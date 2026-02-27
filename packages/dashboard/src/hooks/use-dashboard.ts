@@ -3,15 +3,23 @@
 import { useCallback, useMemo } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
-import type { ApiErrorCode } from "@/lib/api-client"
+import type { ApiErrorCode, JobStatus } from "@/lib/api-client"
 import { listAgents, listApprovals, listJobs, searchMemory } from "@/lib/api-client"
-import { isMockEnabled } from "@/lib/mock"
-import {
-  type DashboardStats,
-  getDashboardStats,
-  getRecentJobs,
-  type RecentJob,
-} from "@/lib/mock/dashboard"
+
+export interface DashboardStats {
+  totalAgents: number
+  activeJobs: number
+  pendingApprovals: number
+  memoryRecords: number
+}
+
+export interface RecentJob {
+  id: string
+  agentName: string
+  status: JobStatus
+  type: string
+  createdAt: string
+}
 
 export interface DashboardData {
   stats: DashboardStats
@@ -35,27 +43,32 @@ export function useDashboard(): DashboardData {
     data: jobData,
     isLoading: jobsLoading,
     error: jobsError,
+    errorCode: jobsErrorCode,
     refetch: refetchJobs,
   } = useApiQuery(() => listJobs({ limit: 5 }), [])
 
   const {
     data: approvalData,
     isLoading: approvalsLoading,
+    error: approvalsError,
+    errorCode: approvalsErrorCode,
     refetch: refetchApprovals,
   } = useApiQuery(() => listApprovals({ status: "PENDING", limit: 1 }), [])
 
   const {
     data: memoryData,
     isLoading: memoryLoading,
+    error: memoryError,
+    errorCode: memoryErrorCode,
     refetch: refetchMemory,
   } = useApiQuery(() => searchMemory({ agentId: "*", query: "all", limit: 1 }), [])
 
   const isLoading = agentsLoading || jobsLoading || approvalsLoading || memoryLoading
-  const error = agentsError || jobsError
-  const errorCode = agentsErrorCode
+  const error = agentsError || jobsError || approvalsError || memoryError
+  const errorCode =
+    agentsErrorCode || jobsErrorCode || approvalsErrorCode || memoryErrorCode || null
 
   const stats = useMemo<DashboardStats>(() => {
-    if (isMockEnabled()) return getDashboardStats()
     return {
       totalAgents: agentData?.pagination?.total ?? 0,
       activeJobs: jobData?.pagination?.total ?? 0,
@@ -65,7 +78,6 @@ export function useDashboard(): DashboardData {
   }, [agentData, jobData, approvalData, memoryData])
 
   const recentJobs = useMemo<RecentJob[]>(() => {
-    if (isMockEnabled()) return getRecentJobs()
     if (!jobData?.jobs || jobData.jobs.length === 0) return []
     return jobData.jobs.map((j) => ({
       id: j.id,

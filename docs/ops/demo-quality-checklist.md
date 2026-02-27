@@ -7,7 +7,6 @@ Ref: GitHub issue #153 — demo quality audit.
 
 ## 1. Mock Data Gate
 
-- [ ] `NEXT_PUBLIC_USE_MOCK_DATA` is **not** set to `"true"` in the runtime environment
 - [ ] Dashboard does **not** show hardcoded KPI values (5 agents / 3 jobs / 7 approvals / 8 memory)
 - [ ] Job detail drawer shows "Unable to load" on API error — never fabricated steps/logs
 - [ ] Pulse page shows empty state or real content — no fake articles
