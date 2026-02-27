@@ -4,9 +4,8 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
-import { useAuth } from "@/components/auth-provider"
 import { UserMenu } from "@/components/layout/user-menu"
-import { resolveAuthGuard } from "@/lib/auth-ui"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 
 /* ── Navigation items ────────────────────────────────── */
 const navItems = [
@@ -171,11 +170,9 @@ function BottomTabs() {
 
 /* ── Shell ────────────────────────────────────────────── */
 export function NavShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
   const router = useRouter()
-  const { isLoading, isAuthenticated } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
-  const guardState = resolveAuthGuard(pathname, isLoading, isAuthenticated)
+  const guardState = useAuthGuard()
 
   useEffect(() => {
     if (guardState.shouldRedirectToLogin) {
@@ -192,6 +189,36 @@ export function NavShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-dark">
         <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (guardState.shouldShowUnverified) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-surface-dark px-4">
+        <div className="max-w-md rounded-xl border border-surface-border bg-surface-light p-6 text-center">
+          <p className="text-sm font-semibold text-text-main">Unable to verify your session</p>
+          <p className="mt-2 text-sm text-text-muted">
+            The control-plane session endpoint is temporarily unavailable. Retry when connectivity
+            stabilizes.
+          </p>
+          <div className="mt-4 flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => void guardState.refreshSession()}
+              className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+            >
+              Retry session check
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace("/login")}
+              className="rounded-lg border border-surface-border bg-surface-dark px-4 py-2 text-sm font-semibold text-text-main transition-colors hover:bg-secondary"
+            >
+              Go to sign in
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
