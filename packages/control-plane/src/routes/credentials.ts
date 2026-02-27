@@ -11,15 +11,23 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
+import type { SessionService } from "../auth/session-service.js"
 import { CredentialService, SUPPORTED_PROVIDERS } from "../auth/credential-service.js"
+import { createRequireAuth, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
 
 interface CredentialRouteDeps {
   credentialService: CredentialService
+  sessionService: SessionService
 }
 
 export function credentialRoutes(deps: CredentialRouteDeps) {
-  const { credentialService } = deps
+  const { credentialService, sessionService } = deps
+
+  const requireAuth: PreHandler = createRequireAuth({
+    config: { apiKeys: [], requireAuth: true },
+    sessionService,
+  })
 
   return function register(app: FastifyInstance): void {
     /**
@@ -32,16 +40,20 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
     /**
      * GET /credentials — list user's credentials (no secrets)
      */
-    app.get("/credentials", async (request: FastifyRequest, reply: FastifyReply) => {
-      const principal = (request as AuthenticatedRequest).principal
-      if (!principal) {
-        reply.status(401).send({ error: "unauthorized" })
-        return
-      }
+    app.get(
+      "/credentials",
+      { preHandler: [requireAuth] },
+      async (request: FastifyRequest, reply: FastifyReply) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (!principal) {
+          reply.status(401).send({ error: "unauthorized" })
+          return
+        }
 
-      const credentials = await credentialService.listCredentials(principal.userId)
-      return { credentials }
-    })
+        const credentials = await credentialService.listCredentials(principal.userId)
+        return { credentials }
+      },
+    )
 
     /**
      * POST /credentials/api-key — store an API key for a provider
@@ -54,6 +66,7 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
       }
     }>(
       "/credentials/api-key",
+      { preHandler: [requireAuth] },
       async (
         request: FastifyRequest<{
           Body: { provider: string; apiKey: string; displayLabel?: string }
@@ -102,6 +115,7 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
      */
     app.delete<{ Params: { id: string } }>(
       "/credentials/:id",
+      { preHandler: [requireAuth] },
       async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
         const principal = (request as AuthenticatedRequest).principal
         if (!principal) {
@@ -119,6 +133,7 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
      */
     app.get<{ Querystring: { limit?: string } }>(
       "/credentials/audit",
+      { preHandler: [requireAuth] },
       async (request: FastifyRequest<{ Querystring: { limit?: string } }>, reply: FastifyReply) => {
         const principal = (request as AuthenticatedRequest).principal
         if (!principal) {
