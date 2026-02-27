@@ -49,7 +49,15 @@ export function formatApprovalMessage(params: {
   riskLevel?: "P0" | "P1" | "P2" | "P3"
   blastRadius?: string | null
 }): string {
-  const { agentName, actionSummary, actionType, jobId, expiresAt, riskLevel = "P2", blastRadius } = params
+  const {
+    agentName,
+    actionSummary,
+    actionType,
+    jobId,
+    expiresAt,
+    riskLevel = "P2",
+    blastRadius,
+  } = params
 
   const expiresIn = formatDuration(expiresAt.getTime() - Date.now())
   const expiresAtStr = expiresAt.toISOString().replace("T", " ").slice(0, 19) + " UTC"
@@ -79,7 +87,8 @@ export function formatDecisionMessage(params: {
   const { decision, decidedBy, agentName, actionSummary } = params
 
   const icon = decision === "APPROVED" ? "✅" : decision === "REJECTED" ? "❌" : "⏰"
-  const verb = decision === "APPROVED" ? "Approved" : decision === "REJECTED" ? "Rejected" : "Expired"
+  const verb =
+    decision === "APPROVED" ? "Approved" : decision === "REJECTED" ? "Rejected" : "Expired"
   const byLine = decision === "EXPIRED" || !decidedBy ? "" : ` by ${escapeMarkdown(decidedBy)}`
 
   return [

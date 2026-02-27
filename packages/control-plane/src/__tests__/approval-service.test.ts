@@ -141,8 +141,6 @@ describe("ApprovalService", () => {
       expect(result.expiresAt.getTime()).toBeLessThan(expectedExpiry + 5000)
     })
 
-
-
     it("applies risk-based defaults and auto-approves P3", async () => {
       db._txMockResult.executeTakeFirstOrThrow.mockResolvedValue({ id: "approval-p3" })
 
@@ -304,8 +302,6 @@ describe("ApprovalService", () => {
       expect(result.success).toBe(true)
     })
   })
-
-
 
   describe("resumeApproval", () => {
     it("returns proposal and payload for approved requests", async () => {

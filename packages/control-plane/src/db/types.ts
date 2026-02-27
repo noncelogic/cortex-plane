@@ -251,7 +251,6 @@ export interface ApprovalAuditLogTable {
 export type ApprovalAuditLog = Selectable<ApprovalAuditLogTable>
 export type NewApprovalAuditLog = Insertable<ApprovalAuditLogTable>
 
-
 // ---------------------------------------------------------------------------
 // Table: feedback_item
 // ---------------------------------------------------------------------------
