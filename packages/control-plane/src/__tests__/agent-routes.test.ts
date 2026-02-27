@@ -59,13 +59,15 @@ function makeJob(overrides: Record<string, unknown> = {}) {
 }
 
 /** Build a chainable mock that simulates Kysely's fluent query API. */
-function mockDb(opts: {
-  agents?: Record<string, unknown>[]
-  jobs?: Record<string, unknown>[]
-  insertedAgent?: Record<string, unknown>
-  updatedAgent?: Record<string, unknown> | null
-  insertedJob?: Record<string, unknown>
-} = {}) {
+function mockDb(
+  opts: {
+    agents?: Record<string, unknown>[]
+    jobs?: Record<string, unknown>[]
+    insertedAgent?: Record<string, unknown>
+    updatedAgent?: Record<string, unknown> | null
+    insertedJob?: Record<string, unknown>
+  } = {},
+) {
   const {
     agents = [makeAgent()],
     jobs = [],
@@ -90,7 +92,9 @@ function mockDb(opts: {
       offset,
       ...terminal,
     })
-    const selectAll = vi.fn().mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
+    const selectAll = vi
+      .fn()
+      .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
     const select = vi.fn().mockReturnValue({ where: whereFn, ...terminal })
     return { selectAll, select }
   }
@@ -108,7 +112,13 @@ function mockDb(opts: {
     const executeTakeFirst = vi.fn().mockResolvedValue(row)
     const execute = vi.fn().mockResolvedValue(row ? [row] : [])
     const returningAll = vi.fn().mockReturnValue({ executeTakeFirst })
-    const where = vi.fn().mockReturnValue({ returningAll, execute, where: vi.fn().mockReturnValue({ returningAll, execute }) })
+    const where = vi
+      .fn()
+      .mockReturnValue({
+        returningAll,
+        execute,
+        where: vi.fn().mockReturnValue({ returningAll, execute }),
+      })
     const set = vi.fn().mockReturnValue({ where })
     return { set }
   }
@@ -137,9 +147,7 @@ async function buildTestApp(dbOpts: Parameters<typeof mockDb>[0] = {}) {
   const db = mockDb(dbOpts)
   const enqueueJob = vi.fn().mockResolvedValue(undefined)
 
-  await app.register(
-    agentRoutes({ db, authConfig: DEV_AUTH_CONFIG, enqueueJob }),
-  )
+  await app.register(agentRoutes({ db, authConfig: DEV_AUTH_CONFIG, enqueueJob }))
 
   return { app, db, enqueueJob }
 }
@@ -150,7 +158,9 @@ async function buildTestApp(dbOpts: Parameters<typeof mockDb>[0] = {}) {
 
 describe("GET /agents", () => {
   it("returns list of agents", async () => {
-    const { app } = await buildTestApp({ agents: [makeAgent(), makeAgent({ id: "other-id", name: "Other" })] })
+    const { app } = await buildTestApp({
+      agents: [makeAgent(), makeAgent({ id: "other-id", name: "Other" })],
+    })
 
     const res = await app.inject({ method: "GET", url: "/agents" })
 
@@ -233,6 +243,47 @@ describe("POST /agents", () => {
     })
 
     expect(res.statusCode).toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: POST /agents/:agentId/pause + /resume
+// ---------------------------------------------------------------------------
+
+describe("POST /agents/:agentId/pause", () => {
+  it("returns pausing status", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/pause",
+      payload: { reason: "manual", timeoutSeconds: 30 },
+    })
+
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({
+      agentId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      status: "pausing",
+    })
+  })
+})
+
+describe("POST /agents/:agentId/resume", () => {
+  it("returns resuming status", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resume",
+      payload: { checkpointId: "chk-1" },
+    })
+
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({
+      agentId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      status: "resuming",
+      fromCheckpoint: "chk-1",
+    })
   })
 })
 

@@ -1209,8 +1209,339 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
 
   # -------------------------------------------------------------------------
+  # Jobs
+  # -------------------------------------------------------------------------
+  /jobs:
+    get:
+      operationId: listJobs
+      summary: List jobs across all agents
+      tags:
+        - Jobs
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - PENDING
+              - SCHEDULED
+              - RUNNING
+              - WAITING_FOR_APPROVAL
+              - COMPLETED
+              - FAILED
+              - TIMED_OUT
+              - RETRYING
+              - DEAD_LETTER
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/offsetParam"
+      responses:
+        "200":
+          description: Paginated list of jobs for dashboard views.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - jobs
+                  - pagination
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - agentId
+                        - status
+                        - type
+                        - createdAt
+                      properties:
+                        id:
+                          type: string
+                        agentId:
+                          type: string
+                        status:
+                          type: string
+                        type:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                        completedAt:
+                          type: string
+                          format: date-time
+                        error:
+                          type: string
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      summary: Get job details for drawer view
+      tags:
+        - Jobs
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      responses:
+        "200":
+          description: Job detail response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - agentId
+                  - status
+                  - type
+                  - createdAt
+                  - steps
+                  - logs
+                properties:
+                  id:
+                    type: string
+                  agentId:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                  error:
+                    type: string
+                  agentName:
+                    type: string
+                  durationMs:
+                    type: number
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                  logs:
+                    type: array
+                    items:
+                      type: object
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /jobs/{jobId}/retry:
+    post:
+      operationId: retryJob
+      summary: Retry a failed job
+      tags:
+        - Jobs
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      responses:
+        "202":
+          description: Retry accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - jobId
+                  - status
+                properties:
+                  jobId:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - retrying
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # -------------------------------------------------------------------------
+  # Content Pipeline
+  # -------------------------------------------------------------------------
+  /content:
+    get:
+      operationId: listContent
+      summary: List content pieces for publishing pipeline
+      tags:
+        - Agents
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - DRAFT
+              - IN_REVIEW
+              - QUEUED
+              - PUBLISHED
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum:
+              - blog
+              - social
+              - newsletter
+              - report
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/offsetParam"
+      responses:
+        "200":
+          description: Content list response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - content
+                  - pagination
+                properties:
+                  content:
+                    type: array
+                    items:
+                      type: object
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+
+  /content/{id}/publish:
+    post:
+      operationId: publishContent
+      summary: Publish content piece to channel
+      tags:
+        - Agents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: string
+      responses:
+        "200":
+          description: Publish result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - contentId
+                  - status
+                  - publishedAt
+                properties:
+                  contentId:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - published
+                  publishedAt:
+                    type: string
+                    format: date-time
+
+  /content/{id}/archive:
+    post:
+      operationId: archiveContent
+      summary: Archive content piece
+      tags:
+        - Agents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Archive result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - contentId
+                  - status
+                properties:
+                  contentId:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - archived
+
+  # -------------------------------------------------------------------------
   # Memory
   # -------------------------------------------------------------------------
+  /memory/search:
+    get:
+      operationId: searchMemory
+      summary: Search memory records
+      tags:
+        - Memory
+      parameters:
+        - name: agentId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Memory search results.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - results
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+
   /memory/sync:
     post:
       operationId: syncMemory
@@ -1266,6 +1597,136 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+
+  # -------------------------------------------------------------------------
+  # Browser Observation (Dashboard)
+  # -------------------------------------------------------------------------
+  /agents/{agentId}/browser:
+    get:
+      operationId: getAgentBrowser
+      summary: Get browser session info
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      responses:
+        "200":
+          description: Browser session info.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - agentId
+                  - vncUrl
+                  - status
+                  - tabs
+                  - latencyMs
+                properties:
+                  id:
+                    type: string
+                  agentId:
+                    type: string
+                  vncUrl:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                      - connecting
+                      - connected
+                      - disconnected
+                      - error
+                  tabs:
+                    type: array
+                    items:
+                      type: object
+                  latencyMs:
+                    type: number
+                  lastHeartbeat:
+                    type: string
+                    format: date-time
+
+  /agents/{agentId}/browser/screenshots:
+    get:
+      operationId: listAgentScreenshots
+      summary: List browser screenshots for an agent
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Screenshot list response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - screenshots
+                properties:
+                  screenshots:
+                    type: array
+                    items:
+                      type: object
+
+  /agents/{agentId}/browser/events:
+    get:
+      operationId: listAgentBrowserEvents
+      summary: List browser event history for an agent
+      tags:
+        - Agents
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: types
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Browser event list response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - events
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+
+  # -------------------------------------------------------------------------
+  # SSE
+  # -------------------------------------------------------------------------
+  /api/jobs/stream:
+    get:
+      operationId: streamJobs
+      summary: Stream real-time job updates via SSE
+      tags:
+        - Jobs
+      security: []
+      responses:
+        "200":
+          description: SSE stream with `job:created`, `job:updated`, `job:completed`, and `job:failed` events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
 
   # -------------------------------------------------------------------------
   # Voice

@@ -26,6 +26,7 @@ import { authRoutes } from "./routes/auth.js"
 import { credentialRoutes } from "./routes/credentials.js"
 import { healthRoutes } from "./routes/health.js"
 import { observationRoutes } from "./routes/observation.js"
+import { dashboardRoutes } from "./routes/dashboard.js"
 import { streamRoutes } from "./routes/stream.js"
 import { voiceRoutes } from "./routes/voice.js"
 import { SSEConnectionManager } from "./streaming/manager.js"
@@ -158,6 +159,17 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       enqueueJob: async (jobId: string) => {
         await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
       },
+    }),
+  )
+
+  // Register dashboard compatibility endpoints that map to existing services/tables.
+  await app.register(
+    dashboardRoutes({
+      db,
+      enqueueJob: async (jobId: string) => {
+        await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
+      },
+      observationService,
     }),
   )
 
