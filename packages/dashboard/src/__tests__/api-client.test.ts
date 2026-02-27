@@ -3,10 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   ApiError,
   approveRequest,
+  deleteCredential,
+  exchangeOAuthConnect,
   getAgent,
+  initOAuthConnect,
   listAgents,
+  listCredentials,
   listJobs,
+  listProviders,
   type ProblemDetail,
+  saveProviderApiKey,
   searchMemory,
   steerAgent,
 } from "@/lib/api-client"
@@ -510,6 +516,127 @@ describe("API Client", () => {
 
       // Initial + 2 retries = 3 calls
       expect(vi.mocked(fetch).mock.calls).toHaveLength(3)
+    })
+  })
+
+  describe("credential & provider-connect endpoints", () => {
+    it("listProviders fetches GET /credentials/providers", async () => {
+      const body = {
+        providers: [
+          { id: "anthropic", name: "Anthropic", authType: "oauth", description: "Claude models" },
+        ],
+      }
+      mockFetchResponse(body)
+
+      const result = await listProviders()
+
+      expect(result.providers).toHaveLength(1)
+      expect(result.providers[0]!.id).toBe("anthropic")
+      expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(`${API_BASE}/credentials/providers`)
+    })
+
+    it("listCredentials fetches GET /credentials", async () => {
+      const body = {
+        credentials: [
+          {
+            id: "cred-1",
+            provider: "anthropic",
+            credentialType: "oauth",
+            displayLabel: null,
+            maskedKey: null,
+            status: "active",
+            lastUsedAt: null,
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }
+      mockFetchResponse(body)
+
+      const result = await listCredentials()
+
+      expect(result.credentials).toHaveLength(1)
+      expect(result.credentials[0]!.provider).toBe("anthropic")
+      expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(`${API_BASE}/credentials`)
+    })
+
+    it("initOAuthConnect fetches GET /auth/connect/:provider/init", async () => {
+      const body = {
+        authUrl: "https://accounts.google.com/o/oauth2/auth?...",
+        codeVerifier: "verifier-123",
+        state: "state-abc",
+      }
+      mockFetchResponse(body)
+
+      const result = await initOAuthConnect("google-antigravity")
+
+      expect(result.authUrl).toBe(body.authUrl)
+      expect(result.codeVerifier).toBe("verifier-123")
+      expect(result.state).toBe("state-abc")
+      expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(
+        `${API_BASE}/auth/connect/google-antigravity/init`,
+      )
+    })
+
+    it("exchangeOAuthConnect sends POST with body", async () => {
+      mockFetchResponse({ success: true })
+
+      await exchangeOAuthConnect("anthropic", {
+        pastedUrl: "http://localhost:3100/callback?code=abc",
+        codeVerifier: "verifier-123",
+        state: "state-abc",
+      })
+
+      const [url, opts] = vi.mocked(fetch).mock.calls[0]!
+      expect(url).toBe(`${API_BASE}/auth/connect/anthropic/exchange`)
+      expect(opts!.method).toBe("POST")
+      expect(JSON.parse(opts!.body as string)).toEqual({
+        pastedUrl: "http://localhost:3100/callback?code=abc",
+        codeVerifier: "verifier-123",
+        state: "state-abc",
+      })
+    })
+
+    it("saveProviderApiKey sends POST with body", async () => {
+      mockFetchResponse({ id: "cred-2" })
+
+      await saveProviderApiKey({
+        provider: "openai-codex",
+        apiKey: "sk-test-12345678",
+        displayLabel: "Production key",
+      })
+
+      const [url, opts] = vi.mocked(fetch).mock.calls[0]!
+      expect(url).toBe(`${API_BASE}/credentials/api-key`)
+      expect(opts!.method).toBe("POST")
+      expect(JSON.parse(opts!.body as string)).toEqual({
+        provider: "openai-codex",
+        apiKey: "sk-test-12345678",
+        displayLabel: "Production key",
+      })
+    })
+
+    it("deleteCredential sends DELETE to /credentials/:id", async () => {
+      mockFetchResponse({ success: true })
+
+      await deleteCredential("cred-1")
+
+      const [url, opts] = vi.mocked(fetch).mock.calls[0]!
+      expect(url).toBe(`${API_BASE}/credentials/cred-1`)
+      expect(opts!.method).toBe("DELETE")
+    })
+
+    it("initOAuthConnect throws ApiError on failure", async () => {
+      mockFetchResponse({ message: "Provider not configured" }, 400)
+
+      try {
+        await initOAuthConnect("unknown-provider")
+        expect.fail("should have thrown")
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiError)
+        const apiErr = err as ApiError
+        expect(apiErr.status).toBe(400)
+        expect(apiErr.message).toBe("Provider not configured")
+      }
     })
   })
 })

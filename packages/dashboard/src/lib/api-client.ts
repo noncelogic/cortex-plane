@@ -6,7 +6,7 @@
  * retry logic for transient errors, and request timeouts.
  */
 
-import type { z } from "zod"
+import { z } from "zod"
 
 import {
   ApprovalDecisionResponseSchema,
@@ -26,6 +26,11 @@ import {
   ScreenshotListResponseSchema,
 } from "./schemas/browser"
 import { ContentListResponseSchema } from "./schemas/content"
+import {
+  CredentialListResponseSchema,
+  OAuthInitResultSchema,
+  ProviderListResponseSchema,
+} from "./schemas/credentials"
 import { JobDetailSchema, JobListResponseSchema } from "./schemas/jobs"
 import { MemorySearchResponseSchema } from "./schemas/memory"
 
@@ -523,4 +528,51 @@ export async function getAgentBrowserEvents(agentId: string, limit?: number, typ
   return apiFetch(`/agents/${agentId}/browser/events${qs ? `?${qs}` : ""}`, {
     schema: BrowserEventListResponseSchema,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Credential & provider-connect endpoint functions
+// ---------------------------------------------------------------------------
+
+export type { Credential, OAuthInitResult, ProviderInfo } from "./schemas/credentials"
+
+export async function listProviders(): Promise<{
+  providers: import("./schemas/credentials").ProviderInfo[]
+}> {
+  return apiFetch("/credentials/providers", { schema: ProviderListResponseSchema })
+}
+
+export async function listCredentials(): Promise<{
+  credentials: import("./schemas/credentials").Credential[]
+}> {
+  return apiFetch("/credentials", { schema: CredentialListResponseSchema })
+}
+
+export async function initOAuthConnect(
+  provider: string,
+): Promise<import("./schemas/credentials").OAuthInitResult> {
+  return apiFetch(`/auth/connect/${provider}/init`, { schema: OAuthInitResultSchema })
+}
+
+export async function exchangeOAuthConnect(
+  provider: string,
+  body: { pastedUrl: string; codeVerifier: string; state: string },
+): Promise<unknown> {
+  return apiFetch(`/auth/connect/${provider}/exchange`, {
+    method: "POST",
+    body,
+    schema: z.unknown(),
+  })
+}
+
+export async function saveProviderApiKey(body: {
+  provider: string
+  apiKey: string
+  displayLabel?: string
+}): Promise<unknown> {
+  return apiFetch("/credentials/api-key", { method: "POST", body, schema: z.unknown() })
+}
+
+export async function deleteCredential(id: string): Promise<unknown> {
+  return apiFetch(`/credentials/${id}`, { method: "DELETE", schema: z.unknown() })
 }

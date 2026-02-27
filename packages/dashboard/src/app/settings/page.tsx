@@ -4,28 +4,16 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ProviderInfo {
-  id: string
-  name: string
-  authType: "oauth" | "api_key"
-  description: string
-}
-
-interface Credential {
-  id: string
-  provider: string
-  credentialType: string
-  displayLabel: string | null
-  maskedKey: string | null
-  status: string
-  lastUsedAt: string | null
-  createdAt: string
-}
+import {
+  type Credential,
+  deleteCredential as apiDeleteCredential,
+  exchangeOAuthConnect,
+  initOAuthConnect,
+  listCredentials,
+  listProviders,
+  type ProviderInfo,
+  saveProviderApiKey,
+} from "@/lib/api-client"
 
 /** Code-paste providers that use the init/exchange flow. */
 const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
@@ -35,7 +23,7 @@ const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "
 // ---------------------------------------------------------------------------
 
 function SettingsInner() {
-  const { user, authStatus, csrfToken } = useAuth()
+  const { user, authStatus } = useAuth()
   const searchParams = useSearchParams()
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
@@ -68,68 +56,41 @@ function SettingsInner() {
   // Fetch providers and credentials
   const fetchData = useCallback(async () => {
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (csrfToken) headers["x-csrf-token"] = csrfToken
+      const [provRes, credRes] = await Promise.allSettled([listProviders(), listCredentials()])
 
-      const [provRes, credRes] = await Promise.all([
-        fetch("/api/credentials/providers", { credentials: "include", headers }),
-        fetch("/api/credentials", { credentials: "include", headers }),
-      ])
-
-      if (provRes.ok) {
-        const data = (await provRes.json()) as { providers?: ProviderInfo[] }
-        setProviders(data.providers ?? [])
+      if (provRes.status === "fulfilled") {
+        setProviders(provRes.value.providers ?? [])
       }
-      if (credRes.ok) {
-        const data = (await credRes.json()) as { credentials?: Credential[] }
-        setCredentials(data.credentials ?? [])
+      if (credRes.status === "fulfilled") {
+        setCredentials(credRes.value.credentials ?? [])
       }
     } catch {
       // Silently fail — display empty state
     } finally {
       setLoading(false)
     }
-  }, [csrfToken])
+  }, [])
 
   useEffect(() => {
     if (authStatus === "authenticated") void fetchData()
   }, [authStatus, fetchData])
 
   // Initiate code-paste flow
-  const startCodePasteFlow = useCallback(
-    async (provider: string) => {
-      setCodePasteError(null)
-      try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" }
-        if (csrfToken) headers["x-csrf-token"] = csrfToken
-
-        const res = await fetch(`/api/auth/connect/${provider}/init`, {
-          credentials: "include",
-          headers,
-        })
-
-        if (!res.ok) {
-          const data = (await res.json().catch(() => ({ message: "Failed to initialize" }))) as {
-            message?: string
-          }
-          setCodePasteError(data.message ?? "Failed to initialize OAuth flow")
-          return
-        }
-
-        const data = (await res.json()) as { authUrl: string; codeVerifier: string; state: string }
-        setCodePasteFlow({
-          provider,
-          authUrl: data.authUrl,
-          codeVerifier: data.codeVerifier,
-          state: data.state,
-          pastedUrl: "",
-        })
-      } catch {
-        setCodePasteError("Failed to initialize OAuth flow")
-      }
-    },
-    [csrfToken],
-  )
+  const startCodePasteFlow = useCallback(async (provider: string) => {
+    setCodePasteError(null)
+    try {
+      const data = await initOAuthConnect(provider)
+      setCodePasteFlow({
+        provider,
+        authUrl: data.authUrl,
+        codeVerifier: data.codeVerifier,
+        state: data.state,
+        pastedUrl: "",
+      })
+    } catch (err) {
+      setCodePasteError(err instanceof Error ? err.message : "Failed to initialize OAuth flow")
+    }
+  }, [])
 
   // Submit code-paste exchange
   const submitCodePaste = useCallback(async () => {
@@ -138,36 +99,22 @@ function SettingsInner() {
     setCodePasteError(null)
 
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (csrfToken) headers["x-csrf-token"] = csrfToken
-
-      const res = await fetch(`/api/auth/connect/${codePasteFlow.provider}/exchange`, {
-        method: "POST",
-        credentials: "include",
-        headers,
-        body: JSON.stringify({
-          pastedUrl: codePasteFlow.pastedUrl,
-          codeVerifier: codePasteFlow.codeVerifier,
-          state: codePasteFlow.state,
-        }),
+      await exchangeOAuthConnect(codePasteFlow.provider, {
+        pastedUrl: codePasteFlow.pastedUrl,
+        codeVerifier: codePasteFlow.codeVerifier,
+        state: codePasteFlow.state,
       })
-
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({ message: "Exchange failed" }))) as {
-          message?: string
-        }
-        setCodePasteError(data.message ?? "Failed to exchange authorization code")
-        return
-      }
 
       setCodePasteFlow(null)
       void fetchData()
-    } catch {
-      setCodePasteError("Failed to exchange authorization code")
+    } catch (err) {
+      setCodePasteError(
+        err instanceof Error ? err.message : "Failed to exchange authorization code",
+      )
     } finally {
       setCodePasteSubmitting(false)
     }
-  }, [codePasteFlow, csrfToken, fetchData])
+  }, [codePasteFlow, fetchData])
 
   // Connect OAuth provider (redirect-based, for providers with registered callbacks)
   const connectOAuth = useCallback((provider: string) => {
@@ -181,51 +128,32 @@ function SettingsInner() {
     setError(null)
 
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (csrfToken) headers["x-csrf-token"] = csrfToken
-
-      const res = await fetch("/api/credentials/api-key", {
-        method: "POST",
-        credentials: "include",
-        headers,
-        body: JSON.stringify({
-          provider: apiKeyForm.provider,
-          apiKey: apiKeyForm.key,
-          displayLabel: apiKeyForm.label || undefined,
-        }),
+      await saveProviderApiKey({
+        provider: apiKeyForm.provider,
+        apiKey: apiKeyForm.key,
+        displayLabel: apiKeyForm.label || undefined,
       })
-
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({ message: "Failed to save" }))) as {
-          message?: string
-        }
-        setError(data.message ?? "Failed to save API key")
-        return
-      }
 
       setApiKeyForm(null)
       void fetchData()
-    } catch {
-      setError("Failed to save API key")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save API key")
     } finally {
       setSaving(false)
     }
-  }, [apiKeyForm, csrfToken, fetchData])
+  }, [apiKeyForm, fetchData])
 
   // Delete credential
-  const deleteCredential = useCallback(
+  const handleDeleteCredential = useCallback(
     async (id: string) => {
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (csrfToken) headers["x-csrf-token"] = csrfToken
-
-      await fetch(`/api/credentials/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-        headers,
-      })
+      try {
+        await apiDeleteCredential(id)
+      } catch {
+        // Ignore — re-fetch will show current state
+      }
       void fetchData()
     },
-    [csrfToken, fetchData],
+    [fetchData],
   )
 
   if (authStatus === "loading" || loading) {
@@ -331,7 +259,7 @@ function SettingsInner() {
                   {cred ? (
                     <button
                       type="button"
-                      onClick={() => void deleteCredential(cred.id)}
+                      onClick={() => void handleDeleteCredential(cred.id)}
                       className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
                     >
                       Disconnect
