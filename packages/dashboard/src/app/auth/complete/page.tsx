@@ -24,8 +24,18 @@ function AuthCompleteInner() {
       }
 
       // Refresh session first so header/menu render authenticated identity immediately.
-      await refreshSession()
-      router.replace("/")
+      const status = await refreshSession()
+      if (status === "authenticated") {
+        router.replace("/")
+        return
+      }
+
+      if (status === "unverified") {
+        router.replace("/login?error=session_unverified")
+        return
+      }
+
+      router.replace("/login?error=session_expired")
     }
 
     void finalizeLogin()

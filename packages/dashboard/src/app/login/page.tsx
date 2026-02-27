@@ -15,6 +15,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_params: "Missing authentication parameters.",
   provider_not_configured: "This login provider is not configured.",
   session_expired: "Your session has expired. Please sign in again.",
+  session_unverified: "Could not verify your session. Please try signing in again.",
 }
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 function LoginInner() {
-  const { login, isAuthenticated, isLoading } = useAuth()
+  const { login, authStatus, authError } = useAuth()
   const searchParams = useSearchParams()
   const router = useRouter()
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([])
@@ -32,10 +33,10 @@ function LoginInner() {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (authStatus === "authenticated") {
       router.replace("/")
     }
-  }, [isLoading, isAuthenticated, router])
+  }, [authStatus, router])
 
   // Fetch available providers
   useEffect(() => {
@@ -48,7 +49,7 @@ function LoginInner() {
       .catch(() => setLoadingProviders(false))
   }, [])
 
-  if (isLoading) {
+  if (authStatus === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-dark">
         <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -74,6 +75,13 @@ function LoginInner() {
         {error && (
           <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {ERROR_MESSAGES[error] ?? `Authentication error: ${error}`}
+          </div>
+        )}
+        {authStatus === "unverified" && (
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
+            Session verification is unstable. Please retry sign in once the control-plane is
+            reachable.
+            {authError ? <span className="block text-xs opacity-80">{authError}</span> : null}
           </div>
         )}
 

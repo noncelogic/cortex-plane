@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
@@ -32,8 +32,7 @@ interface Credential {
 // ---------------------------------------------------------------------------
 
 function SettingsInner() {
-  const { user, isAuthenticated, isLoading, csrfToken } = useAuth()
-  const router = useRouter()
+  const { user, authStatus, csrfToken } = useAuth()
   const searchParams = useSearchParams()
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
@@ -51,13 +50,6 @@ function SettingsInner() {
 
   const connected = searchParams.get("connected")
   const paramError = searchParams.get("error")
-
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace("/login")
-    }
-  }, [isLoading, isAuthenticated, router])
 
   // Fetch providers and credentials
   const fetchData = useCallback(async () => {
@@ -86,8 +78,8 @@ function SettingsInner() {
   }, [csrfToken])
 
   useEffect(() => {
-    if (isAuthenticated) void fetchData()
-  }, [isAuthenticated, fetchData])
+    if (authStatus === "authenticated") void fetchData()
+  }, [authStatus, fetchData])
 
   // Connect OAuth provider
   const connectOAuth = useCallback((provider: string) => {
@@ -148,7 +140,7 @@ function SettingsInner() {
     [csrfToken, fetchData],
   )
 
-  if (isLoading || loading) {
+  if (authStatus === "loading" || loading) {
     return (
       <div className="flex justify-center py-12">
         <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
