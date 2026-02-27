@@ -27,6 +27,13 @@ interface Credential {
   createdAt: string
 }
 
+/** Code-paste providers that use the init/exchange flow. */
+const CODE_PASTE_PROVIDER_IDS = new Set([
+  "google-antigravity",
+  "openai-codex",
+  "anthropic",
+])
+
 // ---------------------------------------------------------------------------
 // Settings page inner (wrapped in Suspense)
 // ---------------------------------------------------------------------------
@@ -47,6 +54,16 @@ function SettingsInner() {
   } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Code-paste flow state
+  const [codePasteFlow, setCodePasteFlow] = useState<{
+    provider: string
+    authUrl: string
+    codeVerifier: string
+    pastedUrl: string
+  } | null>(null)
+  const [codePasteError, setCodePasteError] = useState<string | null>(null)
+  const [codePasteSubmitting, setCodePasteSubmitting] = useState(false)
 
   const connected = searchParams.get("connected")
   const paramError = searchParams.get("error")
@@ -81,7 +98,79 @@ function SettingsInner() {
     if (authStatus === "authenticated") void fetchData()
   }, [authStatus, fetchData])
 
-  // Connect OAuth provider
+  // Initiate code-paste flow
+  const startCodePasteFlow = useCallback(
+    async (provider: string) => {
+      setCodePasteError(null)
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (csrfToken) headers["x-csrf-token"] = csrfToken
+
+        const res = await fetch(`/api/auth/connect/${provider}/init`, {
+          credentials: "include",
+          headers,
+        })
+
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({ message: "Failed to initialize" }))) as {
+            message?: string
+          }
+          setCodePasteError(data.message ?? "Failed to initialize OAuth flow")
+          return
+        }
+
+        const data = (await res.json()) as { authUrl: string; codeVerifier: string }
+        setCodePasteFlow({
+          provider,
+          authUrl: data.authUrl,
+          codeVerifier: data.codeVerifier,
+          pastedUrl: "",
+        })
+      } catch {
+        setCodePasteError("Failed to initialize OAuth flow")
+      }
+    },
+    [csrfToken],
+  )
+
+  // Submit code-paste exchange
+  const submitCodePaste = useCallback(async () => {
+    if (!codePasteFlow || !codePasteFlow.pastedUrl.trim()) return
+    setCodePasteSubmitting(true)
+    setCodePasteError(null)
+
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (csrfToken) headers["x-csrf-token"] = csrfToken
+
+      const res = await fetch(`/api/auth/connect/${codePasteFlow.provider}/exchange`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: JSON.stringify({
+          pastedUrl: codePasteFlow.pastedUrl,
+          codeVerifier: codePasteFlow.codeVerifier,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({ message: "Exchange failed" }))) as {
+          message?: string
+        }
+        setCodePasteError(data.message ?? "Failed to exchange authorization code")
+        return
+      }
+
+      setCodePasteFlow(null)
+      void fetchData()
+    } catch {
+      setCodePasteError("Failed to exchange authorization code")
+    } finally {
+      setCodePasteSubmitting(false)
+    }
+  }, [codePasteFlow, csrfToken, fetchData])
+
+  // Connect OAuth provider (redirect-based, for providers with registered callbacks)
   const connectOAuth = useCallback((provider: string) => {
     window.location.href = `/api/auth/connect/${provider}`
   }, [])
@@ -205,6 +294,7 @@ function SettingsInner() {
           {providers.map((p) => {
             const cred = getCredentialForProvider(p.id)
             const isOAuth = p.authType === "oauth"
+            const isCodePaste = CODE_PASTE_PROVIDER_IDS.has(p.id)
 
             return (
               <div
@@ -214,7 +304,7 @@ function SettingsInner() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-text-main">{p.name}</span>
-                    {cred && (
+                    {cred ? (
                       <span
                         className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                           cred.status === "active"
@@ -225,6 +315,10 @@ function SettingsInner() {
                         }`}
                       >
                         {cred.status}
+                      </span>
+                    ) : (
+                      <span className="inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-text-muted">
+                        Not Connected
                       </span>
                     )}
                   </div>
@@ -242,6 +336,14 @@ function SettingsInner() {
                       className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
                     >
                       Disconnect
+                    </button>
+                  ) : isOAuth && isCodePaste ? (
+                    <button
+                      type="button"
+                      onClick={() => void startCodePasteFlow(p.id)}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
+                    >
+                      Connect
                     </button>
                   ) : isOAuth ? (
                     <button
@@ -272,6 +374,83 @@ function SettingsInner() {
           )}
         </div>
       </section>
+
+      {/* Code-paste flow dialog */}
+      {codePasteFlow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-lg rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-text-main">
+              Connect {providers.find((p) => p.id === codePasteFlow.provider)?.name}
+            </h3>
+
+            <div className="mt-3 space-y-4">
+              <div>
+                <p className="text-sm text-text-muted">
+                  1. Click the link below to open the authorization page in a new tab.
+                </p>
+                <a
+                  href={codePasteFlow.authUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"
+                >
+                  Open authorization page
+                </a>
+              </div>
+
+              <div>
+                <p className="text-sm text-text-muted">
+                  2. After authorizing, copy the URL from your browser address bar and paste it
+                  below.
+                </p>
+              </div>
+
+              {codePasteError && (
+                <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                  {codePasteError}
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text-muted">
+                  Paste redirect URL here
+                </label>
+                <input
+                  type="text"
+                  value={codePasteFlow.pastedUrl}
+                  onChange={(e) =>
+                    setCodePasteFlow((f) => (f ? { ...f, pastedUrl: e.target.value } : f))
+                  }
+                  className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="http://localhost:..."
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCodePasteFlow(null)
+                  setCodePasteError(null)
+                }}
+                className="rounded-lg px-4 py-2 text-sm text-text-muted hover:bg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitCodePaste()}
+                disabled={codePasteSubmitting || !codePasteFlow.pastedUrl.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {codePasteSubmitting ? "Connecting..." : "Connect"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* API Key entry modal */}
       {apiKeyForm && (

@@ -12,6 +12,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
+import { discoverAntigravityProject } from "../auth/antigravity-project.js"
 import type { CredentialService } from "../auth/credential-service.js"
 import {
   buildAuthorizeUrl,
@@ -23,6 +24,8 @@ import {
   generateCodeVerifier,
   type OAuthState,
 } from "../auth/oauth-service.js"
+import { getCodePasteProvider, listCodePasteProviders } from "../auth/oauth-providers.js"
+import { parseAuthorizationInput } from "../auth/parse-authorization-input.js"
 import { findOrCreateOAuthUser, SessionService } from "../auth/session-service.js"
 import type { AuthOAuthConfig, OAuthProviderConfig } from "../config.js"
 import type { Database } from "../db/types.js"
@@ -374,6 +377,154 @@ export function authRoutes(deps: AuthRouteDeps) {
         } catch (err) {
           request.log.error(err, `Provider connect error for ${provider}`)
           reply.redirect(`${authConfig.dashboardUrl}/settings?error=connect_failed`)
+        }
+      },
+    )
+
+    // -----------------------------------------------------------------------
+    // Code-paste flow endpoints
+    // -----------------------------------------------------------------------
+
+    /**
+     * GET /auth/connect/:provider/init — generate PKCE challenge and OAuth URL
+     * for the code-paste flow. Returns { authUrl, codeVerifier } as JSON.
+     */
+    app.get<{ Params: { provider: string } }>(
+      "/auth/connect/:provider/init",
+      { preHandler: [requireAuth] },
+      async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (!principal) {
+          reply.status(401).send({ error: "unauthorized" })
+          return
+        }
+
+        const { provider } = request.params
+        const providerReg = getCodePasteProvider(provider)
+        if (!providerReg) {
+          reply.status(400).send({
+            error: "bad_request",
+            message: `Provider '${provider}' is not available for code-paste connection`,
+          })
+          return
+        }
+
+        const codeVerifier = generateCodeVerifier()
+        const codeChallenge = generateCodeChallenge(codeVerifier)
+
+        const url = new URL(providerReg.authUrl)
+        url.searchParams.set("client_id", providerReg.clientId)
+        url.searchParams.set("redirect_uri", providerReg.redirectUri)
+        url.searchParams.set("response_type", "code")
+        url.searchParams.set("scope", providerReg.scopes.join(" "))
+
+        if (providerReg.usePkce) {
+          url.searchParams.set("code_challenge", codeChallenge)
+          url.searchParams.set("code_challenge_method", "S256")
+        }
+
+        if (providerReg.extraAuthParams) {
+          for (const [key, value] of Object.entries(providerReg.extraAuthParams)) {
+            url.searchParams.set(key, value)
+          }
+        }
+
+        return { authUrl: url.toString(), codeVerifier }
+      },
+    )
+
+    /**
+     * POST /auth/connect/:provider/exchange — accept pasted URL and exchange
+     * authorization code for tokens.
+     */
+    app.post<{
+      Params: { provider: string }
+      Body: { pastedUrl: string; codeVerifier: string }
+    }>(
+      "/auth/connect/:provider/exchange",
+      { preHandler: [requireAuth] },
+      async (
+        request: FastifyRequest<{
+          Params: { provider: string }
+          Body: { pastedUrl: string; codeVerifier: string }
+        }>,
+        reply: FastifyReply,
+      ) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (!principal) {
+          reply.status(401).send({ error: "unauthorized" })
+          return
+        }
+
+        const { provider } = request.params
+        const { pastedUrl, codeVerifier } = request.body
+
+        if (!pastedUrl || !codeVerifier) {
+          reply.status(400).send({
+            error: "bad_request",
+            message: "pastedUrl and codeVerifier are required",
+          })
+          return
+        }
+
+        const providerReg = getCodePasteProvider(provider)
+        if (!providerReg) {
+          reply.status(400).send({
+            error: "bad_request",
+            message: `Provider '${provider}' is not available for code-paste connection`,
+          })
+          return
+        }
+
+        // Parse the pasted input to extract the authorization code
+        const parsed = parseAuthorizationInput(pastedUrl, provider)
+        if (!parsed) {
+          reply.status(400).send({
+            error: "bad_request",
+            message: "Could not extract authorization code from pasted input",
+          })
+          return
+        }
+
+        try {
+          const providerConfig: OAuthProviderConfig = {
+            clientId: providerReg.clientId,
+            clientSecret: providerReg.clientSecret,
+            authUrl: providerReg.authUrl,
+            tokenUrl: providerReg.tokenUrl,
+          }
+
+          const tokens = await exchangeCodeForTokens({
+            provider,
+            config: providerConfig,
+            code: parsed.code,
+            callbackUrl: providerReg.redirectUri,
+            codeVerifier,
+          })
+
+          // Provider-specific post-exchange actions
+          let accountId: string | undefined
+          if (provider === "google-antigravity") {
+            accountId = await discoverAntigravityProject(tokens.access_token)
+          }
+
+          await credentialService.storeOAuthCredential(principal.userId, provider, tokens, {
+            accountId,
+            scopes: providerReg.scopes,
+          })
+
+          return {
+            ok: true,
+            provider: providerReg.name,
+            accountId: accountId ?? null,
+          }
+        } catch (err) {
+          request.log.error(err, `Code-paste exchange error for ${provider}`)
+          reply.status(500).send({
+            error: "exchange_failed",
+            message:
+              err instanceof Error ? err.message : "Failed to exchange authorization code",
+          })
         }
       },
     )
