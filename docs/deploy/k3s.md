@@ -2,6 +2,9 @@
 
 Step-by-step runbook: blank Ubuntu VM to a healthy Cortex Plane cluster on k3s.
 
+For GitHub Actions automation on a private VM runner, see
+`docs/deploy/self-hosted-actions-runner-k3s.md`.
+
 ---
 
 ## 1. VM Preparation
