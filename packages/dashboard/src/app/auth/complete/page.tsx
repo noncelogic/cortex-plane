@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect } from "react"
 
+import { useAuth } from "@/components/auth-provider"
+
 /**
  * /auth/complete — OAuth callback landing page.
  *
@@ -12,15 +14,22 @@ import { Suspense, useEffect } from "react"
 function AuthCompleteInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { refreshSession } = useAuth()
 
   useEffect(() => {
-    const csrf = searchParams.get("csrf")
-    if (csrf) {
-      sessionStorage.setItem("cortex_csrf", csrf)
+    const finalizeLogin = async () => {
+      const csrf = searchParams.get("csrf")
+      if (csrf) {
+        sessionStorage.setItem("cortex_csrf", csrf)
+      }
+
+      // Refresh session first so header/menu render authenticated identity immediately.
+      await refreshSession()
+      router.replace("/")
     }
-    // Redirect to dashboard — the AuthProvider will pick up the session cookie
-    router.replace("/")
-  }, [searchParams, router])
+
+    void finalizeLogin()
+  }, [searchParams, refreshSession, router])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-dark">

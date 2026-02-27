@@ -205,6 +205,7 @@ export function authRoutes(deps: AuthRouteDeps) {
         userId: principal.userId,
         displayName: principal.displayName,
         email: principal.email ?? null,
+        avatarUrl: principal.avatarUrl ?? null,
         role: principal.userRole ?? null,
         authMethod: principal.authMethod,
       }

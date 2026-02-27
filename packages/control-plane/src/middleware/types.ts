@@ -16,6 +16,8 @@ export interface Principal {
   authMethod: "api_key" | "bearer_token" | "session"
   /** Email (populated for session-based auth). */
   email?: string
+  /** Avatar URL (populated for session-based auth). */
+  avatarUrl?: string
   /** Dashboard user role (populated for session-based auth). */
   userRole?: UserRole
 }

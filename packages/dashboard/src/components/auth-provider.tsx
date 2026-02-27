@@ -10,6 +10,7 @@ export interface SessionUser {
   userId: string
   displayName: string | null
   email: string | null
+  avatarUrl?: string | null
   role: string | null
   authMethod: string
 }
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedCsrf) headers["x-csrf-token"] = storedCsrf
 
       const res = await fetch(`${API_BASE}/auth/session`, {
+        cache: "no-store",
         credentials: "include",
         headers,
       })
