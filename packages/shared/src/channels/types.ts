@@ -66,6 +66,16 @@ export interface CallbackQuery {
   timestamp: Date
 }
 
+export interface VoiceSessionLifecycleEvent {
+  voiceSessionId: string
+  agentId: string
+  sessionId: string
+  userAccountId: string
+  tokenExpiresAt: string
+  timestamp: string
+  reason?: "expired" | "replaced" | "shutdown" | "stopped"
+}
+
 // ──────────────────────────────────────────────────
 // Channel Adapter Interface
 // ──────────────────────────────────────────────────
@@ -84,4 +94,6 @@ export interface ChannelAdapter {
 
   onMessage(handler: (msg: InboundMessage) => Promise<void>): void
   onCallback?(handler: (callback: CallbackQuery) => Promise<void>): void
+  onVoiceSessionStart?(event: VoiceSessionLifecycleEvent): Promise<void> | void
+  onVoiceSessionStop?(event: VoiceSessionLifecycleEvent): Promise<void> | void
 }
