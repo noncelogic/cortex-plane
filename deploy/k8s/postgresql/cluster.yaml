@@ -41,7 +41,6 @@ spec:
       max_wal_senders: "10"
       max_replication_slots: "10"
       wal_keep_size: "2GB"
-      shared_preload_libraries: pg_stat_statements
 
   backup:
     retentionPolicy: "7d"
