@@ -9,7 +9,7 @@ import { getUserInitials } from "@/lib/auth-ui"
 
 export function UserMenu() {
   const { theme, toggle } = useTheme()
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, authStatus, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -31,10 +31,12 @@ export function UserMenu() {
     }
   }, [open, close])
 
-  const initials = getUserInitials(user)
+  const isAuthenticated = authStatus === "authenticated"
 
-  const displayName = user?.displayName ?? user?.email ?? "Guest"
-  const role = user?.role ?? "operator"
+  // Only derive identity from user when definitively authenticated
+  const initials = isAuthenticated ? getUserInitials(user) : "?"
+  const displayName = isAuthenticated ? (user?.displayName ?? user?.email ?? "User") : "Guest"
+  const role = isAuthenticated ? (user?.role ?? "operator") : null
 
   return (
     <div ref={ref} className="relative">
@@ -63,10 +65,16 @@ export function UserMenu() {
               <>
                 {user?.email && <p className="text-xs text-text-muted truncate">{user.email}</p>}
                 <p className="mt-0.5 text-[11px] font-medium text-success">Signed in</p>
-                <span className="mt-0.5 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                  {role}
-                </span>
+                {role && (
+                  <span className="mt-0.5 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                    {role}
+                  </span>
+                )}
               </>
+            ) : authStatus === "loading" ? (
+              <p className="mt-0.5 text-[11px] font-medium text-text-muted">Checking session…</p>
+            ) : authStatus === "unverified" ? (
+              <p className="mt-0.5 text-[11px] font-medium text-amber-400">Session unverified</p>
             ) : (
               <p className="mt-0.5 text-[11px] font-medium text-text-muted">Not signed in</p>
             )}
@@ -112,7 +120,7 @@ export function UserMenu() {
 
           <div className="mx-2 border-t border-surface-border" />
 
-          {/* Sign out */}
+          {/* Sign out / Sign in */}
           {isAuthenticated ? (
             <button
               type="button"
