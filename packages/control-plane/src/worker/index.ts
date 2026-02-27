@@ -3,23 +3,25 @@
  *
  * Configures the worker with:
  * - PostgreSQL connection (shared pool)
- * - Task handlers (agent_execute, memory_extract)
+ * - Task handlers (agent_execute, memory_extract, correction_strengthen, proactive_detect)
  * - Concurrency (env GRAPHILE_WORKER_CONCURRENCY, default 5)
  *
  * The runner is started alongside Fastify and shares the same pg.Pool.
  */
 
+import type { BackendRegistry } from "@cortex/shared/backends"
+import type { BufferWriter } from "@cortex/shared/buffer"
 import { run, type Runner, type TaskList } from "graphile-worker"
 import type { Kysely } from "kysely"
 import type { Pool } from "pg"
 
-import type { BackendRegistry } from "@cortex/shared/backends"
-import type { BufferWriter } from "@cortex/shared/buffer"
 import type { Database } from "../db/types.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
 import { createApprovalExpireTask } from "./tasks/approval-expire.js"
+import { createCorrectionStrengthenTask } from "./tasks/correction-strengthen.js"
 import { createMemoryExtractTask } from "./tasks/memory-extract.js"
+import { createProactiveDetectTask } from "./tasks/proactive-detect.js"
 
 export interface WorkerOptions {
   pgPool: Pool
@@ -59,6 +61,8 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     }),
     memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),
+    correction_strengthen: createCorrectionStrengthenTask(),
+    proactive_detect: createProactiveDetectTask(),
   }
 
   const runner = await run({
