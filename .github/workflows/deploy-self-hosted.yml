@@ -1,7 +1,9 @@
 name: Deploy to k3s (self-hosted)
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build & Publish Images"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -15,6 +17,10 @@ permissions:
 
 jobs:
   deploy:
+    # Only deploy if image build succeeded (or manual dispatch)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, linux, cortex-k3s]
     environment: production
 
@@ -22,10 +28,22 @@ jobs:
       NAMESPACE: cortex
       OVERLAY_DIR: deploy/k8s/overlays/prod
       IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/cortex
-      IMAGE_TAG: ${{ github.sha }}
 
     steps:
+      - name: Resolve commit SHA
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            FULL_SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            FULL_SHA="${{ github.sha }}"
+          fi
+          echo "full=${FULL_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short=${FULL_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.sha.outputs.full }}
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
@@ -50,6 +68,8 @@ jobs:
           kubectl get namespace "$NAMESPACE"
 
       - name: Deploy overlay and run smoke checks
+        env:
+          IMAGE_TAG: ${{ steps.sha.outputs.short }}
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-k3s.sh
