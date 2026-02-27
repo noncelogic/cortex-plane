@@ -9,6 +9,7 @@ import type pg from "pg"
 
 import { ApprovalService } from "./approval/service.js"
 import { CredentialService } from "./auth/credential-service.js"
+import { FeedbackService } from "./feedback/service.js"
 import { SessionService } from "./auth/session-service.js"
 import { ClaudeCodeBackend } from "./backends/claude-code.js"
 import { HttpLlmBackend } from "./backends/http-llm.js"
@@ -27,6 +28,7 @@ import { credentialRoutes } from "./routes/credentials.js"
 import { dashboardRoutes } from "./routes/dashboard.js"
 import { healthRoutes } from "./routes/health.js"
 import { observationRoutes } from "./routes/observation.js"
+import { feedbackRoutes } from "./routes/feedback.js"
 import { streamRoutes } from "./routes/stream.js"
 import { voiceRoutes } from "./routes/voice.js"
 import { SSEConnectionManager } from "./streaming/manager.js"
@@ -111,6 +113,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
 
   // Approval service — core approval gate logic
   const approvalService = new ApprovalService({ db })
+  const feedbackService = new FeedbackService({ db })
 
   // Load auth configuration for approval gate endpoints
   const authConfig = loadAuthConfig()
@@ -149,6 +152,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
 
   // Register approval routes (always available)
   await app.register(approvalRoutes({ approvalService, sseManager, authConfig, sessionService }))
+  await app.register(feedbackRoutes({ feedbackService }))
 
   // Register agent CRUD + job routes
   await app.register(

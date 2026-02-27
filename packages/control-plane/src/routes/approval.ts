@@ -10,7 +10,7 @@
  * GET  /approvals/stream            — SSE stream for real-time approval events (requires: auth)
  */
 
-import type { ApprovalStatus } from "@cortex/shared"
+import type { ApprovalStatus, RiskLevel } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
 import { buildActorMetadata } from "../approval/audit.js"
@@ -40,6 +40,9 @@ interface CreateApprovalBody {
   actionDetail: Record<string, unknown>
   approverUserAccountId?: string
   ttlSeconds?: number
+  riskLevel?: RiskLevel
+  resumePayload?: Record<string, unknown>
+  blastRadius?: string
 }
 
 interface DecideParams {
@@ -112,6 +115,9 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
               actionDetail: { type: "object" },
               approverUserAccountId: { type: "string", format: "uuid" },
               ttlSeconds: { type: "number", minimum: 60, maximum: 604800 },
+              riskLevel: { type: "string", enum: ["P0", "P1", "P2", "P3"] },
+              resumePayload: { type: "object" },
+              blastRadius: { type: "string", maxLength: 500 },
             },
             required: ["agentId", "actionType", "actionSummary", "actionDetail"],
           },
@@ -133,6 +139,9 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
             actionDetail: body.actionDetail,
             approverUserAccountId: body.approverUserAccountId,
             ttlSeconds: body.ttlSeconds,
+            riskLevel: body.riskLevel,
+            resumePayload: body.resumePayload,
+            blastRadius: body.blastRadius,
           })
 
           // Broadcast SSE event
