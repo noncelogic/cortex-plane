@@ -22,4 +22,5 @@ export type {
   InlineButton,
   MediaAttachment,
   OutboundMessage,
+  VoiceSessionLifecycleEvent,
 } from "./types.js"

@@ -1,5 +1,5 @@
 import { BackendRegistry } from "@cortex/shared/backends"
-import type { ChannelSupervisor } from "@cortex/shared/channels"
+import type { ChannelAdapter, ChannelSupervisor } from "@cortex/shared/channels"
 import fastifyCors from "@fastify/cors"
 import fastifyWebSocket from "@fastify/websocket"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -27,6 +27,7 @@ import { credentialRoutes } from "./routes/credentials.js"
 import { healthRoutes } from "./routes/health.js"
 import { observationRoutes } from "./routes/observation.js"
 import { streamRoutes } from "./routes/stream.js"
+import { voiceRoutes } from "./routes/voice.js"
 import { SSEConnectionManager } from "./streaming/manager.js"
 import { createWorker, type Runner } from "./worker/index.js"
 import { createMemoryScheduler } from "./worker/memory-scheduler.js"
@@ -48,6 +49,7 @@ export interface AppOptions {
   lifecycleManager?: AgentLifecycleManager
   registry?: BackendRegistry
   channelSupervisor?: ChannelSupervisor
+  voiceAdapters?: ReadonlyArray<ChannelAdapter>
 }
 
 export async function buildApp(options: AppOptions): Promise<AppContext> {
@@ -170,6 +172,12 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Always register streaming + observation routes
   // (lifecycleManager is optional — routes handle its absence gracefully)
   await app.register(streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }))
+  await app.register(
+    voiceRoutes({
+      db,
+      adapters: options.voiceAdapters,
+    }),
+  )
   await app.register(
     observationRoutes({
       sseManager,
