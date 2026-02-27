@@ -27,6 +27,7 @@ export interface WorkerOptions {
   registry: BackendRegistry
   streamManager?: SSEConnectionManager
   sessionBufferFactory?: (jobId: string, agentId: string) => BufferWriter
+  memoryExtractThreshold?: number
   concurrency?: number
 }
 
@@ -35,14 +36,28 @@ export interface WorkerOptions {
  * Returns the Runner instance (used for shutdown and health checks).
  */
 export async function createWorker(options: WorkerOptions): Promise<Runner> {
-  const { pgPool, db, registry, streamManager, sessionBufferFactory, concurrency } = options
+  const {
+    pgPool,
+    db,
+    registry,
+    streamManager,
+    sessionBufferFactory,
+    memoryExtractThreshold,
+    concurrency,
+  } = options
 
   const workerConcurrency =
     concurrency ?? parseInt(process.env.GRAPHILE_WORKER_CONCURRENCY ?? "5", 10)
 
   const taskList: TaskList = {
-    agent_execute: createAgentExecuteTask({ db, registry, streamManager, sessionBufferFactory }),
-    memory_extract: createMemoryExtractTask(),
+    agent_execute: createAgentExecuteTask({
+      db,
+      registry,
+      streamManager,
+      sessionBufferFactory,
+      memoryExtractThreshold,
+    }),
+    memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),
   }
 

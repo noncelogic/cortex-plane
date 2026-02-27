@@ -115,6 +115,38 @@ export type NewSession = Insertable<SessionTable>
 export type SessionUpdate = Updateable<SessionTable>
 
 // ---------------------------------------------------------------------------
+// Table: memory_extract_session_state
+// ---------------------------------------------------------------------------
+export interface MemoryExtractSessionStateTable {
+  session_id: string
+  pending_count: ColumnType<number, number | undefined, number>
+  total_count: ColumnType<number, number | undefined, number>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type MemoryExtractSessionState = Selectable<MemoryExtractSessionStateTable>
+export type NewMemoryExtractSessionState = Insertable<MemoryExtractSessionStateTable>
+export type MemoryExtractSessionStateUpdate = Updateable<MemoryExtractSessionStateTable>
+
+// ---------------------------------------------------------------------------
+// Table: memory_extract_message
+// ---------------------------------------------------------------------------
+export interface MemoryExtractMessageTable {
+  id: Generated<string>
+  session_id: string
+  agent_id: string
+  role: string
+  content: string
+  occurred_at: Date
+  extracted_at: Date | null
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type MemoryExtractMessage = Selectable<MemoryExtractMessageTable>
+export type NewMemoryExtractMessage = Insertable<MemoryExtractMessageTable>
+export type MemoryExtractMessageUpdate = Updateable<MemoryExtractMessageTable>
+
+// ---------------------------------------------------------------------------
 // Table: job
 // ---------------------------------------------------------------------------
 export interface JobTable {
@@ -266,6 +298,8 @@ export interface Database {
   user_account: UserAccountTable
   channel_mapping: ChannelMappingTable
   session: SessionTable
+  memory_extract_session_state: MemoryExtractSessionStateTable
+  memory_extract_message: MemoryExtractMessageTable
   job: JobTable
   approval_request: ApprovalRequestTable
   approval_audit_log: ApprovalAuditLogTable

@@ -29,6 +29,7 @@ import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
 import { classifyError } from "../error-classifier.js"
 import { startHeartbeat } from "../heartbeat.js"
+import { createMemoryScheduler } from "../memory-scheduler.js"
 import { calculateRunAt } from "../retry.js"
 
 export interface AgentExecutePayload {
@@ -40,6 +41,7 @@ export interface AgentExecuteDeps {
   registry: BackendRegistry
   streamManager?: SSEConnectionManager
   sessionBufferFactory?: (jobId: string, agentId: string) => BufferWriter
+  memoryExtractThreshold?: number
   /** Optional skill index for dynamic skill loading. */
   skillIndex?: import("@cortex/shared/skills").SkillIndex
 }
@@ -55,7 +57,15 @@ const SEMAPHORE_TIMEOUT_MS = 60_000
  * Accepts dependencies via closure for dependency injection.
  */
 export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
-  const { db, registry, streamManager, sessionBufferFactory, skillIndex } = deps
+  const {
+    db,
+    registry,
+    streamManager,
+    sessionBufferFactory,
+    memoryExtractThreshold = 50,
+    skillIndex,
+  } = deps
+  const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
   return async (rawPayload: unknown, _helpers: JobHelpers): Promise<void> => {
     const payload = rawPayload as AgentExecutePayload
@@ -191,6 +201,24 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           // ── Step 8: Execute task ──
           handle = await backend.executeTask(task)
 
+          // Store the user prompt as a session message for memory extraction batching.
+          if (job.session_id && task.instruction.prompt.trim().length > 0) {
+            await memoryScheduler
+              .recordMessage(
+                {
+                  sessionId: job.session_id,
+                  agentId: agent.id,
+                  role: "user",
+                  content: task.instruction.prompt,
+                  occurredAt: new Date().toISOString(),
+                },
+                _helpers,
+              )
+              .catch(() => {
+                // Non-fatal: extraction scheduling must not block execution.
+              })
+          }
+
           // ── Step 9: Stream events ──
           const cancelChecker = startCancelChecker(db, jobId, handle)
 
@@ -209,6 +237,23 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   output: event,
                 }
                 streamManager.broadcast(agent.id, "agent:output", ssePayload)
+              }
+
+              if (job.session_id && event.type === "text" && event.content.trim().length > 0) {
+                await memoryScheduler
+                  .recordMessage(
+                    {
+                      sessionId: job.session_id,
+                      agentId: agent.id,
+                      role: "assistant",
+                      content: event.content,
+                      occurredAt: event.timestamp,
+                    },
+                    _helpers,
+                  )
+                  .catch(() => {
+                    // Non-fatal: extraction scheduling must not block execution.
+                  })
               }
             }
           } finally {
@@ -331,6 +376,11 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
         throw err // re-throw so withSpan marks the span as errored
       } finally {
+        if (job.session_id) {
+          await memoryScheduler.flushSession(job.session_id, _helpers).catch(() => {
+            // Non-fatal: best-effort final flush.
+          })
+        }
         heartbeat.stop()
       }
     }) // end withSpan

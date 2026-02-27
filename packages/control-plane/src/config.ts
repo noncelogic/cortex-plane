@@ -48,6 +48,8 @@ export interface Config {
   logLevel: string
   /** Graphile Worker concurrency */
   workerConcurrency: number
+  /** Number of session messages to batch before scheduling memory extraction. */
+  memoryExtractThreshold: number
   /** Qdrant REST URL */
   qdrantUrl: string
   /** OpenTelemetry tracing configuration */
@@ -96,6 +98,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     nodeEnv: env.NODE_ENV ?? "development",
     logLevel: env.LOG_LEVEL ?? "info",
     workerConcurrency: parseIntOr(env.GRAPHILE_WORKER_CONCURRENCY, 5),
+    memoryExtractThreshold: parseIntOr(env.MEMORY_EXTRACT_THRESHOLD, 50),
     qdrantUrl: env.QDRANT_URL ?? "http://localhost:6333",
     tracing: {
       enabled: env.OTEL_TRACING_ENABLED === "true",

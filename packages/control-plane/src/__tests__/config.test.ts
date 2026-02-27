@@ -16,7 +16,9 @@ describe("loadConfig", () => {
       nodeEnv: "development",
       logLevel: "info",
       workerConcurrency: 5,
+      memoryExtractThreshold: 50,
       qdrantUrl: "http://localhost:6333",
+      auth: undefined,
       tracing: {
         enabled: false,
         endpoint: "http://localhost:4318/v1/traces",
@@ -109,7 +111,7 @@ describe("loadConfig", () => {
           DATABASE_URL: "postgres://localhost/test",
           OTEL_EXPORTER_TYPE: "invalid",
         }),
-      ).toThrow('Invalid OTEL_EXPORTER_TYPE: invalid')
+      ).toThrow("Invalid OTEL_EXPORTER_TYPE: invalid")
     })
   })
 })

@@ -18,6 +18,7 @@ export interface ShutdownDeps {
   fastify: FastifyInstance
   runner: Runner
   pool: Pool
+  onDrainStart?: () => Promise<void>
 }
 
 /** Maximum time to wait for active jobs to drain before forcing shutdown */
@@ -40,6 +41,12 @@ export function registerShutdownHandlers(deps: ShutdownDeps): () => void {
     await deps.fastify.close().catch((err: unknown) => {
       deps.fastify.log.error({ err }, "Error closing Fastify")
     })
+
+    if (deps.onDrainStart) {
+      await deps.onDrainStart().catch((err: unknown) => {
+        deps.fastify.log.error({ err }, "Error during pre-drain hooks")
+      })
+    }
 
     // 2. Stop Graphile Worker with a deadline
     const workerStopped = deps.runner.stop()
