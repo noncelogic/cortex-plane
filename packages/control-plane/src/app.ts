@@ -28,6 +28,7 @@ import { observationRoutes } from "./routes/observation.js"
 import { streamRoutes } from "./routes/stream.js"
 import { SSEConnectionManager } from "./streaming/manager.js"
 import { createWorker, type Runner } from "./worker/index.js"
+import { createMemoryScheduler } from "./worker/memory-scheduler.js"
 import { registerShutdownHandlers } from "./worker/shutdown.js"
 
 export interface AppContext {
@@ -73,11 +74,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     db,
     registry,
     streamManager: sseManager,
+    memoryExtractThreshold: config.memoryExtractThreshold,
     concurrency: config.workerConcurrency,
   })
 
   // Worker utils for job enqueueing from routes
   const workerUtils: WorkerUtils = await makeWorkerUtils({ pgPool: pool })
+  const memoryScheduler = createMemoryScheduler({
+    db,
+    threshold: config.memoryExtractThreshold,
+  })
 
   // Browser observation service + orchestration services
   const observationService = new BrowserObservationService()
@@ -158,8 +164,20 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     }),
   )
 
+  // Recovery flush: enqueue extraction jobs for any pending session messages.
+  await memoryScheduler.flushAllPending(workerUtils).catch((err: unknown) => {
+    app.log.error({ err }, "Failed to enqueue pending memory extraction jobs on startup")
+  })
+
   // Register graceful shutdown handlers (SIGTERM, SIGINT)
-  registerShutdownHandlers({ fastify: app, runner, pool })
+  registerShutdownHandlers({
+    fastify: app,
+    runner,
+    pool,
+    onDrainStart: async () => {
+      await memoryScheduler.flushAllPending(workerUtils)
+    },
+  })
 
   // Shut down SSE connections + observation service + browser services + backend registry on app close
   app.addHook("onClose", async () => {

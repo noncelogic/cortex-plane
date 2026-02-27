@@ -81,6 +81,8 @@ describe("PostgreSQL migrations", () => {
       expect(await tableExists(client, "user_account")).toBe(true)
       expect(await tableExists(client, "channel_mapping")).toBe(true)
       expect(await tableExists(client, "session")).toBe(true)
+      expect(await tableExists(client, "memory_extract_session_state")).toBe(true)
+      expect(await tableExists(client, "memory_extract_message")).toBe(true)
       expect(await tableExists(client, "job")).toBe(true)
       expect(await tableExists(client, "approval_request")).toBe(true)
 
@@ -260,6 +262,8 @@ describe("PostgreSQL migrations", () => {
 
       expect(await tableExists(client, "approval_request")).toBe(false)
       expect(await tableExists(client, "job")).toBe(false)
+      expect(await tableExists(client, "memory_extract_message")).toBe(false)
+      expect(await tableExists(client, "memory_extract_session_state")).toBe(false)
       expect(await tableExists(client, "session")).toBe(false)
       expect(await tableExists(client, "channel_mapping")).toBe(false)
       expect(await tableExists(client, "user_account")).toBe(false)

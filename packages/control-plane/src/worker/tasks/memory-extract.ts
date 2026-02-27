@@ -20,7 +20,9 @@ import {
 } from "@cortex/shared/memory"
 import { CortexAttributes, withSpan } from "@cortex/shared/tracing"
 import type { JobHelpers, Task } from "graphile-worker"
+import type { Kysely } from "kysely"
 
+import type { Database } from "../../db/types.js"
 import {
   buildExtractionSystemPrompt,
   buildExtractionUserPrompt,
@@ -34,6 +36,7 @@ import {
 export interface MemoryExtractPayload {
   sessionId: string
   agentId: string
+  upToMessageId?: string
   messages: Array<{
     role: string
     content: string
@@ -152,6 +155,36 @@ export async function runExtractionPipeline(
   })
 }
 
+async function markMessagesExtracted(
+  db: Kysely<Database>,
+  payload: MemoryExtractPayload,
+): Promise<void> {
+  if (!payload.upToMessageId) {
+    return
+  }
+
+  const updated = await db
+    .updateTable("memory_extract_message")
+    .set({ extracted_at: new Date() })
+    .where("session_id", "=", payload.sessionId)
+    .where("extracted_at", "is", null)
+    .where("id", "<=", payload.upToMessageId)
+    .executeTakeFirst()
+
+  const extractedCount = Number(updated.numUpdatedRows)
+
+  if (extractedCount > 0) {
+    await db
+      .updateTable("memory_extract_session_state")
+      .set((eb) => ({
+        pending_count: eb.fn("greatest", [eb("pending_count", "-", extractedCount), eb.val(0)]),
+        updated_at: new Date(),
+      }))
+      .where("session_id", "=", payload.sessionId)
+      .execute()
+  }
+}
+
 // ──────────────────────────────────────────────────
 // Task factory
 // ──────────────────────────────────────────────────
@@ -160,7 +193,7 @@ export async function runExtractionPipeline(
  * Create the memory_extract task handler.
  * Accepts dependencies for LLM calling, embedding, and storage.
  */
-export function createMemoryExtractTask(deps?: MemoryExtractDeps): Task {
+export function createMemoryExtractTask(deps?: MemoryExtractDeps, db?: Kysely<Database>): Task {
   return async (rawPayload: unknown, helpers: JobHelpers): Promise<void> => {
     const payload = rawPayload as MemoryExtractPayload
     const { sessionId, agentId, messages } = payload
@@ -181,6 +214,9 @@ export function createMemoryExtractTask(deps?: MemoryExtractDeps): Task {
 
     try {
       const summary = await runExtractionPipeline(sessionId, agentId, messages, deps)
+      if (db) {
+        await markMessagesExtracted(db, payload)
+      }
 
       helpers.logger.info(
         `memory_extract: completed for ${sessionId} — ` +
