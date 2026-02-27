@@ -141,6 +141,29 @@ describe("ApprovalService", () => {
       expect(result.expiresAt.getTime()).toBeLessThan(expectedExpiry + 5000)
     })
 
+
+
+    it("applies risk-based defaults and auto-approves P3", async () => {
+      db._txMockResult.executeTakeFirstOrThrow.mockResolvedValue({ id: "approval-p3" })
+
+      const result = await service.createRequest({
+        jobId: "job-1",
+        agentId: "agent-1",
+        actionType: "noop",
+        actionSummary: "Low risk change",
+        actionDetail: {},
+        riskLevel: "P3",
+      })
+
+      expect(result.riskLevel).toBe("P3")
+      expect(result.autoApprovable).toBe(true)
+      expect(result.shouldNotify).toBe(false)
+
+      const expectedExpiry = Date.now() + 259_200 * 1000
+      expect(result.expiresAt.getTime()).toBeGreaterThan(expectedExpiry - 5000)
+      expect(result.expiresAt.getTime()).toBeLessThan(expectedExpiry + 5000)
+    })
+
     it("caps TTL at max", async () => {
       db._txMockResult.executeTakeFirstOrThrow.mockResolvedValue({
         id: "approval-3",
@@ -178,6 +201,12 @@ describe("ApprovalService", () => {
       requested_by_agent_id: "agent-1",
       notification_channels: [],
       action_summary: "Deploy to staging",
+      risk_level: "P2",
+      resume_payload: null,
+      execution_result: null,
+      resumed_at: null,
+      executed_at: null,
+      blast_radius: null,
     }
 
     it("returns not_found for missing request", async () => {
@@ -273,6 +302,24 @@ describe("ApprovalService", () => {
       const result = await service.decide("approval-1", "APPROVED", "user-1", "api")
 
       expect(result.success).toBe(true)
+    })
+  })
+
+
+
+  describe("resumeApproval", () => {
+    it("returns proposal and payload for approved requests", async () => {
+      db._mockResult.executeTakeFirst
+        .mockResolvedValueOnce({
+          id: "approval-1",
+          status: "APPROVED",
+          resume_payload: { step: "continue" },
+        })
+        .mockResolvedValueOnce(undefined)
+
+      const result = await service.resumeApproval("approval-1")
+      expect(result?.proposal.id).toBe("approval-1")
+      expect(result?.resumePayload).toEqual({ step: "continue" })
     })
   })
 

@@ -12,6 +12,15 @@ export type JobStatus =
 export type AgentStatus = "ACTIVE" | "DISABLED" | "ARCHIVED"
 
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"
+export type RiskLevel = "P0" | "P1" | "P2" | "P3"
+
+export type FeedbackSource = "user_correction" | "automated" | "reflection"
+export type FeedbackCategory = "behavior" | "tone" | "accuracy" | "protocol"
+export type FeedbackSeverity = "low" | "medium" | "high"
+export type FeedbackStatus = "new" | "acknowledged" | "in_progress" | "resolved"
+export type RemediationStatus = "open" | "planned" | "applied" | "verified" | "failed"
+export type FeedbackActionType = "prompt_patch" | "code_fix" | "config_change" | "rule_update"
+export type FeedbackActionStatus = "planned" | "applied" | "verified" | "failed"
 
 // ---------------------------------------------------------------------------
 // Approval Gate Types
@@ -65,6 +74,9 @@ export interface CreateApprovalRequest {
   actionDetail: Record<string, unknown>
   approverUserAccountId?: string | null
   ttlSeconds?: number
+  riskLevel?: RiskLevel
+  resumePayload?: Record<string, unknown>
+  blastRadius?: string
 }
 
 /** Result of processing an approval decision */

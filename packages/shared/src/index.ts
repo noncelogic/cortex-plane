@@ -7,7 +7,15 @@ export type {
   ApprovalNotificationRecord,
   ApprovalStatus,
   CreateApprovalRequest,
+  FeedbackActionStatus,
+  FeedbackActionType,
+  FeedbackCategory,
+  FeedbackSeverity,
+  FeedbackSource,
+  FeedbackStatus,
   JobStatus,
+  RemediationStatus,
+  RiskLevel,
 } from "./types/index.js"
 export {
   APPROVAL_TOKEN_PREFIX,

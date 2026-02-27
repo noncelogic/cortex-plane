@@ -1,4 +1,16 @@
-import type { AgentStatus, ApprovalStatus, JobStatus } from "@cortex/shared"
+import type {
+  AgentStatus,
+  ApprovalStatus,
+  FeedbackActionStatus,
+  FeedbackActionType,
+  FeedbackCategory,
+  FeedbackSeverity,
+  FeedbackSource,
+  FeedbackStatus,
+  JobStatus,
+  RemediationStatus,
+  RiskLevel,
+} from "@cortex/shared"
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely"
 
 // ---------------------------------------------------------------------------
@@ -198,6 +210,20 @@ export interface ApprovalRequestTable {
     Record<string, unknown>[]
   >
   action_summary: string | null
+  risk_level: ColumnType<RiskLevel, RiskLevel | undefined, RiskLevel>
+  resume_payload: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  execution_result: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  resumed_at: Date | null
+  executed_at: Date | null
+  blast_radius: string | null
 }
 
 export type ApprovalRequest = Selectable<ApprovalRequestTable>
@@ -224,6 +250,59 @@ export interface ApprovalAuditLogTable {
 
 export type ApprovalAuditLog = Selectable<ApprovalAuditLogTable>
 export type NewApprovalAuditLog = Insertable<ApprovalAuditLogTable>
+
+
+// ---------------------------------------------------------------------------
+// Table: feedback_item
+// ---------------------------------------------------------------------------
+export interface FeedbackItemTable {
+  id: Generated<string>
+  run_id: string | null
+  task_id: string | null
+  agent_id: string | null
+  source: ColumnType<FeedbackSource, FeedbackSource, FeedbackSource>
+  category: ColumnType<FeedbackCategory, FeedbackCategory, FeedbackCategory>
+  severity: ColumnType<FeedbackSeverity, FeedbackSeverity, FeedbackSeverity>
+  summary: string
+  details: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  recurrence_key: string | null
+  status: ColumnType<FeedbackStatus, FeedbackStatus | undefined, FeedbackStatus>
+  remediation_status: ColumnType<
+    RemediationStatus,
+    RemediationStatus | undefined,
+    RemediationStatus
+  >
+  remediation_notes: string | null
+  resolved_at: Date | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type FeedbackItem = Selectable<FeedbackItemTable>
+export type NewFeedbackItem = Insertable<FeedbackItemTable>
+export type FeedbackItemUpdate = Updateable<FeedbackItemTable>
+
+// ---------------------------------------------------------------------------
+// Table: feedback_action
+// ---------------------------------------------------------------------------
+export interface FeedbackActionTable {
+  id: Generated<number>
+  feedback_id: string
+  action_type: ColumnType<FeedbackActionType, FeedbackActionType, FeedbackActionType>
+  action_ref: string | null
+  description: string | null
+  status: ColumnType<FeedbackActionStatus, FeedbackActionStatus | undefined, FeedbackActionStatus>
+  created_at: ColumnType<Date, Date | undefined, never>
+  verified_at: Date | null
+}
+
+export type FeedbackAction = Selectable<FeedbackActionTable>
+export type NewFeedbackAction = Insertable<FeedbackActionTable>
+export type FeedbackActionUpdate = Updateable<FeedbackActionTable>
 
 // ---------------------------------------------------------------------------
 // Table: dashboard_session
@@ -303,6 +382,8 @@ export interface Database {
   job: JobTable
   approval_request: ApprovalRequestTable
   approval_audit_log: ApprovalAuditLogTable
+  feedback_item: FeedbackItemTable
+  feedback_action: FeedbackActionTable
   dashboard_session: DashboardSessionTable
   provider_credential: ProviderCredentialTable
   credential_audit_log: CredentialAuditLogTable

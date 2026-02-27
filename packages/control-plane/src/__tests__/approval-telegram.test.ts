@@ -136,12 +136,17 @@ describe("formatApprovalMessage", () => {
       actionType: "deploy_staging",
       jobId: "0192d4e8-b7c6-4f3a-8e1b-5d9f7c2a4e6b",
       expiresAt: new Date(Date.now() + 86_400_000),
+      riskLevel: "P1",
+      blastRadius: "prod users",
     })
 
     expect(msg).toContain("Approval Required")
     expect(msg).toContain("devops\\-01")
     expect(msg).toContain("deploy\\_staging")
     expect(msg).toContain("Deploy to staging")
+    expect(msg).toContain("Risk")
+    expect(msg).toContain("P1")
+    expect(msg).toContain("Blast Radius")
     expect(msg).toContain("Expires")
   })
 })
