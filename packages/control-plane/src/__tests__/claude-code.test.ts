@@ -444,11 +444,11 @@ describe("ClaudeCodeBackend", () => {
       expect(prompt).toContain("Fix auth")
     })
 
-    it("enforces process env allowlist and blocks sensitive control-plane vars", async () => {
+    it("enforces env allowlist and blocks sensitive control-plane vars", async () => {
       const mockProc = createMockProcess({ exitCode: 0, stdout: [] })
       mockSpawn.mockReturnValue(mockProc)
 
-      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {})
 
       const originalEnv = {
         PATH: process.env.PATH,
@@ -474,11 +474,19 @@ describe("ClaudeCodeBackend", () => {
         const backend = new ClaudeCodeBackend()
         await backend.start({})
 
+        const execFileOpts = (mockExecFile.mock.calls[0] as unknown[])[2] as {
+          env: NodeJS.ProcessEnv
+        }
+        expect(execFileOpts.env.DATABASE_URL).toBeUndefined()
+        expect(execFileOpts.env.INTERNAL_API_KEY).toBeUndefined()
+        expect(execFileOpts.env.PATH).toBe("/usr/bin:/bin")
+
         const task = makeTask({
           context: {
             ...makeTask().context,
             environment: {
               ANTHROPIC_API_KEY: "sk-task-level",
+              OPENAI_API_KEY: "sk-openai-task-level",
               TASK_ONLY_FLAG: "enabled",
             },
           },
@@ -496,20 +504,21 @@ describe("ClaudeCodeBackend", () => {
         expect(env.TERM).toBe("xterm-256color")
 
         expect(env.ANTHROPIC_API_KEY).toBe("sk-task-level")
-        expect(env.TASK_ONLY_FLAG).toBe("enabled")
+        expect(env.OPENAI_API_KEY).toBe("sk-openai-task-level")
+        expect(env.TASK_ONLY_FLAG).toBeUndefined()
 
         expect(env.DATABASE_URL).toBeUndefined()
         expect(env.REDIS_URL).toBeUndefined()
         expect(env.INTERNAL_API_KEY).toBeUndefined()
 
-        expect(debugSpy).toHaveBeenCalledWith(
+        expect(infoSpy).toHaveBeenCalledWith(
           "[backend-env] injected env keys for backend process",
           expect.objectContaining({
-            keys: expect.arrayContaining(["ANTHROPIC_API_KEY", "PATH", "TASK_ONLY_FLAG"]),
+            keys: expect.arrayContaining(["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PATH"]),
           }),
         )
       } finally {
-        debugSpy.mockRestore()
+        infoSpy.mockRestore()
         for (const [key, value] of Object.entries(originalEnv)) {
           if (value === undefined) {
             delete process.env[key]

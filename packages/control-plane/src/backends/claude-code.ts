@@ -30,7 +30,7 @@ import type {
 import { CortexAttributes } from "@cortex/shared/tracing"
 import { trace } from "@opentelemetry/api"
 
-import { buildBackendSpawnEnv } from "./env-policy.js"
+import { buildBackendBaseEnv, buildBackendSpawnEnv } from "./env-policy.js"
 
 const execFile = promisify(execFileCb)
 
@@ -56,6 +56,7 @@ export class ClaudeCodeBackend implements ExecutionBackend {
     // Verify the binary exists and is executable.
     const { stdout } = await execFile(this.binaryPath, ["--version"], {
       timeout: 10_000,
+      env: buildBackendBaseEnv(),
     })
 
     if (!stdout.trim()) {
@@ -88,11 +89,15 @@ export class ClaudeCodeBackend implements ExecutionBackend {
     try {
       await access(this.binaryPath, constants.X_OK).catch(async () => {
         // binaryPath may not be absolute — fall back to `which`
-        await execFile("which", [this.binaryPath], { timeout: 5_000 })
+        await execFile("which", [this.binaryPath], {
+          timeout: 5_000,
+          env: buildBackendBaseEnv(),
+        })
       })
 
       const { stdout } = await execFile(this.binaryPath, ["--version"], {
         timeout: 5_000,
+        env: buildBackendBaseEnv(),
       })
 
       const hasApiKey = !!process.env["ANTHROPIC_API_KEY"]
@@ -487,6 +492,7 @@ class ClaudeCodeHandle implements ExecutionHandle {
       const { stdout } = await execFile("git", ["diff", "--name-status", "HEAD"], {
         cwd: this.workspacePath,
         timeout: 5_000,
+        env: buildBackendBaseEnv(),
       })
 
       return stdout
