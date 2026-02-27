@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest"
 
 describe("seed script — expected agents", () => {
-  it("defines exactly 3 demo agents", async () => {
+  it("defines exactly 3 demo agents", () => {
     // Import the seed module's agent definitions by reading the source
     // (we don't run the actual seed against a DB, but verify the structure)
     const agentNames = ["Atlas", "Forge", "Sentinel"]

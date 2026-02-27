@@ -15,8 +15,8 @@ import type { JobStatus } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
-import type { BrowserObservationService } from "../observation/service.js"
 import type { Database } from "../db/types.js"
+import type { BrowserObservationService } from "../observation/service.js"
 
 interface ListJobsQuery {
   agentId?: string

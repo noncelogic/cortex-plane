@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { approvalRoutes } from "../routes/approval.js"
 import { ApprovalService } from "../approval/service.js"
 import { hashApiKey } from "../middleware/api-keys.js"
 import type { AuthConfig } from "../middleware/types.js"
+import { approvalRoutes } from "../routes/approval.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 
 // ---------------------------------------------------------------------------
@@ -165,6 +165,7 @@ describe("Approval routes with auth", () => {
         payload: validBody,
       })
       expect(res.statusCode).toBe(201)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(res.json().approvalRequestId).toBe("approval-1")
     })
 
@@ -212,6 +213,7 @@ describe("Approval routes with auth", () => {
         payload: { decision: "APPROVED" },
       })
       expect(res.statusCode).toBe(200)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(res.json().decision).toBe("APPROVED")
     })
 
@@ -253,7 +255,12 @@ describe("Approval routes with auth", () => {
       })
 
       const decideCall = (mockService.decide as ReturnType<typeof vi.fn>).mock.calls[0]
-      const actorMetadata = decideCall![5]
+      const actorMetadata = decideCall![5] as {
+        userId: string
+        displayName: string
+        authMethod: string
+        userAgent: string
+      }
       expect(actorMetadata).toBeDefined()
       expect(actorMetadata.userId).toBe("user-approver")
       expect(actorMetadata.displayName).toBe("Approver Key")
@@ -316,7 +323,7 @@ describe("Approval routes with auth", () => {
       })
 
       const call = (mockService.decideByToken as ReturnType<typeof vi.fn>).mock.calls[0]
-      const actorMetadata = call![5]
+      const actorMetadata = call![5] as { userId: string }
       expect(actorMetadata).toBeDefined()
       expect(actorMetadata.userId).toBe("user-approver")
     })
@@ -338,6 +345,7 @@ describe("Approval routes with auth", () => {
         headers: { authorization: `Bearer ${VIEWER_KEY}` },
       })
       expect(res.statusCode).toBe(200)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(res.json().approvals).toEqual([])
     })
 
@@ -390,6 +398,7 @@ describe("Approval routes with auth", () => {
         headers: { authorization: `Bearer ${VIEWER_KEY}` },
       })
       expect(res.statusCode).toBe(200)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(res.json().audit).toEqual([])
     })
   })

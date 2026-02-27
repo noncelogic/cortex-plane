@@ -10,7 +10,7 @@
  * we use the session ID directly with a DB lookup.
  */
 
-import type { FastifyRequest, FastifyReply } from "fastify"
+import type { FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
 import type { Database } from "../db/types.js"

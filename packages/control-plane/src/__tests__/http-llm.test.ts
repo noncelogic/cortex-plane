@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest"
-
-import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
+import type { ExecutionTask } from "@cortex/shared/backends"
+import { describe, expect, it } from "vitest"
 
 import { HttpLlmBackend } from "../backends/http-llm.js"
 
@@ -36,16 +35,6 @@ function makeTask(overrides?: Partial<ExecutionTask>): ExecutionTask {
     },
     ...overrides,
   }
-}
-
-async function collectEvents(handle: {
-  events(): AsyncIterable<OutputEvent>
-}): Promise<OutputEvent[]> {
-  const events: OutputEvent[] = []
-  for await (const event of handle.events()) {
-    events.push(event)
-  }
-  return events
 }
 
 // ---------------------------------------------------------------------------

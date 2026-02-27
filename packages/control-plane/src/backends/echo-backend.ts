@@ -44,7 +44,7 @@ export class EchoBackend implements ExecutionBackend {
   private failureClassification: "transient" | "permanent" | "timeout" | "resource" = "transient"
   private started = false
 
-  async start(config: Record<string, unknown>): Promise<void> {
+  start(config: Record<string, unknown>): Promise<void> {
     if (typeof config.latencyMs === "number") {
       this.latencyMs = config.latencyMs
     }
@@ -55,32 +55,36 @@ export class EchoBackend implements ExecutionBackend {
       this.failureClassification = config.failureClassification as typeof this.failureClassification
     }
     this.started = true
+    return Promise.resolve()
   }
 
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
     this.started = false
+    return Promise.resolve()
   }
 
-  async healthCheck(): Promise<BackendHealthReport> {
-    return {
+  healthCheck(): Promise<BackendHealthReport> {
+    return Promise.resolve({
       backendId: this.backendId,
       status: this.started ? "healthy" : "unhealthy",
       reason: this.started ? undefined : "Backend not started",
       checkedAt: new Date().toISOString(),
       latencyMs: 0,
       details: { latencyMs: this.latencyMs, failureRate: this.failureRate },
-    }
+    })
   }
 
-  async executeTask(task: ExecutionTask): Promise<ExecutionHandle> {
+  executeTask(task: ExecutionTask): Promise<ExecutionHandle> {
     if (!this.started) {
-      throw new Error("EchoBackend not started")
+      return Promise.reject(new Error("EchoBackend not started"))
     }
 
     const shouldFail = Math.random() < this.failureRate
     const startTime = Date.now()
 
-    return new EchoHandle(task, this.latencyMs, shouldFail, this.failureClassification, startTime)
+    return Promise.resolve(
+      new EchoHandle(task, this.latencyMs, shouldFail, this.failureClassification, startTime),
+    )
   }
 
   getCapabilities(): BackendCapabilities {
@@ -207,7 +211,7 @@ class EchoHandle implements ExecutionHandle {
     return this.resultPromise
   }
 
-  async cancel(reason: string): Promise<void> {
+  cancel(reason: string): Promise<void> {
     this.cancelled = true
     this.settleResult({
       taskId: this.taskId,
@@ -221,6 +225,7 @@ class EchoHandle implements ExecutionHandle {
       artifacts: [],
       durationMs: Date.now() - this.startTime,
     })
+    return Promise.resolve()
   }
 
   private settleResult(result: ExecutionResult): void {

@@ -13,10 +13,11 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto"
+
 import type {
+  AuthHandoffCookie,
   AuthHandoffRequest,
   AuthHandoffResult,
-  AuthHandoffCookie,
 } from "@cortex/shared/browser"
 
 // ---------------------------------------------------------------------------
@@ -108,7 +109,7 @@ export class AuthHandoffService {
    *
    * Caller MUST have verified the approver role before calling.
    */
-  async prepareHandoff(
+  prepareHandoff(
     request: AuthHandoffRequest,
     actorId: string,
     actorDisplayName: string,
@@ -140,11 +141,11 @@ export class AuthHandoffService {
       timestamp,
     })
 
-    return {
+    return Promise.resolve({
       success: true,
       injectedAt: timestamp,
       targetUrl,
-    }
+    })
   }
 
   /**

@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
+import { findApiKey, hashApiKey, loadAuthConfig } from "../middleware/api-keys.js"
 import { createRequireAuth, createRequireRole } from "../middleware/auth.js"
-import { hashApiKey, loadAuthConfig, findApiKey } from "../middleware/api-keys.js"
 import type { ApiKeyRecord, AuthConfig, AuthenticatedRequest } from "../middleware/types.js"
 
 // ---------------------------------------------------------------------------
@@ -141,6 +141,7 @@ describe("requireAuth middleware", () => {
     app = Fastify({ logger: false })
     const requireAuth = createRequireAuth(authConfig)
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     app.get("/protected", { preHandler: [requireAuth] }, async (request) => {
       const principal = (request as AuthenticatedRequest).principal
       return { userId: principal.userId, roles: principal.roles }
@@ -156,7 +157,7 @@ describe("requireAuth middleware", () => {
   it("returns 401 when no credentials provided", async () => {
     const res = await app.inject({ method: "GET", url: "/protected" })
     expect(res.statusCode).toBe(401)
-    expect(res.json().error).toBe("unauthorized")
+    expect(res.json<{ error: string }>().error).toBe("unauthorized")
   })
 
   it("returns 401 for invalid Bearer token", async () => {
@@ -184,8 +185,8 @@ describe("requireAuth middleware", () => {
       headers: { authorization: `Bearer ${TEST_KEY}` },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().userId).toBe("user-1")
-    expect(res.json().roles).toEqual(["operator", "approver"])
+    expect(res.json<{ userId: string }>().userId).toBe("user-1")
+    expect(res.json<{ roles: string[] }>().roles).toEqual(["operator", "approver"])
   })
 
   it("returns 200 with valid X-API-Key header", async () => {
@@ -195,7 +196,7 @@ describe("requireAuth middleware", () => {
       headers: { "x-api-key": TEST_KEY },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().userId).toBe("user-1")
+    expect(res.json<{ userId: string }>().userId).toBe("user-1")
   })
 
   it("prefers Authorization header over X-API-Key", async () => {
@@ -208,7 +209,7 @@ describe("requireAuth middleware", () => {
       },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().userId).toBe("user-1")
+    expect(res.json<{ userId: string }>().userId).toBe("user-1")
   })
 })
 
@@ -228,6 +229,7 @@ describe("requireAuth dev mode", () => {
     app = Fastify({ logger: false })
     const requireAuth = createRequireAuth(devConfig)
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     app.get("/protected", { preHandler: [requireAuth] }, async (request) => {
       const principal = (request as AuthenticatedRequest).principal
       return { userId: principal.userId }
@@ -243,7 +245,7 @@ describe("requireAuth dev mode", () => {
   it("allows requests without credentials in dev mode", async () => {
     const res = await app.inject({ method: "GET", url: "/protected" })
     expect(res.statusCode).toBe(200)
-    expect(res.json().userId).toBe("dev-user")
+    expect(res.json<{ userId: string }>().userId).toBe("dev-user")
   })
 
   it("allows requests with invalid credentials in dev mode", async () => {
@@ -253,7 +255,7 @@ describe("requireAuth dev mode", () => {
       headers: { authorization: "Bearer bad-key" },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().userId).toBe("dev-user")
+    expect(res.json<{ userId: string }>().userId).toBe("dev-user")
   })
 })
 
@@ -290,6 +292,7 @@ describe("requireRole middleware", () => {
     const requireAuth = createRequireAuth(authConfig)
     const requireOperator = createRequireRole("operator")
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     app.post("/admin-only", { preHandler: [requireAuth, requireOperator] }, async () => ({
       ok: true,
     }))
@@ -308,8 +311,8 @@ describe("requireRole middleware", () => {
       headers: { authorization: `Bearer ${TEST_KEY_VIEWER}` },
     })
     expect(res.statusCode).toBe(403)
-    expect(res.json().error).toBe("forbidden")
-    expect(res.json().message).toContain("operator")
+    expect(res.json<{ error: string }>().error).toBe("forbidden")
+    expect(res.json<{ message: string }>().message).toContain("operator")
   })
 
   it("returns 200 when user has required role", async () => {
@@ -319,7 +322,7 @@ describe("requireRole middleware", () => {
       headers: { authorization: `Bearer ${TEST_KEY_OPERATOR}` },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().ok).toBe(true)
+    expect(res.json<{ ok: boolean }>().ok).toBe(true)
   })
 
   it("returns 401 when no auth at all (before role check)", async () => {

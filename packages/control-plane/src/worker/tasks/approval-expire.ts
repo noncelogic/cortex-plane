@@ -16,8 +16,8 @@
 import type { Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
-import type { Database } from "../../db/types.js"
 import { ApprovalService } from "../../approval/service.js"
+import type { Database } from "../../db/types.js"
 
 /**
  * Create the approval_expire task handler.

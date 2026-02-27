@@ -6,7 +6,9 @@
  */
 
 import { createHash } from "node:crypto"
+
 import type { ScreenshotFrame, ScreenshotStreamConfig } from "@cortex/shared/browser"
+
 import type { BrowserObservationService } from "../observation/service.js"
 
 const DEFAULT_INTERVAL_MS = 2_000

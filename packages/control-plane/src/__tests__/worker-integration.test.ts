@@ -2,21 +2,20 @@ import { readdir, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import EmbeddedPostgres from "embedded-postgres"
-import { makeWorkerUtils, run, type Runner, type WorkerUtils } from "graphile-worker"
-import { Kysely, PostgresDialect } from "kysely"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-
 import {
   BackendRegistry,
-  BackendSemaphore,
   type ExecutionBackend,
   type ExecutionHandle,
   type ExecutionResult,
   type ExecutionTask,
   type OutputEvent,
 } from "@cortex/shared/backends"
+import EmbeddedPostgres from "embedded-postgres"
+import { makeWorkerUtils, run, type Runner, type WorkerUtils } from "graphile-worker"
+import { Kysely, PostgresDialect } from "kysely"
+import pg from "pg"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+
 import type { Database } from "../db/types.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
@@ -80,19 +79,22 @@ function createMockHandle(
   let cancelled = false
   return {
     taskId: result.taskId,
+    // eslint-disable-next-line @typescript-eslint/require-await
     async *events() {
       for (const event of events) {
         if (cancelled) return
         yield event
       }
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async result() {
       if (cancelled) {
         return { ...result, status: "cancelled" as const }
       }
       return result
     },
-    async cancel(reason: string) {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async cancel(_reason: string) {
       cancelled = true
     },
   }
@@ -103,6 +105,7 @@ function createMockBackend(handle: ExecutionHandle = createMockHandle()): Execut
     backendId: "mock-backend",
     async start() {},
     async stop() {},
+    // eslint-disable-next-line @typescript-eslint/require-await
     async healthCheck() {
       return {
         backendId: "mock-backend",
@@ -112,6 +115,7 @@ function createMockBackend(handle: ExecutionHandle = createMockHandle()): Execut
         details: {},
       }
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async executeTask(_task: ExecutionTask) {
       return handle
     },
@@ -379,12 +383,14 @@ describe("Worker integration", () => {
         // Wait a bit to allow cancel check to trigger
         await new Promise((r) => setTimeout(r, 200))
       },
+      // eslint-disable-next-line @typescript-eslint/require-await
       async result() {
         if (cancelled) {
           return createMockResult({ status: "cancelled" })
         }
         return createMockResult()
       },
+      // eslint-disable-next-line @typescript-eslint/require-await
       async cancel(_reason: string) {
         cancelled = true
       },
@@ -470,6 +476,7 @@ describe("Worker integration", () => {
   it("retry: transient failure triggers retry with backoff", async () => {
     let callCount = 0
     const retryBackend = createMockBackend()
+    // eslint-disable-next-line @typescript-eslint/require-await
     retryBackend.executeTask = async (_task: ExecutionTask) => {
       callCount++
       if (callCount === 1) {

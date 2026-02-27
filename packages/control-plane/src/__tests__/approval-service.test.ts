@@ -1,9 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Kysely } from "kysely"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { Database } from "../db/types.js"
 import { ApprovalService } from "../approval/service.js"
-import { hashApprovalToken } from "../approval/token.js"
+import type { Database } from "../db/types.js"
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -344,6 +343,7 @@ describe("ApprovalService", () => {
       await service.list({ status: "PENDING" })
 
       // Verify the chain was called (the where mock returns this)
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(db.selectFrom).toHaveBeenCalledWith("approval_request")
     })
   })

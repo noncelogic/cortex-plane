@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  type AgentLifecycleState,
   AgentLifecycleStateMachine,
   assertValidTransition,
   InvalidTransitionError,
   isValidTransition,
   VALID_TRANSITIONS,
-  type AgentLifecycleState,
 } from "../lifecycle/state-machine.js"
 
 describe("VALID_TRANSITIONS", () => {
@@ -148,7 +148,13 @@ describe("AgentLifecycleStateMachine", () => {
     sm.transition("HYDRATING", "test reason")
 
     expect(listener).toHaveBeenCalledOnce()
-    const event = listener.mock.calls[0]![0]
+    const event = listener.mock.calls[0]![0] as {
+      from: string
+      to: string
+      agentId: string
+      reason: string
+      timestamp: unknown
+    }
     expect(event.from).toBe("BOOTING")
     expect(event.to).toBe("HYDRATING")
     expect(event.agentId).toBe("agent-1")

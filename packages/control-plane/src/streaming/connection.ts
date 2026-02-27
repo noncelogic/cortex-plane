@@ -10,7 +10,7 @@
 
 import type { ServerResponse } from "node:http"
 
-import type { SSEEvent, BufferConfig } from "./types.js"
+import type { BufferConfig, SSEEvent } from "./types.js"
 import { DEFAULT_BUFFER_CONFIG } from "./types.js"
 
 export class SSEConnection {

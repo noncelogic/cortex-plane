@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChildProcess } from "node:child_process"
 import { EventEmitter, Readable } from "node:stream"
 
 import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // ──────────────────────────────────────────────────
 // Mock child_process before importing the module
@@ -13,6 +13,7 @@ const mockExecFile = vi.fn()
 
 vi.mock("node:child_process", () => ({
   spawn: (...args: unknown[]) => mockSpawn(...args),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   execFile: (...args: unknown[]) => mockExecFile(...args),
 }))
 
@@ -63,7 +64,9 @@ function createMockProcess(options?: {
       }
       stderrReadable.push(null)
       ;(proc as unknown as Record<string, unknown>).exitCode = options.exitCode ?? 0
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       proc.emit("exit", options.exitCode ?? 0, null)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       proc.emit("close", options.exitCode ?? 0, null)
     })
   }
@@ -514,6 +517,7 @@ describe("ClaudeCodeBackend", () => {
         expect(infoSpy).toHaveBeenCalledWith(
           "[backend-env] injected env keys for backend process",
           expect.objectContaining({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             keys: expect.arrayContaining(["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PATH"]),
           }),
         )
@@ -534,6 +538,7 @@ describe("ClaudeCodeBackend", () => {
     it("sends SIGTERM and resolves result as cancelled", async () => {
       const mockProc = createMockProcess({ exitCode: 0, stdout: [] })
       // Don't auto-emit exit — we want to cancel manually
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       mockProc.removeAllListeners("exit")
       ;(mockProc as unknown as Record<string, unknown>).exitCode = null
 
@@ -545,10 +550,12 @@ describe("ClaudeCodeBackend", () => {
       const handle = await backend.executeTask(makeTask())
 
       // Simulate the process exiting after SIGTERM
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       const origKill = mockProc.kill as ReturnType<typeof vi.fn>
       origKill.mockImplementation(() => {
         ;(mockProc as unknown as Record<string, unknown>).killed = true
         ;(mockProc as unknown as Record<string, unknown>).exitCode = 143
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         mockProc.emit("exit", 143, "SIGTERM")
         return true
       })
@@ -567,6 +574,7 @@ describe("ClaudeCodeBackend", () => {
   describe("stop()", () => {
     it("kills active process on stop", async () => {
       const mockProc = createMockProcess({ exitCode: 0, stdout: [] })
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       mockProc.removeAllListeners("exit")
       ;(mockProc as unknown as Record<string, unknown>).killed = false
 
@@ -577,9 +585,11 @@ describe("ClaudeCodeBackend", () => {
       await backend.executeTask(makeTask())
 
       // Mock kill to emit exit
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       const origKill = mockProc.kill as ReturnType<typeof vi.fn>
       origKill.mockImplementation(() => {
         ;(mockProc as unknown as Record<string, unknown>).killed = true
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         mockProc.emit("exit", 0, null)
         return true
       })

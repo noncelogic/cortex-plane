@@ -2,13 +2,6 @@ import { readdir, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import type { MemoryStore, ScoredMemoryRecord } from "@cortex/shared/memory"
-import EmbeddedPostgres from "embedded-postgres"
-import { makeWorkerUtils, run, type Runner, type WorkerUtils } from "graphile-worker"
-import { Kysely, PostgresDialect } from "kysely"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-
 import {
   BackendRegistry,
   type ExecutionBackend,
@@ -17,13 +10,20 @@ import {
   type ExecutionTask,
   type OutputEvent,
 } from "@cortex/shared/backends"
+import type { MemoryStore, ScoredMemoryRecord } from "@cortex/shared/memory"
+import EmbeddedPostgres from "embedded-postgres"
+import { makeWorkerUtils, run, type Runner, type WorkerUtils } from "graphile-worker"
+import { Kysely, PostgresDialect } from "kysely"
+import pg from "pg"
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+
 import type { Database } from "../db/types.js"
 import { createMemoryScheduler } from "../worker/memory-scheduler.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
 import {
+  createMemoryExtractTask,
   type EmbeddingFn,
   type LLMCaller,
-  createMemoryExtractTask,
 } from "../worker/tasks/memory-extract.js"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
@@ -72,11 +72,13 @@ function createResult(status: ExecutionResult["status"] = "completed"): Executio
 function createHandle(events: OutputEvent[], result: ExecutionResult): ExecutionHandle {
   return {
     taskId: "task-1",
+    // eslint-disable-next-line @typescript-eslint/require-await
     async *events() {
       for (const event of events) {
         yield event
       }
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async result() {
       return result
     },
@@ -89,6 +91,7 @@ async function createRegistry(handle: ExecutionHandle): Promise<BackendRegistry>
     backendId: "test-backend",
     async start() {},
     async stop() {},
+    // eslint-disable-next-line @typescript-eslint/require-await
     async healthCheck() {
       return {
         backendId: "test-backend",
@@ -98,6 +101,7 @@ async function createRegistry(handle: ExecutionHandle): Promise<BackendRegistry>
         details: {},
       }
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async executeTask(_task: ExecutionTask) {
       return handle
     },

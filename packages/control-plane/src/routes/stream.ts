@@ -9,14 +9,14 @@
  */
 
 import { randomUUID } from "node:crypto"
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
+
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import {
-  SSEConnectionManager,
-  createStreamAuth,
   type AuthenticatedRequest,
-  type SteerRequest,
+  createStreamAuth,
+  SSEConnectionManager,
 } from "../streaming/index.js"
 
 // ---------------------------------------------------------------------------
@@ -54,6 +54,7 @@ export function streamRoutes(deps: StreamRouteDeps) {
     app.get<{ Params: StreamParams }>(
       "/agents/:agentId/stream",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -118,6 +119,7 @@ export function streamRoutes(deps: StreamRouteDeps) {
     app.post<{ Params: StreamParams; Body: SteerBody }>(
       "/agents/:agentId/steer",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {

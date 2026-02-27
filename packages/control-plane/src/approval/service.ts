@@ -11,22 +11,22 @@
  * All approval state lives in PostgreSQL. The service is stateless.
  */
 
-import type { Kysely } from "kysely"
-import type { WorkerUtils } from "graphile-worker"
-
 import {
-  DEFAULT_APPROVAL_TTL_SECONDS,
-  MAX_APPROVAL_TTL_SECONDS,
   type ApprovalAuditEventType,
+  type ApprovalDecisionResult,
   type ApprovalNotificationRecord,
   type ApprovalStatus,
   type CreateApprovalRequest,
-  type ApprovalDecisionResult,
+  DEFAULT_APPROVAL_TTL_SECONDS,
+  MAX_APPROVAL_TTL_SECONDS,
 } from "@cortex/shared"
-import { withSpan, CortexAttributes } from "@cortex/shared/tracing"
-import type { Database, ApprovalRequest, ApprovalAuditLog } from "../db/types.js"
+import { CortexAttributes, withSpan } from "@cortex/shared/tracing"
+import type { WorkerUtils } from "graphile-worker"
+import type { Kysely } from "kysely"
+
+import type { ApprovalAuditLog, ApprovalRequest, Database } from "../db/types.js"
+import { type AuditActorMetadata, createAuditEntry } from "./audit.js"
 import { generateApprovalToken, hashApprovalToken, isValidTokenFormat } from "./token.js"
-import { createAuditEntry, type AuditActorMetadata, type AuditEntry } from "./audit.js"
 
 export interface ApprovalServiceDeps {
   db: Kysely<Database>
@@ -493,7 +493,7 @@ export class ApprovalService {
         .executeTakeFirst()
 
       if (last?.details && typeof last.details === "object") {
-        const hash = (last.details as Record<string, unknown>).entry_hash
+        const hash = last.details.entry_hash
         if (typeof hash === "string") return hash
       }
     } catch {

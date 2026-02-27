@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 
+import { useApiQuery } from "@/hooks/use-api"
 import type {
   ApiErrorCode,
   BrowserEvent,
@@ -9,7 +10,6 @@ import type {
   BrowserTab,
   Screenshot,
 } from "@/lib/api-client"
-import { useApiQuery } from "@/hooks/use-api"
 import {
   getAgent,
   getAgentBrowser,

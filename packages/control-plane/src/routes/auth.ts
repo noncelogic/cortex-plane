@@ -14,6 +14,7 @@ import type { Kysely } from "kysely"
 
 import { discoverAntigravityProject } from "../auth/antigravity-project.js"
 import type { CredentialService } from "../auth/credential-service.js"
+import { getCodePasteProvider } from "../auth/oauth-providers.js"
 import {
   buildAuthorizeUrl,
   decodeOAuthState,
@@ -24,7 +25,6 @@ import {
   generateCodeVerifier,
   type OAuthState,
 } from "../auth/oauth-service.js"
-import { getCodePasteProvider, listCodePasteProviders } from "../auth/oauth-providers.js"
 import { parseAuthorizationInput } from "../auth/parse-authorization-input.js"
 import { findOrCreateOAuthUser, SessionService } from "../auth/session-service.js"
 import type { AuthOAuthConfig, OAuthProviderConfig } from "../config.js"

@@ -35,7 +35,7 @@ function mockFetchSequence(
   ...responses: Array<{ body?: unknown; status?: number; error?: boolean }>
 ): void {
   const mock = vi.fn()
-  for (const [i, r] of responses.entries()) {
+  for (const [_i, r] of responses.entries()) {
     if (r.error) {
       mock.mockRejectedValueOnce(new TypeError("Failed to fetch"))
     } else {

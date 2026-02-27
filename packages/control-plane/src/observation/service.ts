@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
+
 import { WebSocket } from "ws"
 
 import type {
@@ -451,7 +452,7 @@ export class BrowserObservationService {
    * Forward a user annotation (click, hover, etc.) to the agent.
    * Generates a coordinate-based prompt for the agent's next action.
    */
-  async forwardAnnotation(agentId: string, event: AnnotationEvent): Promise<AnnotationResult> {
+  forwardAnnotation(agentId: string, event: AnnotationEvent): Promise<AnnotationResult> {
     const annotationId = randomUUID()
     const state = this.getAgentState(agentId)
 
@@ -464,12 +465,12 @@ export class BrowserObservationService {
       }
     }
 
-    return {
+    return Promise.resolve({
       agentId,
       annotationId,
       forwarded: state.annotationListeners.size > 0,
       timestamp: new Date().toISOString(),
-    }
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -479,15 +480,16 @@ export class BrowserObservationService {
   /**
    * Clean up all state for an agent.
    */
-  async cleanup(agentId: string): Promise<void> {
+  cleanup(agentId: string): Promise<void> {
     const state = this.agents.get(agentId)
-    if (!state) return
+    if (!state) return Promise.resolve()
 
     if (state.cdpWs) {
       state.cdpWs.close()
     }
     state.annotationListeners.clear()
     this.agents.delete(agentId)
+    return Promise.resolve()
   }
 
   /**

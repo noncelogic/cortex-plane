@@ -40,7 +40,7 @@ export function loadAuthConfig(env: Record<string, string | undefined> = process
 
   if (rawKeys) {
     try {
-      const entries: RawApiKeyEntry[] = JSON.parse(rawKeys)
+      const entries = JSON.parse(rawKeys) as RawApiKeyEntry[]
       for (const entry of entries) {
         if (!entry.key || !entry.userId || !Array.isArray(entry.roles)) {
           continue // skip malformed entries

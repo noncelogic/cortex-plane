@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  type AuditActorMetadata,
+  type AuditEntry,
   buildActorMetadata,
   computeEntryHash,
   createAuditEntry,
   verifyAuditChain,
-  type AuditActorMetadata,
-  type AuditEntry,
 } from "../approval/audit.js"
 import type { Principal } from "../middleware/types.js"
 

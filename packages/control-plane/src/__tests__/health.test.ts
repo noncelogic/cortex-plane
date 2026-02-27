@@ -1,18 +1,29 @@
+import {
+  type BackendCapabilities,
+  type BackendHealthReport,
+  BackendRegistry,
+  type ExecutionBackend,
+} from "@cortex/shared/backends"
+import type { ChannelSupervisor } from "@cortex/shared/channels"
 import Fastify from "fastify"
 import type { Runner } from "graphile-worker"
 import type { Kysely } from "kysely"
 import { describe, expect, it, vi } from "vitest"
 
-import {
-  BackendRegistry,
-  type BackendCapabilities,
-  type BackendHealthReport,
-  type ExecutionBackend,
-} from "@cortex/shared/backends"
-import type { ChannelSupervisor } from "@cortex/shared/channels"
 import type { Database } from "../db/types.js"
 import { healthRoutes } from "../routes/health.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
+
+interface BackendHealthEntry {
+  backendId: string
+  health?: { status: string }
+  circuitBreaker?: { state: string; windowFailureCount: number }
+}
+
+interface BackendsHealthResponse {
+  status: string
+  backends: BackendHealthEntry[]
+}
 
 function createMockBackend(id: string, healthy = true): ExecutionBackend {
   return {
@@ -212,14 +223,7 @@ describe("health routes — /health/backends", () => {
     const response = await app.inject({ method: "GET", url: "/health/backends" })
     expect(response.statusCode).toBe(200)
 
-    const body = response.json() as {
-      status: string
-      backends: Array<{
-        backendId: string
-        health: { status: string } | null
-        circuitBreaker: { state: string } | null
-      }>
-    }
+    const body = response.json<BackendsHealthResponse>()
     expect(body.status).toBe("ok")
     expect(body.backends).toHaveLength(2)
 
@@ -246,12 +250,7 @@ describe("health routes — /health/backends", () => {
     await app.register(healthRoutes)
 
     const response = await app.inject({ method: "GET", url: "/health/backends" })
-    const body = response.json() as {
-      backends: Array<{
-        backendId: string
-        circuitBreaker: { state: string; windowFailureCount: number } | null
-      }>
-    }
+    const body = response.json<BackendsHealthResponse>()
 
     const cc = body.backends.find((b) => b.backendId === "claude-code")
     expect(cc!.circuitBreaker!.state).toBe("OPEN")
@@ -265,7 +264,7 @@ describe("health routes — /health/backends", () => {
     await app.register(healthRoutes)
 
     const response = await app.inject({ method: "GET", url: "/health/backends" })
-    const body = response.json() as { backends: unknown[] }
+    const body = response.json<BackendsHealthResponse>()
     expect(body.backends).toHaveLength(0)
   })
 })

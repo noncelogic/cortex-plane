@@ -50,11 +50,7 @@ import type {
   ScreenshotRequest,
   TraceRecordingOptions,
 } from "../observation/types.js"
-import {
-  type AuthenticatedRequest,
-  createStreamAuth,
-  SSEConnectionManager,
-} from "../streaming/index.js"
+import { createStreamAuth, SSEConnectionManager } from "../streaming/index.js"
 
 // ---------------------------------------------------------------------------
 // Route parameter / body types
@@ -143,6 +139,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.get<{ Params: AgentParams }>(
       "/agents/:agentId/observe/stream-status",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -168,6 +165,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.get<{ Params: AgentParams }>(
       "/agents/:agentId/observe/vnc",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         websocket: true,
         schema: {
@@ -178,7 +176,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
           },
         },
       },
-      async (socket, request) => {
+      (socket, request) => {
         const { agentId } = request.params
         const state = lifecycleManager?.getAgentState(agentId)
 
@@ -205,6 +203,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.post<{ Params: AgentParams; Body: ScreenshotRequest }>(
       "/agents/:agentId/observe/screenshot",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -258,6 +257,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.get<{ Params: AgentParams }>(
       "/agents/:agentId/observe/tabs",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -291,6 +291,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.get<{ Params: AgentParams }>(
       "/agents/:agentId/observe/trace",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -316,6 +317,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.post<{ Params: AgentParams; Body: TraceRecordingOptions }>(
       "/agents/:agentId/observe/trace/start",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -371,6 +373,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.post<{ Params: AgentParams }>(
       "/agents/:agentId/observe/trace/stop",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -413,6 +416,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.post<{ Params: AgentParams; Body: AnnotationEvent }>(
       "/agents/:agentId/observe/annotate",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -497,6 +501,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     app.post<{ Params: AgentParams; Body: AnnotationPayload }>(
       "/agents/:agentId/browser/steer",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -674,6 +679,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
       app.get<{ Params: AgentParams }>(
         "/agents/:agentId/browser/trace",
         {
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
           preHandler: authHook,
           schema: {
             params: {
@@ -699,6 +705,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
       app.post<{ Params: AgentParams; Body: TraceRecordingOptions & { jobId?: string } }>(
         "/agents/:agentId/browser/trace/start",
         {
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
           preHandler: authHook,
           schema: {
             params: {
@@ -759,6 +766,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
       app.post<{ Params: AgentParams; Body: { jobId?: string } }>(
         "/agents/:agentId/browser/trace/stop",
         {
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
           preHandler: authHook,
           schema: {
             params: {
@@ -827,6 +835,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
       app.get<{ Params: AgentParams; Querystring: ScreenshotStreamBody }>(
         "/agents/:agentId/browser/screenshot/stream",
         {
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
           preHandler: authHook,
           schema: {
             params: {

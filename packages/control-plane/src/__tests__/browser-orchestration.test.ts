@@ -5,30 +5,29 @@
  * tab session model, and screenshot mode.
  */
 
-import Fastify from "fastify"
+import type { AnnotationPayload } from "@cortex/shared/browser"
 import fastifyWebSocket from "@fastify/websocket"
+import Fastify from "fastify"
 import type { Runner } from "graphile-worker"
 import type { Kysely } from "kysely"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import {
+  AuthHandoffService,
+  decrypt,
+  encrypt,
+  generateEncryptionKey,
+} from "../browser/auth-handoff.js"
+import { hashScreenshot, ScreenshotModeService } from "../browser/screenshot-mode.js"
+import { annotationToAction, annotationToPrompt } from "../browser/steering.js"
+import { TraceCaptureService } from "../browser/trace-capture.js"
 import type { Database } from "../db/types.js"
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import type { AgentLifecycleState } from "../lifecycle/state-machine.js"
-import {
-  AuthHandoffService,
-  encrypt,
-  decrypt,
-  generateEncryptionKey,
-} from "../browser/auth-handoff.js"
-import { annotationToAction, annotationToPrompt } from "../browser/steering.js"
-import { TraceCaptureService } from "../browser/trace-capture.js"
-import { ScreenshotModeService, hashScreenshot } from "../browser/screenshot-mode.js"
 import { BrowserObservationService } from "../observation/service.js"
-import { observationRoutes } from "../routes/observation.js"
 import { healthRoutes } from "../routes/health.js"
+import { observationRoutes } from "../routes/observation.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
-
-import type { AnnotationPayload, AuthHandoffRequest } from "@cortex/shared/browser"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -588,7 +587,7 @@ describe("Tab model via observation service", () => {
       headers: AUTH_HEADERS,
     })
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ tabs: { active: boolean }[] }>()
     expect(body.tabs).toHaveLength(2)
     expect(body.tabs[0].active).toBe(true)
     expect(body.tabs[1].active).toBe(false)
@@ -727,7 +726,11 @@ describe("POST /agents/:agentId/browser/steer", () => {
     })
 
     expect(res.statusCode).toBe(202)
-    const body = res.json()
+    const body = res.json<{
+      agentId: string
+      action: { actionType: string; target: string }
+      prompt: string
+    }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.action.actionType).toBe("click")
     expect(body.action.target).toBe("#btn")
@@ -841,7 +844,7 @@ describe("POST /agents/:agentId/browser/auth-handoff", () => {
     })
 
     expect(res.statusCode).toBe(202)
-    const body = res.json()
+    const body = res.json<{ success: boolean; targetUrl: string }>()
     expect(body.success).toBe(true)
     expect(body.targetUrl).toBe("https://example.com")
 
@@ -923,7 +926,7 @@ describe("GET /agents/:agentId/browser/trace", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ agentId: string; traces: unknown[] }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.traces).toEqual([])
 
@@ -944,7 +947,7 @@ describe("POST /agents/:agentId/browser/trace/start (with trace capture)", () =>
     })
 
     expect(res.statusCode).toBe(202)
-    const body = res.json()
+    const body = res.json<{ status: string }>()
     expect(body.status).toBe("recording")
 
     traceCaptureService.shutdown()
@@ -973,7 +976,7 @@ describe("POST /agents/:agentId/browser/trace/stop (with trace capture)", () => 
     })
 
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ metadata: { agentId: string; jobId: string } }>()
     expect(body.metadata).toBeDefined()
     expect(body.metadata.agentId).toBe("agent-1")
     expect(body.metadata.jobId).toBe("job-1")
@@ -999,7 +1002,7 @@ describe("existing observation routes remain functional", () => {
       headers: AUTH_HEADERS,
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().agentId).toBe("agent-1")
+    expect(res.json<{ agentId: string }>().agentId).toBe("agent-1")
   })
 
   it("POST /agents/:agentId/observe/screenshot still works", async () => {
@@ -1011,7 +1014,7 @@ describe("existing observation routes remain functional", () => {
       payload: {},
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data).toBe("base64data")
+    expect(res.json<{ data: string }>().data).toBe("base64data")
   })
 
   it("POST /agents/:agentId/observe/annotate still works", async () => {

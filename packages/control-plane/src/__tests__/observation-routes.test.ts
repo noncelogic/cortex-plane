@@ -1,5 +1,5 @@
-import Fastify from "fastify"
 import fastifyWebSocket from "@fastify/websocket"
+import Fastify from "fastify"
 import type { Runner } from "graphile-worker"
 import type { Kysely } from "kysely"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -8,8 +8,8 @@ import type { Database } from "../db/types.js"
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import type { AgentLifecycleState } from "../lifecycle/state-machine.js"
 import { BrowserObservationService } from "../observation/service.js"
-import { observationRoutes } from "../routes/observation.js"
 import { healthRoutes } from "../routes/health.js"
+import { observationRoutes } from "../routes/observation.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
 
 // ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ describe("observation route authentication", () => {
       url: "/agents/agent-1/observe/stream-status",
     })
     expect(res.statusCode).toBe(401)
-    expect(res.json().error).toBe("unauthorized")
+    expect(res.json<{ error: string }>().error).toBe("unauthorized")
   })
 
   it("returns 401 with invalid session", async () => {
@@ -206,7 +206,7 @@ describe("GET /agents/:agentId/observe/stream-status", () => {
       headers: AUTH_HEADERS,
     })
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ agentId: string; quality: string }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.quality).toBeDefined()
   })
@@ -248,10 +248,11 @@ describe("POST /agents/:agentId/observe/screenshot", () => {
       payload: { format: "jpeg", quality: 80 },
     })
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ agentId: string; data: string; format: string }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.data).toBe("base64data")
     expect(body.format).toBe("jpeg")
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(observation.captureScreenshot).toHaveBeenCalledWith("agent-1", {
       format: "jpeg",
       quality: 80,
@@ -270,7 +271,7 @@ describe("POST /agents/:agentId/observe/screenshot", () => {
       payload: {},
     })
     expect(res.statusCode).toBe(502)
-    expect(res.json().error).toBe("upstream_error")
+    expect(res.json<{ error: string }>().error).toBe("upstream_error")
   })
 
   it("returns 404 when agent is not found", async () => {
@@ -318,7 +319,7 @@ describe("GET /agents/:agentId/observe/tabs", () => {
       headers: AUTH_HEADERS,
     })
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ agentId: string; tabs: { active: boolean; url: string }[] }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.tabs).toHaveLength(2)
     expect(body.tabs[0].active).toBe(true)
@@ -363,7 +364,7 @@ describe("GET /agents/:agentId/observe/trace", () => {
       headers: AUTH_HEADERS,
     })
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ agentId: string; status: string }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.status).toBe("idle")
   })
@@ -394,8 +395,9 @@ describe("POST /agents/:agentId/observe/trace/start", () => {
       payload: { snapshots: true, network: true },
     })
     expect(res.statusCode).toBe(202)
-    const body = res.json()
+    const body = res.json<{ status: string }>()
     expect(body.status).toBe("recording")
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(observation.startTrace).toHaveBeenCalledWith("agent-1", {
       snapshots: true,
       network: true,
@@ -416,7 +418,7 @@ describe("POST /agents/:agentId/observe/trace/start", () => {
       payload: {},
     })
     expect(res.statusCode).toBe(409)
-    expect(res.json().error).toBe("conflict")
+    expect(res.json<{ error: string }>().error).toBe("conflict")
   })
 
   it("broadcasts browser:trace:state event via SSE", async () => {
@@ -452,10 +454,11 @@ describe("POST /agents/:agentId/observe/trace/stop", () => {
       headers: AUTH_HEADER,
     })
     expect(res.statusCode).toBe(200)
-    const body = res.json()
+    const body = res.json<{ agentId: string; filePath: string; sizeBytes: number }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.filePath).toContain("trace-agent-1")
     expect(body.sizeBytes).toBe(4096)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(observation.stopTrace).toHaveBeenCalledWith("agent-1")
   })
 
@@ -472,7 +475,7 @@ describe("POST /agents/:agentId/observe/trace/stop", () => {
       headers: AUTH_HEADER,
     })
     expect(res.statusCode).toBe(409)
-    expect(res.json().error).toBe("conflict")
+    expect(res.json<{ error: string }>().error).toBe("conflict")
   })
 
   it("broadcasts browser:trace:state idle event via SSE", async () => {
@@ -514,11 +517,12 @@ describe("POST /agents/:agentId/observe/annotate", () => {
       payload: { type: "click", x: 100, y: 200 },
     })
     expect(res.statusCode).toBe(202)
-    const body = res.json()
+    const body = res.json<{ agentId: string; annotationId: string; forwarded: boolean }>()
     expect(body.agentId).toBe("agent-1")
     expect(body.annotationId).toBeDefined()
     expect(body.forwarded).toBe(true)
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(observation.forwardAnnotation).toHaveBeenCalledWith(
       "agent-1",
       expect.objectContaining({ type: "click", x: 100, y: 200 }),
@@ -541,7 +545,7 @@ describe("POST /agents/:agentId/observe/annotate", () => {
     })
 
     expect(steerFn).toHaveBeenCalledTimes(1)
-    const msg = steerFn.mock.calls[0]![0]
+    const msg = steerFn.mock.calls[0]![0] as { message: string }
     expect(msg.message).toContain("[ANNOTATION]")
     expect(msg.message).toContain("(100, 200)")
     expect(msg.message).toContain("#btn")
@@ -562,7 +566,7 @@ describe("POST /agents/:agentId/observe/annotate", () => {
       payload: { type: "click", x: 100, y: 200, prompt: "Click the submit button" },
     })
 
-    const msg = steerFn.mock.calls[0]![0]
+    const msg = steerFn.mock.calls[0]![0] as { message: string }
     expect(msg.message).toContain("[ANNOTATION] Click the submit button")
   })
 
@@ -576,7 +580,7 @@ describe("POST /agents/:agentId/observe/annotate", () => {
       payload: { type: "click", x: 100, y: 200 },
     })
     expect(res.statusCode).toBe(409)
-    expect(res.json().error).toBe("conflict")
+    expect(res.json<{ error: string }>().error).toBe("conflict")
   })
 
   it("validates required fields", async () => {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
+  type AgentHeartbeat,
   calculateCrashCooldown,
   CRASH_COOLDOWN,
   CrashLoopDetector,
@@ -9,7 +10,6 @@ import {
   HeartbeatReceiver,
   isLivenessHealthy,
   isReadinessHealthy,
-  type AgentHeartbeat,
 } from "../lifecycle/health.js"
 
 // ---------------------------------------------------------------------------
