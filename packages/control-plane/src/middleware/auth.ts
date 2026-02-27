@@ -72,6 +72,7 @@ export function createRequireAuth(configOrOptions: AuthConfig | AuthMiddlewareOp
             displayName: sessionData.user.displayName ?? sessionData.user.email ?? "User",
             authMethod: "session",
             email: sessionData.user.email ?? undefined,
+            avatarUrl: sessionData.user.avatarUrl ?? undefined,
             userRole: sessionData.user.role,
           }
           ;(request as AuthenticatedRequest).principal = principal

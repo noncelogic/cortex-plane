@@ -1,10 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
+import { useAuth } from "@/components/auth-provider"
 import { UserMenu } from "@/components/layout/user-menu"
+import { resolveAuthGuard } from "@/lib/auth-ui"
 
 /* ── Navigation items ────────────────────────────────── */
 const navItems = [
@@ -167,17 +169,31 @@ function BottomTabs() {
   )
 }
 
-/* ── Paths that render without the shell chrome ──────── */
-const CHROMELESS_PATHS = ["/login", "/auth/complete"]
-
 /* ── Shell ────────────────────────────────────────────── */
 export function NavShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { isLoading, isAuthenticated } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
+  const guardState = resolveAuthGuard(pathname, isLoading, isAuthenticated)
+
+  useEffect(() => {
+    if (guardState.shouldRedirectToLogin) {
+      router.replace("/login")
+    }
+  }, [guardState.shouldRedirectToLogin, router])
 
   // Auth-related pages render without sidebar/nav
-  if (CHROMELESS_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+  if (guardState.shouldHideChrome) {
     return <>{children}</>
+  }
+
+  if (guardState.shouldShowLoading || guardState.shouldRedirectToLogin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-surface-dark">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
   }
 
   return (

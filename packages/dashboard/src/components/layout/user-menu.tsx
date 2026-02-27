@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
 import { useTheme } from "@/components/theme-provider"
+import { getUserInitials } from "@/lib/auth-ui"
 
 export function UserMenu() {
   const { theme, toggle } = useTheme()
@@ -30,17 +31,9 @@ export function UserMenu() {
     }
   }, [open, close])
 
-  // Derive initials from display name or fallback
-  const initials = user?.displayName
-    ? user.displayName
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
-    : "OP"
+  const initials = getUserInitials(user)
 
-  const displayName = user?.displayName ?? user?.email ?? "Operator"
+  const displayName = user?.displayName ?? user?.email ?? "Guest"
   const role = user?.role ?? "operator"
 
   return (
@@ -49,11 +42,15 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-content transition-shadow hover:ring-2 hover:ring-primary/30"
+        className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-primary-content transition-shadow hover:ring-2 hover:ring-primary/30"
         aria-label="User menu"
         aria-expanded={open}
       >
-        {initials}
+        {isAuthenticated && user?.avatarUrl ? (
+          <img src={user.avatarUrl} alt={displayName} className="size-full object-cover" />
+        ) : (
+          initials
+        )}
       </button>
 
       {/* Dropdown */}
@@ -62,10 +59,17 @@ export function UserMenu() {
           {/* Identity */}
           <div className="px-3 py-2.5">
             <p className="text-sm font-semibold text-text-main">{displayName}</p>
-            {user?.email && <p className="text-xs text-text-muted truncate">{user.email}</p>}
-            <span className="mt-0.5 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-              {role}
-            </span>
+            {isAuthenticated ? (
+              <>
+                {user?.email && <p className="text-xs text-text-muted truncate">{user.email}</p>}
+                <p className="mt-0.5 text-[11px] font-medium text-success">Signed in</p>
+                <span className="mt-0.5 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                  {role}
+                </span>
+              </>
+            ) : (
+              <p className="mt-0.5 text-[11px] font-medium text-text-muted">Not signed in</p>
+            )}
           </div>
 
           <div className="mx-2 border-t border-surface-border" />
