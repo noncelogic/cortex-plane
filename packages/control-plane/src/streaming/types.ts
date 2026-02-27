@@ -22,6 +22,7 @@ export type SSEEventType =
   | "approval:created"
   | "approval:decided"
   | "approval:expired"
+  | "channel:health"
   | "browser:screenshot"
   | "browser:tabs"
   | "browser:tab:event"

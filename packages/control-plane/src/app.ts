@@ -1,4 +1,5 @@
 import { BackendRegistry } from "@cortex/shared/backends"
+import type { ChannelSupervisor } from "@cortex/shared/channels"
 import fastifyCors from "@fastify/cors"
 import fastifyWebSocket from "@fastify/websocket"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -37,6 +38,7 @@ export interface AppContext {
   sseManager: SSEConnectionManager
   observationService: BrowserObservationService
   registry: BackendRegistry
+  channelSupervisor?: ChannelSupervisor
 }
 
 export interface AppOptions {
@@ -45,6 +47,7 @@ export interface AppOptions {
   config: Config
   lifecycleManager?: AgentLifecycleManager
   registry?: BackendRegistry
+  channelSupervisor?: ChannelSupervisor
 }
 
 export async function buildApp(options: AppOptions): Promise<AppContext> {
@@ -67,6 +70,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
 
   // SSE connection manager for agent streaming
   const sseManager = new SSEConnectionManager()
+  const channelSupervisor = options.channelSupervisor
 
   // Start Graphile Worker alongside Fastify — shared pg.Pool
   const runner = await createWorker({
@@ -97,6 +101,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Decorate Fastify with runner + db references for health checks
   app.decorate("worker", runner)
   app.decorate("db", db)
+  app.decorate("sseManager", sseManager)
+  if (channelSupervisor) {
+    app.decorate("channelSupervisor", channelSupervisor)
+  }
 
   // Approval service — core approval gate logic
   const approvalService = new ApprovalService({ db })
@@ -124,6 +132,17 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   }
 
   await app.register(healthRoutes)
+
+  let unsubscribeChannelSupervisor: (() => void) | undefined
+  if (channelSupervisor) {
+    channelSupervisor.start()
+    unsubscribeChannelSupervisor = channelSupervisor.subscribe((statuses) => {
+      sseManager.broadcast("_channel_health", "channel:health", {
+        timestamp: new Date().toISOString(),
+        adapters: statuses,
+      })
+    })
+  }
 
   // Register approval routes (always available)
   await app.register(approvalRoutes({ approvalService, sseManager, authConfig, sessionService }))
@@ -181,6 +200,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
 
   // Shut down SSE connections + observation service + browser services + backend registry on app close
   app.addHook("onClose", async () => {
+    if (unsubscribeChannelSupervisor) {
+      unsubscribeChannelSupervisor()
+    }
+    channelSupervisor?.stop()
     sseManager.shutdown()
     screenshotModeService.shutdown()
     authHandoffService.shutdown()
@@ -190,7 +213,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     await registry.stopAll()
   })
 
-  return { app, runner, sseManager, observationService, registry }
+  return { app, runner, sseManager, observationService, registry, channelSupervisor }
 }
 
 /**

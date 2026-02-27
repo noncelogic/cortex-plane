@@ -1,22 +1,39 @@
-import type { FastifyInstance } from "fastify"
-import type { Kysely } from "kysely"
-import type { Runner } from "graphile-worker"
-
 import type { BackendRegistry } from "@cortex/shared/backends"
+import type { ChannelSupervisor } from "@cortex/shared/channels"
+import type { FastifyInstance } from "fastify"
+import type { Runner } from "graphile-worker"
+import type { Kysely } from "kysely"
+
 import type { Database } from "../db/types.js"
+import type { SSEConnectionManager } from "../streaming/manager.js"
 
 declare module "fastify" {
   interface FastifyInstance {
     worker: Runner
     db: Kysely<Database>
     backendRegistry?: BackendRegistry
+    channelSupervisor?: ChannelSupervisor
+    sseManager?: SSEConnectionManager
   }
 }
 
 export function healthRoutes(app: FastifyInstance): void {
   /** Liveness — always 200 if process is up. */
   app.get("/healthz", async (_request, reply) => {
-    return reply.send({ status: "ok" })
+    const supervisor = app.channelSupervisor
+    if (!supervisor) {
+      return reply.send({ status: "ok" })
+    }
+
+    const adapters = supervisor.getAllStatuses()
+    const overallHealthy = adapters.every((adapter) => adapter.healthy)
+    return reply.send({
+      status: overallHealthy ? "ok" : "degraded",
+      channels: {
+        status: overallHealthy ? "ok" : "degraded",
+        adapters,
+      },
+    })
   })
 
   /**
@@ -88,5 +105,23 @@ export function healthRoutes(app: FastifyInstance): void {
     })
 
     return reply.send({ status: "ok", backends })
+  })
+
+  app.get("/health/stream", async (_request, reply) => {
+    const sseManager = app.sseManager
+    if (!sseManager) {
+      return reply.status(503).send({
+        status: "unavailable",
+        reason: "SSE manager not configured",
+      })
+    }
+
+    const raw = reply.raw
+    const conn = sseManager.connect("_channel_health", raw)
+    _request.log.info(
+      { connectionId: conn.connectionId },
+      "Channel health SSE connection established",
+    )
+    reply.hijack()
   })
 }
