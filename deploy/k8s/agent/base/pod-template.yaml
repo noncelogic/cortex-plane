@@ -26,7 +26,7 @@ template:
         type: RuntimeDefault
     initContainers:
       - name: hydrate
-        image: noncelogic/cortex-agent-init:latest
+        image: ghcr.io/noncelogic/cortex-agent-init:dev
         command: ["/bin/sh", "-c"]
         args:
           - |
@@ -61,7 +61,7 @@ template:
             mountPath: /tmp
     containers:
       - name: core-agent
-        image: noncelogic/cortex-agent:latest
+        image: ghcr.io/noncelogic/cortex-agent:dev
         ports:
           - name: health
             containerPort: 4001
@@ -108,7 +108,7 @@ template:
           - name: tmp
             mountPath: /tmp
       - name: playwright
-        image: noncelogic/cortex-playwright-sidecar:latest
+        image: ghcr.io/noncelogic/cortex-playwright-sidecar:dev
         ports:
           - name: cdp
             containerPort: 9222
