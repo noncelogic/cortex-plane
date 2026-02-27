@@ -117,7 +117,7 @@ function classifyNetworkError(err: unknown): ApiErrorCode {
 // API Client
 // ---------------------------------------------------------------------------
 
-const API_BASE = process.env.NEXT_PUBLIC_CORTEX_API_URL ?? "http://localhost:4000"
+const API_BASE = process.env.NEXT_PUBLIC_CORTEX_API_URL ?? "/api"
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const MAX_RETRIES = 2

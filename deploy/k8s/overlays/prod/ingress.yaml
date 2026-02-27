@@ -27,24 +27,3 @@ spec:
                 name: dashboard
                 port:
                   number: 3000
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: control-plane
-                port:
-                  number: 4000
-          - path: /healthz
-            pathType: Exact
-            backend:
-              service:
-                name: control-plane
-                port:
-                  number: 4000
-          - path: /readyz
-            pathType: Exact
-            backend:
-              service:
-                name: control-plane
-                port:
-                  number: 4000
