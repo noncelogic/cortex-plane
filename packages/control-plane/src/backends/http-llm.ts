@@ -139,21 +139,11 @@ export class HttpLlmBackend implements ExecutionBackend {
     const startTime = Date.now()
 
     if (this.provider === "anthropic" && this.anthropicClient) {
-      return new AnthropicHandle(
-        task,
-        this.anthropicClient,
-        model,
-        startTime,
-      )
+      return new AnthropicHandle(task, this.anthropicClient, model, startTime)
     }
 
     if (this.openaiClient) {
-      return new OpenAIHandle(
-        task,
-        this.openaiClient,
-        model,
-        startTime,
-      )
+      return new OpenAIHandle(task, this.openaiClient, model, startTime)
     }
 
     throw new Error("No LLM client initialized")
@@ -166,7 +156,13 @@ export class HttpLlmBackend implements ExecutionBackend {
       supportsShellExecution: false,
       reportsTokenUsage: true,
       supportsCancellation: true,
-      supportedGoalTypes: ["code_edit", "code_generate", "code_review", "shell_command", "research"],
+      supportedGoalTypes: [
+        "code_edit",
+        "code_generate",
+        "code_review",
+        "shell_command",
+        "research",
+      ],
       maxContextTokens: 200_000,
     }
   }
@@ -220,12 +216,15 @@ class AnthropicHandle implements ExecutionHandle {
     const usage: TokenUsage = { ...ZERO_TOKEN_USAGE }
 
     try {
-      const stream = this.client.messages.stream({
-        model: this.model,
-        max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
-        system: systemPrompt,
-        messages,
-      }, { signal: this.abortController.signal })
+      const stream = this.client.messages.stream(
+        {
+          model: this.model,
+          max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
+          system: systemPrompt,
+          messages,
+        },
+        { signal: this.abortController.signal },
+      )
 
       for await (const event of stream) {
         if (this.cancelled) break
@@ -245,10 +244,12 @@ class AnthropicHandle implements ExecutionHandle {
       usage.inputTokens = finalMessage.usage.input_tokens
       usage.outputTokens = finalMessage.usage.output_tokens
       if ("cache_read_input_tokens" in finalMessage.usage) {
-        usage.cacheReadTokens = (finalMessage.usage as unknown as Record<string, number>).cache_read_input_tokens ?? 0
+        usage.cacheReadTokens =
+          (finalMessage.usage as unknown as Record<string, number>).cache_read_input_tokens ?? 0
       }
       if ("cache_creation_input_tokens" in finalMessage.usage) {
-        usage.cacheCreationTokens = (finalMessage.usage as unknown as Record<string, number>).cache_creation_input_tokens ?? 0
+        usage.cacheCreationTokens =
+          (finalMessage.usage as unknown as Record<string, number>).cache_creation_input_tokens ?? 0
       }
 
       const usageEvent: OutputUsageEvent = {

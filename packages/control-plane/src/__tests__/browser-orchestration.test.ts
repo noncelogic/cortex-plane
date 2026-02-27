@@ -502,8 +502,20 @@ describe("TraceCaptureService", () => {
   })
 
   it("lists traces for an agent", async () => {
-    await service.registerTrace("agent-1", "job-1", "/path/1", "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z")
-    await service.registerTrace("agent-1", "job-2", "/path/2", "2026-01-01T00:02:00Z", "2026-01-01T00:03:00Z")
+    await service.registerTrace(
+      "agent-1",
+      "job-1",
+      "/path/1",
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:01:00Z",
+    )
+    await service.registerTrace(
+      "agent-1",
+      "job-2",
+      "/path/2",
+      "2026-01-01T00:02:00Z",
+      "2026-01-01T00:03:00Z",
+    )
 
     const traces = service.getTraces("agent-1")
     expect(traces).toHaveLength(2)

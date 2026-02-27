@@ -303,9 +303,9 @@ describe("DiscordAdapter", () => {
     it("throws for non-existent channel", async () => {
       mockChannelFetch.mockResolvedValue(null)
 
-      await expect(
-        adapter.sendMessage("bad-channel", { text: "test" }),
-      ).rejects.toThrow("Channel not found: bad-channel")
+      await expect(adapter.sendMessage("bad-channel", { text: "test" })).rejects.toThrow(
+        "Channel not found: bad-channel",
+      )
     })
   })
 
@@ -338,8 +338,8 @@ describe("DiscordAdapter", () => {
       expect(mockSend).toHaveBeenCalledOnce()
 
       const callArgs = mockSend.mock.calls[0]![0] as Record<string, unknown>
-      expect((callArgs["content"] as string)).toContain("Approval Required")
-      expect((callArgs["content"] as string)).toContain("devops")
+      expect(callArgs["content"] as string).toContain("Approval Required")
+      expect(callArgs["content"] as string).toContain("devops")
       expect(callArgs["components"]).toBeDefined()
       expect((callArgs["components"] as unknown[]).length).toBe(1)
 
@@ -534,9 +534,9 @@ describe("DiscordAdapter", () => {
     it("throws if thread not found", async () => {
       mockChannelFetch.mockResolvedValue(null)
 
-      await expect(
-        adapter.sendToThread("bad-thread", { text: "test" }),
-      ).rejects.toThrow("Thread not found: bad-thread")
+      await expect(adapter.sendToThread("bad-thread", { text: "test" })).rejects.toThrow(
+        "Thread not found: bad-thread",
+      )
     })
   })
 

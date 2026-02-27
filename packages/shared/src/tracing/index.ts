@@ -18,12 +18,7 @@ import {
 import { TraceIdRatioBasedSampler, AlwaysOnSampler } from "@opentelemetry/sdk-trace-base"
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http"
 
-export {
-  CortexAttributes,
-  withSpan,
-  injectTraceContext,
-  extractTraceContext,
-} from "./spans.js"
+export { CortexAttributes, withSpan, injectTraceContext, extractTraceContext } from "./spans.js"
 export { TracingLogger, type LogLevel, type TracingLoggerOptions } from "./logger.js"
 
 // ──────────────────────────────────────────────────

@@ -10,10 +10,7 @@
 
 import { createHash, randomBytes } from "node:crypto"
 
-import {
-  APPROVAL_TOKEN_PREFIX,
-  APPROVAL_TOKEN_VERSION,
-} from "@cortex/shared"
+import { APPROVAL_TOKEN_PREFIX, APPROVAL_TOKEN_VERSION } from "@cortex/shared"
 
 const TOKEN_ENTROPY_BYTES = 32 // 256 bits
 

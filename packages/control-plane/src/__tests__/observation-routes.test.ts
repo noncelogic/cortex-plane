@@ -404,7 +404,9 @@ describe("POST /agents/:agentId/observe/trace/start", () => {
 
   it("returns 409 when trace is already recording", async () => {
     const observation = mockObservationService({
-      startTrace: vi.fn().mockRejectedValue(new Error("Trace recording already in progress for agent agent-1")),
+      startTrace: vi
+        .fn()
+        .mockRejectedValue(new Error("Trace recording already in progress for agent agent-1")),
     })
     const { app } = await buildTestApp({ observationService: observation })
     const res = await app.inject({
@@ -459,7 +461,9 @@ describe("POST /agents/:agentId/observe/trace/stop", () => {
 
   it("returns 409 when no active trace recording", async () => {
     const observation = mockObservationService({
-      stopTrace: vi.fn().mockRejectedValue(new Error("No active trace recording for agent agent-1")),
+      stopTrace: vi
+        .fn()
+        .mockRejectedValue(new Error("No active trace recording for agent agent-1")),
     })
     const { app } = await buildTestApp({ observationService: observation })
     const res = await app.inject({

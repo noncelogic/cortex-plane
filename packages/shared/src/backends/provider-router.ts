@@ -56,10 +56,7 @@ export class ProviderRouter {
     this.providers.sort((a, b) => a.priority - b.priority)
 
     if (!this.breakers.has(entry.providerId)) {
-      this.breakers.set(
-        entry.providerId,
-        new CircuitBreaker(entry.circuitBreakerConfig, this.now),
-      )
+      this.breakers.set(entry.providerId, new CircuitBreaker(entry.circuitBreakerConfig, this.now))
     }
   }
 

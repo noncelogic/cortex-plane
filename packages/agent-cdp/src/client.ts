@@ -2,12 +2,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 
-import type {
-  ActionResult,
-  BrowserAction,
-  CdpClientConfig,
-  Observation,
-} from "./types.js"
+import type { ActionResult, BrowserAction, CdpClientConfig, Observation } from "./types.js"
 
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_PORT = 9222

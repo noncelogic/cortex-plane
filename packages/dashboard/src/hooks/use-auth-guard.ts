@@ -10,10 +10,7 @@ export function useAuthGuard() {
   const pathname = usePathname()
   const { authStatus, authError, refreshSession } = useAuth()
 
-  const guardState = useMemo(
-    () => resolveAuthGuard(pathname, authStatus),
-    [pathname, authStatus],
-  )
+  const guardState = useMemo(() => resolveAuthGuard(pathname, authStatus), [pathname, authStatus])
 
   return {
     pathname,

@@ -80,13 +80,7 @@ export class EchoBackend implements ExecutionBackend {
     const shouldFail = Math.random() < this.failureRate
     const startTime = Date.now()
 
-    return new EchoHandle(
-      task,
-      this.latencyMs,
-      shouldFail,
-      this.failureClassification,
-      startTime,
-    )
+    return new EchoHandle(task, this.latencyMs, shouldFail, this.failureClassification, startTime)
   }
 
   getCapabilities(): BackendCapabilities {
@@ -96,7 +90,13 @@ export class EchoBackend implements ExecutionBackend {
       supportsShellExecution: false,
       reportsTokenUsage: false,
       supportsCancellation: true,
-      supportedGoalTypes: ["code_edit", "code_generate", "code_review", "shell_command", "research"],
+      supportedGoalTypes: [
+        "code_edit",
+        "code_generate",
+        "code_review",
+        "shell_command",
+        "research",
+      ],
       maxContextTokens: 100_000,
     }
   }
@@ -105,7 +105,8 @@ export class EchoBackend implements ExecutionBackend {
   configure(config: EchoBackendConfig): void {
     if (config.latencyMs !== undefined) this.latencyMs = config.latencyMs
     if (config.failureRate !== undefined) this.failureRate = config.failureRate
-    if (config.failureClassification !== undefined) this.failureClassification = config.failureClassification
+    if (config.failureClassification !== undefined)
+      this.failureClassification = config.failureClassification
   }
 }
 

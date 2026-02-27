@@ -184,12 +184,7 @@ describe("ApprovalService", () => {
     it("returns not_found for missing request", async () => {
       db._mockResult.executeTakeFirst.mockResolvedValue(undefined)
 
-      const result = await service.decide(
-        "nonexistent",
-        "APPROVED",
-        "user-1",
-        "api",
-      )
+      const result = await service.decide("nonexistent", "APPROVED", "user-1", "api")
 
       expect(result.success).toBe(false)
       expect(result.error).toBe("not_found")
@@ -201,12 +196,7 @@ describe("ApprovalService", () => {
         status: "APPROVED",
       })
 
-      const result = await service.decide(
-        "approval-1",
-        "APPROVED",
-        "user-1",
-        "api",
-      )
+      const result = await service.decide("approval-1", "APPROVED", "user-1", "api")
 
       expect(result.success).toBe(false)
       expect(result.error).toBe("already_decided")
@@ -218,12 +208,7 @@ describe("ApprovalService", () => {
         expires_at: new Date(Date.now() - 1000), // Already expired
       })
 
-      const result = await service.decide(
-        "approval-1",
-        "APPROVED",
-        "user-1",
-        "api",
-      )
+      const result = await service.decide("approval-1", "APPROVED", "user-1", "api")
 
       expect(result.success).toBe(false)
       expect(result.error).toBe("expired")
@@ -235,12 +220,7 @@ describe("ApprovalService", () => {
         approver_user_account_id: "specific-user",
       })
 
-      const result = await service.decide(
-        "approval-1",
-        "APPROVED",
-        "wrong-user",
-        "api",
-      )
+      const result = await service.decide("approval-1", "APPROVED", "wrong-user", "api")
 
       expect(result.success).toBe(false)
       expect(result.error).toBe("not_authorized")
@@ -252,12 +232,7 @@ describe("ApprovalService", () => {
         numUpdatedRows: 1n,
       })
 
-      const result = await service.decide(
-        "approval-1",
-        "APPROVED",
-        "user-1",
-        "telegram",
-      )
+      const result = await service.decide("approval-1", "APPROVED", "user-1", "telegram")
 
       expect(result.success).toBe(true)
       expect(result.decision).toBe("APPROVED")
@@ -296,12 +271,7 @@ describe("ApprovalService", () => {
         numUpdatedRows: 1n,
       })
 
-      const result = await service.decide(
-        "approval-1",
-        "APPROVED",
-        "user-1",
-        "api",
-      )
+      const result = await service.decide("approval-1", "APPROVED", "user-1", "api")
 
       expect(result.success).toBe(true)
     })
@@ -309,12 +279,7 @@ describe("ApprovalService", () => {
 
   describe("decideByToken", () => {
     it("returns invalid_token_format for bad tokens", async () => {
-      const result = await service.decideByToken(
-        "not_a_valid_token",
-        "APPROVED",
-        "user-1",
-        "api",
-      )
+      const result = await service.decideByToken("not_a_valid_token", "APPROVED", "user-1", "api")
 
       expect(result.success).toBe(false)
       expect(result.error).toBe("invalid_token_format")

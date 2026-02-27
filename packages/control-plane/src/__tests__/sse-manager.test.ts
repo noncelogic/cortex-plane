@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { SSEConnectionManager } from "../streaming/manager.js"
 
-function createMockResponse(): ServerResponse & { chunks: string[]; _listeners: Map<string, Function> } {
+function createMockResponse(): ServerResponse & {
+  chunks: string[]
+  _listeners: Map<string, Function>
+} {
   const chunks: string[] = []
   const listeners = new Map<string, Function>()
 

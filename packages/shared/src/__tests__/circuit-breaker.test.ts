@@ -10,10 +10,7 @@ import {
 // Helpers
 // ──────────────────────────────────────────────────
 
-function createBreaker(
-  config?: Partial<CircuitBreakerConfig>,
-  now?: () => number,
-): CircuitBreaker {
+function createBreaker(config?: Partial<CircuitBreakerConfig>, now?: () => number): CircuitBreaker {
   return new CircuitBreaker(config, now)
 }
 
@@ -107,13 +104,13 @@ describe("CircuitBreaker — CLOSED → OPEN", () => {
   it("records failures with mixed classifications correctly", () => {
     const breaker = createBreaker({ failureThreshold: 3 })
 
-    breaker.recordFailure("transient")   // counts
-    breaker.recordFailure("permanent")   // ignored
-    breaker.recordFailure("resource")    // counts
-    breaker.recordFailure("timeout")     // ignored
+    breaker.recordFailure("transient") // counts
+    breaker.recordFailure("permanent") // ignored
+    breaker.recordFailure("resource") // counts
+    breaker.recordFailure("timeout") // ignored
     expect(breaker.getState()).toBe("CLOSED")
 
-    breaker.recordFailure("transient")   // counts → trip
+    breaker.recordFailure("transient") // counts → trip
     expect(breaker.getState()).toBe("OPEN")
   })
 })
@@ -125,10 +122,7 @@ describe("CircuitBreaker — CLOSED → OPEN", () => {
 describe("CircuitBreaker — sliding window", () => {
   it("prunes failures outside the window", () => {
     let time = 1000
-    const breaker = createBreaker(
-      { failureThreshold: 3, windowMs: 5000 },
-      () => time,
-    )
+    const breaker = createBreaker({ failureThreshold: 3, windowMs: 5000 }, () => time)
 
     // Record 2 failures at t=1000
     breaker.recordFailure("transient")
@@ -150,10 +144,7 @@ describe("CircuitBreaker — sliding window", () => {
 
   it("stats reflect current window only", () => {
     let time = 0
-    const breaker = createBreaker(
-      { failureThreshold: 10, windowMs: 5000 },
-      () => time,
-    )
+    const breaker = createBreaker({ failureThreshold: 10, windowMs: 5000 }, () => time)
 
     breaker.recordFailure("transient")
     breaker.recordFailure("transient")
@@ -166,10 +157,7 @@ describe("CircuitBreaker — sliding window", () => {
 
   it("successes in window count toward total calls", () => {
     let time = 0
-    const breaker = createBreaker(
-      { failureThreshold: 10, windowMs: 5000 },
-      () => time,
-    )
+    const breaker = createBreaker({ failureThreshold: 10, windowMs: 5000 }, () => time)
 
     breaker.recordSuccess()
     breaker.recordSuccess()
@@ -188,10 +176,7 @@ describe("CircuitBreaker — sliding window", () => {
 describe("CircuitBreaker — OPEN → HALF_OPEN", () => {
   it("transitions to HALF_OPEN after openDurationMs", () => {
     let time = 0
-    const breaker = createBreaker(
-      { failureThreshold: 1, openDurationMs: 5000 },
-      () => time,
-    )
+    const breaker = createBreaker({ failureThreshold: 1, openDurationMs: 5000 }, () => time)
 
     breaker.recordFailure("transient")
     expect(breaker.getState()).toBe("OPEN")
@@ -471,10 +456,7 @@ describe("CircuitBreaker — full lifecycle", () => {
 describe("CircuitBreaker — getStats()", () => {
   it("reports correct stats after various operations", () => {
     let time = 1000
-    const breaker = createBreaker(
-      { failureThreshold: 10, windowMs: 60_000 },
-      () => time,
-    )
+    const breaker = createBreaker({ failureThreshold: 10, windowMs: 60_000 }, () => time)
 
     breaker.recordSuccess()
     breaker.recordSuccess()
@@ -489,10 +471,7 @@ describe("CircuitBreaker — getStats()", () => {
 
   it("lastStateChange updates on transitions", () => {
     let time = 0
-    const breaker = createBreaker(
-      { failureThreshold: 1, openDurationMs: 1000 },
-      () => time,
-    )
+    const breaker = createBreaker({ failureThreshold: 1, openDurationMs: 1000 }, () => time)
 
     const initialStats = breaker.getStats()
     const initialChange = initialStats.lastStateChange

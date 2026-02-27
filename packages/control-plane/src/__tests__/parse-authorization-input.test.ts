@@ -5,8 +5,7 @@ import { parseAuthorizationInput } from "../auth/parse-authorization-input.js"
 describe("parseAuthorizationInput", () => {
   describe("standard URL with query params", () => {
     it("extracts code and state from a full redirect URL", () => {
-      const input =
-        "http://localhost:51121/oauth-callback?code=4/0AQSTgQG_abc123&state=somestate"
+      const input = "http://localhost:51121/oauth-callback?code=4/0AQSTgQG_abc123&state=somestate"
       const result = parseAuthorizationInput(input, "google-antigravity")
       expect(result).toEqual({
         code: "4/0AQSTgQG_abc123",
@@ -24,8 +23,7 @@ describe("parseAuthorizationInput", () => {
     })
 
     it("handles URL with extra query params", () => {
-      const input =
-        "http://localhost:51121/oauth-callback?code=abc&state=xyz&scope=openid"
+      const input = "http://localhost:51121/oauth-callback?code=abc&state=xyz&scope=openid"
       const result = parseAuthorizationInput(input, "google-antigravity")
       expect(result).toEqual({ code: "abc", state: "xyz" })
     })
@@ -33,8 +31,7 @@ describe("parseAuthorizationInput", () => {
 
   describe("Anthropic code#state format", () => {
     it("extracts code and state from Anthropic callback URL with hash", () => {
-      const input =
-        "https://console.anthropic.com/oauth/code/callback?code=authcode123#statevalue"
+      const input = "https://console.anthropic.com/oauth/code/callback?code=authcode123#statevalue"
       const result = parseAuthorizationInput(input, "anthropic")
       expect(result).toEqual({
         code: "authcode123",
@@ -43,8 +40,7 @@ describe("parseAuthorizationInput", () => {
     })
 
     it("extracts code from Anthropic URL without hash", () => {
-      const input =
-        "https://console.anthropic.com/oauth/code/callback?code=authcode123"
+      const input = "https://console.anthropic.com/oauth/code/callback?code=authcode123"
       const result = parseAuthorizationInput(input, "anthropic")
       expect(result).toEqual({
         code: "authcode123",

@@ -37,7 +37,9 @@ function buildMockDb(options?: {
       return {
         select: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            executeTakeFirst: vi.fn().mockResolvedValue(agentExists ? { id: VALID_SESSION.agent_id } : null),
+            executeTakeFirst: vi
+              .fn()
+              .mockResolvedValue(agentExists ? { id: VALID_SESSION.agent_id } : null),
           }),
         }),
       }

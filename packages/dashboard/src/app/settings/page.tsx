@@ -28,11 +28,7 @@ interface Credential {
 }
 
 /** Code-paste providers that use the init/exchange flow. */
-const CODE_PASTE_PROVIDER_IDS = new Set([
-  "google-antigravity",
-  "openai-codex",
-  "anthropic",
-])
+const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
 
 // ---------------------------------------------------------------------------
 // Settings page inner (wrapped in Suspense)

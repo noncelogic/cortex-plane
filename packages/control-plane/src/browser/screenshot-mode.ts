@@ -109,13 +109,19 @@ export class ScreenshotModeService {
       state = {
         timer: null,
         lastHash: null,
-        config: { intervalMs: DEFAULT_INTERVAL_MS, format: DEFAULT_FORMAT, quality: DEFAULT_QUALITY },
+        config: {
+          intervalMs: DEFAULT_INTERVAL_MS,
+          format: DEFAULT_FORMAT,
+          quality: DEFAULT_QUALITY,
+        },
         listeners: new Set(),
       }
       this.agents.set(agentId, state)
     }
     state.listeners.add(listener)
-    return () => { state.listeners.delete(listener) }
+    return () => {
+      state.listeners.delete(listener)
+    }
   }
 
   /**

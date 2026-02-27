@@ -112,13 +112,11 @@ function mockDb(
     const executeTakeFirst = vi.fn().mockResolvedValue(row)
     const execute = vi.fn().mockResolvedValue(row ? [row] : [])
     const returningAll = vi.fn().mockReturnValue({ executeTakeFirst })
-    const where = vi
-      .fn()
-      .mockReturnValue({
-        returningAll,
-        execute,
-        where: vi.fn().mockReturnValue({ returningAll, execute }),
-      })
+    const where = vi.fn().mockReturnValue({
+      returningAll,
+      execute,
+      where: vi.fn().mockReturnValue({ returningAll, execute }),
+    })
     const set = vi.fn().mockReturnValue({ where })
     return { set }
   }

@@ -126,9 +126,7 @@ describe("createCorrectionStrengthenTask", () => {
 
     await task(makePayload(), helpers)
 
-    expect(helpers.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("no deps configured"),
-    )
+    expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("no deps configured"))
   })
 
   it("runs as no-op for empty feedback", async () => {
@@ -138,9 +136,7 @@ describe("createCorrectionStrengthenTask", () => {
 
     await task(makePayload({ feedback: [] }), helpers)
 
-    expect(helpers.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("no feedback entries"),
-    )
+    expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("no feedback entries"))
     expect(deps.embed).not.toHaveBeenCalled()
   })
 

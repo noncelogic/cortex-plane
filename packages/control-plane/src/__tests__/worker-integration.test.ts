@@ -98,9 +98,7 @@ function createMockHandle(
   }
 }
 
-function createMockBackend(
-  handle: ExecutionHandle = createMockHandle(),
-): ExecutionBackend {
+function createMockBackend(handle: ExecutionHandle = createMockHandle()): ExecutionBackend {
   return {
     backendId: "mock-backend",
     async start() {},
@@ -124,7 +122,13 @@ function createMockBackend(
         supportsShellExecution: true,
         reportsTokenUsage: true,
         supportsCancellation: true,
-        supportedGoalTypes: ["code_edit", "code_generate", "code_review", "shell_command", "research"],
+        supportedGoalTypes: [
+          "code_edit",
+          "code_generate",
+          "code_review",
+          "shell_command",
+          "research",
+        ],
         maxContextTokens: 200_000,
       }
     },
@@ -269,13 +273,9 @@ describe("Worker integration", () => {
   it("successful execution: SCHEDULED → RUNNING → COMPLETED with real result", async () => {
     const mockResult = createMockResult({
       summary: "Created 2 files",
-      fileChanges: [
-        { path: "src/index.ts", operation: "modified", diff: "+hello" },
-      ],
+      fileChanges: [{ path: "src/index.ts", operation: "modified", diff: "+hello" }],
     })
-    const registry = await createMockRegistry(
-      createMockBackend(createMockHandle(mockResult)),
-    )
+    const registry = await createMockRegistry(createMockBackend(createMockHandle(mockResult)))
     await startRunner(registry)
 
     const { jobId } = await setupJob()
@@ -314,9 +314,7 @@ describe("Worker integration", () => {
         partialExecution: false,
       },
     })
-    const registry = await createMockRegistry(
-      createMockBackend(createMockHandle(mockResult)),
-    )
+    const registry = await createMockRegistry(createMockBackend(createMockHandle(mockResult)))
     await startRunner(registry)
 
     const { jobId } = await setupJob()
@@ -348,9 +346,7 @@ describe("Worker integration", () => {
         partialExecution: true,
       },
     })
-    const registry = await createMockRegistry(
-      createMockBackend(createMockHandle(mockResult)),
-    )
+    const registry = await createMockRegistry(createMockBackend(createMockHandle(mockResult)))
     await startRunner(registry)
 
     const { jobId } = await setupJob()
@@ -551,15 +547,11 @@ describe("Worker integration", () => {
     await waitForJobStatus(jobId, ["COMPLETED"])
 
     // Verify broadcast was called with agent:output events
-    const outputCalls = broadcastSpy.mock.calls.filter(
-      ([, event]) => event === "agent:output",
-    )
+    const outputCalls = broadcastSpy.mock.calls.filter(([, event]) => event === "agent:output")
     expect(outputCalls.length).toBeGreaterThanOrEqual(3)
 
     // Verify completion broadcast
-    const completeCalls = broadcastSpy.mock.calls.filter(
-      ([, event]) => event === "agent:complete",
-    )
+    const completeCalls = broadcastSpy.mock.calls.filter(([, event]) => event === "agent:complete")
     expect(completeCalls.length).toBe(1)
 
     broadcastSpy.mockRestore()

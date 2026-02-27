@@ -6,7 +6,11 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { trace, SpanStatusCode } from "@opentelemetry/api"
-import { NodeTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node"
+import {
+  NodeTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-node"
 
 import { CortexAttributes, extractTraceContext } from "../tracing/spans.js"
 
@@ -56,11 +60,7 @@ describe("withSpan", () => {
     exporter.reset()
     const { withSpan } = await import("../tracing/spans.js")
 
-    await withSpan(
-      "test.with-attrs",
-      async () => "ok",
-      { "test.key": "value", "test.num": 123 },
-    )
+    await withSpan("test.with-attrs", async () => "ok", { "test.key": "value", "test.num": 123 })
 
     const spans = exporter.getFinishedSpans()
     expect(spans).toHaveLength(1)

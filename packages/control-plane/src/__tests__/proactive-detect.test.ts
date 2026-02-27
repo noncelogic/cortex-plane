@@ -150,9 +150,7 @@ describe("createProactiveDetectTask", () => {
 
     await task(makePayload(), helpers)
 
-    expect(helpers.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("no deps configured"),
-    )
+    expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("no deps configured"))
   })
 
   it("runs as no-op for empty collectors", async () => {
@@ -187,8 +185,6 @@ describe("createProactiveDetectTask", () => {
     const helpers = mockHelpers()
 
     await expect(task(makePayload(), helpers)).rejects.toThrow("API unavailable")
-    expect(helpers.logger.error).toHaveBeenCalledWith(
-      expect.stringContaining("API unavailable"),
-    )
+    expect(helpers.logger.error).toHaveBeenCalledWith(expect.stringContaining("API unavailable"))
   })
 })

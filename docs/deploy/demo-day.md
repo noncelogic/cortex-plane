@@ -138,6 +138,7 @@ kubectl -n cortex-plane logs deploy/control-plane --previous
 ```
 
 **Likely causes and fixes:**
+
 - `DATABASE_URL` missing or wrong: check `.env` or the `control-plane-secrets` Secret.
 - Postgres not ready: wait for Postgres to be healthy, then restart control-plane.
 - Migration not run: `pnpm db:migrate` (compose) or `kubectl exec` (k8s).
@@ -260,14 +261,15 @@ kubectl apply -k deploy/k8s/dashboard/ -n cortex-plane
 
 ## 7. Emergency Contacts / Escalation
 
-| Role | Contact | When to Escalate |
-|------|---------|-----------------|
-| Project lead | (fill in) | Any issue not resolved within 5 minutes |
-| Infra / DevOps | (fill in) | VM unreachable, k3s cluster down, networking issues |
-| Backend engineer | (fill in) | control-plane crash loops, migration failures, data issues |
-| Frontend engineer | (fill in) | Dashboard rendering errors, API integration failures |
+| Role              | Contact   | When to Escalate                                           |
+| ----------------- | --------- | ---------------------------------------------------------- |
+| Project lead      | (fill in) | Any issue not resolved within 5 minutes                    |
+| Infra / DevOps    | (fill in) | VM unreachable, k3s cluster down, networking issues        |
+| Backend engineer  | (fill in) | control-plane crash loops, migration failures, data issues |
+| Frontend engineer | (fill in) | Dashboard rendering errors, API integration failures       |
 
 **Escalation timeline during demo:**
+
 - 0-2 min: Try single-service restart (Section 5).
 - 2-5 min: Try full-stack rollback (Section 6).
 - 5+ min: Escalate to the relevant contact. Consider switching to a backup environment or recorded demo.

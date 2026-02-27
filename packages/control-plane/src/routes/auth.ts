@@ -522,8 +522,7 @@ export function authRoutes(deps: AuthRouteDeps) {
           request.log.error(err, `Code-paste exchange error for ${provider}`)
           reply.status(500).send({
             error: "exchange_failed",
-            message:
-              err instanceof Error ? err.message : "Failed to exchange authorization code",
+            message: err instanceof Error ? err.message : "Failed to exchange authorization code",
           })
         }
       },

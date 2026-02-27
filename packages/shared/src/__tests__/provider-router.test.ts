@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest"
 
 import type { CircuitBreakerConfig } from "../backends/circuit-breaker.js"
-import { ProviderRouter, type ProviderEntry, type RoutingEvent } from "../backends/provider-router.js"
+import {
+  ProviderRouter,
+  type ProviderEntry,
+  type RoutingEvent,
+} from "../backends/provider-router.js"
 import type {
   BackendCapabilities,
   BackendHealthReport,
@@ -197,9 +201,7 @@ describe("ProviderRouter — all circuits open", () => {
     router.recordOutcome("a", false, "transient")
     router.recordOutcome("b", false, "transient")
 
-    expect(() => router.route(makeTask())).toThrow(
-      "All provider circuits are open",
-    )
+    expect(() => router.route(makeTask())).toThrow("All provider circuits are open")
   })
 
   it("emits route_exhausted event when all circuits open", () => {

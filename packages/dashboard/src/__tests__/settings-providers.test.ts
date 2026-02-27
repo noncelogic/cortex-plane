@@ -5,11 +5,7 @@ import { describe, expect, it } from "vitest"
  * Validates the static mapping is correct without requiring React rendering.
  */
 
-const CODE_PASTE_PROVIDER_IDS = new Set([
-  "google-antigravity",
-  "openai-codex",
-  "anthropic",
-])
+const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
 
 describe("settings page code-paste providers", () => {
   it("identifies google-antigravity as a code-paste provider", () => {

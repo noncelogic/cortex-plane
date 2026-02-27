@@ -55,17 +55,18 @@ The platform acts as a **control plane** — the persistent brain and orchestrat
 
 ### Scope Gates
 
-| Tier | Section(s) | Description |
-|------|-----------|-------------|
-| **Core (MVP)** | 4–13 | Control plane, state machine, orchestration, agent lifecycle, memory, checkpoints, security |
-| **Core (MVP)** | 17–19 | Memory extraction pipeline, PostgreSQL deployment, observability |
-| **Extended** | 14 | Browser orchestration (Playwright observe-think-act, VNC/noVNC) |
-| **Extended** | 15–16 | Multi-channel routing, voice/WebRTC integration |
-| **Extended** | 20–21 | LLM failover circuit breaker, hot-reload skills framework |
-| **Extended** | 22 | Dashboard (Phase 2 — Next.js + SSE) |
-| **Deferred** | — | HA PostgreSQL (CloudNativePG), Qdrant clustering, multi-node k3s |
+| Tier           | Section(s) | Description                                                                                 |
+| -------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| **Core (MVP)** | 4–13       | Control plane, state machine, orchestration, agent lifecycle, memory, checkpoints, security |
+| **Core (MVP)** | 17–19      | Memory extraction pipeline, PostgreSQL deployment, observability                            |
+| **Extended**   | 14         | Browser orchestration (Playwright observe-think-act, VNC/noVNC)                             |
+| **Extended**   | 15–16      | Multi-channel routing, voice/WebRTC integration                                             |
+| **Extended**   | 20–21      | LLM failover circuit breaker, hot-reload skills framework                                   |
+| **Extended**   | 22         | Dashboard (Phase 2 — Next.js + SSE)                                                         |
+| **Deferred**   | —          | HA PostgreSQL (CloudNativePG), Qdrant clustering, multi-node k3s                            |
 
 **Non-goals for demo milestone:**
+
 - Voice / WebRTC integration (section 16)
 - HA PostgreSQL failover (section 18 Phase 2)
 - LLM circuit breaker (section 20 Phase 2)

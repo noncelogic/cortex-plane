@@ -88,19 +88,14 @@ export class DiscordAdapter implements ChannelAdapter {
 
     const result = await channel.send({
       content: message.text,
-      reply: message.replyToMessageId
-        ? { messageReference: message.replyToMessageId }
-        : undefined,
+      reply: message.replyToMessageId ? { messageReference: message.replyToMessageId } : undefined,
       components,
     })
 
     return result.id
   }
 
-  async sendApprovalRequest(
-    chatId: string,
-    request: ApprovalNotification,
-  ): Promise<string> {
+  async sendApprovalRequest(chatId: string, request: ApprovalNotification): Promise<string> {
     const channel = await this.resolveTextChannel(chatId)
 
     const text = formatApprovalRequest(request)
@@ -182,11 +177,7 @@ export class DiscordAdapter implements ChannelAdapter {
     if (message.author.bot) return
 
     const guildId = message.guildId
-    if (
-      guildId &&
-      this.config.allowedGuilds.size > 0 &&
-      !this.config.allowedGuilds.has(guildId)
-    ) {
+    if (guildId && this.config.allowedGuilds.size > 0 && !this.config.allowedGuilds.has(guildId)) {
       return
     }
 
@@ -213,11 +204,7 @@ export class DiscordAdapter implements ChannelAdapter {
     if (!interaction.isButton()) return
 
     const guildId = interaction.guildId
-    if (
-      guildId &&
-      this.config.allowedGuilds.size > 0 &&
-      !this.config.allowedGuilds.has(guildId)
-    ) {
+    if (guildId && this.config.allowedGuilds.size > 0 && !this.config.allowedGuilds.has(guildId)) {
       await interaction.reply({ content: "You are not authorized.", ephemeral: true })
       return
     }
@@ -248,9 +235,7 @@ export class DiscordAdapter implements ChannelAdapter {
   // Slash command registration
   // ──────────────────────────────────────────────────
 
-  async registerSlashCommands(
-    commands: { name: string; description: string }[],
-  ): Promise<void> {
+  async registerSlashCommands(commands: { name: string; description: string }[]): Promise<void> {
     if (!this.client.application) {
       throw new Error("Client application not available — call start() first")
     }

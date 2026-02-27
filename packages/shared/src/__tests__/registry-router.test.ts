@@ -184,9 +184,7 @@ describe("BackendRegistry — routeTask (no router)", () => {
   it("throws when no backend available", async () => {
     const registry = new BackendRegistry()
 
-    expect(() => registry.routeTask(makeTask())).toThrow(
-      "No execution backend available",
-    )
+    expect(() => registry.routeTask(makeTask())).toThrow("No execution backend available")
   })
 
   it("throws when preferred backend not found", async () => {

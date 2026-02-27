@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SSEConnection } from "../streaming/connection.js"
 import type { SSEEvent } from "../streaming/types.js"
 
-function createMockResponse(): ServerResponse & { chunks: string[]; _listeners: Map<string, Function> } {
+function createMockResponse(): ServerResponse & {
+  chunks: string[]
+  _listeners: Map<string, Function>
+} {
   const chunks: string[] = []
   const listeners = new Map<string, Function>()
 

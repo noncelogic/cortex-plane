@@ -51,7 +51,8 @@ function mockStore(
   }
 }
 
-const mockEmbed: EmbeddingFn = () => Promise.resolve(Array.from({ length: 1536 }, () => Math.random()))
+const mockEmbed: EmbeddingFn = () =>
+  Promise.resolve(Array.from({ length: 1536 }, () => Math.random()))
 
 function makeDeps(overrides: Partial<MemoryExtractDeps> = {}): MemoryExtractDeps {
   return {

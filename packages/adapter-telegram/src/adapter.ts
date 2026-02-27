@@ -84,31 +84,20 @@ export class TelegramAdapter implements ChannelAdapter {
   async sendMessage(chatId: string, message: OutboundMessage): Promise<string> {
     const keyboard = message.inlineButtons
       ? message.inlineButtons.reduce((kb, row) => {
-          const buttonRow = row.map((b) =>
-            InlineKeyboard.text(b.text, b.callbackData)
-          )
+          const buttonRow = row.map((b) => InlineKeyboard.text(b.text, b.callbackData))
           return kb.row(...buttonRow)
         }, new InlineKeyboard())
       : undefined
 
-    const result = await this.bot.api.sendMessage(
-      Number(chatId),
-      message.text,
-      {
-        reply_to_message_id: message.replyToMessageId
-          ? Number(message.replyToMessageId)
-          : undefined,
-        reply_markup: keyboard,
-      }
-    )
+    const result = await this.bot.api.sendMessage(Number(chatId), message.text, {
+      reply_to_message_id: message.replyToMessageId ? Number(message.replyToMessageId) : undefined,
+      reply_markup: keyboard,
+    })
 
     return String(result.message_id)
   }
 
-  async sendApprovalRequest(
-    chatId: string,
-    request: ApprovalNotification
-  ): Promise<string> {
+  async sendApprovalRequest(chatId: string, request: ApprovalNotification): Promise<string> {
     const keyboard = new InlineKeyboard()
       .text("✅ Approve", request.approveCallbackData)
       .text("❌ Reject", request.rejectCallbackData)

@@ -141,14 +141,10 @@ describe("requireAuth middleware", () => {
     app = Fastify({ logger: false })
     const requireAuth = createRequireAuth(authConfig)
 
-    app.get(
-      "/protected",
-      { preHandler: [requireAuth] },
-      async (request) => {
-        const principal = (request as AuthenticatedRequest).principal
-        return { userId: principal.userId, roles: principal.roles }
-      },
-    )
+    app.get("/protected", { preHandler: [requireAuth] }, async (request) => {
+      const principal = (request as AuthenticatedRequest).principal
+      return { userId: principal.userId, roles: principal.roles }
+    })
 
     await app.ready()
   })
@@ -232,14 +228,10 @@ describe("requireAuth dev mode", () => {
     app = Fastify({ logger: false })
     const requireAuth = createRequireAuth(devConfig)
 
-    app.get(
-      "/protected",
-      { preHandler: [requireAuth] },
-      async (request) => {
-        const principal = (request as AuthenticatedRequest).principal
-        return { userId: principal.userId }
-      },
-    )
+    app.get("/protected", { preHandler: [requireAuth] }, async (request) => {
+      const principal = (request as AuthenticatedRequest).principal
+      return { userId: principal.userId }
+    })
 
     await app.ready()
   })
@@ -298,11 +290,9 @@ describe("requireRole middleware", () => {
     const requireAuth = createRequireAuth(authConfig)
     const requireOperator = createRequireRole("operator")
 
-    app.post(
-      "/admin-only",
-      { preHandler: [requireAuth, requireOperator] },
-      async () => ({ ok: true }),
-    )
+    app.post("/admin-only", { preHandler: [requireAuth, requireOperator] }, async () => ({
+      ok: true,
+    }))
 
     await app.ready()
   })

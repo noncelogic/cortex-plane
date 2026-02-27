@@ -7,7 +7,12 @@
  * See: docs/spikes/037-execution-backends.md — "Artifact: Backend Registry Pattern"
  */
 
-import { CircuitBreaker, type CircuitBreakerConfig, type CircuitState, type CircuitStats } from "./circuit-breaker.js"
+import {
+  CircuitBreaker,
+  type CircuitBreakerConfig,
+  type CircuitState,
+  type CircuitStats,
+} from "./circuit-breaker.js"
 import { ProviderRouter, type RouteResult } from "./provider-router.js"
 import type { BackendHealthReport, ExecutionBackend, ExecutionTask } from "./types.js"
 
@@ -107,7 +112,10 @@ export class BackendRegistry {
   private readonly healthChecks = new Map<string, CachedHealthCheck>()
   private readonly semaphores = new Map<string, BackendSemaphore>()
   private readonly circuitBreakers = new Map<string, CircuitBreaker>()
-  private readonly circuitBreakerConfigs = new Map<string, Partial<CircuitBreakerConfig> | undefined>()
+  private readonly circuitBreakerConfigs = new Map<
+    string,
+    Partial<CircuitBreakerConfig> | undefined
+  >()
   private defaultBackendId: string | undefined
   private router: ProviderRouter | undefined
 
@@ -245,9 +253,7 @@ export class BackendRegistry {
     }
 
     // Fallback: no router configured — use direct lookup
-    const backend = preferredBackendId
-      ? this.backends.get(preferredBackendId)
-      : this.getDefault()
+    const backend = preferredBackendId ? this.backends.get(preferredBackendId) : this.getDefault()
 
     if (!backend) {
       throw new Error(

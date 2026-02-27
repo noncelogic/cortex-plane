@@ -8,23 +8,23 @@ Reproducible runbook for provisioning a Cortex Plane VM on Proxmox VE (lnx-pegas
 
 ## Current Deployment
 
-| Property         | Value                          |
-| ---------------- | ------------------------------ |
-| PVE Host         | lnx-pegasus (AMD Ryzen 9 3950X, 64 GB RAM) |
-| VMID             | 110                            |
-| VM Name          | cortex-plane                   |
-| OS               | Ubuntu 24.04.4 LTS             |
-| vCPU             | 4 (host passthrough)           |
-| RAM              | 8 GiB                          |
-| Disk             | 80 GB (local-lvm, thin)        |
-| Static IP        | 10.244.7.110/16                |
-| Gateway          | 10.244.0.1                     |
-| DNS              | 10.244.0.1                     |
-| SSH User         | cortex                         |
-| k3s Version      | v1.34.4+k3s1                   |
-| Ingress          | Traefik (bundled, hostPort 80/443) |
-| Storage Class    | local-path (default)           |
-| Namespace        | cortex (pre-created)           |
+| Property      | Value                                      |
+| ------------- | ------------------------------------------ |
+| PVE Host      | lnx-pegasus (AMD Ryzen 9 3950X, 64 GB RAM) |
+| VMID          | 110                                        |
+| VM Name       | cortex-plane                               |
+| OS            | Ubuntu 24.04.4 LTS                         |
+| vCPU          | 4 (host passthrough)                       |
+| RAM           | 8 GiB                                      |
+| Disk          | 80 GB (local-lvm, thin)                    |
+| Static IP     | 10.244.7.110/16                            |
+| Gateway       | 10.244.0.1                                 |
+| DNS           | 10.244.0.1                                 |
+| SSH User      | cortex                                     |
+| k3s Version   | v1.34.4+k3s1                               |
+| Ingress       | Traefik (bundled, hostPort 80/443)         |
+| Storage Class | local-path (default)                       |
+| Namespace     | cortex (pre-created)                       |
 
 ---
 
@@ -171,6 +171,7 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
 ```
 
 Key flags:
+
 - `--tls-san`: Adds SANs for remote kubectl access via IP or hostname
 - `--write-kubeconfig-mode 644`: Allows non-root kubeconfig reads
 - `--disable servicelb`: Traefik uses hostPort instead (single-node, no MetalLB needed)
@@ -251,14 +252,14 @@ kubectl --kubeconfig=~/.kube/cortex-plane.yaml get nodes
 
 ## 9. Storage Assumptions
 
-| Property         | Value                              |
-| ---------------- | ---------------------------------- |
-| Storage Class    | `local-path` (k3s default)         |
-| Provisioner      | `rancher.io/local-path`            |
-| Reclaim Policy   | Delete                             |
-| Binding Mode     | WaitForFirstConsumer               |
-| Data Location    | `/var/lib/rancher/k3s/storage/`    |
-| Expansion        | Not supported                      |
+| Property       | Value                           |
+| -------------- | ------------------------------- |
+| Storage Class  | `local-path` (k3s default)      |
+| Provisioner    | `rancher.io/local-path`         |
+| Reclaim Policy | Delete                          |
+| Binding Mode   | WaitForFirstConsumer            |
+| Data Location  | `/var/lib/rancher/k3s/storage/` |
+| Expansion      | Not supported                   |
 
 The `local-path` provisioner is suitable for single-node demo deployments. PVCs for Postgres and Qdrant (10 Gi each) will bind on first pod scheduling.
 
@@ -276,11 +277,11 @@ Traefik is the bundled k3s ingress controller, bound to hostPort 80/443 on the V
 
 ### TLS options
 
-| Option                  | Complexity | When to use                       |
-| ----------------------- | ---------- | --------------------------------- |
-| Self-signed (Traefik default) | None | Internal-only demos         |
-| cert-manager + Let's Encrypt  | Medium | Public-facing demo with DNS |
-| Manual TLS secret       | Low        | Known cert, no automation needed  |
+| Option                        | Complexity | When to use                      |
+| ----------------------------- | ---------- | -------------------------------- |
+| Self-signed (Traefik default) | None       | Internal-only demos              |
+| cert-manager + Let's Encrypt  | Medium     | Public-facing demo with DNS      |
+| Manual TLS secret             | Low        | Known cert, no automation needed |
 
 For a LAN demo, Traefik's default self-signed certificate is sufficient. For public-facing deployments with a real domain, install cert-manager:
 
@@ -354,12 +355,12 @@ sudo qm destroy 110 --purge
 
 ## 13. Host Resource Budget
 
-| VM     | vCPU | RAM   | Purpose            |
-| ------ | ---- | ----- | ------------------ |
-| 100    | 16   | 16 GB | ollama (GPU)       |
-| 101    | —    | —     | cluster-dev-4 (stopped) |
-| 102    | 4×2  | 16 GB | lnx-orion          |
-| **110** | **4** | **8 GB** | **cortex-plane (k3s)** |
-| _Free_ | ~8   | ~22 GB | Available          |
+| VM      | vCPU  | RAM      | Purpose                 |
+| ------- | ----- | -------- | ----------------------- |
+| 100     | 16    | 16 GB    | ollama (GPU)            |
+| 101     | —     | —        | cluster-dev-4 (stopped) |
+| 102     | 4×2   | 16 GB    | lnx-orion               |
+| **110** | **4** | **8 GB** | **cortex-plane (k3s)**  |
+| _Free_  | ~8    | ~22 GB   | Available               |
 
 Host: 32 threads / 62 GiB total.

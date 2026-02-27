@@ -16,7 +16,9 @@ export function annotationToAction(annotation: AnnotationPayload): SteerAction {
     case "click":
       return {
         actionType: "click",
-        target: annotation.selector ?? `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
+        target:
+          annotation.selector ??
+          `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
         parameters: {
           x: annotation.coordinates.x,
           y: annotation.coordinates.y,
@@ -28,7 +30,9 @@ export function annotationToAction(annotation: AnnotationPayload): SteerAction {
     case "type":
       return {
         actionType: "fill",
-        target: annotation.selector ?? `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
+        target:
+          annotation.selector ??
+          `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
         parameters: {
           x: annotation.coordinates.x,
           y: annotation.coordinates.y,
@@ -54,7 +58,9 @@ export function annotationToAction(annotation: AnnotationPayload): SteerAction {
     case "highlight":
       return {
         actionType: "highlight",
-        target: annotation.selector ?? `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
+        target:
+          annotation.selector ??
+          `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
         parameters: {
           x: annotation.coordinates.x,
           y: annotation.coordinates.y,
@@ -67,7 +73,9 @@ export function annotationToAction(annotation: AnnotationPayload): SteerAction {
     case "select":
       return {
         actionType: "select",
-        target: annotation.selector ?? `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
+        target:
+          annotation.selector ??
+          `coordinates(${annotation.coordinates.x},${annotation.coordinates.y})`,
         parameters: {
           x: annotation.coordinates.x,
           y: annotation.coordinates.y,

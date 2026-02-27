@@ -94,7 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!res.ok) {
-        const nextStatus: AuthStatus = res.status === 401 || res.status === 403 ? "unauthenticated" : "unverified"
+        const nextStatus: AuthStatus =
+          res.status === 401 || res.status === 403 ? "unauthenticated" : "unverified"
         if (mountedRef.current) {
           setUser(null)
           setAuthStatus(nextStatus)

@@ -237,12 +237,7 @@ describe("health routes — /health/backends", () => {
 
   it("shows OPEN circuit when failures recorded", async () => {
     const registry = new BackendRegistry()
-    await registry.register(
-      createMockBackend("claude-code"),
-      {},
-      1,
-      { failureThreshold: 1 },
-    )
+    await registry.register(createMockBackend("claude-code"), {}, 1, { failureThreshold: 1 })
 
     // Trip the breaker
     registry.recordOutcome("claude-code", false, "transient")

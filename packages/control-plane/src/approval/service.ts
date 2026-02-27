@@ -63,65 +63,65 @@ export class ApprovalService {
     return withSpan("cortex.approval.create", async (span) => {
       span.setAttribute(CortexAttributes.JOB_ID, req.jobId)
       span.setAttribute(CortexAttributes.AGENT_ID, req.agentId)
-    const { plaintext, hash } = generateApprovalToken()
+      const { plaintext, hash } = generateApprovalToken()
 
-    const ttlSeconds = Math.min(
-      req.ttlSeconds ?? DEFAULT_APPROVAL_TTL_SECONDS,
-      MAX_APPROVAL_TTL_SECONDS,
-    )
-    const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
+      const ttlSeconds = Math.min(
+        req.ttlSeconds ?? DEFAULT_APPROVAL_TTL_SECONDS,
+        MAX_APPROVAL_TTL_SECONDS,
+      )
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
 
-    let approvalRequestId: string | undefined
+      let approvalRequestId: string | undefined
 
-    await this.db.transaction().execute(async (tx) => {
-      // Insert approval_request
-      const inserted = await tx
-        .insertInto("approval_request")
-        .values({
-          job_id: req.jobId,
+      await this.db.transaction().execute(async (tx) => {
+        // Insert approval_request
+        const inserted = await tx
+          .insertInto("approval_request")
+          .values({
+            job_id: req.jobId,
+            action_type: req.actionType,
+            action_summary: req.actionSummary,
+            action_detail: req.actionDetail,
+            token_hash: hash,
+            expires_at: expiresAt,
+            requested_by_agent_id: req.agentId,
+            approver_user_account_id: req.approverUserAccountId ?? null,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow()
+
+        approvalRequestId = inserted.id
+
+        // Transition job: RUNNING → WAITING_FOR_APPROVAL
+        await tx
+          .updateTable("job")
+          .set({
+            status: "WAITING_FOR_APPROVAL" as const,
+            approval_expires_at: expiresAt,
+          })
+          .where("id", "=", req.jobId)
+          .where("status", "=", "RUNNING")
+          .execute()
+      })
+
+      // Audit log (outside transaction for speed)
+      await this.writeAuditLog({
+        approvalRequestId: approvalRequestId!,
+        jobId: req.jobId,
+        eventType: "request_created",
+        details: {
           action_type: req.actionType,
           action_summary: req.actionSummary,
-          action_detail: req.actionDetail,
-          token_hash: hash,
-          expires_at: expiresAt,
-          requested_by_agent_id: req.agentId,
-          approver_user_account_id: req.approverUserAccountId ?? null,
-        })
-        .returning("id")
-        .executeTakeFirstOrThrow()
+          ttl_seconds: ttlSeconds,
+          expires_at: expiresAt.toISOString(),
+        },
+      })
 
-      approvalRequestId = inserted.id
-
-      // Transition job: RUNNING → WAITING_FOR_APPROVAL
-      await tx
-        .updateTable("job")
-        .set({
-          status: "WAITING_FOR_APPROVAL" as const,
-          approval_expires_at: expiresAt,
-        })
-        .where("id", "=", req.jobId)
-        .where("status", "=", "RUNNING")
-        .execute()
-    })
-
-    // Audit log (outside transaction for speed)
-    await this.writeAuditLog({
-      approvalRequestId: approvalRequestId!,
-      jobId: req.jobId,
-      eventType: "request_created",
-      details: {
-        action_type: req.actionType,
-        action_summary: req.actionSummary,
-        ttl_seconds: ttlSeconds,
-        expires_at: expiresAt.toISOString(),
-      },
-    })
-
-    return {
-      approvalRequestId: approvalRequestId!,
-      plaintextToken: plaintext,
-      expiresAt,
-    }
+      return {
+        approvalRequestId: approvalRequestId!,
+        plaintextToken: plaintext,
+        expiresAt,
+      }
     }) // end withSpan
   }
 
@@ -146,133 +146,133 @@ export class ApprovalService {
     return withSpan("cortex.approval.decide", async (span) => {
       span.setAttribute(CortexAttributes.APPROVAL_REQUEST_ID, approvalRequestId)
       span.setAttribute(CortexAttributes.APPROVAL_DECISION, decision)
-    // Fetch the request
-    const request = await this.db
-      .selectFrom("approval_request")
-      .selectAll()
-      .where("id", "=", approvalRequestId)
-      .executeTakeFirst()
+      // Fetch the request
+      const request = await this.db
+        .selectFrom("approval_request")
+        .selectAll()
+        .where("id", "=", approvalRequestId)
+        .executeTakeFirst()
 
-    if (!request) {
-      return { success: false, error: "not_found" }
-    }
+      if (!request) {
+        return { success: false, error: "not_found" }
+      }
 
-    if (request.status !== "PENDING") {
-      return { success: false, error: "already_decided" }
-    }
+      if (request.status !== "PENDING") {
+        return { success: false, error: "already_decided" }
+      }
 
-    if (request.expires_at < new Date()) {
-      return { success: false, error: "expired" }
-    }
+      if (request.expires_at < new Date()) {
+        return { success: false, error: "expired" }
+      }
 
-    // Check authorization: if a specific approver is designated, only they can decide
-    if (
-      request.approver_user_account_id !== null &&
-      request.approver_user_account_id !== decidedBy
-    ) {
+      // Check authorization: if a specific approver is designated, only they can decide
+      if (
+        request.approver_user_account_id !== null &&
+        request.approver_user_account_id !== decidedBy
+      ) {
+        await this.writeAuditLog({
+          approvalRequestId,
+          jobId: request.job_id,
+          eventType: "unauthorized_attempt",
+          actorUserId: decidedBy,
+          actorChannel: channel,
+          details: { attempted_action: decision },
+        })
+        return { success: false, error: "not_authorized" }
+      }
+
+      let jobId: string | undefined
+
+      await this.db.transaction().execute(async (tx) => {
+        // Atomic single-use: only update if still PENDING
+        const updated = await tx
+          .updateTable("approval_request")
+          .set({
+            status: decision,
+            decided_at: new Date(),
+            decided_by: decidedBy,
+            decision_note: reason ?? null,
+          })
+          .where("id", "=", approvalRequestId)
+          .where("status", "=", "PENDING")
+          .executeTakeFirst()
+
+        if (!updated.numUpdatedRows || updated.numUpdatedRows === 0n) {
+          throw new Error("approval_already_decided")
+        }
+
+        jobId = request.job_id
+
+        if (decision === "APPROVED") {
+          // Transition job: WAITING_FOR_APPROVAL → RUNNING
+          await tx
+            .updateTable("job")
+            .set({
+              status: "RUNNING" as const,
+              approval_expires_at: null,
+            })
+            .where("id", "=", request.job_id)
+            .where("status", "=", "WAITING_FOR_APPROVAL")
+            .execute()
+        } else {
+          // Transition job: WAITING_FOR_APPROVAL → FAILED
+          const errorMessage = reason
+            ? `Approval rejected by ${decidedBy}: ${reason}`
+            : `Approval rejected by ${decidedBy}`
+
+          await tx
+            .updateTable("job")
+            .set({
+              status: "FAILED" as const,
+              approval_expires_at: null,
+              error: { message: errorMessage },
+              completed_at: new Date(),
+            })
+            .where("id", "=", request.job_id)
+            .where("status", "=", "WAITING_FOR_APPROVAL")
+            .execute()
+        }
+      })
+
+      // Enqueue agent resume outside transaction
+      if (decision === "APPROVED" && this.workerUtils && jobId) {
+        await this.workerUtils.addJob("agent_execute", { jobId }, { maxAttempts: 1 })
+      }
+
+      // Audit log with chained hash for tamper evidence
+      const auditDetails: Record<string, unknown> = {
+        decision,
+        reason: reason ?? null,
+      }
+      if (actorMetadata) {
+        auditDetails.actor = actorMetadata
+
+        // Build chained audit entry
+        const previousHash = await this.getLastAuditHash(approvalRequestId)
+        const auditEntry = createAuditEntry(
+          approvalRequestId,
+          decision,
+          actorMetadata,
+          previousHash,
+        )
+        auditDetails.entry_hash = auditEntry.entryHash
+        auditDetails.previous_hash = auditEntry.previousHash
+      }
+
       await this.writeAuditLog({
         approvalRequestId,
         jobId: request.job_id,
-        eventType: "unauthorized_attempt",
+        eventType: "request_decided",
         actorUserId: decidedBy,
         actorChannel: channel,
-        details: { attempted_action: decision },
+        details: auditDetails,
       })
-      return { success: false, error: "not_authorized" }
-    }
 
-    let jobId: string | undefined
-
-    await this.db.transaction().execute(async (tx) => {
-      // Atomic single-use: only update if still PENDING
-      const updated = await tx
-        .updateTable("approval_request")
-        .set({
-          status: decision,
-          decided_at: new Date(),
-          decided_by: decidedBy,
-          decision_note: reason ?? null,
-        })
-        .where("id", "=", approvalRequestId)
-        .where("status", "=", "PENDING")
-        .executeTakeFirst()
-
-      if (!updated.numUpdatedRows || updated.numUpdatedRows === 0n) {
-        throw new Error("approval_already_decided")
-      }
-
-      jobId = request.job_id
-
-      if (decision === "APPROVED") {
-        // Transition job: WAITING_FOR_APPROVAL → RUNNING
-        await tx
-          .updateTable("job")
-          .set({
-            status: "RUNNING" as const,
-            approval_expires_at: null,
-          })
-          .where("id", "=", request.job_id)
-          .where("status", "=", "WAITING_FOR_APPROVAL")
-          .execute()
-      } else {
-        // Transition job: WAITING_FOR_APPROVAL → FAILED
-        const errorMessage = reason
-          ? `Approval rejected by ${decidedBy}: ${reason}`
-          : `Approval rejected by ${decidedBy}`
-
-        await tx
-          .updateTable("job")
-          .set({
-            status: "FAILED" as const,
-            approval_expires_at: null,
-            error: { message: errorMessage },
-            completed_at: new Date(),
-          })
-          .where("id", "=", request.job_id)
-          .where("status", "=", "WAITING_FOR_APPROVAL")
-          .execute()
-      }
-    })
-
-    // Enqueue agent resume outside transaction
-    if (decision === "APPROVED" && this.workerUtils && jobId) {
-      await this.workerUtils.addJob("agent_execute", { jobId }, { maxAttempts: 1 })
-    }
-
-    // Audit log with chained hash for tamper evidence
-    const auditDetails: Record<string, unknown> = {
-      decision,
-      reason: reason ?? null,
-    }
-    if (actorMetadata) {
-      auditDetails.actor = actorMetadata
-
-      // Build chained audit entry
-      const previousHash = await this.getLastAuditHash(approvalRequestId)
-      const auditEntry = createAuditEntry(
+      return {
+        success: true,
         approvalRequestId,
         decision,
-        actorMetadata,
-        previousHash,
-      )
-      auditDetails.entry_hash = auditEntry.entryHash
-      auditDetails.previous_hash = auditEntry.previousHash
-    }
-
-    await this.writeAuditLog({
-      approvalRequestId,
-      jobId: request.job_id,
-      eventType: "request_decided",
-      actorUserId: decidedBy,
-      actorChannel: channel,
-      details: auditDetails,
-    })
-
-    return {
-      success: true,
-      approvalRequestId,
-      decision,
-    }
+      }
     }) // end withSpan
   }
 
@@ -442,9 +442,7 @@ export class ApprovalService {
     limit?: number
     offset?: number
   }): Promise<ApprovalRequest[]> {
-    let query = this.db
-      .selectFrom("approval_request")
-      .selectAll()
+    let query = this.db.selectFrom("approval_request").selectAll()
 
     if (filters?.status) {
       query = query.where("status", "=", filters.status)
@@ -456,9 +454,7 @@ export class ApprovalService {
       query = query.where("approver_user_account_id", "=", filters.approverUserId)
     }
 
-    query = query
-      .orderBy("requested_at", "desc")
-      .limit(filters?.limit ?? 50)
+    query = query.orderBy("requested_at", "desc").limit(filters?.limit ?? 50)
 
     if (filters?.offset) {
       query = query.offset(filters.offset)

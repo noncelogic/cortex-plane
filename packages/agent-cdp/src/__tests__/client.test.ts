@@ -5,13 +5,7 @@ import type { CdpClientConfig } from "../types.js"
 // ---------------------------------------------------------------------------
 // vi.hoisted ensures these are available when vi.mock factories execute
 // ---------------------------------------------------------------------------
-const {
-  mockPage,
-  mockContext,
-  mockBrowser,
-  mockConnectOverCDP,
-  mockFetch,
-} = vi.hoisted(() => {
+const { mockPage, mockContext, mockBrowser, mockConnectOverCDP, mockFetch } = vi.hoisted(() => {
   const mockPage = {
     screenshot: vi.fn(),
     content: vi.fn(),
