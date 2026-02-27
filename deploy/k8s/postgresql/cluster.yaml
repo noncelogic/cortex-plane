@@ -1,0 +1,67 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgresql
+  labels:
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  instances: 3
+
+  bootstrap:
+    initdb:
+      database: cortex_plane
+      owner: cortex
+      secret:
+        name: postgresql-app
+
+  storage:
+    size: 50Gi
+    storageClass: local-path
+
+  walStorage:
+    size: 20Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+  postgresql:
+    parameters:
+      max_connections: "300"
+      shared_buffers: "512MB"
+      wal_level: replica
+      max_wal_senders: "10"
+      max_replication_slots: "10"
+      wal_keep_size: "2GB"
+      shared_preload_libraries: pg_stat_statements
+
+  backup:
+    retentionPolicy: "7d"
+    barmanObjectStore:
+      destinationPath: s3://cortex-plane-postgresql
+      endpointURL: http://minio.minio.svc.cluster.local:9000
+      s3Credentials:
+        accessKeyId:
+          name: postgresql-backup-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: postgresql-backup-s3
+          key: SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+        maxParallel: 4
+      data:
+        compression: gzip
+
+  startDelay: 300
+  stopDelay: 300
+  smartShutdownTimeout: 180
+  failoverDelay: 0

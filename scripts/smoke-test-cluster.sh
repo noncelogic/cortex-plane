@@ -34,7 +34,17 @@ echo "---"
 
 printf "\n${BOLD}1. Pod Readiness${RESET}\n"
 
-for deploy in postgres qdrant control-plane dashboard; do
+if kubectl -n "$NS" get cluster.postgresql.cnpg.io/postgresql >/dev/null 2>&1; then
+  status=$(kubectl -n "$NS" wait --for=condition=Ready cluster/postgresql --timeout=120s 2>&1) && \
+    ok "cluster/postgresql is Ready" || \
+    fail "cluster/postgresql not ready: ${status}"
+else
+  status=$(kubectl -n "$NS" rollout status deployment/postgres --timeout=60s 2>&1) && \
+    ok "deployment/postgres rolled out" || \
+    fail "deployment/postgres not ready: ${status}"
+fi
+
+for deploy in qdrant control-plane dashboard; do
   status=$(kubectl -n "$NS" rollout status "deployment/$deploy" --timeout=10s 2>&1) && \
     ok "deployment/$deploy rolled out" || \
     fail "deployment/$deploy not ready: ${status}"

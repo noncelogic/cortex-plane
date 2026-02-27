@@ -1,0 +1,46 @@
+# Point-in-time restore example.
+#
+# Usage:
+# 1. Copy this file and set a real target time.
+# 2. Apply it into the same namespace (or a restore namespace).
+# 3. After validation, repoint clients to the restored cluster pooler.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgresql-restore
+  labels:
+    app.kubernetes.io/name: postgresql-restore
+    app.kubernetes.io/component: database-restore
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  instances: 3
+
+  bootstrap:
+    recovery:
+      source: postgresql
+      recoveryTarget:
+        targetTime: "2026-01-01 00:00:00+00"
+
+  storage:
+    size: 50Gi
+    storageClass: local-path
+
+  walStorage:
+    size: 20Gi
+    storageClass: local-path
+
+  externalClusters:
+    - name: postgresql
+      barmanObjectStore:
+        destinationPath: s3://cortex-plane-postgresql
+        endpointURL: http://minio.minio.svc.cluster.local:9000
+        s3Credentials:
+          accessKeyId:
+            name: postgresql-backup-s3
+            key: ACCESS_KEY_ID
+          secretAccessKey:
+            name: postgresql-backup-s3
+            key: SECRET_ACCESS_KEY
+        wal:
+          maxParallel: 4
