@@ -11,8 +11,8 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
-import type { SessionService } from "../auth/session-service.js"
 import { CredentialService, SUPPORTED_PROVIDERS } from "../auth/credential-service.js"
+import type { SessionService } from "../auth/session-service.js"
 import { createRequireAuth, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
 

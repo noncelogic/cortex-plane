@@ -387,7 +387,7 @@ export function authRoutes(deps: AuthRouteDeps) {
 
     /**
      * GET /auth/connect/:provider/init — generate PKCE challenge and OAuth URL
-     * for the code-paste flow. Returns { authUrl, codeVerifier } as JSON.
+     * for the code-paste flow. Returns { authUrl, codeVerifier, state } as JSON.
      */
     app.get<{ Params: { provider: string } }>(
       "/auth/connect/:provider/init",
@@ -411,12 +411,14 @@ export function authRoutes(deps: AuthRouteDeps) {
 
         const codeVerifier = generateCodeVerifier()
         const codeChallenge = generateCodeChallenge(codeVerifier)
+        const state = crypto.randomUUID()
 
         const url = new URL(providerReg.authUrl)
         url.searchParams.set("client_id", providerReg.clientId)
         url.searchParams.set("redirect_uri", providerReg.redirectUri)
         url.searchParams.set("response_type", "code")
         url.searchParams.set("scope", providerReg.scopes.join(" "))
+        url.searchParams.set("state", state)
 
         if (providerReg.usePkce) {
           url.searchParams.set("code_challenge", codeChallenge)
@@ -429,7 +431,7 @@ export function authRoutes(deps: AuthRouteDeps) {
           }
         }
 
-        return { authUrl: url.toString(), codeVerifier }
+        return { authUrl: url.toString(), codeVerifier, state }
       },
     )
 
@@ -439,14 +441,14 @@ export function authRoutes(deps: AuthRouteDeps) {
      */
     app.post<{
       Params: { provider: string }
-      Body: { pastedUrl: string; codeVerifier: string }
+      Body: { pastedUrl: string; codeVerifier: string; state?: string }
     }>(
       "/auth/connect/:provider/exchange",
       { preHandler: [requireAuth] },
       async (
         request: FastifyRequest<{
           Params: { provider: string }
-          Body: { pastedUrl: string; codeVerifier: string }
+          Body: { pastedUrl: string; codeVerifier: string; state?: string }
         }>,
         reply: FastifyReply,
       ) => {
@@ -457,7 +459,7 @@ export function authRoutes(deps: AuthRouteDeps) {
         }
 
         const { provider } = request.params
-        const { pastedUrl, codeVerifier } = request.body
+        const { pastedUrl, codeVerifier, state } = request.body
 
         if (!pastedUrl || !codeVerifier) {
           reply.status(400).send({
@@ -482,6 +484,14 @@ export function authRoutes(deps: AuthRouteDeps) {
           reply.status(400).send({
             error: "bad_request",
             message: "Could not extract authorization code from pasted input",
+          })
+          return
+        }
+
+        if (state && parsed.state !== state) {
+          reply.status(400).send({
+            error: "bad_request",
+            message: "State parameter mismatch",
           })
           return
         }

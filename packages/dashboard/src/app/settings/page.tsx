@@ -56,6 +56,7 @@ function SettingsInner() {
     provider: string
     authUrl: string
     codeVerifier: string
+    state: string
     pastedUrl: string
   } | null>(null)
   const [codePasteError, setCodePasteError] = useState<string | null>(null)
@@ -115,11 +116,12 @@ function SettingsInner() {
           return
         }
 
-        const data = (await res.json()) as { authUrl: string; codeVerifier: string }
+        const data = (await res.json()) as { authUrl: string; codeVerifier: string; state: string }
         setCodePasteFlow({
           provider,
           authUrl: data.authUrl,
           codeVerifier: data.codeVerifier,
+          state: data.state,
           pastedUrl: "",
         })
       } catch {
@@ -146,6 +148,7 @@ function SettingsInner() {
         body: JSON.stringify({
           pastedUrl: codePasteFlow.pastedUrl,
           codeVerifier: codePasteFlow.codeVerifier,
+          state: codePasteFlow.state,
         }),
       })
 
