@@ -4,29 +4,69 @@
  * Secret handoff model:
  * - Control-plane process secrets remain private by default and are not inherited.
  * - Only a small OS/runtime allowlist is inherited from process.env.
- * - Task-scoped env vars are explicitly injected per task and are the only supported
- *   channel for handing agent-specific secrets (for example model API keys).
+ * - Task-scoped env vars are allowlisted and explicitly injected per task; this is
+ *   the only supported channel for handing agent-specific secrets (for example model API keys).
  */
-const BACKEND_ENV_ALLOWLIST = ["PATH", "HOME", "NODE_PATH", "LANG", "TERM"] as const
+const INHERITED_ENV_ALLOWLIST = [
+  "PATH",
+  "HOME",
+  "NODE_PATH",
+  "LANG",
+  "TERM",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+] as const
 
-export function buildBackendSpawnEnv(taskEnvironment: Record<string, string>): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {}
+const TASK_ENV_ALLOWLIST = [
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "LLM_API_KEY",
+  "LLM_PROVIDER",
+  "LLM_MODEL",
+  "LLM_BASE_URL",
+  "ANTHROPIC_BASE_URL",
+  "OPENAI_BASE_URL",
+  "TRACEPARENT",
+  "TRACESTATE",
+  "BAGGAGE",
+] as const
 
-  for (const key of BACKEND_ENV_ALLOWLIST) {
-    const value = process.env[key]
+type InfoLogger = (message: string, details: { keys: string[] }) => void
+
+const defaultInfoLogger: InfoLogger = (message, details) => {
+  console.info(message, details)
+}
+
+function addAllowlistedKeys(
+  source: Record<string, string | undefined>,
+  target: NodeJS.ProcessEnv,
+  allowlist: readonly string[],
+): void {
+  for (const key of allowlist) {
+    const value = source[key]
     if (typeof value === "string" && value.length > 0) {
-      env[key] = value
+      target[key] = value
     }
   }
+}
 
-  // Task context env is an explicit handoff from scheduler to backend process.
-  for (const [key, value] of Object.entries(taskEnvironment)) {
-    env[key] = value
-  }
+export function buildBackendBaseEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  addAllowlistedKeys(process.env, env, INHERITED_ENV_ALLOWLIST)
+  return env
+}
+
+export function buildBackendSpawnEnv(
+  taskEnvironment: Record<string, string>,
+  logInfo: InfoLogger = defaultInfoLogger,
+): NodeJS.ProcessEnv {
+  const env = buildBackendBaseEnv()
+  addAllowlistedKeys(taskEnvironment, env, TASK_ENV_ALLOWLIST)
 
   // Audit only env key names, never values.
   const injectedEnvKeys = Object.keys(env).sort()
-  console.debug("[backend-env] injected env keys for backend process", { keys: injectedEnvKeys })
+  logInfo("[backend-env] injected env keys for backend process", { keys: injectedEnvKeys })
 
   return env
 }
