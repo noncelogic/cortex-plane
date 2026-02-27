@@ -25,7 +25,7 @@ spec:
         - name: tailscale
           # Pin to a specific version for production reproducibility:
           #   image: tailscale/tailscale:v1.78.1
-          image: tailscale/tailscale:latest
+          image: tailscale/tailscale:v1.78.1
           env:
             - name: TS_AUTHKEY
               valueFrom:
