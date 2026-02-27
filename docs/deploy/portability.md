@@ -6,12 +6,12 @@ Cortex Plane is designed to run anywhere containers run. This document defines t
 
 ## Service Contract
 
-| Service | Port | Health Endpoint | Required Env Vars | Optional Env Vars | Volumes | Image |
-|---------|------|----------------|-------------------|-------------------|---------|-------|
-| control-plane | 4000 | `/healthz` (liveness), `/readyz` (readiness), `/health/backends` (dependency status) | `DATABASE_URL` | `QDRANT_URL`, `PORT`, `HOST`, `NODE_ENV`, `LOG_LEVEL`, `GRAPHILE_WORKER_CONCURRENCY`, `CREDENTIAL_MASTER_KEY` | None | `ghcr.io/noncelogic/cortex-control-plane` |
-| dashboard | 3000 | `/` (returns 200) | `CORTEX_API_URL` (server-side API base) | `HOSTNAME`, `PORT`, `NODE_ENV`, `NEXT_PUBLIC_CORTEX_API_URL` (client-side API base) | None | `ghcr.io/noncelogic/cortex-dashboard` |
-| PostgreSQL | 5432 | `pg_isready` | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | -- | `/var/lib/postgresql/data` (persistent) | `postgres:17-bookworm` |
-| Qdrant | 6333 (HTTP), 6334 (gRPC) | `/healthz` | -- | Config via `production.yaml` mount | `/qdrant/storage` (persistent) | `qdrant/qdrant:v1.13.2` |
+| Service       | Port                     | Health Endpoint                                                                      | Required Env Vars                                   | Optional Env Vars                                                                                             | Volumes                                 | Image                                     |
+| ------------- | ------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------- |
+| control-plane | 4000                     | `/healthz` (liveness), `/readyz` (readiness), `/health/backends` (dependency status) | `DATABASE_URL`                                      | `QDRANT_URL`, `PORT`, `HOST`, `NODE_ENV`, `LOG_LEVEL`, `GRAPHILE_WORKER_CONCURRENCY`, `CREDENTIAL_MASTER_KEY` | None                                    | `ghcr.io/noncelogic/cortex-control-plane` |
+| dashboard     | 3000                     | `/` (returns 200)                                                                    | `CORTEX_API_URL` (server-side API base)             | `HOSTNAME`, `PORT`, `NODE_ENV`, `NEXT_PUBLIC_CORTEX_API_URL` (client-side API base)                           | None                                    | `ghcr.io/noncelogic/cortex-dashboard`     |
+| PostgreSQL    | 5432                     | `pg_isready`                                                                         | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | --                                                                                                            | `/var/lib/postgresql/data` (persistent) | `postgres:17-bookworm`                    |
+| Qdrant        | 6333 (HTTP), 6334 (gRPC) | `/healthz`                                                                           | --                                                  | Config via `production.yaml` mount                                                                            | `/qdrant/storage` (persistent)          | `qdrant/qdrant:v1.13.2`                   |
 
 ### Key Points
 
@@ -25,12 +25,12 @@ Cortex Plane is designed to run anywhere containers run. This document defines t
 
 Each service maps to a separate Railway service within a single Railway project:
 
-| Cortex Service | Railway Service Type | Build | Notes |
-|---------------|---------------------|-------|-------|
-| control-plane | Docker (Dockerfile) | `deploy/docker/Dockerfile.control-plane` | Set root directory to repo root |
-| dashboard | Docker (Dockerfile) | `deploy/docker/Dockerfile.dashboard` | Set root directory to repo root |
-| PostgreSQL | Railway Managed Postgres | -- | Use Railway's built-in Postgres plugin (v17) |
-| Qdrant | Docker or External | `qdrant/qdrant:v1.13.2` | Deploy as a Railway Docker service, or use a managed Qdrant Cloud instance |
+| Cortex Service | Railway Service Type     | Build                                    | Notes                                                                      |
+| -------------- | ------------------------ | ---------------------------------------- | -------------------------------------------------------------------------- |
+| control-plane  | Docker (Dockerfile)      | `deploy/docker/Dockerfile.control-plane` | Set root directory to repo root                                            |
+| dashboard      | Docker (Dockerfile)      | `deploy/docker/Dockerfile.dashboard`     | Set root directory to repo root                                            |
+| PostgreSQL     | Railway Managed Postgres | --                                       | Use Railway's built-in Postgres plugin (v17)                               |
+| Qdrant         | Docker or External       | `qdrant/qdrant:v1.13.2`                  | Deploy as a Railway Docker service, or use a managed Qdrant Cloud instance |
 
 ### railway.json (per service)
 
@@ -74,26 +74,26 @@ For dashboard:
 
 ### control-plane
 
-| Variable | Railway Value | Notes |
-|----------|--------------|-------|
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Railway reference variable from managed Postgres |
-| `QDRANT_URL` | `http://qdrant.railway.internal:6333` | Railway private networking, or external Qdrant Cloud URL |
-| `PORT` | `4000` | Railway auto-detects from Dockerfile EXPOSE |
-| `HOST` | `0.0.0.0` | Required for Railway to reach the service |
-| `NODE_ENV` | `production` | -- |
-| `LOG_LEVEL` | `info` | -- |
-| `GRAPHILE_WORKER_CONCURRENCY` | `5` | Adjust based on Railway plan CPU |
-| `CREDENTIAL_MASTER_KEY` | (set manually) | 32-byte hex key for credential encryption |
+| Variable                      | Railway Value                         | Notes                                                    |
+| ----------------------------- | ------------------------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`                | `${{Postgres.DATABASE_URL}}`          | Railway reference variable from managed Postgres         |
+| `QDRANT_URL`                  | `http://qdrant.railway.internal:6333` | Railway private networking, or external Qdrant Cloud URL |
+| `PORT`                        | `4000`                                | Railway auto-detects from Dockerfile EXPOSE              |
+| `HOST`                        | `0.0.0.0`                             | Required for Railway to reach the service                |
+| `NODE_ENV`                    | `production`                          | --                                                       |
+| `LOG_LEVEL`                   | `info`                                | --                                                       |
+| `GRAPHILE_WORKER_CONCURRENCY` | `5`                                   | Adjust based on Railway plan CPU                         |
+| `CREDENTIAL_MASTER_KEY`       | (set manually)                        | 32-byte hex key for credential encryption                |
 
 ### dashboard
 
-| Variable | Railway Value | Notes |
-|----------|--------------|-------|
-| `CORTEX_API_URL` | `http://control-plane.railway.internal:4000` | Private networking for SSR requests |
-| `NEXT_PUBLIC_CORTEX_API_URL` | `https://control-plane-production-XXXX.up.railway.app` | Public URL for browser requests |
-| `HOSTNAME` | `0.0.0.0` | -- |
-| `PORT` | `3000` | -- |
-| `NODE_ENV` | `production` | -- |
+| Variable                     | Railway Value                                          | Notes                               |
+| ---------------------------- | ------------------------------------------------------ | ----------------------------------- |
+| `CORTEX_API_URL`             | `http://control-plane.railway.internal:4000`           | Private networking for SSR requests |
+| `NEXT_PUBLIC_CORTEX_API_URL` | `https://control-plane-production-XXXX.up.railway.app` | Public URL for browser requests     |
+| `HOSTNAME`                   | `0.0.0.0`                                              | --                                  |
+| `PORT`                       | `3000`                                                 | --                                  |
+| `NODE_ENV`                   | `production`                                           | --                                  |
 
 ---
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 
+import { useApiQuery } from "@/hooks/use-api"
 import type {
   ApiErrorCode,
   BrowserEvent,
@@ -9,7 +10,6 @@ import type {
   BrowserTab,
   Screenshot,
 } from "@/lib/api-client"
-import { useApiQuery } from "@/hooks/use-api"
 import {
   getAgent,
   getAgentBrowser,
@@ -33,30 +33,21 @@ export function useBrowserObservation(agentId: string) {
     error: sessionError,
     errorCode: sessionErrorCode,
     refetch: refetchSession,
-  } = useApiQuery(
-    () => getAgentBrowser(agentId),
-    [agentId],
-  )
+  } = useApiQuery(() => getAgentBrowser(agentId), [agentId])
   const {
     data: screenshotData,
     isLoading: screenshotLoading,
     error: screenshotError,
     errorCode: screenshotErrorCode,
     refetch: refetchScreenshots,
-  } = useApiQuery(
-    () => getAgentScreenshots(agentId),
-    [agentId],
-  )
+  } = useApiQuery(() => getAgentScreenshots(agentId), [agentId])
   const {
     data: eventData,
     isLoading: eventLoading,
     error: eventError,
     errorCode: eventErrorCode,
     refetch: refetchEvents,
-  } = useApiQuery(
-    () => getAgentBrowserEvents(agentId),
-    [agentId],
-  )
+  } = useApiQuery(() => getAgentBrowserEvents(agentId), [agentId])
 
   useEffect(() => {
     setTabs(sessionData?.tabs ?? [])

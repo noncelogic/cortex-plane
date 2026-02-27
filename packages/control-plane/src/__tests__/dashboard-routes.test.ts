@@ -125,14 +125,18 @@ describe("dashboard routes", () => {
     const { app } = await buildTestApp()
     const res = await app.inject({ method: "GET", url: "/jobs?limit=10&offset=0" })
     expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(Array.isArray(body.jobs)).toBe(true)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.jobs[0]).toMatchObject({
       id: "job-1",
       agentId: "agent-1",
       status: "FAILED",
       type: "research",
     })
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.pagination).toBeDefined()
   })
 
@@ -169,7 +173,9 @@ describe("dashboard routes", () => {
       payload: { channel: "website" },
     })
     expect(publish.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(publish.json().contentId).toBe("c-1")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(publish.json().status).toBe("published")
 
     const archive = await app.inject({ method: "POST", url: "/content/c-1/archive" })
@@ -181,6 +187,7 @@ describe("dashboard routes", () => {
       url: "/memory/search?agentId=agent-1&query=kubernetes",
     })
     expect(memory.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(memory.json().results[0]).toMatchObject({
       id: "mem-1",
       type: "fact",
@@ -193,6 +200,7 @@ describe("dashboard routes", () => {
       payload: { agentId: "agent-1" },
     })
     expect(sync.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(sync.json().status).toBe("completed")
 
     const browser = await app.inject({ method: "GET", url: "/agents/agent-1/browser" })

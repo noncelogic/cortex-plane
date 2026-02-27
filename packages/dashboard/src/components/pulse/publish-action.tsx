@@ -132,7 +132,7 @@ export function PublishAction({
           </button>
           <button
             type="button"
-            onClick={handlePublish}
+            onClick={() => void handlePublish()}
             disabled={state === "loading"}
             className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-500 active:scale-95 disabled:opacity-50"
           >

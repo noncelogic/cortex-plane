@@ -1,7 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest"
 
-import type { MemoryRecord, ScoredMemoryRecord } from "./types.js"
 import { scoreMemory } from "./scoring.js"
+import type { MemoryRecord, ScoredMemoryRecord } from "./types.js"
 
 const VECTOR_SIZE = 1536
 const COLLECTION_PREFIX = "agent_memory_"

@@ -123,15 +123,18 @@ kubectl -n cortex wait --for=condition=Ready cluster/postgresql-restore --timeou
 ## Failure Signals and Immediate Actions
 
 1. `cluster/postgresql` not Ready for >5 minutes:
+
 - Check events: `kubectl -n cortex describe cluster/postgresql`
 - Check pods: `kubectl -n cortex get pods -l cnpg.io/cluster=postgresql`
 - Check operator logs in CNPG namespace.
 
 2. Control-plane `/readyz` failing after failover:
+
 - Confirm pooler service exists and has endpoints.
 - Confirm `DATABASE_URL` points to `postgresql-rw-pooler`.
 - Restart control-plane deployment once DB is healthy.
 
 3. Backups failing:
+
 - Validate `postgresql-backup-s3` credentials.
 - Verify MinIO/S3 endpoint reachability and bucket policy.

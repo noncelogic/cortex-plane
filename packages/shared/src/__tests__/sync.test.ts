@@ -1,15 +1,16 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
 import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { QdrantMemoryClient } from "../memory/client.js"
-import type { MemoryRecord } from "../memory/types.js"
-import { batchImport, deleteFile, syncFile, type EmbeddingFn } from "../memory/sync/sync.js"
 import { loadState, type SyncState } from "../memory/sync/state.js"
+import { batchImport, deleteFile, type EmbeddingFn, syncFile } from "../memory/sync/sync.js"
+import type { MemoryRecord } from "../memory/types.js"
 
 /** Create a mock QdrantMemoryClient. */
-function mockQdrant(): QdrantMemoryClient {
+function mockQdrant() {
   return {
     upsert: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
@@ -19,17 +20,21 @@ function mockQdrant(): QdrantMemoryClient {
     client: {} as QdrantMemoryClient["client"],
     collectionName: "test_collection",
     createCollection: vi.fn().mockResolvedValue(undefined),
-  } as unknown as QdrantMemoryClient
+  }
 }
 
+type MockQdrant = ReturnType<typeof mockQdrant>
+
 /** Mock embedding function that returns deterministic fake vectors. */
-const mockEmbeddingFn: EmbeddingFn = async (texts) => {
-  return texts.map((_, i) => Array.from({ length: 1536 }, (_, j) => (i + j) * 0.001))
+const mockEmbeddingFn: EmbeddingFn = (texts) => {
+  return Promise.resolve(
+    texts.map((_, i) => Array.from({ length: 1536 }, (_, j) => (i + j) * 0.001)),
+  )
 }
 
 describe("syncFile", () => {
   let tempDir: string
-  let qdrant: QdrantMemoryClient
+  let qdrant: MockQdrant
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "sync-file-"))
@@ -46,9 +51,15 @@ describe("syncFile", () => {
       "## Preferences\n\nAlways use TypeScript strict mode in all projects.\n\n## Deployment\n\nUse k3s on ARM64 nodes for production workloads.\n",
     )
 
-    const { state, result } = await syncFile("MEMORY.md", tempDir, qdrant, mockEmbeddingFn, {
-      entries: {},
-    })
+    const { state, result } = await syncFile(
+      "MEMORY.md",
+      tempDir,
+      qdrant as unknown as QdrantMemoryClient,
+      mockEmbeddingFn,
+      {
+        entries: {},
+      },
+    )
 
     expect(result.created).toBe(2)
     expect(result.updated).toBe(0)
@@ -59,12 +70,13 @@ describe("syncFile", () => {
     expect(Object.keys(state.entries)).toHaveLength(2)
 
     // Upsert should be called with 2 records and 2 vectors
-    const upsertCall = vi.mocked(qdrant.upsert).mock.calls[0]!
+    const upsertCalls = qdrant.upsert.mock.calls as [MemoryRecord[], number[][]][]
+    const upsertCall = upsertCalls[0]!
     expect(upsertCall[0]).toHaveLength(2)
     expect(upsertCall[1]).toHaveLength(2)
 
     // All records should have source = 'markdown_sync'
-    for (const record of upsertCall[0] as MemoryRecord[]) {
+    for (const record of upsertCall[0]) {
       expect(record.source).toBe("markdown_sync")
       expect(record.confidence).toBe(1.0)
     }
@@ -74,12 +86,14 @@ describe("syncFile", () => {
     const content = "## Section\n\nContent that is long enough to pass the minimum chunk threshold."
     writeFileSync(join(tempDir, "test.md"), content)
 
+    const typedQdrant = qdrant as unknown as QdrantMemoryClient
+
     // First sync — creates
-    const first = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, { entries: {} })
+    const first = await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, { entries: {} })
     expect(first.result.created).toBe(1)
 
     // Second sync with same state — no changes
-    const second = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, first.state)
+    const second = await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, first.state)
     expect(second.result.created).toBe(0)
     expect(second.result.updated).toBe(0)
     expect(second.result.deleted).toBe(0)
@@ -95,7 +109,9 @@ describe("syncFile", () => {
       "## Section\n\nOriginal content that is long enough to pass minimum chunk size.",
     )
 
-    const first = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, { entries: {} })
+    const typedQdrant = qdrant as unknown as QdrantMemoryClient
+
+    const first = await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, { entries: {} })
 
     // Modify the file
     writeFileSync(
@@ -103,7 +119,7 @@ describe("syncFile", () => {
       "## Section\n\nUpdated content that is long enough to pass minimum chunk size.",
     )
 
-    const second = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, first.state)
+    const second = await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, first.state)
     expect(second.result.updated).toBe(1)
     expect(second.result.created).toBe(0)
   })
@@ -114,7 +130,9 @@ describe("syncFile", () => {
       "## Section One\n\nFirst section long enough for valid chunk.\n\n## Section Two\n\nSecond section long enough for valid chunk.",
     )
 
-    const first = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, { entries: {} })
+    const typedQdrant = qdrant as unknown as QdrantMemoryClient
+
+    const first = await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, { entries: {} })
     expect(first.result.created).toBe(2)
 
     // Remove section two
@@ -123,7 +141,7 @@ describe("syncFile", () => {
       "## Section One\n\nFirst section long enough for valid chunk.",
     )
 
-    const second = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, first.state)
+    const second = await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, first.state)
     expect(second.result.deleted).toBe(1)
     expect(qdrant.delete).toHaveBeenCalledOnce()
   })
@@ -132,15 +150,17 @@ describe("syncFile", () => {
     const content = "## Section\n\nSame content for idempotency testing with enough chars."
     writeFileSync(join(tempDir, "test.md"), content)
 
-    const first = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, { entries: {} })
-    const firstRecords = vi.mocked(qdrant.upsert).mock.calls[0]![0] as MemoryRecord[]
-    const firstId = firstRecords[0]!.id
+    const typedQdrant = qdrant as unknown as QdrantMemoryClient
+
+    await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, { entries: {} })
+    const firstCalls = qdrant.upsert.mock.calls as [MemoryRecord[], number[][]][]
+    const firstId = firstCalls[0]![0][0]!.id
 
     // Reset mock and sync again from empty state — should produce same ID
-    vi.mocked(qdrant.upsert).mockClear()
-    const second = await syncFile("test.md", tempDir, qdrant, mockEmbeddingFn, { entries: {} })
-    const secondRecords = vi.mocked(qdrant.upsert).mock.calls[0]![0] as MemoryRecord[]
-    const secondId = secondRecords[0]!.id
+    qdrant.upsert.mockClear()
+    await syncFile("test.md", tempDir, typedQdrant, mockEmbeddingFn, { entries: {} })
+    const secondCalls = qdrant.upsert.mock.calls as [MemoryRecord[], number[][]][]
+    const secondId = secondCalls[0]![0][0]!.id
 
     expect(firstId).toBe(secondId)
   })
@@ -175,7 +195,7 @@ describe("deleteFile", () => {
       },
     }
 
-    const newState = await deleteFile("MEMORY.md", qdrant, state)
+    const newState = await deleteFile("MEMORY.md", qdrant as unknown as QdrantMemoryClient, state)
 
     // Should delete only MEMORY.md points
     expect(qdrant.delete).toHaveBeenCalledWith(["id-1", "id-2"])
@@ -189,7 +209,7 @@ describe("deleteFile", () => {
     const qdrant = mockQdrant()
     const state: SyncState = { entries: {} }
 
-    const newState = await deleteFile("MEMORY.md", qdrant, state)
+    const newState = await deleteFile("MEMORY.md", qdrant as unknown as QdrantMemoryClient, state)
     expect(qdrant.delete).not.toHaveBeenCalled()
     expect(newState.entries).toEqual({})
   })
@@ -197,7 +217,7 @@ describe("deleteFile", () => {
 
 describe("batchImport", () => {
   let tempDir: string
-  let qdrant: QdrantMemoryClient
+  let qdrant: MockQdrant
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "batch-import-"))
@@ -218,7 +238,12 @@ describe("batchImport", () => {
       "## Notes\n\nSome important notes that are long enough for valid chunking.",
     )
 
-    const { state, results } = await batchImport(tempDir, ["*.md"], qdrant, mockEmbeddingFn)
+    const { state, results } = await batchImport(
+      tempDir,
+      ["*.md"],
+      qdrant as unknown as QdrantMemoryClient,
+      mockEmbeddingFn,
+    )
 
     expect(results.size).toBe(2)
     expect(Object.keys(state.entries).length).toBeGreaterThanOrEqual(2)
@@ -229,7 +254,12 @@ describe("batchImport", () => {
   })
 
   it("handles empty directory", async () => {
-    const { state, results } = await batchImport(tempDir, ["*.md"], qdrant, mockEmbeddingFn)
+    const { state, results } = await batchImport(
+      tempDir,
+      ["*.md"],
+      qdrant as unknown as QdrantMemoryClient,
+      mockEmbeddingFn,
+    )
     expect(results.size).toBe(0)
     expect(Object.keys(state.entries)).toHaveLength(0)
   })
@@ -240,12 +270,14 @@ describe("batchImport", () => {
       "## Section\n\nContent for idempotency testing with enough length.",
     )
 
-    const first = await batchImport(tempDir, ["*.md"], qdrant, mockEmbeddingFn)
+    const typedQdrant = qdrant as unknown as QdrantMemoryClient
+
+    const first = await batchImport(tempDir, ["*.md"], typedQdrant, mockEmbeddingFn)
     const firstIds = Object.values(first.state.entries).map((e) => e.pointId)
 
-    vi.mocked(qdrant.upsert).mockClear()
+    qdrant.upsert.mockClear()
 
-    const second = await batchImport(tempDir, ["*.md"], qdrant, mockEmbeddingFn)
+    const second = await batchImport(tempDir, ["*.md"], typedQdrant, mockEmbeddingFn)
     const secondIds = Object.values(second.state.entries).map((e) => e.pointId)
 
     expect(firstIds).toEqual(secondIds)

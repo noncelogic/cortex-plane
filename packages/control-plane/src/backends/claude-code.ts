@@ -69,10 +69,10 @@ export class ClaudeCodeBackend implements ExecutionBackend {
 
     this.activeProcess.kill("SIGTERM")
 
+    const proc = this.activeProcess
     await Promise.race([
-      new Promise<void>((resolve) => {
-        this.activeProcess!.on("exit", () => resolve())
-      }),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return
+      new Promise<void>((resolve) => proc.on("exit", () => resolve())),
       new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
     ])
 
@@ -156,6 +156,7 @@ export class ClaudeCodeBackend implements ExecutionBackend {
       }
     }, task.constraints.timeoutMs)
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     subprocess.on("exit", () => {
       clearTimeout(timeoutTimer)
     })
@@ -321,6 +322,7 @@ class ClaudeCodeHandle implements ExecutionHandle {
       this.subprocess.kill("SIGTERM")
 
       await Promise.race([
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return
         new Promise<void>((r) => this.subprocess.on("exit", () => r())),
         new Promise<void>((r) => setTimeout(r, 5_000)),
       ])
@@ -356,7 +358,8 @@ class ClaudeCodeHandle implements ExecutionHandle {
       return Promise.resolve(this.subprocess.exitCode)
     }
     return new Promise<number | null>((resolve) => {
-      this.subprocess.on("exit", (code) => resolve(code))
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      this.subprocess.on("exit", (code: number | null) => resolve(code))
     })
   }
 

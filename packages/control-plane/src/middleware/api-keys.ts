@@ -34,15 +34,13 @@ interface RawApiKeyEntry {
  * Reads CORTEX_API_KEYS (JSON array) and hashes each key.
  * If CORTEX_REQUIRE_AUTH is "false" (or unset in dev), auth is optional.
  */
-export function loadAuthConfig(
-  env: Record<string, string | undefined> = process.env,
-): AuthConfig {
+export function loadAuthConfig(env: Record<string, string | undefined> = process.env): AuthConfig {
   const rawKeys = env.CORTEX_API_KEYS
   const apiKeys: ApiKeyRecord[] = []
 
   if (rawKeys) {
     try {
-      const entries: RawApiKeyEntry[] = JSON.parse(rawKeys)
+      const entries = JSON.parse(rawKeys) as RawApiKeyEntry[]
       for (const entry of entries) {
         if (!entry.key || !entry.userId || !Array.isArray(entry.roles)) {
           continue // skip malformed entries

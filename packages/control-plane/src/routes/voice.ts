@@ -49,6 +49,7 @@ export function voiceRoutes(deps: VoiceRouteDeps) {
     app.post<{ Body: WebRtcOfferBody }>(
       "/voice/webrtc-offer",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           body: {

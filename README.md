@@ -45,21 +45,21 @@ make up-full
 
 ## Make Targets
 
-| Target | Description |
-|---|---|
-| `make up` | Start infra services (postgres, qdrant, control-plane) |
-| `make up-full` | Start full stack including dashboard |
-| `make down` | Stop all services |
-| `make logs` | Tail logs for all services |
-| `make dev` | Start dev servers with hot reload |
-| `make build` | Build all packages |
-| `make test` | Run all tests |
-| `make lint` | Lint all packages |
-| `make db-migrate` | Run database migrations |
-| `make db-seed` | Seed database with sample data |
-| `make smoke` | Run smoke tests against running stack |
-| `make preflight` | Pre-deployment checklist |
-| `make clean` | Remove build artifacts and volumes |
+| Target            | Description                                            |
+| ----------------- | ------------------------------------------------------ |
+| `make up`         | Start infra services (postgres, qdrant, control-plane) |
+| `make up-full`    | Start full stack including dashboard                   |
+| `make down`       | Stop all services                                      |
+| `make logs`       | Tail logs for all services                             |
+| `make dev`        | Start dev servers with hot reload                      |
+| `make build`      | Build all packages                                     |
+| `make test`       | Run all tests                                          |
+| `make lint`       | Lint all packages                                      |
+| `make db-migrate` | Run database migrations                                |
+| `make db-seed`    | Seed database with sample data                         |
+| `make smoke`      | Run smoke tests against running stack                  |
+| `make preflight`  | Pre-deployment checklist                               |
+| `make clean`      | Remove build artifacts and volumes                     |
 
 ## Project Structure
 
@@ -112,14 +112,14 @@ See `.github/workflows/docker-publish.yml`.
 
 Copy `.env.example` to `.env`. Key variables:
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `QDRANT_URL` | No | `http://localhost:6333` | Qdrant vector store URL |
-| `PORT` | No | `4000` | Control-plane HTTP port |
-| `LOG_LEVEL` | No | `info` | Pino log level |
-| `CREDENTIAL_MASTER_KEY` | No | — | Enables auth/OAuth features |
-| `CORTEX_API_URL` | No | `http://localhost:4000` | Dashboard → control-plane URL |
+| Variable                | Required | Default                 | Description                   |
+| ----------------------- | -------- | ----------------------- | ----------------------------- |
+| `DATABASE_URL`          | Yes      | —                       | PostgreSQL connection string  |
+| `QDRANT_URL`            | No       | `http://localhost:6333` | Qdrant vector store URL       |
+| `PORT`                  | No       | `4000`                  | Control-plane HTTP port       |
+| `LOG_LEVEL`             | No       | `info`                  | Pino log level                |
+| `CREDENTIAL_MASTER_KEY` | No       | —                       | Enables auth/OAuth features   |
+| `CORTEX_API_URL`        | No       | `http://localhost:4000` | Dashboard → control-plane URL |
 
 Full list with descriptions: [`.env.example`](.env.example)
 

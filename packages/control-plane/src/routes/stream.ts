@@ -9,14 +9,14 @@
  */
 
 import { randomUUID } from "node:crypto"
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
+
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import {
-  SSEConnectionManager,
-  createStreamAuth,
   type AuthenticatedRequest,
-  type SteerRequest,
+  createStreamAuth,
+  SSEConnectionManager,
 } from "../streaming/index.js"
 
 // ---------------------------------------------------------------------------
@@ -54,6 +54,7 @@ export function streamRoutes(deps: StreamRouteDeps) {
     app.get<{ Params: StreamParams }>(
       "/agents/:agentId/stream",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -85,8 +86,7 @@ export function streamRoutes(deps: StreamRouteDeps) {
         }
 
         // Support reconnection via Last-Event-ID
-        const lastEventId =
-          (request.headers["last-event-id"] as string | undefined) ?? null
+        const lastEventId = (request.headers["last-event-id"] as string | undefined) ?? null
 
         // Hijack the response for raw SSE streaming
         // We must prevent Fastify from sending its own response
@@ -119,6 +119,7 @@ export function streamRoutes(deps: StreamRouteDeps) {
     app.post<{ Params: StreamParams; Body: SteerBody }>(
       "/agents/:agentId/steer",
       {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify awaits async preHandlers
         preHandler: authHook,
         schema: {
           params: {
@@ -138,7 +139,10 @@ export function streamRoutes(deps: StreamRouteDeps) {
           },
         },
       },
-      async (request: FastifyRequest<{ Params: StreamParams; Body: SteerBody }>, reply: FastifyReply) => {
+      async (
+        request: FastifyRequest<{ Params: StreamParams; Body: SteerBody }>,
+        reply: FastifyReply,
+      ) => {
         const { agentId } = request.params
         const { message, priority } = request.body
         const authContext = (request as AuthenticatedRequest).authContext
@@ -179,7 +183,8 @@ export function streamRoutes(deps: StreamRouteDeps) {
           } catch (error) {
             return reply.status(409).send({
               error: "conflict",
-              message: error instanceof Error ? error.message : "Failed to deliver steering message",
+              message:
+                error instanceof Error ? error.message : "Failed to deliver steering message",
             })
           }
         }

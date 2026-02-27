@@ -7,7 +7,8 @@
  */
 
 const PROD_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
-const SANDBOX_ENDPOINT = "https://staging-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist"
+const SANDBOX_ENDPOINT =
+  "https://staging-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist"
 const DEFAULT_PROJECT = "anthropic-cortex-default"
 
 interface CodeAssistResponse {
@@ -31,10 +32,7 @@ export async function discoverAntigravityProject(accessToken: string): Promise<s
   return DEFAULT_PROJECT
 }
 
-async function tryLoadCodeAssist(
-  endpoint: string,
-  accessToken: string,
-): Promise<string | null> {
+async function tryLoadCodeAssist(endpoint: string, accessToken: string): Promise<string | null> {
   try {
     const res = await fetch(endpoint, {
       method: "POST",

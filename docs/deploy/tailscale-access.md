@@ -6,12 +6,12 @@ Exposes the Cortex Plane dashboard and control-plane API over Tailscale for inte
 
 **Endpoints (after setup):**
 
-| Service | URL |
-|---------|-----|
-| Dashboard | `https://cortex-demo.<tailnet>.ts.net/` |
-| Control-plane API | `https://cortex-demo.<tailnet>.ts.net/api` |
-| Health check | `https://cortex-demo.<tailnet>.ts.net/healthz` |
-| Readiness check | `https://cortex-demo.<tailnet>.ts.net/readyz` |
+| Service           | URL                                            |
+| ----------------- | ---------------------------------------------- |
+| Dashboard         | `https://cortex-demo.<tailnet>.ts.net/`        |
+| Control-plane API | `https://cortex-demo.<tailnet>.ts.net/api`     |
+| Health check      | `https://cortex-demo.<tailnet>.ts.net/healthz` |
+| Readiness check   | `https://cortex-demo.<tailnet>.ts.net/readyz`  |
 
 Replace `<tailnet>` with your Tailscale tailnet name (visible at https://login.tailscale.com/admin/dns).
 
@@ -19,13 +19,13 @@ Replace `<tailnet>` with your Tailscale tailnet name (visible at https://login.t
 
 ## Prerequisites
 
-| Requirement | How to verify |
-|-------------|---------------|
-| Cortex Plane deployed and healthy | `./scripts/smoke-test-cluster.sh cortex` |
-| Tailscale account | https://login.tailscale.com |
+| Requirement                                 | How to verify                                     |
+| ------------------------------------------- | ------------------------------------------------- |
+| Cortex Plane deployed and healthy           | `./scripts/smoke-test-cluster.sh cortex`          |
+| Tailscale account                           | https://login.tailscale.com                       |
 | HTTPS certificates enabled (for HTTPS mode) | Tailscale Admin → DNS → Enable HTTPS Certificates |
-| Tailscale auth key generated | See Step 1 below |
-| Operator machine on the same tailnet | `tailscale status` shows connected |
+| Tailscale auth key generated                | See Step 1 below                                  |
+| Operator machine on the same tailnet        | `tailscale status` shows connected                |
 
 ---
 
@@ -167,6 +167,7 @@ Tailscale Funnel extends Serve to allow public internet access through Tailscale
 ### Enable Funnel
 
 1. Enable Funnel in Tailscale ACL policy:
+
    ```json
    {
      "nodeAttrs": [
@@ -179,6 +180,7 @@ Tailscale Funnel extends Serve to allow public internet access through Tailscale
    ```
 
 2. Update the serve config to enable Funnel (`AllowFunnel: true`):
+
    ```json
    {
      "AllowFunnel": {
@@ -292,6 +294,7 @@ kubectl -n cortex logs deploy/tailscale-proxy
 ```
 
 **Common causes:**
+
 - `tailscale-auth` secret missing or invalid key → check Step 2
 - Auth key expired → generate a new one in Tailscale admin
 - `/dev/net/tun` not available → verify the k3s host has TUN device support
@@ -320,6 +323,7 @@ kubectl -n cortex exec deploy/tailscale-proxy -- wget -qO- http://control-plane:
 ### HTTPS certificate errors
 
 HTTPS certificates require:
+
 1. MagicDNS enabled in Tailscale admin → DNS settings
 2. HTTPS certificates enabled in Tailscale admin → DNS settings
 3. The node must be online for at least a few seconds to provision the cert

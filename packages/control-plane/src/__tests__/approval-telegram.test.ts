@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  parseApprovalCallback,
   buildApprovalCallbackData,
   buildApprovalInlineKeyboard,
   formatApprovalMessage,
   formatDecisionMessage,
+  parseApprovalCallback,
 } from "../approval/telegram.js"
 
 describe("parseApprovalCallback", () => {

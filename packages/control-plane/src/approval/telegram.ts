@@ -89,8 +89,7 @@ export function formatApprovalMessage(params: {
   const { agentName, actionSummary, actionType, jobId, expiresAt } = params
 
   const expiresIn = formatDuration(expiresAt.getTime() - Date.now())
-  const expiresAtStr =
-    expiresAt.toISOString().replace("T", " ").slice(0, 19) + " UTC"
+  const expiresAtStr = expiresAt.toISOString().replace("T", " ").slice(0, 19) + " UTC"
 
   return [
     "🔒 *Approval Required*",
@@ -116,16 +115,10 @@ export function formatDecisionMessage(params: {
 }): string {
   const { decision, decidedBy, agentName, actionSummary } = params
 
-  const icon =
-    decision === "APPROVED" ? "✅" : decision === "REJECTED" ? "❌" : "⏰"
+  const icon = decision === "APPROVED" ? "✅" : decision === "REJECTED" ? "❌" : "⏰"
   const verb =
-    decision === "APPROVED"
-      ? "Approved"
-      : decision === "REJECTED"
-        ? "Rejected"
-        : "Expired"
-  const byLine =
-    decision === "EXPIRED" || !decidedBy ? "" : ` by ${escapeMarkdown(decidedBy)}`
+    decision === "APPROVED" ? "Approved" : decision === "REJECTED" ? "Rejected" : "Expired"
+  const byLine = decision === "EXPIRED" || !decidedBy ? "" : ` by ${escapeMarkdown(decidedBy)}`
 
   return [
     `${icon} *${verb}${byLine}*`,

@@ -6,8 +6,6 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk"
-import OpenAI from "openai"
-
 import type {
   BackendCapabilities,
   BackendHealthReport,
@@ -21,6 +19,7 @@ import type {
   OutputUsageEvent,
   TokenUsage,
 } from "@cortex/shared/backends"
+import OpenAI from "openai"
 
 type LlmProvider = "anthropic" | "openai"
 
@@ -44,7 +43,7 @@ export class HttpLlmBackend implements ExecutionBackend {
   private anthropicClient: Anthropic | null = null
   private openaiClient: OpenAI | null = null
 
-  async start(config: Record<string, unknown>): Promise<void> {
+  start(config: Record<string, unknown>): Promise<void> {
     this.provider = (config.provider as LlmProvider) ?? process.env.LLM_PROVIDER ?? "anthropic"
     this.apiKey = (config.apiKey as string) ?? process.env.LLM_API_KEY ?? ""
     this.model = (config.model as string) ?? process.env.LLM_MODEL ?? this.defaultModel()
@@ -60,7 +59,9 @@ export class HttpLlmBackend implements ExecutionBackend {
     }
 
     if (!this.apiKey) {
-      throw new Error(`LLM_API_KEY (or provider-specific key) is required for http-llm backend`)
+      return Promise.reject(
+        new Error(`LLM_API_KEY (or provider-specific key) is required for http-llm backend`),
+      )
     }
 
     if (this.provider === "anthropic") {
@@ -76,12 +77,14 @@ export class HttpLlmBackend implements ExecutionBackend {
     }
 
     this.started = true
+    return Promise.resolve()
   }
 
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
     this.anthropicClient = null
     this.openaiClient = null
     this.started = false
+    return Promise.resolve()
   }
 
   async healthCheck(): Promise<BackendHealthReport> {
@@ -130,33 +133,23 @@ export class HttpLlmBackend implements ExecutionBackend {
     }
   }
 
-  async executeTask(task: ExecutionTask): Promise<ExecutionHandle> {
+  executeTask(task: ExecutionTask): Promise<ExecutionHandle> {
     if (!this.started) {
-      throw new Error("HttpLlmBackend not started")
+      return Promise.reject(new Error("HttpLlmBackend not started"))
     }
 
     const model = task.constraints.model || this.model
     const startTime = Date.now()
 
     if (this.provider === "anthropic" && this.anthropicClient) {
-      return new AnthropicHandle(
-        task,
-        this.anthropicClient,
-        model,
-        startTime,
-      )
+      return Promise.resolve(new AnthropicHandle(task, this.anthropicClient, model, startTime))
     }
 
     if (this.openaiClient) {
-      return new OpenAIHandle(
-        task,
-        this.openaiClient,
-        model,
-        startTime,
-      )
+      return Promise.resolve(new OpenAIHandle(task, this.openaiClient, model, startTime))
     }
 
-    throw new Error("No LLM client initialized")
+    return Promise.reject(new Error("No LLM client initialized"))
   }
 
   getCapabilities(): BackendCapabilities {
@@ -166,7 +159,13 @@ export class HttpLlmBackend implements ExecutionBackend {
       supportsShellExecution: false,
       reportsTokenUsage: true,
       supportsCancellation: true,
-      supportedGoalTypes: ["code_edit", "code_generate", "code_review", "shell_command", "research"],
+      supportedGoalTypes: [
+        "code_edit",
+        "code_generate",
+        "code_review",
+        "shell_command",
+        "research",
+      ],
       maxContextTokens: 200_000,
     }
   }
@@ -220,12 +219,15 @@ class AnthropicHandle implements ExecutionHandle {
     const usage: TokenUsage = { ...ZERO_TOKEN_USAGE }
 
     try {
-      const stream = this.client.messages.stream({
-        model: this.model,
-        max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
-        system: systemPrompt,
-        messages,
-      }, { signal: this.abortController.signal })
+      const stream = this.client.messages.stream(
+        {
+          model: this.model,
+          max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
+          system: systemPrompt,
+          messages,
+        },
+        { signal: this.abortController.signal },
+      )
 
       for await (const event of stream) {
         if (this.cancelled) break
@@ -245,10 +247,12 @@ class AnthropicHandle implements ExecutionHandle {
       usage.inputTokens = finalMessage.usage.input_tokens
       usage.outputTokens = finalMessage.usage.output_tokens
       if ("cache_read_input_tokens" in finalMessage.usage) {
-        usage.cacheReadTokens = (finalMessage.usage as unknown as Record<string, number>).cache_read_input_tokens ?? 0
+        usage.cacheReadTokens =
+          (finalMessage.usage as unknown as Record<string, number>).cache_read_input_tokens ?? 0
       }
       if ("cache_creation_input_tokens" in finalMessage.usage) {
-        usage.cacheCreationTokens = (finalMessage.usage as unknown as Record<string, number>).cache_creation_input_tokens ?? 0
+        usage.cacheCreationTokens =
+          (finalMessage.usage as unknown as Record<string, number>).cache_creation_input_tokens ?? 0
       }
 
       const usageEvent: OutputUsageEvent = {
@@ -314,7 +318,7 @@ class AnthropicHandle implements ExecutionHandle {
     return this.resultPromise
   }
 
-  async cancel(reason: string): Promise<void> {
+  cancel(reason: string): Promise<void> {
     this.cancelled = true
     this.abortController.abort()
     this.settleResult({
@@ -329,6 +333,7 @@ class AnthropicHandle implements ExecutionHandle {
       artifacts: [],
       durationMs: Date.now() - this.startTime,
     })
+    return Promise.resolve()
   }
 
   private settleResult(result: ExecutionResult): void {
@@ -375,7 +380,7 @@ class OpenAIHandle implements ExecutionHandle {
     if (this.task.instruction.conversationHistory) {
       for (const turn of this.task.instruction.conversationHistory) {
         messages.push({
-          role: turn.role as "user" | "assistant",
+          role: turn.role,
           content: turn.content,
         })
       }
@@ -481,7 +486,7 @@ class OpenAIHandle implements ExecutionHandle {
     return this.resultPromise
   }
 
-  async cancel(reason: string): Promise<void> {
+  cancel(reason: string): Promise<void> {
     this.cancelled = true
     this.abortController.abort()
     this.settleResult({
@@ -496,6 +501,7 @@ class OpenAIHandle implements ExecutionHandle {
       artifacts: [],
       durationMs: Date.now() - this.startTime,
     })
+    return Promise.resolve()
   }
 
   private settleResult(result: ExecutionResult): void {

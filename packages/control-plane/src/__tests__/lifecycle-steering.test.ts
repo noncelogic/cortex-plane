@@ -41,7 +41,7 @@ function setAgentState(
     sm.transition("EXECUTING")
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
   const agents = (manager as any).agents as Map<string, any>
   agents.set(agentId, {
     agentId,
@@ -183,7 +183,7 @@ describe("AgentLifecycleManager steering", () => {
       timestamp: new Date(),
     })
 
-    expect(listener.mock.calls[0]![0].priority).toBe("high")
+    expect((listener.mock.calls[0]![0] as { priority: string }).priority).toBe("high")
   })
 
   it("cleanup removes steer listeners", async () => {

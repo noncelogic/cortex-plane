@@ -10,16 +10,11 @@
  * - Clean up dead connections
  */
 
-import type { ServerResponse } from "node:http"
 import { randomUUID } from "node:crypto"
+import type { ServerResponse } from "node:http"
 
 import { SSEConnection } from "./connection.js"
-import type {
-  SSEEvent,
-  SSEEventType,
-  BufferConfig,
-  SSEConnectionInfo,
-} from "./types.js"
+import type { BufferConfig, SSEConnectionInfo, SSEEvent, SSEEventType } from "./types.js"
 import { DEFAULT_BUFFER_CONFIG } from "./types.js"
 
 export class SSEConnectionManager {

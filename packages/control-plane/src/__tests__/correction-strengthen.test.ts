@@ -1,15 +1,14 @@
-import { describe, expect, it, vi } from "vitest"
-
 import type {
   EmbeddingFn,
   FeedbackEntry,
   RuleSynthesizer,
 } from "@cortex/shared/correction-strengthener"
+import { describe, expect, it, vi } from "vitest"
 
 import {
-  createCorrectionStrengthenTask,
   type CorrectionStrengthenDeps,
   type CorrectionStrengthenPayload,
+  createCorrectionStrengthenTask,
   runCorrectionStrengthenPipeline,
 } from "../worker/tasks/correction-strengthen.js"
 
@@ -84,6 +83,7 @@ describe("runCorrectionStrengthenPipeline", () => {
   it("returns empty proposals when no clusters qualify", async () => {
     // Each entry gets a different embedding → no cluster
     let idx = 0
+    // eslint-disable-next-line @typescript-eslint/require-await
     const embed = vi.fn<EmbeddingFn>().mockImplementation(async () => {
       const v = [0, 0, 0]
       v[idx % 3] = 1
@@ -126,9 +126,8 @@ describe("createCorrectionStrengthenTask", () => {
 
     await task(makePayload(), helpers)
 
-    expect(helpers.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("no deps configured"),
-    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("no deps configured"))
   })
 
   it("runs as no-op for empty feedback", async () => {
@@ -138,9 +137,8 @@ describe("createCorrectionStrengthenTask", () => {
 
     await task(makePayload({ feedback: [] }), helpers)
 
-    expect(helpers.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("no feedback entries"),
-    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("no feedback entries"))
     expect(deps.embed).not.toHaveBeenCalled()
   })
 
@@ -151,6 +149,7 @@ describe("createCorrectionStrengthenTask", () => {
 
     await task(makePayload(), helpers)
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("proposals="))
     expect(deps.embed).toHaveBeenCalled()
   })
@@ -162,6 +161,7 @@ describe("createCorrectionStrengthenTask", () => {
     const helpers = mockHelpers()
 
     await expect(task(makePayload(), helpers)).rejects.toThrow("embed failed")
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.error).toHaveBeenCalledWith(expect.stringContaining("embed failed"))
   })
 })

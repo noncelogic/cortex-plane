@@ -1,15 +1,15 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
   fdatasyncSync,
   mkdirSync,
   openSync,
-  closeSync,
   writeFileSync,
 } from "node:fs"
 import { join } from "node:path"
 
-import type { BufferEvent, EventType, SessionMetadata } from "./types.js"
+import type { BufferEvent, SessionMetadata } from "./types.js"
 
 const FSYNC_INTERVAL_MS = 30_000
 

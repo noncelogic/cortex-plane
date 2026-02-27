@@ -1,11 +1,15 @@
 import type { ServerResponse } from "node:http"
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { SSEConnectionManager } from "../streaming/manager.js"
 
-function createMockResponse(): ServerResponse & { chunks: string[]; _listeners: Map<string, Function> } {
+function createMockResponse(): ServerResponse & {
+  chunks: string[]
+  _listeners: Map<string, (...args: unknown[]) => unknown>
+} {
   const chunks: string[] = []
-  const listeners = new Map<string, Function>()
+  const listeners = new Map<string, (...args: unknown[]) => unknown>()
 
   return {
     chunks,
@@ -16,13 +20,16 @@ function createMockResponse(): ServerResponse & { chunks: string[]; _listeners: 
       return true
     }),
     end: vi.fn(),
-    on: vi.fn((event: string, cb: Function) => {
+    on: vi.fn((event: string, cb: (...args: unknown[]) => unknown) => {
       listeners.set(event, cb)
     }),
-    once: vi.fn((event: string, cb: Function) => {
+    once: vi.fn((event: string, cb: (...args: unknown[]) => unknown) => {
       listeners.set(event, cb)
     }),
-  } as unknown as ServerResponse & { chunks: string[]; _listeners: Map<string, Function> }
+  } as unknown as ServerResponse & {
+    chunks: string[]
+    _listeners: Map<string, (...args: unknown[]) => unknown>
+  }
 }
 
 describe("SSEConnectionManager", () => {
@@ -76,7 +83,9 @@ describe("SSEConnectionManager", () => {
 
     // Both responses should have received the event (plus the initial state broadcast is not here)
     // Check that write was called on both
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res1.write).toHaveBeenCalled()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res2.write).toHaveBeenCalled()
 
     // Verify the frame format in one of them
@@ -228,7 +237,9 @@ describe("SSEConnectionManager", () => {
     manager.disconnectAll("agent-1")
 
     expect(manager.connectionCount("agent-1")).toBe(0)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res1.end).toHaveBeenCalled()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res2.end).toHaveBeenCalled()
 
     // Reconnect — no events to replay since buffer was cleared
@@ -268,7 +279,9 @@ describe("SSEConnectionManager", () => {
 
     manager.shutdown()
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res1.end).toHaveBeenCalled()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res2.end).toHaveBeenCalled()
     expect(manager.totalConnectionCount).toBe(0)
   })

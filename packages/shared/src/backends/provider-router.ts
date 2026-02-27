@@ -56,10 +56,7 @@ export class ProviderRouter {
     this.providers.sort((a, b) => a.priority - b.priority)
 
     if (!this.breakers.has(entry.providerId)) {
-      this.breakers.set(
-        entry.providerId,
-        new CircuitBreaker(entry.circuitBreakerConfig, this.now),
-      )
+      this.breakers.set(entry.providerId, new CircuitBreaker(entry.circuitBreakerConfig, this.now))
     }
   }
 
@@ -115,7 +112,7 @@ export class ProviderRouter {
     throw new Error("All provider circuits are open — no backend available for execution")
   }
 
-  routeWithFailover(task: ExecutionTask): RouteResult {
+  routeWithFailover(_task: ExecutionTask): RouteResult {
     const sorted = this.providers
     const skipped: string[] = []
 

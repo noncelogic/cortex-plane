@@ -13,7 +13,12 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto"
-import type { AuthHandoffRequest, AuthHandoffResult, AuthHandoffCookie } from "@cortex/shared/browser"
+
+import type {
+  AuthHandoffCookie,
+  AuthHandoffRequest,
+  AuthHandoffResult,
+} from "@cortex/shared/browser"
 
 // ---------------------------------------------------------------------------
 // Encryption utilities (AES-256-GCM)
@@ -44,10 +49,7 @@ export function encrypt(plaintext: string, key: Buffer): EncryptedPayload {
   const iv = randomBytes(IV_LENGTH)
   const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
 
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final(),
-  ])
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()])
 
   return {
     ciphertext: encrypted.toString("base64"),
@@ -67,10 +69,7 @@ export function decrypt(payload: EncryptedPayload, key: Buffer): string {
   const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
   decipher.setAuthTag(authTag)
 
-  const decrypted = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ])
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
 
   return decrypted.toString("utf8")
 }
@@ -110,7 +109,7 @@ export class AuthHandoffService {
    *
    * Caller MUST have verified the approver role before calling.
    */
-  async prepareHandoff(
+  prepareHandoff(
     request: AuthHandoffRequest,
     actorId: string,
     actorDisplayName: string,
@@ -142,11 +141,11 @@ export class AuthHandoffService {
       timestamp,
     })
 
-    return {
+    return Promise.resolve({
       success: true,
       injectedAt: timestamp,
       targetUrl,
-    }
+    })
   }
 
   /**

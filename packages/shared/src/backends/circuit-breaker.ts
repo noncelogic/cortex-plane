@@ -138,9 +138,9 @@ export class CircuitBreaker {
     return {
       state: this.state,
       windowFailureCount: this.failures.length,
-      windowTotalCalls: this.failures.length + this.successes.filter(
-        (t) => t > this.now() - this.config.windowMs,
-      ).length,
+      windowTotalCalls:
+        this.failures.length +
+        this.successes.filter((t) => t > this.now() - this.config.windowMs).length,
       consecutiveHalfOpenSuccesses: this.consecutiveHalfOpenSuccesses,
       lastStateChange: new Date(this.lastStateChange).toISOString(),
     }

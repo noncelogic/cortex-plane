@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
+
 import { WebSocket } from "ws"
 
 import type {
@@ -149,7 +150,10 @@ export class BrowserObservationService {
   /**
    * Capture a screenshot of the current page via CDP.
    */
-  async captureScreenshot(agentId: string, request: ScreenshotRequest = {}): Promise<ScreenshotResult> {
+  async captureScreenshot(
+    agentId: string,
+    request: ScreenshotRequest = {},
+  ): Promise<ScreenshotResult> {
     const format = request.format ?? "jpeg"
     const quality = format === "jpeg" ? (request.quality ?? 70) : undefined
     const fullPage = request.fullPage ?? false
@@ -161,11 +165,9 @@ export class BrowserObservationService {
       await this.waitForWsOpen(ws)
 
       // Get the list of targets to find the first page
-      const targets = await this.cdpSend<{ targetInfos: Array<{ type: string; targetId: string; url: string; title: string }> }>(
-        ws,
-        "Target.getTargets",
-        {},
-      )
+      const targets = await this.cdpSend<{
+        targetInfos: Array<{ type: string; targetId: string; url: string; title: string }>
+      }>(ws, "Target.getTargets", {})
 
       const pageTarget = targets.targetInfos.find((t) => t.type === "page")
       if (!pageTarget) {
@@ -173,11 +175,10 @@ export class BrowserObservationService {
       }
 
       // Attach to the target
-      const { sessionId } = await this.cdpSend<{ sessionId: string }>(
-        ws,
-        "Target.attachToTarget",
-        { targetId: pageTarget.targetId, flatten: true },
-      )
+      const { sessionId } = await this.cdpSend<{ sessionId: string }>(ws, "Target.attachToTarget", {
+        targetId: pageTarget.targetId,
+        flatten: true,
+      })
 
       // If fullPage, get the full document dimensions first
       let clip: { x: number; y: number; width: number; height: number; scale: number } | undefined
@@ -195,17 +196,15 @@ export class BrowserObservationService {
       }
 
       // Capture screenshot
-      const result = await this.cdpSendSession<{ data: string; metadata?: { width?: number; height?: number } }>(
-        ws,
-        sessionId,
-        "Page.captureScreenshot",
-        {
-          format,
-          quality,
-          clip,
-          fromSurface: true,
-        },
-      )
+      const result = await this.cdpSendSession<{
+        data: string
+        metadata?: { width?: number; height?: number }
+      }>(ws, sessionId, "Page.captureScreenshot", {
+        format,
+        quality,
+        clip,
+        fromSurface: true,
+      })
 
       return {
         agentId,
@@ -308,19 +307,16 @@ export class BrowserObservationService {
     try {
       await this.waitForWsOpen(ws)
 
-      const targets = await this.cdpSend<{ targetInfos: Array<{ type: string; targetId: string }> }>(
-        ws,
-        "Target.getTargets",
-        {},
-      )
+      const targets = await this.cdpSend<{
+        targetInfos: Array<{ type: string; targetId: string }>
+      }>(ws, "Target.getTargets", {})
       const pageTarget = targets.targetInfos.find((t) => t.type === "page")
       if (!pageTarget) throw new Error("No browser page found for tracing")
 
-      const { sessionId } = await this.cdpSend<{ sessionId: string }>(
-        ws,
-        "Target.attachToTarget",
-        { targetId: pageTarget.targetId, flatten: true },
-      )
+      const { sessionId } = await this.cdpSend<{ sessionId: string }>(ws, "Target.attachToTarget", {
+        targetId: pageTarget.targetId,
+        flatten: true,
+      })
 
       // Enable tracing categories
       const categories: string[] = []
@@ -368,19 +364,16 @@ export class BrowserObservationService {
     try {
       await this.waitForWsOpen(ws)
 
-      const targets = await this.cdpSend<{ targetInfos: Array<{ type: string; targetId: string }> }>(
-        ws,
-        "Target.getTargets",
-        {},
-      )
+      const targets = await this.cdpSend<{
+        targetInfos: Array<{ type: string; targetId: string }>
+      }>(ws, "Target.getTargets", {})
       const pageTarget = targets.targetInfos.find((t) => t.type === "page")
       if (!pageTarget) throw new Error("No browser page found for tracing")
 
-      const { sessionId } = await this.cdpSend<{ sessionId: string }>(
-        ws,
-        "Target.attachToTarget",
-        { targetId: pageTarget.targetId, flatten: true },
-      )
+      const { sessionId } = await this.cdpSend<{ sessionId: string }>(ws, "Target.attachToTarget", {
+        targetId: pageTarget.targetId,
+        flatten: true,
+      })
 
       // Stop tracing and collect data
       await this.cdpSendSession(ws, sessionId, "Tracing.end", {})
@@ -459,7 +452,7 @@ export class BrowserObservationService {
    * Forward a user annotation (click, hover, etc.) to the agent.
    * Generates a coordinate-based prompt for the agent's next action.
    */
-  async forwardAnnotation(agentId: string, event: AnnotationEvent): Promise<AnnotationResult> {
+  forwardAnnotation(agentId: string, event: AnnotationEvent): Promise<AnnotationResult> {
     const annotationId = randomUUID()
     const state = this.getAgentState(agentId)
 
@@ -472,12 +465,12 @@ export class BrowserObservationService {
       }
     }
 
-    return {
+    return Promise.resolve({
       agentId,
       annotationId,
       forwarded: state.annotationListeners.size > 0,
       timestamp: new Date().toISOString(),
-    }
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -487,15 +480,16 @@ export class BrowserObservationService {
   /**
    * Clean up all state for an agent.
    */
-  async cleanup(agentId: string): Promise<void> {
+  cleanup(agentId: string): Promise<void> {
     const state = this.agents.get(agentId)
-    if (!state) return
+    if (!state) return Promise.resolve()
 
     if (state.cdpWs) {
       state.cdpWs.close()
     }
     state.annotationListeners.clear()
     this.agents.delete(agentId)
+    return Promise.resolve()
   }
 
   /**
@@ -556,7 +550,11 @@ export class BrowserObservationService {
       const timeout = setTimeout(() => reject(new Error(`CDP ${method} timed out`)), 10_000)
 
       const handler = (rawMsg: Buffer | string) => {
-        const msg = JSON.parse(rawMsg.toString()) as { id?: number; result?: T; error?: { message: string } }
+        const msg = JSON.parse(rawMsg.toString()) as {
+          id?: number
+          result?: T
+          error?: { message: string }
+        }
         if (msg.id !== id) return
 
         clearTimeout(timeout)
@@ -585,7 +583,11 @@ export class BrowserObservationService {
       const timeout = setTimeout(() => reject(new Error(`CDP ${method} timed out`)), 10_000)
 
       const handler = (rawMsg: Buffer | string) => {
-        const msg = JSON.parse(rawMsg.toString()) as { id?: number; result?: T; error?: { message: string } }
+        const msg = JSON.parse(rawMsg.toString()) as {
+          id?: number
+          result?: T
+          error?: { message: string }
+        }
         if (msg.id !== id) return
 
         clearTimeout(timeout)

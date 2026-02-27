@@ -2,21 +2,20 @@ import { readdir, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import EmbeddedPostgres from "embedded-postgres"
-import { makeWorkerUtils, run, type Runner, type WorkerUtils } from "graphile-worker"
-import { Kysely, PostgresDialect } from "kysely"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-
 import {
   BackendRegistry,
-  BackendSemaphore,
   type ExecutionBackend,
   type ExecutionHandle,
   type ExecutionResult,
   type ExecutionTask,
   type OutputEvent,
 } from "@cortex/shared/backends"
+import EmbeddedPostgres from "embedded-postgres"
+import { makeWorkerUtils, run, type Runner, type WorkerUtils } from "graphile-worker"
+import { Kysely, PostgresDialect } from "kysely"
+import pg from "pg"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+
 import type { Database } from "../db/types.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
@@ -80,31 +79,33 @@ function createMockHandle(
   let cancelled = false
   return {
     taskId: result.taskId,
+    // eslint-disable-next-line @typescript-eslint/require-await
     async *events() {
       for (const event of events) {
         if (cancelled) return
         yield event
       }
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async result() {
       if (cancelled) {
         return { ...result, status: "cancelled" as const }
       }
       return result
     },
-    async cancel(reason: string) {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async cancel(_reason: string) {
       cancelled = true
     },
   }
 }
 
-function createMockBackend(
-  handle: ExecutionHandle = createMockHandle(),
-): ExecutionBackend {
+function createMockBackend(handle: ExecutionHandle = createMockHandle()): ExecutionBackend {
   return {
     backendId: "mock-backend",
     async start() {},
     async stop() {},
+    // eslint-disable-next-line @typescript-eslint/require-await
     async healthCheck() {
       return {
         backendId: "mock-backend",
@@ -114,6 +115,7 @@ function createMockBackend(
         details: {},
       }
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async executeTask(_task: ExecutionTask) {
       return handle
     },
@@ -124,7 +126,13 @@ function createMockBackend(
         supportsShellExecution: true,
         reportsTokenUsage: true,
         supportsCancellation: true,
-        supportedGoalTypes: ["code_edit", "code_generate", "code_review", "shell_command", "research"],
+        supportedGoalTypes: [
+          "code_edit",
+          "code_generate",
+          "code_review",
+          "shell_command",
+          "research",
+        ],
         maxContextTokens: 200_000,
       }
     },
@@ -269,13 +277,9 @@ describe("Worker integration", () => {
   it("successful execution: SCHEDULED → RUNNING → COMPLETED with real result", async () => {
     const mockResult = createMockResult({
       summary: "Created 2 files",
-      fileChanges: [
-        { path: "src/index.ts", operation: "modified", diff: "+hello" },
-      ],
+      fileChanges: [{ path: "src/index.ts", operation: "modified", diff: "+hello" }],
     })
-    const registry = await createMockRegistry(
-      createMockBackend(createMockHandle(mockResult)),
-    )
+    const registry = await createMockRegistry(createMockBackend(createMockHandle(mockResult)))
     await startRunner(registry)
 
     const { jobId } = await setupJob()
@@ -314,9 +318,7 @@ describe("Worker integration", () => {
         partialExecution: false,
       },
     })
-    const registry = await createMockRegistry(
-      createMockBackend(createMockHandle(mockResult)),
-    )
+    const registry = await createMockRegistry(createMockBackend(createMockHandle(mockResult)))
     await startRunner(registry)
 
     const { jobId } = await setupJob()
@@ -348,9 +350,7 @@ describe("Worker integration", () => {
         partialExecution: true,
       },
     })
-    const registry = await createMockRegistry(
-      createMockBackend(createMockHandle(mockResult)),
-    )
+    const registry = await createMockRegistry(createMockBackend(createMockHandle(mockResult)))
     await startRunner(registry)
 
     const { jobId } = await setupJob()
@@ -383,12 +383,14 @@ describe("Worker integration", () => {
         // Wait a bit to allow cancel check to trigger
         await new Promise((r) => setTimeout(r, 200))
       },
+      // eslint-disable-next-line @typescript-eslint/require-await
       async result() {
         if (cancelled) {
           return createMockResult({ status: "cancelled" })
         }
         return createMockResult()
       },
+      // eslint-disable-next-line @typescript-eslint/require-await
       async cancel(_reason: string) {
         cancelled = true
       },
@@ -474,6 +476,7 @@ describe("Worker integration", () => {
   it("retry: transient failure triggers retry with backoff", async () => {
     let callCount = 0
     const retryBackend = createMockBackend()
+    // eslint-disable-next-line @typescript-eslint/require-await
     retryBackend.executeTask = async (_task: ExecutionTask) => {
       callCount++
       if (callCount === 1) {
@@ -551,15 +554,11 @@ describe("Worker integration", () => {
     await waitForJobStatus(jobId, ["COMPLETED"])
 
     // Verify broadcast was called with agent:output events
-    const outputCalls = broadcastSpy.mock.calls.filter(
-      ([, event]) => event === "agent:output",
-    )
+    const outputCalls = broadcastSpy.mock.calls.filter(([, event]) => event === "agent:output")
     expect(outputCalls.length).toBeGreaterThanOrEqual(3)
 
     // Verify completion broadcast
-    const completeCalls = broadcastSpy.mock.calls.filter(
-      ([, event]) => event === "agent:complete",
-    )
+    const completeCalls = broadcastSpy.mock.calls.filter(([, event]) => event === "agent:complete")
     expect(completeCalls.length).toBe(1)
 
     broadcastSpy.mockRestore()

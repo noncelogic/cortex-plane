@@ -22,12 +22,12 @@ import type { Kysely } from "kysely"
 import type { Database } from "../db/types.js"
 import type { AgentDeployer } from "../k8s/agent-deployer.js"
 import type { AgentDeploymentConfig } from "../k8s/types.js"
-import { CrashLoopDetector, HeartbeatReceiver, type AgentHeartbeat } from "./health.js"
+import { type AgentHeartbeat, CrashLoopDetector, HeartbeatReceiver } from "./health.js"
 import { hydrateAgent, type HydrationResult, type QdrantClient } from "./hydration.js"
 import { IdleDetector } from "./idle-detector.js"
 import {
-  AgentLifecycleStateMachine,
   type AgentLifecycleState,
+  AgentLifecycleStateMachine,
   type LifecycleTransitionEvent,
 } from "./state-machine.js"
 

@@ -1,10 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
-import { join } from "node:path"
 import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { BufferWriter } from "../buffer/writer.js"
 import type { BufferEvent } from "../buffer/types.js"
+import { BufferWriter } from "../buffer/writer.js"
 
 const JOB_ID = "test-job-001"
 
@@ -104,7 +105,9 @@ describe("BufferWriter", () => {
     const content = readFileSync(writer.currentFilePath, "utf-8")
     const lines = content.split("\n").filter((l) => l.trim() !== "")
     expect(lines).toHaveLength(1)
-    expect(() => JSON.parse(lines[0]!)).not.toThrow()
+    expect(() => {
+      JSON.parse(lines[0]!)
+    }).not.toThrow()
   })
 
   it("starts a new session file with newSession()", () => {

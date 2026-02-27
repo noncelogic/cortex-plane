@@ -5,12 +5,7 @@
  * context propagation helpers, and attribute constants.
  */
 
-import {
-  type Span,
-  SpanStatusCode,
-  context,
-  trace,
-} from "@opentelemetry/api"
+import { context, type Span, SpanStatusCode, trace } from "@opentelemetry/api"
 
 // ──────────────────────────────────────────────────
 // Attribute constants

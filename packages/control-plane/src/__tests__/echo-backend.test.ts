@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest"
-
 import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
+import { describe, expect, it } from "vitest"
 
 import { EchoBackend } from "../backends/echo-backend.js"
 
@@ -38,7 +37,9 @@ function makeTask(overrides?: Partial<ExecutionTask>): ExecutionTask {
   }
 }
 
-async function collectEvents(handle: { events(): AsyncIterable<OutputEvent> }): Promise<OutputEvent[]> {
+async function collectEvents(handle: {
+  events(): AsyncIterable<OutputEvent>
+}): Promise<OutputEvent[]> {
   const events: OutputEvent[] = []
   for await (const event of handle.events()) {
     events.push(event)

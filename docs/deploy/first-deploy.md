@@ -6,12 +6,12 @@ Exact command sequence for deploying Cortex Plane from published images to a k3s
 
 ## Prerequisites
 
-| Requirement                                  | Verification                                                                                             |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| k3s running                                  | `kubectl get nodes` shows Ready                                                                          |
-| kubectl configured                           | `kubectl cluster-info` succeeds                                                                          |
+| Requirement                                  | Verification                                                                                                         |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| k3s running                                  | `kubectl get nodes` shows Ready                                                                                      |
+| kubectl configured                           | `kubectl cluster-info` succeeds                                                                                      |
 | GHCR access (or local Docker)                | `docker pull ghcr.io/noncelogic/cortex-control-plane:<TAG>` succeeds, or Docker installed on the VM for local builds |
-| This repo cloned on the operator workstation | `ls deploy/k8s/overlays/prod/kustomization.yaml`                                                         |
+| This repo cloned on the operator workstation | `ls deploy/k8s/overlays/prod/kustomization.yaml`                                                                     |
 
 ---
 
@@ -267,6 +267,7 @@ kubectl -n cortex describe pod -l app=dashboard | grep -A10 Events
 3. **Prod overlay not updated after deploy:** The kustomization.yaml still points to an old SHA while a newer tag was applied via `kubectl set image`. Always update `deploy/k8s/overlays/prod/kustomization.yaml` to match what is deployed.
 
 **Prevention:**
+
 - Use classic PATs (`ghp_`) or fine-grained PATs for image pull secrets, never OAuth tokens (`gho_`)
 - After each CI build on `main`, update the prod overlay's `newTag` to the new SHA before deploying
 - Consider making GHCR packages public for demo environments to eliminate pull secret dependencies entirely
@@ -278,6 +279,7 @@ kubectl -n cortex logs deploy/control-plane --previous
 ```
 
 Common causes:
+
 - Missing `control-plane-secrets` secret
 - Unreachable Postgres (check `DATABASE_URL`)
 - Missing migrations directory in the image (ensure `COPY --from=builder /app/packages/control-plane/migrations` is in the Dockerfile runtime stage)
@@ -289,6 +291,7 @@ kubectl -n cortex logs deploy/qdrant --previous
 ```
 
 Common causes:
+
 - Config conflicts: the qdrant configmap must not override defaults that conflict with the Qdrant version. Keep `production.yaml` minimal (service settings only).
 - `ReadOnlyFilesystem` errors: ensure the deployment has an `emptyDir` volume mounted at `/qdrant/snapshots` (Qdrant writes snapshot metadata even when snapshots are not used).
 

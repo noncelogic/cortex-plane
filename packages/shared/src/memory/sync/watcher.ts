@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
-import { watch, type FSWatcher } from "chokidar"
+import { type FSWatcher, watch } from "chokidar"
 
 export interface WatcherConfig {
   /** Glob patterns to watch, relative to watchDir. Default: ['*.md', 'memory/*.md'] */
@@ -48,15 +48,12 @@ export function createWatcher(
 
     debounceTimers.set(
       filePath,
-      setTimeout(async () => {
+      setTimeout(() => {
         debounceTimers.delete(filePath)
         const absPath = resolve(watchDir, filePath)
-        try {
-          await stat(absPath)
-          await events.onFileChanged(filePath)
-        } catch {
-          await events.onFileDeleted(filePath)
-        }
+        void stat(absPath)
+          .then(() => events.onFileChanged(filePath))
+          .catch(() => events.onFileDeleted(filePath))
       }, resolved.debounceMs),
     )
   }

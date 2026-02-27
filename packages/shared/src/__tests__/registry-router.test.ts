@@ -81,7 +81,7 @@ describe("BackendRegistry — circuit breakers", () => {
     expect(breakerB).toBeDefined()
   })
 
-  it("returns undefined circuit breaker for unregistered backend", async () => {
+  it("returns undefined circuit breaker for unregistered backend", () => {
     const registry = new BackendRegistry()
     expect(registry.getCircuitBreaker("nonexistent")).toBeUndefined()
   })
@@ -147,7 +147,7 @@ describe("BackendRegistry — recordOutcome (direct)", () => {
     expect(registry.getCircuitBreaker("a")!.getState()).toBe("OPEN")
   })
 
-  it("ignores outcome for unknown backend", async () => {
+  it("ignores outcome for unknown backend", () => {
     const registry = new BackendRegistry()
     // Should not throw
     registry.recordOutcome("nonexistent", true)
@@ -181,12 +181,10 @@ describe("BackendRegistry — routeTask (no router)", () => {
     expect(result.backend).toBe(backendB)
   })
 
-  it("throws when no backend available", async () => {
+  it("throws when no backend available", () => {
     const registry = new BackendRegistry()
 
-    expect(() => registry.routeTask(makeTask())).toThrow(
-      "No execution backend available",
-    )
+    expect(() => registry.routeTask(makeTask())).toThrow("No execution backend available")
   })
 
   it("throws when preferred backend not found", async () => {

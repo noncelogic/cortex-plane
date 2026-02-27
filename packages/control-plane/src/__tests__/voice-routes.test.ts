@@ -3,8 +3,8 @@ import type { Kysely } from "kysely"
 import { describe, expect, it, vi } from "vitest"
 
 import type { Database } from "../db/types.js"
-import type { VoiceSignalingBackendInput } from "../routes/voice-signaling.js"
 import { voiceRoutes } from "../routes/voice.js"
+import type { VoiceSignalingBackendInput } from "../routes/voice-signaling.js"
 
 const VALID_SESSION = {
   id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -37,7 +37,9 @@ function buildMockDb(options?: {
       return {
         select: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            executeTakeFirst: vi.fn().mockResolvedValue(agentExists ? { id: VALID_SESSION.agent_id } : null),
+            executeTakeFirst: vi
+              .fn()
+              .mockResolvedValue(agentExists ? { id: VALID_SESSION.agent_id } : null),
           }),
         }),
       }
@@ -52,6 +54,7 @@ function buildMockDb(options?: {
 describe("voice routes", () => {
   it("POST /voice/webrtc-offer performs mocked SDP exchange and binds to bearer session", async () => {
     const db = buildMockDb()
+    /* eslint-disable @typescript-eslint/require-await */
     const backendExchange = vi.fn(
       async (
         input: VoiceSignalingBackendInput,
@@ -67,6 +70,7 @@ describe("voice routes", () => {
         }
       },
     )
+    /* eslint-enable @typescript-eslint/require-await */
 
     const app = Fastify({ logger: false })
     await app.register(
@@ -87,9 +91,13 @@ describe("voice routes", () => {
     })
 
     expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.sessionId).toBeTypeOf("string")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.sdp).toBe("v=0\r\ns=mock-answer\r\nt=0 0\r\n")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.iceServers[0].urls[0]).toBe("stun:stun.example.net:3478")
     expect(backendExchange).toHaveBeenCalledTimes(1)
   })
@@ -111,6 +119,7 @@ describe("voice routes", () => {
     })
 
     expect(res.statusCode).toBe(403)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(res.json().error).toBe("forbidden")
   })
 })

@@ -112,13 +112,11 @@ function mockDb(
     const executeTakeFirst = vi.fn().mockResolvedValue(row)
     const execute = vi.fn().mockResolvedValue(row ? [row] : [])
     const returningAll = vi.fn().mockReturnValue({ executeTakeFirst })
-    const where = vi
-      .fn()
-      .mockReturnValue({
-        returningAll,
-        execute,
-        where: vi.fn().mockReturnValue({ returningAll, execute }),
-      })
+    const where = vi.fn().mockReturnValue({
+      returningAll,
+      execute,
+      where: vi.fn().mockReturnValue({ returningAll, execute }),
+    })
     const set = vi.fn().mockReturnValue({ where })
     return { set }
   }
@@ -165,8 +163,11 @@ describe("GET /agents", () => {
     const res = await app.inject({ method: "GET", url: "/agents" })
 
     expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.agents).toBeDefined()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.count).toBeGreaterThanOrEqual(1)
   })
 
@@ -193,7 +194,9 @@ describe("GET /agents/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.name).toBe("Test Agent")
     expect("latest_job" in body).toBe(true)
   })
@@ -229,7 +232,9 @@ describe("POST /agents", () => {
     })
 
     expect(res.statusCode).toBe(201)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.name).toBe("Test Agent") // Returns mock data
   })
 
@@ -371,7 +376,9 @@ describe("GET /agents/:id/jobs", () => {
     })
 
     expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.jobs).toBeDefined()
   })
 
@@ -406,7 +413,9 @@ describe("POST /agents/:id/jobs", () => {
 
     expect(res.statusCode).toBe(201)
     expect(enqueueJob).toHaveBeenCalledTimes(1)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.status).toBe("SCHEDULED")
   })
 
@@ -449,7 +458,7 @@ describe("POST /agents/:id/jobs", () => {
   })
 
   it("still creates job even if enqueue fails", async () => {
-    const { app } = await buildTestApp()
+    const { app: _app } = await buildTestApp()
     // Override enqueueJob to fail — the route handles this gracefully
     const failApp = Fastify({ logger: false })
     const failEnqueue = vi.fn().mockRejectedValue(new Error("Queue down"))

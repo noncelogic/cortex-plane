@@ -25,15 +25,15 @@ content pipeline management.
 
 ## 2. Tech Stack
 
-| Layer | Choice | Rationale |
-|-------|--------|-----------|
-| Framework | Next.js 15 (App Router) | React 19 Server Components, streaming SSR |
-| Styling | Tailwind CSS 4 | Utility-first, zero runtime, dark mode built-in |
-| State | React 19 `use()` + `useSyncExternalStore` | No external state library needed |
-| Real-time | Native `EventSource` + custom hook | SSE with `Last-Event-ID` reconnection |
-| Charts | Lightweight (future — consider recharts) | Deferred to implementation phase |
-| VNC | noVNC embed via `<iframe>` / WebSocket | Reuses Playwright sidecar websockify |
-| Deployment | k3s pod (Dockerfile) | Same cluster as control plane |
+| Layer      | Choice                                    | Rationale                                       |
+| ---------- | ----------------------------------------- | ----------------------------------------------- |
+| Framework  | Next.js 15 (App Router)                   | React 19 Server Components, streaming SSR       |
+| Styling    | Tailwind CSS 4                            | Utility-first, zero runtime, dark mode built-in |
+| State      | React 19 `use()` + `useSyncExternalStore` | No external state library needed                |
+| Real-time  | Native `EventSource` + custom hook        | SSE with `Last-Event-ID` reconnection           |
+| Charts     | Lightweight (future — consider recharts)  | Deferred to implementation phase                |
+| VNC        | noVNC embed via `<iframe>` / WebSocket    | Reuses Playwright sidecar websockify            |
+| Deployment | k3s pod (Dockerfile)                      | Same cluster as control plane                   |
 
 ---
 
@@ -335,19 +335,19 @@ src/
 
 ### Component Rendering Strategy
 
-| Component | Rendering | Rationale |
-|-----------|-----------|-----------|
-| `nav-shell` | Server Component | Static layout, no interactivity |
-| `agent-grid` | Server Component | Initial fetch, passes data to cards |
-| `agent-card` | Client Component | SSE-driven live status updates |
-| `live-output` | Client Component | SSE streaming terminal |
-| `steer-input` | Client Component | Form with POST mutation |
+| Component       | Rendering        | Rationale                            |
+| --------------- | ---------------- | ------------------------------------ |
+| `nav-shell`     | Server Component | Static layout, no interactivity      |
+| `agent-grid`    | Server Component | Initial fetch, passes data to cards  |
+| `agent-card`    | Client Component | SSE-driven live status updates       |
+| `live-output`   | Client Component | SSE streaming terminal               |
+| `steer-input`   | Client Component | Form with POST mutation              |
 | `approval-card` | Client Component | SSE updates + approve/reject actions |
-| `vnc-viewer` | Client Component | WebSocket + iframe embed |
-| `memory-search` | Client Component | Search input + async results |
-| `memory-editor` | Client Component | Textarea + save mutation |
-| `job-table` | Server Component | Paginated, server-fetched |
-| `page-header` | Server Component | Static title + breadcrumbs |
+| `vnc-viewer`    | Client Component | WebSocket + iframe embed             |
+| `memory-search` | Client Component | Search input + async results         |
+| `memory-editor` | Client Component | Textarea + save mutation             |
+| `job-table`     | Server Component | Paginated, server-fetched            |
+| `page-header`   | Server Component | Static title + breadcrumbs           |
 
 ---
 
@@ -503,13 +503,14 @@ Browser EventSource → GET /api/agents/:id/stream (Next.js route)
 
 ## 9. Mobile-Responsive Strategy
 
-| Breakpoint | Layout |
-|------------|--------|
-| `< 640px` (sm) | Single column, bottom nav, stacked cards |
-| `640–1024px` (md) | Two-column grid, collapsible sidebar |
-| `> 1024px` (lg) | Three-column grid, persistent sidebar |
+| Breakpoint        | Layout                                   |
+| ----------------- | ---------------------------------------- |
+| `< 640px` (sm)    | Single column, bottom nav, stacked cards |
+| `640–1024px` (md) | Two-column grid, collapsible sidebar     |
+| `> 1024px` (lg)   | Three-column grid, persistent sidebar    |
 
 **Key mobile adaptations:**
+
 - Agent grid collapses to a scrollable list
 - Approval actions use full-width buttons
 - Browser observation shows screenshot-only mode (no VNC on mobile)
@@ -561,31 +562,32 @@ resources:
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `CORTEX_API_URL` | Control plane internal URL | `http://control-plane:4000` |
-| `CORTEX_API_KEY` | API key for initial auth | (required) |
-| `NEXT_PUBLIC_WS_URL` | WebSocket URL for VNC proxy | `ws://localhost:4000` |
+| Variable             | Description                 | Default                     |
+| -------------------- | --------------------------- | --------------------------- |
+| `CORTEX_API_URL`     | Control plane internal URL  | `http://control-plane:4000` |
+| `CORTEX_API_KEY`     | API key for initial auth    | (required)                  |
+| `NEXT_PUBLIC_WS_URL` | WebSocket URL for VNC proxy | `ws://localhost:4000`       |
 
 ---
 
 ## 11. Open Questions / Future Work
 
-| Item | Status | Notes |
-|------|--------|-------|
-| OAuth / OIDC login | Deferred | Use API key for MVP |
-| Qdrant direct search from dashboard | Deferred | Needs new REST endpoint on control plane |
-| Job retry from dashboard | Design ready | Needs `POST /jobs/:id/retry` endpoint |
-| Content pipeline ("AI Pulse") | Design ready | Needs content-specific REST endpoints |
-| Dark mode | Included in scaffold | Tailwind `dark:` variant with system preference |
-| Keyboard shortcuts | Deferred | Consider `j/k` nav, `a/r` approve/reject |
-| Notifications (push/audio) | Deferred | Browser Notification API for approvals |
+| Item                                | Status               | Notes                                           |
+| ----------------------------------- | -------------------- | ----------------------------------------------- |
+| OAuth / OIDC login                  | Deferred             | Use API key for MVP                             |
+| Qdrant direct search from dashboard | Deferred             | Needs new REST endpoint on control plane        |
+| Job retry from dashboard            | Design ready         | Needs `POST /jobs/:id/retry` endpoint           |
+| Content pipeline ("AI Pulse")       | Design ready         | Needs content-specific REST endpoints           |
+| Dark mode                           | Included in scaffold | Tailwind `dark:` variant with system preference |
+| Keyboard shortcuts                  | Deferred             | Consider `j/k` nav, `a/r` approve/reject        |
+| Notifications (push/audio)          | Deferred             | Browser Notification API for approvals          |
 
 ---
 
 ## 12. Implementation Phases
 
 ### Phase 1 — Scaffold (this ticket)
+
 - [x] Design document
 - [x] Next.js app structure with App Router
 - [x] Tailwind CSS configuration
@@ -594,17 +596,20 @@ resources:
 - [x] SSE hook scaffolds
 
 ### Phase 2 — Core Views
+
 - [ ] Agent grid with real data
 - [ ] Agent detail + live output streaming
 - [ ] Approval queue with SSE updates
 - [ ] Steering input
 
 ### Phase 3 — Observation + Memory
+
 - [ ] Browser observation (noVNC embed)
 - [ ] Memory explorer (search + edit)
 - [ ] Memory sync trigger
 
 ### Phase 4 — Pipeline + Polish
+
 - [ ] Content pipeline dashboard
 - [ ] Job history + retry
 - [ ] Mobile responsiveness pass

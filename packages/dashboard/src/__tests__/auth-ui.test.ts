@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { getUserInitials } from "@/lib/auth-ui"
 import { isPublicAuthPath, resolveAuthGuard } from "@/lib/auth-guard"
+import { getUserInitials } from "@/lib/auth-ui"
 
 describe("auth-ui helpers", () => {
   it("uses display name initials for authenticated users", () => {

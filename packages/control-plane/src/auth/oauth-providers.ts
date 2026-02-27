@@ -35,7 +35,9 @@ export const CODE_PASTE_PROVIDERS: Record<string, CodePasteProviderConfig> = {
     id: "google-antigravity",
     name: "Google Antigravity",
     description: "Claude/Gemini via Google Cloud Antigravity",
-    clientId: decode("MTA3MTAwNjA2MDU5MS10bWhzc2luMmgyMWxjcmUyMzV2dG9sb2poNGc0MDNlcC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbQ=="),
+    clientId: decode(
+      "MTA3MTAwNjA2MDU5MS10bWhzc2luMmgyMWxjcmUyMzV2dG9sb2poNGc0MDNlcC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbQ==",
+    ),
     clientSecret: decode("R09DU1BYLUs1OEZXUjQ4NkxkTEoxbUxCOHNYQzR6NnFEQWY="),
     redirectUri: "http://localhost:51121/oauth-callback",
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { KubeConfig } from "@kubernetes/client-node"
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest"
 
 import {
   AgentDeployer,
@@ -8,6 +9,28 @@ import {
   buildServiceAccount,
 } from "../k8s/agent-deployer.js"
 import type { AgentDeploymentConfig } from "../k8s/types.js"
+
+interface MockCoreV1Api {
+  readNamespacedServiceAccount: Mock
+  replaceNamespacedServiceAccount: Mock
+  createNamespacedServiceAccount: Mock
+  deleteNamespacedServiceAccount: Mock
+  createNamespacedPod: Mock
+  deleteNamespacedPod: Mock
+  readNamespacedPod: Mock
+  listNamespacedPod: Mock
+}
+
+interface MockRbacAuthorizationV1Api {
+  readNamespacedRole: Mock
+  replaceNamespacedRole: Mock
+  createNamespacedRole: Mock
+  readNamespacedRoleBinding: Mock
+  replaceNamespacedRoleBinding: Mock
+  createNamespacedRoleBinding: Mock
+  deleteNamespacedRole: Mock
+  deleteNamespacedRoleBinding: Mock
+}
 
 const baseConfig: AgentDeploymentConfig = {
   name: "devops-01",
@@ -241,10 +264,8 @@ describe("buildRoleBinding", () => {
 // AgentDeployer (mocked k8s client)
 // ---------------------------------------------------------------------------
 describe("AgentDeployer", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockCoreApi: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockRbacApi: any
+  let mockCoreApi: MockCoreV1Api
+  let mockRbacApi: MockRbacAuthorizationV1Api
   let deployer: AgentDeployer
 
   beforeEach(() => {
@@ -273,15 +294,16 @@ describe("AgentDeployer", () => {
     // Build deployer with mocked API clients
     const kc = {
       makeApiClient: vi.fn((apiClass: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
         const k8s = require("@kubernetes/client-node")
-        if (apiClass === k8s.CoreV1Api) return mockCoreApi
-        if (apiClass === k8s.RbacAuthorizationV1Api) return mockRbacApi
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        if (apiClass === k8s.CoreV1Api) return mockCoreApi as unknown
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        if (apiClass === k8s.RbacAuthorizationV1Api) return mockRbacApi as unknown
         return {}
       }),
     }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-    deployer = new AgentDeployer(kc as any, "cortex-plane")
+    deployer = new AgentDeployer(kc as unknown as KubeConfig, "cortex-plane")
   })
 
   describe("deployAgent", () => {

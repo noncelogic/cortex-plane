@@ -58,6 +58,7 @@ describe("backend env policy", () => {
     expect(logInfo).toHaveBeenCalledWith(
       "[backend-env] injected env keys for backend process",
       expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         keys: expect.arrayContaining(["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]),
       }),
     )

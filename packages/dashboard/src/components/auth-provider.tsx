@@ -47,7 +47,7 @@ const AuthContext = createContext<AuthContextValue>({
   csrfToken: null,
   login: () => {},
   logout: async () => {},
-  refreshSession: async () => "unauthenticated",
+  refreshSession: () => Promise.resolve("unauthenticated" as AuthStatus),
 })
 
 export function useAuth() {
@@ -94,7 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!res.ok) {
-        const nextStatus: AuthStatus = res.status === 401 || res.status === 403 ? "unauthenticated" : "unverified"
+        const nextStatus: AuthStatus =
+          res.status === 401 || res.status === 403 ? "unauthenticated" : "unverified"
         if (mountedRef.current) {
           setUser(null)
           setAuthStatus(nextStatus)
@@ -153,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const refreshSession = useCallback(async () => {
+  const refreshSession = useCallback(() => {
     return fetchSession()
   }, [fetchSession])
 

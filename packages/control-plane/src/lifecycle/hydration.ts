@@ -175,9 +175,9 @@ export async function loadQdrantContext(
   return {
     memories: results.map((r) => ({
       id: String(r.id),
-      content: String(r.payload.content ?? ""),
+      content: typeof r.payload.content === "string" ? r.payload.content : "",
       score: r.score,
-      type: String(r.payload.type ?? "unknown"),
+      type: typeof r.payload.type === "string" ? r.payload.type : "unknown",
     })),
   }
 }

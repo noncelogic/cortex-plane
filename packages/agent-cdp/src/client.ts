@@ -1,13 +1,9 @@
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 
-import type {
-  ActionResult,
-  BrowserAction,
-  CdpClientConfig,
-  Observation,
-} from "./types.js"
+import { type Browser, type BrowserContext, chromium, type Page } from "playwright-core"
+
+import type { ActionResult, BrowserAction, CdpClientConfig, Observation } from "./types.js"
 
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_PORT = 9222
@@ -82,13 +78,12 @@ export class CdpClient {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 })
     }
 
-    const [screenshotPath, domSnapshot, pageUrl, title] = await Promise.all([
+    const [screenshotPath, domSnapshot] = await Promise.all([
       this.captureScreenshot(page),
       this.captureDom(page),
-      page.url(),
-      page.title(),
     ])
-
+    const pageUrl = page.url()
+    const title = await page.title()
     return {
       screenshotPath,
       domSnapshot,

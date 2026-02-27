@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from "vitest"
 import type { Database } from "../db/types.js"
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import type { AgentLifecycleState } from "../lifecycle/state-machine.js"
-import { streamRoutes } from "../routes/stream.js"
 import { healthRoutes } from "../routes/health.js"
+import { streamRoutes } from "../routes/stream.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ describe("stream route authentication", () => {
     })
 
     expect(res.statusCode).toBe(401)
-    expect(res.json().error).toBe("unauthorized")
+    expect(res.json<{ error: string }>().error).toBe("unauthorized")
   })
 
   it("returns 401 with invalid token format", async () => {
@@ -177,7 +177,7 @@ describe("GET /agents/:agentId/stream", () => {
     })
 
     expect(res.statusCode).toBe(404)
-    expect(res.json().error).toBe("not_found")
+    expect(res.json<{ error: string }>().error).toBe("not_found")
   })
 
   it("returns 410 when agent is terminated", async () => {
@@ -193,7 +193,7 @@ describe("GET /agents/:agentId/stream", () => {
     })
 
     expect(res.statusCode).toBe(410)
-    expect(res.json().error).toBe("gone")
+    expect(res.json<{ error: string }>().error).toBe("gone")
   })
 
   it("returns 401 without auth for stream endpoint", async () => {
@@ -261,7 +261,7 @@ describe("POST /agents/:agentId/steer", () => {
     })
 
     expect(res.statusCode).toBe(409)
-    expect(res.json().error).toBe("conflict")
+    expect(res.json<{ error: string }>().error).toBe("conflict")
   })
 
   it("returns 202 with steerMessageId on success", async () => {
@@ -283,7 +283,12 @@ describe("POST /agents/:agentId/steer", () => {
     })
 
     expect(res.statusCode).toBe(202)
-    const body = res.json()
+    const body = res.json<{
+      status: string
+      steerMessageId: string
+      agentId: string
+      priority: string
+    }>()
     expect(body.status).toBe("accepted")
     expect(body.steerMessageId).toBeDefined()
     expect(body.agentId).toBe("agent-1")
@@ -309,7 +314,12 @@ describe("POST /agents/:agentId/steer", () => {
     })
 
     expect(steerFn).toHaveBeenCalledTimes(1)
-    const msg = steerFn.mock.calls[0]![0]
+    const msg = steerFn.mock.calls[0]![0] as {
+      agentId: string
+      message: string
+      priority: string
+      id: string
+    }
     expect(msg.agentId).toBe("agent-1")
     expect(msg.message).toBe("focus on tests")
     expect(msg.priority).toBe("high")
@@ -373,8 +383,8 @@ describe("POST /agents/:agentId/steer", () => {
       payload: { message: "focus on tests" },
     })
 
-    expect(res.json().priority).toBe("normal")
-    expect(steerFn.mock.calls[0]![0].priority).toBe("normal")
+    expect(res.json<{ priority: string }>().priority).toBe("normal")
+    expect((steerFn.mock.calls[0]![0] as { priority: string }).priority).toBe("normal")
   })
 
   it("broadcasts steer:ack and agent:output events on success", async () => {

@@ -1,8 +1,9 @@
 import { initTracing, shutdownTracing } from "@cortex/shared/tracing"
+
 import { buildApp } from "./app.js"
 import { loadConfig } from "./config.js"
-import { createDatabase } from "./db/index.js"
 import { runMigrations } from "./db/auto-migrate.js"
+import { createDatabase } from "./db/index.js"
 
 const config = loadConfig()
 

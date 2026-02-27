@@ -67,13 +67,13 @@ return real responses (200) or proper errors (404/500) — never silently replac
 
 ## Go / No-Go Decision
 
-| Category | Status |
-|----------|--------|
-| Mock data gate | PASS / FAIL |
-| API contract health | PASS / FAIL |
+| Category                 | Status      |
+| ------------------------ | ----------- |
+| Mock data gate           | PASS / FAIL |
+| API contract health      | PASS / FAIL |
 | Auth / session integrity | PASS / FAIL |
-| Visual / UX consistency | PASS / FAIL |
-| Deployment readiness | PASS / FAIL |
-| Regression guards | PASS / FAIL |
+| Visual / UX consistency  | PASS / FAIL |
+| Deployment readiness     | PASS / FAIL |
+| Regression guards        | PASS / FAIL |
 
 **Rule**: All categories must PASS for go. Any single FAIL is a no-go.

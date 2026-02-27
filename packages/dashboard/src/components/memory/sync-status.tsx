@@ -70,7 +70,7 @@ export function SyncStatus({ agentId }: SyncStatusProps): React.JSX.Element {
       {/* Sync button */}
       <button
         type="button"
-        onClick={handleSync}
+        onClick={() => void handleSync()}
         disabled={isLoading}
         className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50"
       >

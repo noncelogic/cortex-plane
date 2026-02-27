@@ -16,8 +16,7 @@ function formatDuration(ms: number): string {
 
 export function formatApprovalRequest(notification: ApprovalNotification): string {
   const expiresIn = formatDuration(notification.expiresAt.getTime() - Date.now())
-  const expiresAt =
-    notification.expiresAt.toISOString().replace("T", " ").slice(0, 19) + " UTC"
+  const expiresAt = notification.expiresAt.toISOString().replace("T", " ").slice(0, 19) + " UTC"
 
   return [
     "🔐 **Approval Required**",

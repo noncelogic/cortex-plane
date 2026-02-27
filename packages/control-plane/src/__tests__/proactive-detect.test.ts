@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest"
-
 import type { Signal, SignalCollector, SignalPersistence } from "@cortex/shared/proactive-detector"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   createProactiveDetectTask,
@@ -83,6 +82,7 @@ describe("runProactiveDetectPipeline", () => {
 
     expect(result.signalsCollected).toBe(1)
     expect(result.persisted).toBe(1)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(store.insertSignalIfNew).toHaveBeenCalled()
   })
 
@@ -150,9 +150,8 @@ describe("createProactiveDetectTask", () => {
 
     await task(makePayload(), helpers)
 
-    expect(helpers.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("no deps configured"),
-    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("no deps configured"))
   })
 
   it("runs as no-op for empty collectors", async () => {
@@ -162,6 +161,7 @@ describe("createProactiveDetectTask", () => {
 
     await task(makePayload(), helpers)
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.info).toHaveBeenCalledWith(
       expect.stringContaining("no collectors registered"),
     )
@@ -174,6 +174,7 @@ describe("createProactiveDetectTask", () => {
 
     await task(makePayload(), helpers)
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("collected="))
   })
 
@@ -187,8 +188,7 @@ describe("createProactiveDetectTask", () => {
     const helpers = mockHelpers()
 
     await expect(task(makePayload(), helpers)).rejects.toThrow("API unavailable")
-    expect(helpers.logger.error).toHaveBeenCalledWith(
-      expect.stringContaining("API unavailable"),
-    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(helpers.logger.error).toHaveBeenCalledWith(expect.stringContaining("API unavailable"))
   })
 })

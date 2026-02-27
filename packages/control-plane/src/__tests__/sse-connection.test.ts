@@ -1,13 +1,16 @@
-import { PassThrough } from "node:stream"
 import type { ServerResponse } from "node:http"
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { SSEConnection } from "../streaming/connection.js"
 import type { SSEEvent } from "../streaming/types.js"
 
-function createMockResponse(): ServerResponse & { chunks: string[]; _listeners: Map<string, Function> } {
+function createMockResponse(): ServerResponse & {
+  chunks: string[]
+  _listeners: Map<string, (...args: unknown[]) => unknown>
+} {
   const chunks: string[] = []
-  const listeners = new Map<string, Function>()
+  const listeners = new Map<string, (...args: unknown[]) => unknown>()
 
   const mock = {
     chunks,
@@ -18,13 +21,16 @@ function createMockResponse(): ServerResponse & { chunks: string[]; _listeners: 
       return true
     }),
     end: vi.fn(),
-    on: vi.fn((event: string, cb: Function) => {
+    on: vi.fn((event: string, cb: (...args: unknown[]) => unknown) => {
       listeners.set(event, cb)
     }),
-    once: vi.fn((event: string, cb: Function) => {
+    once: vi.fn((event: string, cb: (...args: unknown[]) => unknown) => {
       listeners.set(event, cb)
     }),
-  } as unknown as ServerResponse & { chunks: string[]; _listeners: Map<string, Function> }
+  } as unknown as ServerResponse & {
+    chunks: string[]
+    _listeners: Map<string, (...args: unknown[]) => unknown>
+  }
 
   return mock
 }
@@ -42,6 +48,7 @@ describe("SSEConnection", () => {
     const res = createMockResponse()
     const _conn = new SSEConnection("conn-1", "agent-1", res, { heartbeatIntervalMs: 60_000 })
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res.writeHead).toHaveBeenCalledWith(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
@@ -122,6 +129,7 @@ describe("SSEConnection", () => {
     vi.advanceTimersByTime(5_000)
 
     // heartbeat is a comment line
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res.write).toHaveBeenCalledWith(":heartbeat\n\n")
   })
 
@@ -138,6 +146,7 @@ describe("SSEConnection", () => {
     vi.advanceTimersByTime(10_000)
 
     // Should not have sent any heartbeats after close
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res.write).not.toHaveBeenCalled()
   })
 
@@ -156,7 +165,7 @@ describe("SSEConnection", () => {
     // Second should succeed but buffer fills
     conn.send({ id: "2", event: "agent:output", data: "{}" })
     // Third should fail due to buffer limit
-    const ok = conn.send({ id: "3", event: "agent:output", data: "{}" })
+    conn.send({ id: "3", event: "agent:output", data: "{}" })
 
     // Note: the maxBufferSize check is on pendingWrites, which are only added
     // when we're draining. The current implementation writes directly so
@@ -170,6 +179,7 @@ describe("SSEConnection", () => {
 
     const ok = conn.sendComment("ping")
     expect(ok).toBe(true)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res.write).toHaveBeenCalledWith(":ping\n\n")
   })
 
@@ -178,6 +188,7 @@ describe("SSEConnection", () => {
     const conn = new SSEConnection("conn-1", "agent-1", res, { heartbeatIntervalMs: 60_000 })
 
     conn.close()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res.end).toHaveBeenCalled()
     expect(conn.closed).toBe(true)
   })
@@ -188,6 +199,7 @@ describe("SSEConnection", () => {
 
     conn.close()
     conn.close()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(res.end).toHaveBeenCalledTimes(1)
   })
 })

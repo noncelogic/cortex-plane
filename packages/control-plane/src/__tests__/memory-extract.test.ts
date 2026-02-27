@@ -51,7 +51,8 @@ function mockStore(
   }
 }
 
-const mockEmbed: EmbeddingFn = () => Promise.resolve(Array.from({ length: 1536 }, () => Math.random()))
+const mockEmbed: EmbeddingFn = () =>
+  Promise.resolve(Array.from({ length: 1536 }, () => Math.random()))
 
 function makeDeps(overrides: Partial<MemoryExtractDeps> = {}): MemoryExtractDeps {
   return {
@@ -205,6 +206,7 @@ describe("runExtractionPipeline", () => {
 
     expect(summary.extracted).toBe(1)
     expect(summary.deduped).toBe(1)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(store.upsert).not.toHaveBeenCalled()
   })
 
@@ -259,6 +261,7 @@ describe("createMemoryExtractTask", () => {
 
     await task(makePayload(), helpers)
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("no deps configured"))
   })
 
@@ -269,6 +272,7 @@ describe("createMemoryExtractTask", () => {
 
     await task(makePayload({ messages: [] }), helpers)
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.info).toHaveBeenCalledWith(
       expect.stringContaining("no messages to extract"),
     )
@@ -282,6 +286,7 @@ describe("createMemoryExtractTask", () => {
 
     await task(makePayload(), helpers)
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.info).toHaveBeenCalledWith(expect.stringContaining("extracted=1"))
     expect(deps.llmCall).toHaveBeenCalledOnce()
   })
@@ -293,6 +298,7 @@ describe("createMemoryExtractTask", () => {
     const helpers = mockHelpers()
 
     await expect(task(makePayload(), helpers)).rejects.toThrow("boom")
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(helpers.logger.error).toHaveBeenCalledWith(expect.stringContaining("boom"))
   })
 })

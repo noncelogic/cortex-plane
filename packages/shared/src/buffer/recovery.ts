@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
-import type { BufferEvent, RecoveryState } from "./types.js"
 import { scanBuffer } from "./reader.js"
+import type { RecoveryState } from "./types.js"
 
 export function recoverFromBuffer(basePath: string, jobId: string): RecoveryState {
   const jobDir = join(basePath, jobId)

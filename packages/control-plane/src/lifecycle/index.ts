@@ -1,50 +1,46 @@
 export {
-  type AgentLifecycleState,
-  VALID_TRANSITIONS,
-  InvalidTransitionError,
-  isValidTransition,
-  assertValidTransition,
-  type LifecycleTransitionEvent,
-  type LifecycleListener,
-  AgentLifecycleStateMachine,
-} from "./state-machine.js"
-
-export {
-  HEARTBEAT_INTERVAL_MS,
-  MISSED_HEARTBEATS_THRESHOLD,
-  HEARTBEAT_TIMEOUT_MS,
+  type AgentHealthRecord,
   type AgentHealthStatus,
   type AgentHeartbeat,
-  type AgentHealthRecord,
-  HeartbeatReceiver,
-  CRASH_COOLDOWN,
   calculateCrashCooldown,
-  type CrashRecord,
+  CRASH_COOLDOWN,
   CrashLoopDetector,
-  READY_STATES,
+  type CrashRecord,
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_TIMEOUT_MS,
+  HeartbeatReceiver,
   isLivenessHealthy,
   isReadinessHealthy,
+  MISSED_HEARTBEATS_THRESHOLD,
+  READY_STATES,
 } from "./health.js"
-
 export {
-  type CheckpointData,
   type AgentIdentity,
-  type QdrantContext,
+  type CheckpointData,
+  hydrateAgent,
   type HydrationResult,
-  type QdrantClient,
-  QDRANT_TIMEOUT_MS,
   loadCheckpoint,
   loadIdentity,
   loadQdrantContext,
-  hydrateAgent,
+  QDRANT_TIMEOUT_MS,
+  type QdrantClient,
+  type QdrantContext,
 } from "./hydration.js"
-
-export { DEFAULT_IDLE_TIMEOUT_MS, type IdleDetectorOptions, IdleDetector } from "./idle-detector.js"
-
+export { DEFAULT_IDLE_TIMEOUT_MS, IdleDetector, type IdleDetectorOptions } from "./idle-detector.js"
 export {
-  type LifecycleManagerDeps,
   type AgentContext,
-  type SteerMessage,
-  type SteerListener,
   AgentLifecycleManager,
+  type LifecycleManagerDeps,
+  type SteerListener,
+  type SteerMessage,
 } from "./manager.js"
+export {
+  type AgentLifecycleState,
+  AgentLifecycleStateMachine,
+  assertValidTransition,
+  InvalidTransitionError,
+  isValidTransition,
+  type LifecycleListener,
+  type LifecycleTransitionEvent,
+  VALID_TRANSITIONS,
+} from "./state-machine.js"

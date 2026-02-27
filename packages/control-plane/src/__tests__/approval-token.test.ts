@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  generateApprovalToken,
-  hashApprovalToken,
-  isValidTokenFormat,
-} from "../approval/token.js"
+import { generateApprovalToken, hashApprovalToken, isValidTokenFormat } from "../approval/token.js"
 
 describe("approval token generation", () => {
   it("generates a token with correct prefix and version", () => {
