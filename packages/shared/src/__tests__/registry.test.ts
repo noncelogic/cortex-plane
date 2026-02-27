@@ -1,17 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { BackendRegistry, BackendSemaphore, CachedHealthCheck } from "../backends/registry.js"
-import type {
-  BackendCapabilities,
-  BackendHealthReport,
-  ExecutionBackend,
-} from "../backends/types.js"
+import type { BackendCapabilities, BackendHealthReport } from "../backends/types.js"
 
 // ──────────────────────────────────────────────────
 // Mock Backend
 // ──────────────────────────────────────────────────
 
-function createMockBackend(id: string, healthy = true): ExecutionBackend {
+function createMockBackend(id: string, healthy = true) {
   return {
     backendId: id,
     start: vi.fn().mockResolvedValue(undefined),
@@ -171,7 +167,7 @@ describe("BackendRegistry", () => {
     await expect(registry.register(backend2)).rejects.toThrow("already registered")
   })
 
-  it("returns undefined for unregistered backend", async () => {
+  it("returns undefined for unregistered backend", () => {
     const registry = new BackendRegistry()
     expect(registry.get("nonexistent")).toBeUndefined()
   })
@@ -286,7 +282,7 @@ describe("BackendRegistry", () => {
   it("stopAll clears all state even if a backend stop fails", async () => {
     const registry = new BackendRegistry()
     const failingBackend = createMockBackend("failing")
-    ;(failingBackend.stop as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Stop failed"))
+    failingBackend.stop.mockRejectedValue(new Error("Stop failed"))
     const goodBackend = createMockBackend("good")
 
     await registry.register(failingBackend)

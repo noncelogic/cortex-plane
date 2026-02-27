@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 
 import { ChannelAdapterRegistry } from "../channels/registry.js"
-import type { ChannelAdapter } from "../channels/types.js"
 
-function createMockAdapter(type: string, healthy = true): ChannelAdapter {
+function createMockAdapter(type: string, healthy = true) {
   return {
     channelType: type,
     start: vi.fn().mockResolvedValue(undefined),
@@ -69,7 +68,7 @@ describe("ChannelAdapterRegistry", () => {
     const registry = new ChannelAdapterRegistry()
     const tg = createMockAdapter("telegram")
     const dc = createMockAdapter("discord")
-    ;(dc.stop as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("boom"))
+    dc.stop.mockRejectedValue(new Error("boom"))
 
     registry.register(tg)
     registry.register(dc)
@@ -95,9 +94,7 @@ describe("ChannelAdapterRegistry", () => {
   it("healthCheckAll marks adapter as unhealthy if healthCheck throws", async () => {
     const registry = new ChannelAdapterRegistry()
     const broken = createMockAdapter("telegram")
-    ;(broken.healthCheck as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("connection lost"),
-    )
+    broken.healthCheck.mockRejectedValue(new Error("connection lost"))
 
     registry.register(broken)
 

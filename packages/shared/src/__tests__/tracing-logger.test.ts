@@ -7,7 +7,17 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node"
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockInstance,
+  vi,
+} from "vitest"
 
 import { TracingLogger } from "../tracing/logger.js"
 
@@ -27,10 +37,8 @@ afterAll(async () => {
 })
 
 describe("TracingLogger", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let stdoutWrite: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let stderrWrite: any
+  let stdoutWrite: MockInstance
+  let stderrWrite: MockInstance
 
   beforeEach(() => {
     stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
@@ -43,11 +51,11 @@ describe("TracingLogger", () => {
   })
 
   function parseStdout(): Record<string, unknown> {
-    return JSON.parse(String(stdoutWrite.mock.calls[0]?.[0]))
+    return JSON.parse(String(stdoutWrite.mock.calls[0]?.[0])) as Record<string, unknown>
   }
 
   function parseStderr(): Record<string, unknown> {
-    return JSON.parse(String(stderrWrite.mock.calls[0]?.[0]))
+    return JSON.parse(String(stderrWrite.mock.calls[0]?.[0])) as Record<string, unknown>
   }
 
   it("logs info messages to stdout as JSON", () => {
@@ -100,11 +108,11 @@ describe("TracingLogger", () => {
     expect(output.count).toBe(42)
   })
 
-  it("includes traceId and spanId from active span", async () => {
+  it("includes traceId and spanId from active span", () => {
     const logger = new TracingLogger({ level: "info" })
     const tracer = trace.getTracer("test")
 
-    await tracer.startActiveSpan("test.log", async (span) => {
+    tracer.startActiveSpan("test.log", (span) => {
       logger.info("inside span")
       span.end()
     })

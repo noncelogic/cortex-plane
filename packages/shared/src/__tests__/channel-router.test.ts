@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import type { ResolvedUser, RouterDb } from "../channels/router.js"
+import type { ResolvedUser } from "../channels/router.js"
 import { MessageRouter } from "../channels/router.js"
 import type { ChannelAdapter, InboundMessage } from "../channels/types.js"
 
@@ -8,7 +8,7 @@ import type { ChannelAdapter, InboundMessage } from "../channels/types.js"
 // Helpers
 // ──────────────────────────────────────────────────
 
-function createMockAdapter(type: string): ChannelAdapter {
+function createMockAdapter(type: string) {
   return {
     channelType: type,
     start: vi.fn().mockResolvedValue(undefined),
@@ -20,7 +20,7 @@ function createMockAdapter(type: string): ChannelAdapter {
   }
 }
 
-function createMockDb(existingUser?: ResolvedUser): RouterDb {
+function createMockDb(existingUser?: ResolvedUser) {
   return {
     resolveUser: vi.fn().mockResolvedValue(existingUser),
     createUser: vi.fn().mockResolvedValue({

@@ -105,7 +105,9 @@ describe("BufferWriter", () => {
     const content = readFileSync(writer.currentFilePath, "utf-8")
     const lines = content.split("\n").filter((l) => l.trim() !== "")
     expect(lines).toHaveLength(1)
-    expect(() => JSON.parse(lines[0]!)).not.toThrow()
+    expect(() => {
+      JSON.parse(lines[0]!)
+    }).not.toThrow()
   })
 
   it("starts a new session file with newSession()", () => {

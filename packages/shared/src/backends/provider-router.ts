@@ -112,7 +112,7 @@ export class ProviderRouter {
     throw new Error("All provider circuits are open — no backend available for execution")
   }
 
-  routeWithFailover(task: ExecutionTask): RouteResult {
+  routeWithFailover(_task: ExecutionTask): RouteResult {
     const sorted = this.providers
     const skipped: string[] = []
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import { persistSignals } from "../proactive-detector/persist.js"
-import type { Signal, SignalPersistence } from "../proactive-detector/types.js"
+import type { Signal } from "../proactive-detector/types.js"
 
 // ──────────────────────────────────────────────────
 // Helpers
@@ -20,7 +20,7 @@ function makeSignal(overrides: Partial<Signal> = {}): Signal {
   }
 }
 
-function mockStore(insertResult: string | null = "signal-123"): SignalPersistence {
+function mockStore(insertResult: string | null = "signal-123") {
   return {
     insertSignalIfNew: vi.fn().mockResolvedValue(insertResult),
     createSuggestion: vi.fn().mockResolvedValue(undefined),
@@ -87,7 +87,7 @@ describe("persistSignals", () => {
     expect(result.tasksCreated).toBe(1)
     expect(store.createTask).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: expect.stringContaining("Proactive:"),
+        title: expect.stringContaining("Proactive:") as string,
         priority: 2, // high severity → priority 2
         signalId: "signal-123",
       }),

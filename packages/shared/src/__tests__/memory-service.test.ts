@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import type { AtomicFact } from "../memory/schemas.js"
-import { factToRecord, MemoryService, type MemoryStore } from "../memory/service.js"
+import { factToRecord, MemoryService } from "../memory/service.js"
 import type { MemoryRecord, ScoredMemoryRecord } from "../memory/types.js"
 
 // ──────────────────────────────────────────────────
@@ -58,7 +58,7 @@ function makeScoredRecord(
 function mockStore(
   searchResults: ScoredMemoryRecord[] = [],
   getByIdResult: MemoryRecord | null = null,
-): MemoryStore {
+) {
   return {
     upsert: vi.fn().mockResolvedValue(undefined),
     search: vi.fn().mockResolvedValue(searchResults),
@@ -169,7 +169,8 @@ describe("MemoryService.store", () => {
     expect(result.outcome).toBe("superseded")
     expect(store.upsert).toHaveBeenCalledOnce()
 
-    const upsertedRecord = vi.mocked(store.upsert).mock.calls[0]![0][0]!
+    const upsertCalls = store.upsert.mock.calls as [MemoryRecord[], number[][]][]
+    const upsertedRecord = upsertCalls[0]![0][0]!
     expect(upsertedRecord.supersedesId).toBe("old-rec")
   })
 
@@ -236,7 +237,8 @@ describe("MemoryService.store", () => {
     const result = await service.store(fact, fakeEmbedding)
 
     expect(result.outcome).toBe("superseded")
-    const upserted = vi.mocked(store.upsert).mock.calls[0]![0][0]!
+    const upsertCalls = store.upsert.mock.calls as [MemoryRecord[], number[][]][]
+    const upserted = upsertCalls[0]![0][0]!
     expect(upserted.tags).toEqual(["infra", "db", "postgres"])
     expect(upserted.people).toEqual(["alice", "bob"])
     expect(upserted.projects).toEqual(["proj-a", "proj-b"])

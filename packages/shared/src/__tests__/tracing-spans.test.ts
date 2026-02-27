@@ -43,9 +43,7 @@ describe("withSpan", () => {
     exporter.reset()
     const { withSpan } = await import("../tracing/spans.js")
 
-    const result = await withSpan("test.operation", async () => {
-      return 42
-    })
+    const result = await withSpan("test.operation", () => Promise.resolve(42))
 
     expect(result).toBe(42)
 
@@ -60,7 +58,10 @@ describe("withSpan", () => {
     exporter.reset()
     const { withSpan } = await import("../tracing/spans.js")
 
-    await withSpan("test.with-attrs", async () => "ok", { "test.key": "value", "test.num": 123 })
+    await withSpan("test.with-attrs", () => Promise.resolve("ok"), {
+      "test.key": "value",
+      "test.num": 123,
+    })
 
     const spans = exporter.getFinishedSpans()
     expect(spans).toHaveLength(1)
@@ -74,7 +75,7 @@ describe("withSpan", () => {
     const { withSpan } = await import("../tracing/spans.js")
 
     await expect(
-      withSpan("test.error", async () => {
+      withSpan("test.error", () => {
         throw new Error("boom")
       }),
     ).rejects.toThrow("boom")
@@ -92,8 +93,9 @@ describe("withSpan", () => {
     exporter.reset()
     const { withSpan } = await import("../tracing/spans.js")
 
-    await withSpan("test.custom", async (span) => {
+    await withSpan("test.custom", (span) => {
       span.setAttribute(CortexAttributes.JOB_ID, "job-123")
+      return Promise.resolve()
     })
 
     const spans = exporter.getFinishedSpans()
@@ -107,7 +109,7 @@ describe("injectTraceContext", () => {
     const { injectTraceContext } = await import("../tracing/spans.js")
     const tracer = trace.getTracer("test")
 
-    await tracer.startActiveSpan("test.inject", async (span) => {
+    tracer.startActiveSpan("test.inject", (span) => {
       const headers = injectTraceContext()
       expect(headers.traceparent).toBeDefined()
       expect(headers.traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[0-9a-f]$/)

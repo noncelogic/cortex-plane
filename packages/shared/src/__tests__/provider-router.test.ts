@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import type { CircuitBreakerConfig } from "../backends/circuit-breaker.js"
-import {
-  type ProviderEntry,
-  ProviderRouter,
-  type RoutingEvent,
-} from "../backends/provider-router.js"
+import { ProviderRouter, type RoutingEvent } from "../backends/provider-router.js"
 import type {
   BackendCapabilities,
   BackendHealthReport,

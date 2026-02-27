@@ -1,5 +1,3 @@
-import { QdrantClient } from "@qdrant/js-client-rest"
-
 import { QdrantMemoryClient } from "./client.js"
 
 export async function ensureCollection(

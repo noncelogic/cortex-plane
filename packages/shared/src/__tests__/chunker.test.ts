@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { chunkMarkdown, contentHash, MEMORY_SYNC_NS, normalize } from "../memory/sync/chunker.js"
+import { chunkMarkdown, contentHash, normalize } from "../memory/sync/chunker.js"
 
 describe("normalize", () => {
   it("trims leading and trailing whitespace", () => {

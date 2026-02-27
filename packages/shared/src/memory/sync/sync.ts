@@ -173,7 +173,7 @@ export interface SyncOrchestrator {
 export function initSync(qdrant: QdrantMemoryClient, config: SyncConfig): SyncOrchestrator {
   let state: SyncState = { entries: {} }
   let watcher: ManagedWatcher | null = null
-  let lastAgentWriteTs = 0
+  let _lastAgentWriteTs = 0
 
   return {
     async start(): Promise<void> {
@@ -231,7 +231,7 @@ export function initSync(qdrant: QdrantMemoryClient, config: SyncConfig): SyncOr
     },
 
     setAgentWriteTimestamp(): void {
-      lastAgentWriteTs = Date.now()
+      _lastAgentWriteTs = Date.now()
     },
   }
 }
