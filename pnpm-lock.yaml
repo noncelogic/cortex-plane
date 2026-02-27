@@ -65,6 +65,9 @@ importers:
       "@cortex/shared":
         specifier: workspace:*
         version: link:../shared
+      grammy:
+        specifier: ^1.40.1
+        version: 1.40.1
     devDependencies:
       "@cortex/config":
         specifier: workspace:*
@@ -775,6 +778,12 @@ packages:
     resolution:
       {
         integrity: sha512-3HrDPbAG1CzUCqnslgJxppvzaAZffieOVbLp1DAy1huCSynUWPifSvfdEDUR8HlJLp3sp1A36uOM2tJogADS8w==,
+      }
+
+  "@grammyjs/types@3.24.0":
+    resolution:
+      {
+        integrity: sha512-qQIEs4lN5WqUdr4aT8MeU6UFpMbGYAvcvYSW1A4OO1PABGJQHz/KLON6qvpf+5RxaNDQBxiY2k2otIhg/AG7RQ==,
       }
 
   "@graphile/logger@0.2.0":
@@ -2049,6 +2058,13 @@ packages:
       }
     engines: { node: ">=v14.0.0", npm: ">=7.0.0" }
 
+  abort-controller@3.0.0:
+    resolution:
+      {
+        integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==,
+      }
+    engines: { node: ">=6.5" }
+
   abstract-logging@2.0.1:
     resolution:
       {
@@ -2697,6 +2713,13 @@ packages:
       }
     engines: { node: ">=0.10.0" }
 
+  event-target-shim@5.0.1:
+    resolution:
+      {
+        integrity: sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ==,
+      }
+    engines: { node: ">=6" }
+
   events-universal@1.0.1:
     resolution:
       {
@@ -2914,6 +2937,13 @@ packages:
       {
         integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==,
       }
+
+  grammy@1.40.1:
+    resolution:
+      {
+        integrity: sha512-bTe8SWXD8/Sdt2LGAAAsFGhuxI9RG8zL2gGk3V42A/RxriPqBQqwMGoNSldNK1qIFD2EaVuq7NQM8+ZAmNgHLw==,
+      }
+    engines: { node: ^12.20.0 || >=14.13.1 }
 
   graphile-config@0.0.1-beta.18:
     resolution:
@@ -4817,6 +4847,8 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  "@grammyjs/types@3.24.0": {}
+
   "@graphile/logger@0.2.0": {}
 
   "@humanfs/core@0.19.1": {}
@@ -5504,6 +5536,10 @@ snapshots:
 
   "@vladfrangu/async_event_emitter@2.4.7": {}
 
+  abort-controller@3.0.0:
+    dependencies:
+      event-target-shim: 5.0.1
+
   abstract-logging@2.0.1: {}
 
   acorn-jsx@5.3.2(acorn@8.16.0):
@@ -5917,6 +5953,8 @@ snapshots:
 
   esutils@2.0.3: {}
 
+  event-target-shim@5.0.1: {}
+
   events-universal@1.0.1:
     dependencies:
       bare-events: 2.8.2
@@ -6052,6 +6090,16 @@ snapshots:
   gopd@1.2.0: {}
 
   graceful-fs@4.2.11: {}
+
+  grammy@1.40.1:
+    dependencies:
+      "@grammyjs/types": 3.24.0
+      abort-controller: 3.0.0
+      debug: 4.4.3
+      node-fetch: 2.7.0
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
 
   graphile-config@0.0.1-beta.18:
     dependencies:

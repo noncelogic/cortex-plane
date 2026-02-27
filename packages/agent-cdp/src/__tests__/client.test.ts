@@ -77,7 +77,7 @@ function resetMockDefaults(): void {
 
   mockFetch.mockResolvedValue({
     ok: true,
-    json: async () => ({
+    json: () => ({
       webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/browser/abc-123",
     }),
   })
@@ -86,8 +86,9 @@ function resetMockDefaults(): void {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-import { CdpClient } from "../client.js"
 import * as fs from "node:fs/promises"
+
+import { CdpClient } from "../client.js"
 
 const testConfig: CdpClientConfig = {
   host: "127.0.0.1",
@@ -196,7 +197,7 @@ describe("CdpClient", () => {
 
       expect(observation.screenshotPath).toContain("/tmp/test-browser-assets/")
       expect(mockPage.screenshot).toHaveBeenCalledWith(
-        expect.objectContaining({
+        expect.objectContaining<Record<string, unknown>>({
           path: expect.stringContaining("/tmp/test-browser-assets/screenshot-"),
           fullPage: false,
         }),

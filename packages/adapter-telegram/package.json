@@ -19,7 +19,8 @@
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
-    "@cortex/shared": "workspace:*"
+    "@cortex/shared": "workspace:*",
+    "grammy": "^1.40.1"
   },
   "devDependencies": {
     "@cortex/config": "workspace:*",
