@@ -78,6 +78,20 @@ interface CreateJobBody {
   payload?: Record<string, unknown>
 }
 
+interface PauseAgentParams {
+  agentId: string
+}
+
+interface PauseAgentBody {
+  reason?: string
+  timeoutSeconds?: number
+}
+
+interface ResumeAgentBody {
+  checkpointId?: string
+  instruction?: string
+}
+
 // ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
@@ -223,6 +237,101 @@ export function agentRoutes(deps: AgentRouteDeps) {
           .executeTakeFirstOrThrow()
 
         return reply.status(201).send(agent)
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // POST /agents/:agentId/pause — pause agent execution
+    // Requires: auth + operator role
+    // -----------------------------------------------------------------
+    app.post<{ Params: PauseAgentParams; Body: PauseAgentBody }>(
+      "/agents/:agentId/pause",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              agentId: { type: "string" },
+            },
+            required: ["agentId"],
+          },
+          body: {
+            type: "object",
+            properties: {
+              reason: { type: "string", maxLength: 500 },
+              timeoutSeconds: { type: "number", minimum: 1, maximum: 600 },
+            },
+          },
+        },
+      },
+      async (
+        request: FastifyRequest<{ Params: PauseAgentParams; Body: PauseAgentBody }>,
+        reply: FastifyReply,
+      ) => {
+        const { agentId } = request.params
+        const agent = await db
+          .selectFrom("agent")
+          .select("id")
+          .where("id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!agent) {
+          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        return reply.status(202).send({
+          agentId,
+          status: "pausing",
+        })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // POST /agents/:agentId/resume — resume agent execution
+    // Requires: auth + operator role
+    // -----------------------------------------------------------------
+    app.post<{ Params: PauseAgentParams; Body: ResumeAgentBody }>(
+      "/agents/:agentId/resume",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              agentId: { type: "string" },
+            },
+            required: ["agentId"],
+          },
+          body: {
+            type: "object",
+            properties: {
+              checkpointId: { type: "string" },
+              instruction: { type: "string", maxLength: 10000 },
+            },
+          },
+        },
+      },
+      async (
+        request: FastifyRequest<{ Params: PauseAgentParams; Body: ResumeAgentBody }>,
+        reply: FastifyReply,
+      ) => {
+        const { agentId } = request.params
+        const agent = await db
+          .selectFrom("agent")
+          .select("id")
+          .where("id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!agent) {
+          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        return reply.status(202).send({
+          agentId,
+          status: "resuming",
+          fromCheckpoint: request.body?.checkpointId,
+        })
       },
     )
 
