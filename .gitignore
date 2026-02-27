@@ -31,3 +31,6 @@ coverage/
 # Docker
 pgdata/
 qdrant_data/
+
+# Kubernetes dev secrets (local-only)
+deploy/k8s/overlays/dev/secrets.yaml

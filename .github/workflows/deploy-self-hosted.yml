@@ -34,7 +34,7 @@ jobs:
         uses: imranismail/setup-kustomize@v2
 
       - name: Write kubeconfig from secret (optional)
-        if: ${{ secrets.K3S_KUBECONFIG != '' }}
+        if: env.K3S_KUBECONFIG != ''
         env:
           K3S_KUBECONFIG: ${{ secrets.K3S_KUBECONFIG }}
         run: |

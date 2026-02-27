@@ -5,7 +5,7 @@ namespace: cortex
 
 resources:
   - ../../base
-  - secrets.yaml
+  - secrets.example.yaml
 
 patches:
   # Dev: relax resource limits, enable debug logging
@@ -21,9 +21,9 @@ patches:
         value: "development"
 
 images:
-  # Dev overlay: "latest" is acceptable here for local iteration.
+  # Dev overlay pins to dev tags by default; deploy-k3s.sh rewrites to SHA tags for immutable deploys.
   # For reproducible dev clusters, switch to a SHA tag.
   - name: ghcr.io/noncelogic/cortex-control-plane
-    newTag: latest
+    newTag: dev
   - name: ghcr.io/noncelogic/cortex-dashboard
-    newTag: latest
+    newTag: dev
