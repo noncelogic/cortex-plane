@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react"
 import type { AgentMetrics } from "@/components/agents/agent-card"
 import { AgentGrid } from "@/components/agents/agent-grid"
 import { AgentTable } from "@/components/agents/agent-table"
+import { DeployAgentModal } from "@/components/agents/deploy-agent-modal"
 import { type ViewMode, ViewToggle } from "@/components/agents/view-toggle"
 import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { EmptyState } from "@/components/layout/empty-state"
@@ -59,6 +60,7 @@ export default function AgentsPage(): React.JSX.Element {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<AgentLifecycleState | "ALL">("ALL")
   const [metricsMap, setMetricsMap] = useState<Record<string, AgentMetrics>>({})
+  const [deployOpen, setDeployOpen] = useState(false)
 
   // Fetch agent list
   const { data, isLoading, error, errorCode, refetch } = useApiQuery(
@@ -127,6 +129,21 @@ export default function AgentsPage(): React.JSX.Element {
     void refetch()
   }, [refetch])
 
+  const handleDeploySuccess = useCallback(() => {
+    setDeployOpen(false)
+    void refetch()
+  }, [refetch])
+
+  const handleExport = useCallback(() => {
+    const blob = new Blob([JSON.stringify(agents, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "agents-export.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [agents])
+
   // Loading skeleton
   if (isLoading && agents.length === 0) {
     return (
@@ -175,11 +192,18 @@ export default function AgentsPage(): React.JSX.Element {
           </p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700">
+          <button
+            onClick={handleExport}
+            disabled={agents.length === 0}
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 disabled:opacity-50 dark:bg-slate-800 dark:hover:bg-slate-700"
+          >
             <span className="material-symbols-outlined text-lg">download</span>
             Export
           </button>
-          <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90">
+          <button
+            onClick={() => setDeployOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
+          >
             <span className="material-symbols-outlined text-lg">add</span>
             Deploy New Agent
           </button>
@@ -275,7 +299,7 @@ export default function AgentsPage(): React.JSX.Element {
           title="No agents configured"
           description="Deploy your first autonomous agent to get started."
           actionLabel="Deploy New Agent"
-          actionHref="/agents"
+          onAction={() => setDeployOpen(true)}
         />
       ) : (
         <>
@@ -303,6 +327,12 @@ export default function AgentsPage(): React.JSX.Element {
           </div>
         </>
       )}
+
+      <DeployAgentModal
+        open={deployOpen}
+        onClose={() => setDeployOpen(false)}
+        onSuccess={handleDeploySuccess}
+      />
     </div>
   )
 }

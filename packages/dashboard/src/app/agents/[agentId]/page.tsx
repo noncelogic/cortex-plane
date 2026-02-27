@@ -10,7 +10,14 @@ import { SteerInput } from "@/components/agents/steer-input"
 import { Skeleton } from "@/components/layout/skeleton"
 import { type AgentEventPayload, useAgentStream } from "@/hooks/use-agent-stream"
 import { useApiQuery } from "@/hooks/use-api"
-import { type AgentDetail, type AgentLifecycleState, getAgent, pauseAgent } from "@/lib/api-client"
+import {
+  type AgentDetail,
+  type AgentLifecycleState,
+  deleteAgent,
+  getAgent,
+  pauseAgent,
+  resumeAgent,
+} from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
 // Mobile tabs
@@ -96,9 +103,10 @@ interface Props {
 
 export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   const { agentId } = use(params)
-  const { data: agent, isLoading } = useApiQuery(() => getAgent(agentId), [agentId])
+  const { data: agent, isLoading, refetch } = useApiQuery(() => getAgent(agentId), [agentId])
   const { events } = useAgentStream(agentId)
   const [mobileTab, setMobileTab] = useState<MobileTab>("Output")
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Build lifecycle transitions from state events
   const transitions = useMemo<LifecycleStep[]>(() => {
@@ -120,7 +128,27 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
 
   const handlePause = useCallback(async () => {
     try {
-      await pauseAgent(agentId)
+      await pauseAgent(agentId, { reason: "Paused from dashboard" })
+      void refetch()
+    } catch {
+      // handled by UI
+    }
+  }, [agentId, refetch])
+
+  const handleResume = useCallback(async () => {
+    try {
+      await resumeAgent(agentId, { instruction: "Resumed from dashboard" })
+      void refetch()
+    } catch {
+      // handled by UI
+    }
+  }, [agentId, refetch])
+
+  const handleDelete = useCallback(async () => {
+    try {
+      await deleteAgent(agentId)
+      // Navigate back to agents list using window.location for simplicity
+      window.location.href = "/agents"
     } catch {
       // handled by UI
     }
@@ -136,7 +164,66 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
       {/* Header */}
-      <AgentHeader agent={liveAgent} onPause={() => void handlePause()} />
+      <AgentHeader
+        agent={liveAgent}
+        onPause={() => void handlePause()}
+        onTerminate={() => setShowDeleteConfirm(true)}
+      />
+
+      {/* Resume banner for paused/draining agents */}
+      {(currentState === "DRAINING" || currentState === "TERMINATED") && (
+        <div className="flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-amber-500">pause_circle</span>
+            <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+              Agent is {currentState.toLowerCase()}
+            </span>
+          </div>
+          <button
+            onClick={() => void handleResume()}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+          >
+            <span className="material-symbols-outlined text-lg">play_arrow</span>
+            Resume
+          </button>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowDeleteConfirm(false)}
+          />
+          <div className="relative mx-4 w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-red-500/10">
+                <span className="material-symbols-outlined text-xl text-red-500">warning</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Delete Agent</h3>
+            </div>
+            <p className="mb-6 text-sm text-slate-500">
+              Are you sure you want to delete <strong>{agent?.name}</strong>? This will archive the
+              agent and it will no longer accept jobs.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleDelete()}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                Delete Agent
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lifecycle timeline (desktop only) */}
       <LifecycleTimeline currentState={currentState} transitions={transitions} />

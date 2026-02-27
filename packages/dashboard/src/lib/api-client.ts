@@ -11,6 +11,7 @@ import { z } from "zod"
 import {
   ApprovalDecisionResponseSchema,
   ArchiveContentResponseSchema,
+  CreateAgentJobResponseSchema,
   PauseResponseSchema,
   PublishContentResponseSchema,
   ResumeResponseSchema,
@@ -347,6 +348,61 @@ export async function listAgents(params?: {
 
 export async function getAgent(agentId: string): Promise<import("./schemas/agents").AgentDetail> {
   return apiFetch(`/agents/${agentId}`, { schema: AgentDetailSchema })
+}
+
+export interface CreateAgentRequest {
+  name: string
+  role: string
+  slug?: string
+  description?: string
+  model_config?: Record<string, unknown>
+  skill_config?: Record<string, unknown>
+  resource_limits?: Record<string, unknown>
+  channel_permissions?: Record<string, unknown>
+}
+
+export interface UpdateAgentRequest {
+  name?: string
+  role?: string
+  description?: string | null
+  model_config?: Record<string, unknown>
+  skill_config?: Record<string, unknown>
+  resource_limits?: Record<string, unknown>
+  channel_permissions?: Record<string, unknown>
+  status?: "ACTIVE" | "DISABLED" | "ARCHIVED"
+}
+
+export interface CreateAgentJobRequest {
+  prompt: string
+  goal_type?: string
+  model?: string
+  priority?: number
+  timeout_seconds?: number
+  max_attempts?: number
+  payload?: Record<string, unknown>
+}
+
+export async function createAgent(body: CreateAgentRequest): Promise<unknown> {
+  return apiFetch("/agents", { method: "POST", body, schema: z.unknown() })
+}
+
+export async function updateAgent(agentId: string, body: UpdateAgentRequest): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}`, { method: "PUT", body, schema: z.unknown() })
+}
+
+export async function deleteAgent(agentId: string): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}`, { method: "DELETE", schema: z.unknown() })
+}
+
+export async function createAgentJob(
+  agentId: string,
+  body: CreateAgentJobRequest,
+): Promise<import("./schemas/actions").CreateAgentJobResponse> {
+  return apiFetch(`/agents/${agentId}/jobs`, {
+    method: "POST",
+    body,
+    schema: CreateAgentJobResponseSchema,
+  })
 }
 
 export async function steerAgent(agentId: string, request: SteerRequest) {

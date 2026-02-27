@@ -90,14 +90,18 @@ export class FeedbackService {
   }): Promise<FeedbackItem[]> {
     let q = this.db.selectFrom("feedback_item").selectAll()
     if (filters?.status) q = q.where("status", "=", filters.status)
-    if (filters?.remediationStatus) q = q.where("remediation_status", "=", filters.remediationStatus)
+    if (filters?.remediationStatus)
+      q = q.where("remediation_status", "=", filters.remediationStatus)
     if (filters?.severity) q = q.where("severity", "=", filters.severity)
     q = q.orderBy("created_at", "desc").limit(filters?.limit ?? 50)
     if (filters?.offset) q = q.offset(filters.offset)
     return q.execute()
   }
 
-  async updateRemediation(id: string, input: UpdateRemediationInput): Promise<FeedbackItem | undefined> {
+  async updateRemediation(
+    id: string,
+    input: UpdateRemediationInput,
+  ): Promise<FeedbackItem | undefined> {
     const patch: Record<string, unknown> = { updated_at: new Date() }
     if (input.status !== undefined) patch.status = input.status
     if (input.remediationStatus !== undefined) patch.remediation_status = input.remediationStatus

@@ -22,6 +22,14 @@ export const ResumeResponseSchema = z.object({
   fromCheckpoint: z.string().optional(),
 })
 
+export const CreateAgentJobResponseSchema = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  status: z.string(),
+})
+
+export type CreateAgentJobResponse = z.infer<typeof CreateAgentJobResponseSchema>
+
 // ---------------------------------------------------------------------------
 // Approval action responses
 // ---------------------------------------------------------------------------

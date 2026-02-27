@@ -65,7 +65,8 @@ export class ApprovalService {
 
       const riskLevel = req.riskLevel ?? "P2"
       const autoApprovable = riskLevel === "P3"
-      const shouldNotify = riskLevel === "P0" || riskLevel === "P1" || (riskLevel === "P2" && !autoApprovable)
+      const shouldNotify =
+        riskLevel === "P0" || riskLevel === "P1" || (riskLevel === "P2" && !autoApprovable)
 
       const { plaintext, hash } = generateApprovalToken()
       const defaultTtl = DEFAULT_TTL_BY_RISK[riskLevel]
@@ -163,7 +164,10 @@ export class ApprovalService {
       if (request.status !== "PENDING") return { success: false, error: "already_decided" }
       if (request.expires_at < new Date()) return { success: false, error: "expired" }
 
-      if (request.approver_user_account_id !== null && request.approver_user_account_id !== decidedBy) {
+      if (
+        request.approver_user_account_id !== null &&
+        request.approver_user_account_id !== decidedBy
+      ) {
         await this.writeAuditLog({
           approvalRequestId,
           jobId: request.job_id,
@@ -228,7 +232,12 @@ export class ApprovalService {
       if (actorMetadata) {
         auditDetails.actor = actorMetadata
         const previousHash = await this.getLastAuditHash(approvalRequestId)
-        const auditEntry = createAuditEntry(approvalRequestId, decision, actorMetadata, previousHash)
+        const auditEntry = createAuditEntry(
+          approvalRequestId,
+          decision,
+          actorMetadata,
+          previousHash,
+        )
         auditDetails.entry_hash = auditEntry.entryHash
         auditDetails.previous_hash = auditEntry.previousHash
       }
@@ -254,7 +263,8 @@ export class ApprovalService {
     reason?: string,
     actorMetadata?: AuditActorMetadata,
   ): Promise<ApprovalDecisionResult> {
-    if (!isValidTokenFormat(plaintextToken)) return { success: false, error: "invalid_token_format" }
+    if (!isValidTokenFormat(plaintextToken))
+      return { success: false, error: "invalid_token_format" }
 
     const tokenHash = hashApprovalToken(plaintextToken)
     const request = await this.db
@@ -268,7 +278,9 @@ export class ApprovalService {
     return this.decide(request.id, decision, decidedBy, channel, reason, actorMetadata)
   }
 
-  async resumeApproval(approvalRequestId: string): Promise<{ proposal: ApprovalRequest; resumePayload: Record<string, unknown> | null } | null> {
+  async resumeApproval(
+    approvalRequestId: string,
+  ): Promise<{ proposal: ApprovalRequest; resumePayload: Record<string, unknown> | null } | null> {
     const request = await this.getRequest(approvalRequestId)
     if (!request || request.status !== "APPROVED") return null
 
@@ -284,7 +296,10 @@ export class ApprovalService {
     }
   }
 
-  async recordExecution(approvalRequestId: string, executionResult: Record<string, unknown>): Promise<void> {
+  async recordExecution(
+    approvalRequestId: string,
+    executionResult: Record<string, unknown>,
+  ): Promise<void> {
     await this.db
       .updateTable("approval_request")
       .set({
@@ -339,7 +354,10 @@ export class ApprovalService {
     return expiredRequests.length
   }
 
-  async recordNotification(approvalRequestId: string, notification: ApprovalNotificationRecord): Promise<void> {
+  async recordNotification(
+    approvalRequestId: string,
+    notification: ApprovalNotificationRecord,
+  ): Promise<void> {
     const request = await this.db
       .selectFrom("approval_request")
       .select(["id", "job_id", "notification_channels"])
@@ -383,7 +401,11 @@ export class ApprovalService {
   }
 
   async getRequest(approvalRequestId: string): Promise<ApprovalRequest | undefined> {
-    return this.db.selectFrom("approval_request").selectAll().where("id", "=", approvalRequestId).executeTakeFirst()
+    return this.db
+      .selectFrom("approval_request")
+      .selectAll()
+      .where("id", "=", approvalRequestId)
+      .executeTakeFirst()
   }
 
   async getPendingForJob(jobId: string): Promise<ApprovalRequest[]> {
@@ -406,7 +428,8 @@ export class ApprovalService {
     let query = this.db.selectFrom("approval_request").selectAll()
     if (filters?.status) query = query.where("status", "=", filters.status)
     if (filters?.jobId) query = query.where("job_id", "=", filters.jobId)
-    if (filters?.approverUserId) query = query.where("approver_user_account_id", "=", filters.approverUserId)
+    if (filters?.approverUserId)
+      query = query.where("approver_user_account_id", "=", filters.approverUserId)
     query = query.orderBy("requested_at", "desc").limit(filters?.limit ?? 50)
     if (filters?.offset) query = query.offset(filters.offset)
     return query.execute()
