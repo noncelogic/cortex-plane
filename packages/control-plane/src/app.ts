@@ -178,7 +178,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     await app.register(
       authRoutes({ db, authConfig: config.auth, sessionService, credentialService }),
     )
-    await app.register(credentialRoutes({ credentialService }))
+    await app.register(credentialRoutes({ credentialService, sessionService }))
   }
 
   // Always register streaming + observation routes
