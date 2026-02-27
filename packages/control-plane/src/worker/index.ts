@@ -19,6 +19,7 @@ import type { Database } from "../db/types.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
 import { createApprovalExpireTask } from "./tasks/approval-expire.js"
+import { createCouncilExpireTask } from "./tasks/council-expire.js"
 import { createCorrectionStrengthenTask } from "./tasks/correction-strengthen.js"
 import { createMemoryExtractTask } from "./tasks/memory-extract.js"
 import { createProactiveDetectTask } from "./tasks/proactive-detect.js"
@@ -61,6 +62,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     }),
     memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),
+    council_expire: createCouncilExpireTask(db, streamManager),
     correction_strengthen: createCorrectionStrengthenTask(),
     proactive_detect: createProactiveDetectTask(),
   }
@@ -73,6 +75,8 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     crontab: [
       // Expire stale approval requests every 60 seconds
       "* * * * * approval_expire ?max=1",
+      // Expire stale council sessions every 60 seconds
+      "* * * * * council_expire ?max=1",
     ].join("\n"),
   })
 

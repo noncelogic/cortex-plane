@@ -1,6 +1,9 @@
 import type {
   AgentStatus,
   ApprovalStatus,
+  CouncilSessionStatus,
+  CouncilSessionType,
+  CouncilVote,
   FeedbackActionStatus,
   FeedbackActionType,
   FeedbackCategory,
@@ -125,6 +128,79 @@ export interface SessionTable {
 export type Session = Selectable<SessionTable>
 export type NewSession = Insertable<SessionTable>
 export type SessionUpdate = Updateable<SessionTable>
+
+// ---------------------------------------------------------------------------
+// Table: council_sessions
+// ---------------------------------------------------------------------------
+export interface CouncilSessionTable {
+  id: Generated<string>
+  type: ColumnType<CouncilSessionType, CouncilSessionType, CouncilSessionType>
+  status: ColumnType<CouncilSessionStatus, CouncilSessionStatus | undefined, CouncilSessionStatus>
+  title: string
+  context: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  participants: ColumnType<string[], string[] | undefined, string[]>
+  decision: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  decided_by: string | null
+  decided_at: Date | null
+  expires_at: Date
+  model_policy: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type CouncilSession = Selectable<CouncilSessionTable>
+export type NewCouncilSession = Insertable<CouncilSessionTable>
+export type CouncilSessionUpdate = Updateable<CouncilSessionTable>
+
+// ---------------------------------------------------------------------------
+// Table: council_votes
+// ---------------------------------------------------------------------------
+export interface CouncilVoteTable {
+  id: Generated<string>
+  session_id: string
+  voter: string
+  vote: ColumnType<CouncilVote, CouncilVote, CouncilVote>
+  confidence: ColumnType<number | null, number | null | undefined, number | null>
+  reasoning: string | null
+  model_used: string | null
+  token_cost: number | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type CouncilVoteRecord = Selectable<CouncilVoteTable>
+export type NewCouncilVote = Insertable<CouncilVoteTable>
+export type CouncilVoteUpdate = Updateable<CouncilVoteTable>
+
+// ---------------------------------------------------------------------------
+// Table: council_events
+// ---------------------------------------------------------------------------
+export interface CouncilEventTable {
+  id: Generated<string>
+  session_id: string
+  event_type: string
+  payload: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type CouncilEvent = Selectable<CouncilEventTable>
+export type NewCouncilEvent = Insertable<CouncilEventTable>
 
 // ---------------------------------------------------------------------------
 // Table: memory_extract_session_state
@@ -376,6 +452,9 @@ export interface Database {
   user_account: UserAccountTable
   channel_mapping: ChannelMappingTable
   session: SessionTable
+  council_sessions: CouncilSessionTable
+  council_votes: CouncilVoteTable
+  council_events: CouncilEventTable
   memory_extract_session_state: MemoryExtractSessionStateTable
   memory_extract_message: MemoryExtractMessageTable
   job: JobTable

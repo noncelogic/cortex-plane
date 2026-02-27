@@ -14,6 +14,10 @@ export type AgentStatus = "ACTIVE" | "DISABLED" | "ARCHIVED"
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"
 export type RiskLevel = "P0" | "P1" | "P2" | "P3"
 
+export type CouncilSessionType = "STANDARD" | "ADVISORY" | "ESCALATION"
+export type CouncilSessionStatus = "OPEN" | "DECIDED" | "EXPIRED" | "CANCELLED"
+export type CouncilVote = "APPROVE" | "REJECT" | "ABSTAIN"
+
 export type FeedbackSource = "user_correction" | "automated" | "reflection"
 export type FeedbackCategory = "behavior" | "tone" | "accuracy" | "protocol"
 export type FeedbackSeverity = "low" | "medium" | "high"
