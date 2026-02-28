@@ -1,0 +1,25 @@
+{
+  "agents": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Research Agent",
+      "slug": "research-agent",
+      "role": "researcher",
+      "description": "An agent for research tasks",
+      "model_config": { "model": "gpt-4" },
+      "skill_config": {},
+      "resource_limits": {},
+      "channel_permissions": {},
+      "status": "ACTIVE",
+      "created_at": "2025-01-15T10:30:00.000Z",
+      "updated_at": "2025-01-15T10:30:00.000Z"
+    }
+  ],
+  "count": 1,
+  "pagination": {
+    "total": 1,
+    "limit": 50,
+    "offset": 0,
+    "hasMore": false
+  }
+}

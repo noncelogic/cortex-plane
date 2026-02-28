@@ -121,33 +121,33 @@ describe("JobTable filter and search logic", () => {
   const mockJobs: JobSummary[] = [
     {
       id: "job-0001-abc12345",
-      agent_id: "agt-a1b2c3d4",
+      agentId: "agt-a1b2c3d4",
       status: "COMPLETED",
       type: "inference",
-      created_at: new Date(Date.now() - 3_600_000).toISOString(),
-      completed_at: new Date(Date.now() - 3_555_000).toISOString(),
+      createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+      completedAt: new Date(Date.now() - 3_555_000).toISOString(),
     },
     {
       id: "job-0002-def67890",
-      agent_id: "agt-e5f6g7h8",
+      agentId: "agt-e5f6g7h8",
       status: "FAILED",
       type: "tool-call",
-      created_at: new Date(Date.now() - 7_200_000).toISOString(),
+      createdAt: new Date(Date.now() - 7_200_000).toISOString(),
       error: "Timeout",
     },
     {
       id: "job-0003-ghi11111",
-      agent_id: "agt-a1b2c3d4",
+      agentId: "agt-a1b2c3d4",
       status: "RUNNING",
       type: "pipeline",
-      created_at: new Date(Date.now() - 1_800_000).toISOString(),
+      createdAt: new Date(Date.now() - 1_800_000).toISOString(),
     },
     {
       id: "job-0004-jkl22222",
-      agent_id: "agt-i9j0k1l2",
+      agentId: "agt-i9j0k1l2",
       status: "PENDING",
       type: "batch",
-      created_at: new Date(Date.now() - 900_000).toISOString(),
+      createdAt: new Date(Date.now() - 900_000).toISOString(),
     },
   ]
 
@@ -163,7 +163,7 @@ describe("JobTable filter and search logic", () => {
         const q = opts.search.toLowerCase()
         return (
           j.id.toLowerCase().includes(q) ||
-          j.agent_id.toLowerCase().includes(q) ||
+          j.agentId.toLowerCase().includes(q) ||
           j.type.toLowerCase().includes(q)
         )
       }
@@ -299,17 +299,16 @@ describe("JobDetailDrawer data", () => {
   it("JobDetail extends JobSummary with steps, metrics, logs", () => {
     const detail: JobDetail = {
       id: "job-001",
-      agent_id: "agt-001",
+      agentId: "agt-001",
       status: "COMPLETED",
       type: "inference",
-      created_at: new Date().toISOString(),
-      agent_name: "TestAgent",
-      agent_version: "v1.2",
-      duration_ms: 5000,
+      createdAt: new Date().toISOString(),
+      agentName: "TestAgent",
+      durationMs: 5000,
       steps: [
-        { name: "Init", status: "COMPLETED", duration_ms: 1000 },
-        { name: "Execute", status: "COMPLETED", duration_ms: 3000 },
-        { name: "Cleanup", status: "COMPLETED", duration_ms: 1000 },
+        { name: "Init", status: "COMPLETED", durationMs: 1000 },
+        { name: "Execute", status: "COMPLETED", durationMs: 3000 },
+        { name: "Cleanup", status: "COMPLETED", durationMs: 1000 },
       ],
       metrics: {
         cpu_percent: 30,
@@ -327,7 +326,7 @@ describe("JobDetailDrawer data", () => {
     expect(detail.steps).toHaveLength(3)
     expect(detail.metrics?.cpu_percent).toBe(30)
     expect(detail.logs).toHaveLength(2)
-    expect(detail.agent_name).toBe("TestAgent")
+    expect(detail.agentName).toBe("TestAgent")
   })
 })
 
@@ -372,10 +371,10 @@ describe("getJob API", () => {
   it("fetches job detail by ID", async () => {
     const mockDetail: JobDetail = {
       id: "job-123",
-      agent_id: "agt-456",
+      agentId: "agt-456",
       status: "COMPLETED",
       type: "inference",
-      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       steps: [],
       logs: [],
     }

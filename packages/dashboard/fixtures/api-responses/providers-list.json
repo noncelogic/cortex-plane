@@ -1,0 +1,16 @@
+{
+  "providers": [
+    {
+      "id": "google-antigravity",
+      "name": "Google Antigravity",
+      "authType": "oauth",
+      "description": "Claude/Gemini via Google Cloud Antigravity"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "authType": "api_key",
+      "description": "GPT models via direct API key"
+    }
+  ]
+}

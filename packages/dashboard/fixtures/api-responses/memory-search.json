@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+      "type": "fact",
+      "content": "The project uses TypeScript with strict mode enabled",
+      "tags": ["typescript", "config"],
+      "people": [],
+      "projects": ["cortex-plane"],
+      "importance": 3,
+      "confidence": 0.7,
+      "source": "session:s1234",
+      "createdAt": 1705312800000,
+      "accessCount": 0,
+      "lastAccessedAt": 1705312800000
+    }
+  ]
+}

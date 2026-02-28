@@ -1,0 +1,5 @@
+{
+  "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=test&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fconnect%2Fcallback%2Fgoogle-antigravity&response_type=code&scope=openid+email&state=abc123&code_challenge=challenge&code_challenge_method=S256",
+  "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+  "state": "abc123-def456-7890"
+}

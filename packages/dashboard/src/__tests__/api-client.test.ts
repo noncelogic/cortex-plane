@@ -238,10 +238,11 @@ describe("API Client", () => {
       mockFetchResponse({
         id: "apr-1",
         job_id: "job-1",
-        agent_id: "agent-1",
+        requested_by_agent_id: "agent-1",
         status: "PENDING",
         action_type: "deploy",
         action_summary: "Deploy to production",
+        action_detail: { target: "production" },
         requested_at: "2026-02-24T14:00:00Z",
         expires_at: "2026-02-25T14:00:00Z",
       })

@@ -77,7 +77,7 @@ export function useJobsPage() {
         mimeType = "application/json"
         filename = "jobs.json"
       } else {
-        const headers = ["id", "agent_id", "status", "type", "created_at", "updated_at", "error"]
+        const headers = ["id", "agentId", "status", "type", "createdAt", "updatedAt", "error"]
         const rows = jobs.map((j) =>
           headers.map((h) => {
             const val = j[h as keyof JobSummary] ?? ""

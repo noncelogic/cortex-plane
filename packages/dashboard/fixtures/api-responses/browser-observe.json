@@ -1,0 +1,16 @@
+{
+  "id": "browser-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "vncUrl": null,
+  "status": "disconnected",
+  "tabs": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890-tab-0",
+      "title": "Google",
+      "url": "https://www.google.com",
+      "active": true
+    }
+  ],
+  "latencyMs": 0,
+  "lastHeartbeat": "2025-01-15T11:00:00.000Z"
+}

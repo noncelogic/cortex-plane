@@ -43,7 +43,7 @@ function applyFilters(
         "90d": 90 * 86_400_000,
       }
       const maxAge = ranges[filters.timeRange]
-      if (maxAge && now - r.created_at > maxAge) return false
+      if (maxAge && now - r.createdAt > maxAge) return false
     }
 
     return true

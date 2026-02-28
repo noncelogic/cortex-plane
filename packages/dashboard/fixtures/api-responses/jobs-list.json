@@ -1,0 +1,28 @@
+{
+  "jobs": [
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "status": "COMPLETED",
+      "type": "research",
+      "createdAt": "2025-01-15T11:00:00.000Z",
+      "updatedAt": "2025-01-15T11:05:00.000Z",
+      "completedAt": "2025-01-15T11:05:00.000Z"
+    },
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "status": "FAILED",
+      "type": "task",
+      "createdAt": "2025-01-15T12:00:00.000Z",
+      "updatedAt": "2025-01-15T12:03:00.000Z",
+      "error": "Timeout exceeded"
+    }
+  ],
+  "pagination": {
+    "total": 2,
+    "limit": 50,
+    "offset": 0,
+    "hasMore": false
+  }
+}

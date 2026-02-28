@@ -16,21 +16,21 @@ export const JobStatusSchema = z.enum([
 
 export const JobSummarySchema = z.object({
   id: z.string(),
-  agent_id: z.string(),
+  agentId: z.string(),
   status: JobStatusSchema,
   type: z.string(),
-  created_at: z.string(),
-  updated_at: z.string().optional(),
-  completed_at: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+  completedAt: z.string().optional(),
   error: z.string().optional(),
 })
 
 export const JobStepSchema = z.object({
   name: z.string(),
   status: z.enum(["COMPLETED", "FAILED", "RUNNING", "PENDING"]),
-  started_at: z.string().optional(),
-  completed_at: z.string().optional(),
-  duration_ms: z.number().optional(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
+  durationMs: z.number().optional(),
   worker: z.string().optional(),
   error: z.string().optional(),
 })
@@ -50,9 +50,8 @@ export const JobLogEntrySchema = z.object({
 })
 
 export const JobDetailSchema = JobSummarySchema.extend({
-  agent_name: z.string().optional(),
-  agent_version: z.string().optional(),
-  duration_ms: z.number().optional(),
+  agentName: z.string().optional(),
+  durationMs: z.number().optional(),
   steps: z.array(JobStepSchema),
   metrics: JobMetricsSchema.optional(),
   logs: z.array(JobLogEntrySchema),
