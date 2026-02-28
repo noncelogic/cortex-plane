@@ -17,6 +17,8 @@ import { Kysely, PostgresDialect } from "kysely"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { attachPoolErrorHandler, endPoolGracefully } from "./postgres-teardown.js"
+
 import type { Database } from "../db/types.js"
 import { createMemoryScheduler } from "../worker/memory-scheduler.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
@@ -33,6 +35,7 @@ const PG_PORT = 15434
 
 let embeddedPg: EmbeddedPostgres
 let pool: pg.Pool
+let detachPoolErrorHandler: (() => void) | undefined
 let db: Kysely<Database>
 let runner: Runner
 let workerUtils: WorkerUtils
@@ -155,6 +158,7 @@ beforeAll(async () => {
   pool = new pg.Pool({
     connectionString: `postgres://cortex:cortex_test@localhost:${PG_PORT}/cortex_memory_scheduling_test`,
   })
+  detachPoolErrorHandler = attachPoolErrorHandler(pool)
 
   const client = await pool.connect()
   try {
@@ -175,9 +179,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (workerUtils) await workerUtils.release()
   if (runner) await runner.stop()
-  if (db) await db.destroy()
-  if (pool) await pool.end()
+  if (pool) await endPoolGracefully(pool)
   if (embeddedPg) await embeddedPg.stop()
+  detachPoolErrorHandler?.()
 }, 30_000)
 
 beforeEach(async () => {

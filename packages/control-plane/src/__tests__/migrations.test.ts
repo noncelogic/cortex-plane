@@ -6,11 +6,14 @@ import EmbeddedPostgres from "embedded-postgres"
 import pg from "pg"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
+import { attachPoolErrorHandler, endPoolGracefully } from "./postgres-teardown.js"
+
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const MIGRATIONS_DIR = join(__dirname, "../../migrations")
 
 let embeddedPg: EmbeddedPostgres
 let pool: pg.Pool
+let detachPoolErrorHandler: (() => void) | undefined
 
 beforeAll(async () => {
   embeddedPg = new EmbeddedPostgres({
@@ -27,11 +30,13 @@ beforeAll(async () => {
   pool = new pg.Pool({
     connectionString: "postgres://cortex:cortex_test@localhost:15432/cortex_test",
   })
+  detachPoolErrorHandler = attachPoolErrorHandler(pool)
 }, 60_000)
 
 afterAll(async () => {
-  await pool.end()
-  await embeddedPg.stop()
+  if (pool) await endPoolGracefully(pool)
+  if (embeddedPg) await embeddedPg.stop()
+  detachPoolErrorHandler?.()
 }, 30_000)
 
 async function runMigrations(client: pg.PoolClient, direction: "up" | "down"): Promise<void> {

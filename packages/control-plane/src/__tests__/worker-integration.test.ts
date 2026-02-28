@@ -16,6 +16,8 @@ import { Kysely, PostgresDialect } from "kysely"
 import pg from "pg"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
+import { attachPoolErrorHandler, endPoolGracefully } from "./postgres-teardown.js"
+
 import type { Database } from "../db/types.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
@@ -27,6 +29,7 @@ const PG_PORT = 15433
 
 let embeddedPg: EmbeddedPostgres
 let pool: pg.Pool
+let detachPoolErrorHandler: (() => void) | undefined
 let db: Kysely<Database>
 let runner: Runner
 let workerUtils: WorkerUtils
@@ -168,6 +171,7 @@ beforeAll(async () => {
 
   const connStr = `postgres://cortex:cortex_test@localhost:${PG_PORT}/cortex_worker_test`
   pool = new pg.Pool({ connectionString: connStr })
+  detachPoolErrorHandler = attachPoolErrorHandler(pool)
 
   // Run all migrations
   const client = await pool.connect()
@@ -189,8 +193,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (workerUtils) await workerUtils.release()
   if (runner) await runner.stop()
-  if (db) await db.destroy()
+  if (pool) await endPoolGracefully(pool)
   if (embeddedPg) await embeddedPg.stop()
+  detachPoolErrorHandler?.()
 }, 30_000)
 
 // ── Helper: insert agent + job and transition to SCHEDULED ──
