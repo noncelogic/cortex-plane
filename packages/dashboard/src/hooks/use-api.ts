@@ -19,6 +19,7 @@ interface CacheEntry<T> {
  */
 const inflightCache = new Map<string, CacheEntry<unknown>>()
 const DEDUP_WINDOW_MS = 2_000
+let nextInstanceId = 0
 
 function deduped<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const existing = inflightCache.get(key)
@@ -71,6 +72,12 @@ export function useApi<T>(
   const apiFnRef = useRef(apiFn)
   apiFnRef.current = apiFn
 
+  // Stable per-instance ID so anonymous arrow functions don't collide
+  const instanceIdRef = useRef<number | null>(null)
+  if (instanceIdRef.current === null) {
+    instanceIdRef.current = nextInstanceId++
+  }
+
   // Store the last args for revalidation after mutate
   const lastArgsRef = useRef<unknown[]>([])
 
@@ -80,7 +87,7 @@ export function useApi<T>(
       setState((prev) => ({ ...prev, isLoading: true, error: null, errorCode: null }))
 
       try {
-        const key = dedupKey ?? `useApi:${apiFnRef.current.name}:${JSON.stringify(args)}`
+        const key = dedupKey ?? `useApi:${instanceIdRef.current}:${JSON.stringify(args)}`
         const data = await deduped(key, () => apiFnRef.current(...args))
         setState({ data, isLoading: false, error: null, errorCode: null })
         return data

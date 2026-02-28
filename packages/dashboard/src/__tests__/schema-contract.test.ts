@@ -292,6 +292,48 @@ describe("API-Dashboard contract tests", () => {
   })
 
   // ---------------------------------------------------------------------------
+  // Dashboard stat cards — zero-result responses
+  // ---------------------------------------------------------------------------
+
+  describe("dashboard stat cards: zero-result API responses", () => {
+    it("JobListResponseSchema parses empty jobs with pagination.total = 0", () => {
+      const emptyResponse = {
+        jobs: [],
+        pagination: { total: 0, limit: 5, offset: 0, hasMore: false },
+      }
+      const result = JobListResponseSchema.parse(emptyResponse)
+      expect(result.jobs).toHaveLength(0)
+      expect(result.pagination.total).toBe(0)
+    })
+
+    it("ApprovalListResponseSchema parses empty approvals with pagination.total = 0", () => {
+      const emptyResponse = {
+        approvals: [],
+        pagination: { total: 0, limit: 1, offset: 0, hasMore: false },
+      }
+      const result = ApprovalListResponseSchema.parse(emptyResponse)
+      expect(result.approvals).toHaveLength(0)
+      expect(result.pagination?.total).toBe(0)
+    })
+
+    it("AgentListResponseSchema parses empty agents with pagination.total = 0", () => {
+      const emptyResponse = {
+        agents: [],
+        pagination: { total: 0, limit: 100, offset: 0, hasMore: false },
+      }
+      const result = AgentListResponseSchema.parse(emptyResponse)
+      expect(result.agents).toHaveLength(0)
+      expect(result.pagination.total).toBe(0)
+    })
+
+    it("AgentListResponseSchema normalizes count-only response to pagination", () => {
+      const countOnlyResponse = { agents: [], count: 0 }
+      const result = AgentListResponseSchema.parse(countOnlyResponse)
+      expect(result.pagination.total).toBe(0)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
   // Negative test — deliberately broken field name detected
   // ---------------------------------------------------------------------------
 

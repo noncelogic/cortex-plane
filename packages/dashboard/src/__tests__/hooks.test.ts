@@ -138,6 +138,25 @@ describe("useApi deduplication logic", () => {
   })
 })
 
+describe("useApi instance key isolation", () => {
+  it("anonymous arrow functions have empty name (root cause of #245)", () => {
+    // When useApiQuery wraps calls like () => listAgents({limit: 100}),
+    // the arrow function has .name === "". Before the fix, all three
+    // dashboard queries shared the dedup key "useApi::[]", causing the
+    // first resolved response (agents) to be used for jobs and approvals.
+    const anon1 = (
+      () => () =>
+        Promise.resolve({ total: 10 })
+    )()
+    const anon2 = (
+      () => () =>
+        Promise.resolve({ total: 20 })
+    )()
+    expect(anon1.name).toBe("")
+    expect(anon2.name).toBe("")
+  })
+})
+
 // ---------------------------------------------------------------------------
 // ApiError integration with hooks
 // ---------------------------------------------------------------------------
