@@ -7,9 +7,11 @@
  * 3. If no binding, check for default agent for this channel type
  * 4. If still no agent, send a reply: "No agent is assigned to this chat."
  * 5. If agent found, find or create a session for (agent_id, user_account_id)
- * 6. Log the message + session info (execution backend comes in #233)
+ * 6. Create a job row and enqueue agent_execute via Graphile Worker
+ * 7. Watch for job completion and relay the response back to the chat channel
  */
 
+import type { JobStatus } from "@cortex/shared"
 import type { MessageRouter, RoutedMessage } from "@cortex/shared/channels"
 import type { Kysely } from "kysely"
 
@@ -20,10 +22,24 @@ export interface MessageDispatchDeps {
   db: Kysely<Database>
   agentChannelService: AgentChannelService
   router: MessageRouter
+  enqueueJob: (jobId: string) => Promise<void>
   logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }
 }
 
 const NO_AGENT_MESSAGE = "No agent is assigned to this chat. Use the dashboard to connect an agent."
+
+/** Default polling interval (ms) for job completion checks. */
+const JOB_POLL_INTERVAL_MS = 2_000
+
+/** Maximum time (ms) to wait for a job to complete before giving up. */
+const JOB_POLL_TIMEOUT_MS = 120_000
+
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set<JobStatus>([
+  "COMPLETED",
+  "FAILED",
+  "TIMED_OUT",
+  "DEAD_LETTER",
+])
 
 /**
  * Create a message handler that dispatches routed messages to the correct agent session.
@@ -31,7 +47,7 @@ const NO_AGENT_MESSAGE = "No agent is assigned to this chat. Use the dashboard t
 export function createMessageDispatch(
   deps: MessageDispatchDeps,
 ): (msg: RoutedMessage) => Promise<void> {
-  const { db, agentChannelService, router, logger = console } = deps
+  const { db, agentChannelService, router, enqueueJob, logger = console } = deps
 
   return async function dispatch(routed: RoutedMessage): Promise<void> {
     const { channelType, chatId } = routed.message
@@ -52,19 +68,116 @@ export function createMessageDispatch(
     // Find or create a session for (agent_id, user_account_id)
     const session = await findOrCreateSession(db, agentId, routed.userAccountId)
 
-    // Log the dispatch (execution backend comes in #233)
+    // Create a job row
+    const job = await db
+      .insertInto("job")
+      .values({
+        agent_id: agentId,
+        session_id: session.id,
+        payload: {
+          type: "CHAT_RESPONSE",
+          prompt: routed.message.text,
+          goalType: "research",
+          conversationHistory: [],
+        },
+        priority: 0,
+        max_attempts: 3,
+        timeout_seconds: 120,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow()
+
+    // Transition PENDING → SCHEDULED
+    await db
+      .updateTable("job")
+      .set({ status: "SCHEDULED" as JobStatus })
+      .where("id", "=", job.id)
+      .execute()
+
+    // Enqueue worker task
+    try {
+      await enqueueJob(job.id)
+    } catch (err) {
+      logger.warn({ err, jobId: job.id }, "Failed to enqueue job via Graphile Worker")
+      // Job is in the DB as SCHEDULED — the worker cron will pick it up
+    }
+
     logger.info(
       {
         agentId,
         sessionId: session.id,
+        jobId: job.id,
         userAccountId: routed.userAccountId,
         channelType,
         chatId,
         messageId: routed.message.messageId,
       },
-      "Message dispatched to agent session",
+      "Chat message dispatched — job created",
+    )
+
+    // Fire-and-forget: watch for job completion and relay the response
+    watchJobCompletion(
+      db,
+      job.id,
+      async (result) => {
+        const summary = result?.summary
+        if (typeof summary === "string" && summary.length > 0) {
+          await router.send(channelType, chatId, { text: summary })
+        }
+      },
+      logger,
     )
   }
+}
+
+/**
+ * Poll the job table for a terminal status, then invoke the callback with the result.
+ * Runs in the background — does not block the dispatch handler.
+ */
+export function watchJobCompletion(
+  db: Kysely<Database>,
+  jobId: string,
+  onComplete: (result: Record<string, unknown> | null) => Promise<void>,
+  logger: { warn: (...args: unknown[]) => void },
+  opts: { intervalMs?: number; timeoutMs?: number } = {},
+): void {
+  const intervalMs = opts.intervalMs ?? JOB_POLL_INTERVAL_MS
+  const timeoutMs = opts.timeoutMs ?? JOB_POLL_TIMEOUT_MS
+  const deadline = Date.now() + timeoutMs
+
+  const timer = setInterval(() => {
+    void (async () => {
+      if (Date.now() > deadline) {
+        clearInterval(timer)
+        logger.warn({ jobId }, "Job completion watch timed out")
+        return
+      }
+
+      try {
+        const row = await db
+          .selectFrom("job")
+          .select(["status", "result"])
+          .where("id", "=", jobId)
+          .executeTakeFirst()
+
+        if (!row) {
+          clearInterval(timer)
+          return
+        }
+
+        if (TERMINAL_STATUSES.has(row.status)) {
+          clearInterval(timer)
+          try {
+            await onComplete(row.result)
+          } catch (err) {
+            logger.warn({ err, jobId }, "Failed to relay job completion to chat")
+          }
+        }
+      } catch {
+        // Swallow DB errors — will retry on next interval
+      }
+    })()
+  }, intervalMs)
 }
 
 async function findOrCreateSession(

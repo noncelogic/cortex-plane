@@ -58,6 +58,13 @@ if (config.channels.discord) {
   registry.register(adapter)
 }
 
+// Deferred enqueueJob — resolved after buildApp() creates workerUtils
+let _enqueueJob: ((jobId: string) => Promise<void>) | undefined
+const enqueueJobDeferred = async (jobId: string): Promise<void> => {
+  if (!_enqueueJob) throw new Error("enqueueJob not yet initialized — buildApp() not called")
+  return _enqueueJob(jobId)
+}
+
 if (registry.getAll().length > 0) {
   // Build adapter map for the MessageRouter
   const adapterMap = new Map(registry.getAll().map((a) => [a.channelType, a]))
@@ -70,6 +77,7 @@ if (registry.getAll().length > 0) {
     db,
     agentChannelService,
     router: messageRouter,
+    enqueueJob: enqueueJobDeferred,
   })
   messageRouter.onMessage(dispatch)
   messageRouter.bind()
@@ -80,7 +88,8 @@ if (registry.getAll().length > 0) {
   })
 }
 
-const { app } = await buildApp({ db, pool, config, channelSupervisor })
+const { app, enqueueJob } = await buildApp({ db, pool, config, channelSupervisor })
+_enqueueJob = enqueueJob
 
 // Shutdown tracing on app close
 app.addHook("onClose", async () => {

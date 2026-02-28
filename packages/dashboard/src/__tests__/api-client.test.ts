@@ -104,7 +104,7 @@ describe("API Client", () => {
             created_at: "2026-01-01T00:00:00Z",
           },
         ],
-        pagination: { total: 1, limit: 20, offset: 0, has_more: false },
+        pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
       }
       mockFetchResponse(body)
 
@@ -143,7 +143,7 @@ describe("API Client", () => {
       expect(result.agents).toHaveLength(1)
       expect(result.pagination).toBeDefined()
       expect(result.pagination.total).toBe(1)
-      expect(result.pagination.has_more).toBe(false)
+      expect(result.pagination.hasMore).toBe(false)
     })
 
     it("listAgents handles empty {agents:[], count:0} response", async () => {
@@ -153,7 +153,7 @@ describe("API Client", () => {
 
       expect(result.agents).toEqual([])
       expect(result.pagination.total).toBe(0)
-      expect(result.pagination.has_more).toBe(false)
+      expect(result.pagination.hasMore).toBe(false)
     })
 
     it("getAgent fetches by ID", async () => {
@@ -194,7 +194,7 @@ describe("API Client", () => {
     it("listJobs passes query parameters", async () => {
       mockFetchResponse({
         jobs: [],
-        pagination: { total: 0, limit: 20, offset: 0, has_more: false },
+        pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
       })
 
       await listJobs({ agent_id: "a1", status: "RUNNING" })
@@ -497,7 +497,7 @@ describe("API Client", () => {
       mockFetchSequence(
         { body: { message: "Unavailable" }, status: 503 },
         {
-          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, has_more: false } },
+          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } },
           status: 200,
         },
       )
@@ -512,7 +512,7 @@ describe("API Client", () => {
       mockFetchSequence(
         { error: true },
         {
-          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, has_more: false } },
+          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } },
           status: 200,
         },
       )

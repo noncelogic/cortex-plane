@@ -45,6 +45,7 @@ export interface AppContext {
   observationService: BrowserObservationService
   registry: BackendRegistry
   channelSupervisor?: ChannelSupervisor
+  enqueueJob: (jobId: string) => Promise<void>
 }
 
 export interface AppOptions {
@@ -249,7 +250,11 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     await registry.stopAll()
   })
 
-  return { app, runner, sseManager, observationService, registry, channelSupervisor }
+  const enqueueJob = async (jobId: string) => {
+    await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
+  }
+
+  return { app, runner, sseManager, observationService, registry, channelSupervisor, enqueueJob }
 }
 
 /**

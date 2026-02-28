@@ -62,7 +62,7 @@ export const AgentListResponseSchema = z
         total,
         limit: total,
         offset: 0,
-        has_more: false,
+        hasMore: false,
       },
     }
   })

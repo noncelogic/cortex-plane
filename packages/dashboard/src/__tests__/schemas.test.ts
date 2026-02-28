@@ -18,7 +18,7 @@ import { MemoryRecordSchema, MemorySearchResponseSchema } from "@/lib/schemas/me
 
 describe("PaginationSchema", () => {
   it("accepts valid pagination", () => {
-    const data = { total: 42, limit: 20, offset: 0, has_more: true }
+    const data = { total: 42, limit: 20, offset: 0, hasMore: true }
     expect(PaginationSchema.parse(data)).toEqual(data)
   })
 
@@ -28,7 +28,7 @@ describe("PaginationSchema", () => {
 
   it("rejects wrong types", () => {
     expect(() =>
-      PaginationSchema.parse({ total: "1", limit: 20, offset: 0, has_more: false }),
+      PaginationSchema.parse({ total: "1", limit: 20, offset: 0, hasMore: false }),
     ).toThrow()
   })
 })
@@ -118,7 +118,7 @@ describe("AgentListResponseSchema", () => {
           created_at: "2026-01-01T00:00:00Z",
         },
       ],
-      pagination: { total: 1, limit: 20, offset: 0, has_more: false },
+      pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
     }
     expect(AgentListResponseSchema.parse(data).agents).toHaveLength(1)
   })
@@ -189,7 +189,7 @@ describe("JobListResponseSchema", () => {
   it("accepts empty jobs list", () => {
     const data = {
       jobs: [],
-      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
+      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
     }
     expect(JobListResponseSchema.parse(data).jobs).toHaveLength(0)
   })
@@ -229,7 +229,7 @@ describe("ApprovalListResponseSchema", () => {
   it("accepts valid response", () => {
     const data = {
       approvals: [],
-      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
+      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
     }
     expect(ApprovalListResponseSchema.parse(data).approvals).toHaveLength(0)
   })
@@ -329,7 +329,7 @@ describe("ContentListResponseSchema", () => {
   it("accepts valid response", () => {
     const data = {
       content: [],
-      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
+      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
     }
     expect(ContentListResponseSchema.parse(data).content).toHaveLength(0)
   })

@@ -344,7 +344,7 @@ describe("Content API endpoints", () => {
   it("listContent passes query parameters", async () => {
     mockFetchResponse({
       content: [],
-      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
+      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
     })
 
     await listContent({ status: "DRAFT", type: "blog", limit: 10 })
@@ -358,7 +358,7 @@ describe("Content API endpoints", () => {
   it("listContent works without parameters", async () => {
     mockFetchResponse({
       content: [createMockPiece()],
-      pagination: { total: 1, limit: 20, offset: 0, has_more: false },
+      pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
     })
 
     const result = await listContent()

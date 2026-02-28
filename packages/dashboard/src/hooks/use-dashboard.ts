@@ -37,7 +37,7 @@ export function useDashboard(): DashboardData {
     error: agentsError,
     errorCode: agentsErrorCode,
     refetch: refetchAgents,
-  } = useApiQuery(() => listAgents({ limit: 1 }), [])
+  } = useApiQuery(() => listAgents({ limit: 100 }), [])
 
   const {
     data: jobData,
