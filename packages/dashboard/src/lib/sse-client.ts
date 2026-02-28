@@ -35,6 +35,10 @@ const KNOWN_EVENT_TYPES = [
   "browser:screenshot",
   "browser:trace:state",
   "browser:annotation:ack",
+  "job:created",
+  "job:updated",
+  "job:completed",
+  "job:failed",
 ] as const
 
 /**
