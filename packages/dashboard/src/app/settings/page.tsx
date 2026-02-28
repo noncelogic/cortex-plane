@@ -209,6 +209,11 @@ function SettingsInner() {
           Connection error: {paramError}
         </div>
       )}
+      {codePasteError && !codePasteFlow && (
+        <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {codePasteError}
+        </div>
+      )}
 
       {/* Connected Providers */}
       <section className="rounded-xl border border-surface-border bg-surface-light p-6">
