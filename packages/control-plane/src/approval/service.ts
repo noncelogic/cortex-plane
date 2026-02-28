@@ -435,6 +435,11 @@ export class ApprovalService {
     return query.execute()
   }
 
+  /** Return a count query builder for approval_request (caller adds filters). */
+  countQuery() {
+    return this.db.selectFrom("approval_request").select(this.db.fn.countAll<number>().as("total"))
+  }
+
   async getAuditTrail(approvalRequestId: string): Promise<ApprovalAuditLog[]> {
     return this.db
       .selectFrom("approval_audit_log")

@@ -72,6 +72,10 @@ function createMockApprovalService() {
       requested_by_agent_id: "agent-1",
     }),
     list: vi.fn().mockResolvedValue([]),
+    countQuery: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnThis(),
+      executeTakeFirstOrThrow: vi.fn().mockResolvedValue({ total: 0 }),
+    }),
     getAuditTrail: vi.fn().mockResolvedValue([]),
     getPendingForJob: vi.fn().mockResolvedValue([]),
     recordNotification: vi.fn().mockResolvedValue(undefined),

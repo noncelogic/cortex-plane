@@ -132,18 +132,30 @@ export function agentRoutes(deps: AgentRouteDeps) {
         const { status, limit = 50, offset = 0 } = request.query
 
         let query = db.selectFrom("agent").selectAll()
+        let countQuery = db.selectFrom("agent").select(db.fn.countAll<number>().as("total"))
 
         if (status) {
           query = query.where("status", "=", status)
+          countQuery = countQuery.where("status", "=", status)
         }
 
-        const agents = await query
-          .orderBy("created_at", "desc")
-          .limit(limit)
-          .offset(offset)
-          .execute()
+        const [agents, countResult] = await Promise.all([
+          query.orderBy("created_at", "desc").limit(limit).offset(offset).execute(),
+          countQuery.executeTakeFirstOrThrow(),
+        ])
 
-        return reply.status(200).send({ agents, count: agents.length })
+        const total = Number(countResult.total)
+
+        return reply.status(200).send({
+          agents,
+          count: agents.length,
+          pagination: {
+            total,
+            limit,
+            offset,
+            hasMore: offset + agents.length < total,
+          },
+        })
       },
     )
 

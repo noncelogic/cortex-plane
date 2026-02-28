@@ -5,9 +5,7 @@ import { useCallback, useMemo, useState } from "react"
 import type { ActiveFilters } from "@/components/memory/memory-search"
 import { useApiQuery } from "@/hooks/use-api"
 import type { MemoryRecord } from "@/lib/api-client"
-import { searchMemory, syncMemory } from "@/lib/api-client"
-
-const DEFAULT_AGENT_ID = "default"
+import { listAgents, searchMemory, syncMemory } from "@/lib/api-client"
 
 function applyFilters(
   records: MemoryRecord[],
@@ -62,8 +60,11 @@ export function useMemoryExplorer() {
     timeRange: "ALL",
   })
 
-  // Skip the API call when the query is empty to avoid sending a wildcard
-  // that the backend would try to parse as a UUID (bug #216).
+  // Fetch agents to get a real agent ID for memory search
+  const { data: agentData } = useApiQuery(() => listAgents({ limit: 1 }), [])
+  const agentId = agentData?.agents?.[0]?.id ?? null
+
+  // Skip the API call when the query is empty or no agent is available
   const {
     data,
     isLoading,
@@ -72,10 +73,10 @@ export function useMemoryExplorer() {
     refetch,
   } = useApiQuery(
     () =>
-      searchQuery.trim()
-        ? searchMemory({ agent_id: DEFAULT_AGENT_ID, query: searchQuery.trim(), limit: 50 })
+      searchQuery.trim() && agentId
+        ? searchMemory({ agent_id: agentId, query: searchQuery.trim(), limit: 50 })
         : Promise.resolve({ results: [] as MemoryRecord[] }),
-    [searchQuery],
+    [searchQuery, agentId],
   )
 
   // A 404 means the /memory/search route isn't deployed — not a connection failure.
@@ -112,11 +113,12 @@ export function useMemoryExplorer() {
   }, [])
 
   const handleSync = useCallback(async () => {
-    await syncMemory(DEFAULT_AGENT_ID)
+    if (!agentId) return
+    await syncMemory(agentId)
     if (searchQuery.trim()) {
       await refetch()
     }
-  }, [searchQuery, refetch])
+  }, [agentId, searchQuery, refetch])
 
   return {
     allRecords,
@@ -135,6 +137,6 @@ export function useMemoryExplorer() {
     isLoading,
     error,
     errorCode: errorCode,
-    agentId: DEFAULT_AGENT_ID,
+    agentId: agentId ?? "",
   }
 }

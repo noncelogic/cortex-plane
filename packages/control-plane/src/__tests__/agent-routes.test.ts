@@ -79,8 +79,9 @@ function mockDb(
   // Chain builder for selectFrom — every node returns all possible continuations
   function selectChain(rows: Record<string, unknown>[]) {
     const executeTakeFirst = vi.fn().mockResolvedValue(rows[0] ?? null)
+    const executeTakeFirstOrThrow = vi.fn().mockResolvedValue(rows[0] ?? {})
     const execute = vi.fn().mockResolvedValue(rows)
-    const terminal = { execute, executeTakeFirst }
+    const terminal = { execute, executeTakeFirst, executeTakeFirstOrThrow }
     const offset = vi.fn().mockReturnValue(terminal)
     const limit = vi.fn().mockReturnValue({ ...terminal, offset })
     const orderBy = vi.fn().mockReturnValue({ ...terminal, limit, offset })
@@ -95,7 +96,20 @@ function mockDb(
     const selectAll = vi
       .fn()
       .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
-    const select = vi.fn().mockReturnValue({ where: whereFn, ...terminal })
+    // Count queries use select(fn.countAll().as("total")) — return { total: rows.length }
+    // Regular selects (e.g. select("id")) still need where/executeTakeFirst
+    const countResult = { total: rows.length }
+    const selectTerminal = {
+      executeTakeFirst,
+      executeTakeFirstOrThrow: vi.fn().mockResolvedValue(countResult),
+      execute,
+    }
+    const selectWhereFn: ReturnType<typeof vi.fn> = vi.fn()
+    selectWhereFn.mockReturnValue({
+      where: selectWhereFn,
+      ...selectTerminal,
+    })
+    const select = vi.fn().mockReturnValue({ where: selectWhereFn, ...selectTerminal })
     return { selectAll, select }
   }
 
@@ -137,6 +151,11 @@ function mockDb(
       if (table === "job") return updateChain(insertedJob)
       return updateChain(null)
     }),
+    fn: {
+      countAll: () => ({
+        as: () => "count(*) as total",
+      }),
+    },
   } as unknown as Kysely<Database>
 }
 

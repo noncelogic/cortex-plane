@@ -339,15 +339,39 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
         },
       },
       async (request: FastifyRequest<{ Querystring: ListQuery }>, reply: FastifyReply) => {
+        const limit = request.query.limit ?? 50
+        const offset = request.query.offset ?? 0
+
         const requests = await approvalService.list({
           status: request.query.status,
           jobId: request.query.jobId,
           approverUserId: request.query.approverUserId,
-          limit: request.query.limit,
-          offset: request.query.offset,
+          limit,
+          offset,
         })
 
-        return reply.status(200).send({ approvals: requests })
+        // Build count query with same filters
+        let countQuery = approvalService.countQuery()
+        if (request.query.status) countQuery = countQuery.where("status", "=", request.query.status)
+        if (request.query.jobId) countQuery = countQuery.where("job_id", "=", request.query.jobId)
+        if (request.query.approverUserId)
+          countQuery = countQuery.where(
+            "approver_user_account_id",
+            "=",
+            request.query.approverUserId,
+          )
+        const countResult = await countQuery.executeTakeFirstOrThrow()
+        const total = Number(countResult.total)
+
+        return reply.status(200).send({
+          approvals: requests,
+          pagination: {
+            total,
+            limit,
+            offset,
+            hasMore: offset + requests.length < total,
+          },
+        })
       },
     )
 
