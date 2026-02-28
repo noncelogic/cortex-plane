@@ -19,6 +19,7 @@ describe("loadConfig", () => {
       memoryExtractThreshold: 50,
       qdrantUrl: "http://localhost:6333",
       auth: undefined,
+      channels: {},
       tracing: {
         enabled: false,
         endpoint: "http://localhost:4318/v1/traces",
@@ -112,6 +113,79 @@ describe("loadConfig", () => {
           OTEL_EXPORTER_TYPE: "invalid",
         }),
       ).toThrow("Invalid OTEL_EXPORTER_TYPE: invalid")
+    })
+  })
+
+  describe("channel config", () => {
+    it("returns empty channels when no channel env vars are set", () => {
+      const config = loadConfig({ DATABASE_URL: "postgres://localhost/test" })
+      expect(config.channels).toEqual({})
+      expect(config.channels.telegram).toBeUndefined()
+      expect(config.channels.discord).toBeUndefined()
+    })
+
+    it("parses Telegram config from env vars", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CHANNEL_TELEGRAM_BOT_TOKEN: "123:ABC",
+        CHANNEL_TELEGRAM_ALLOWED_USERS: "111,222,333",
+      })
+      expect(config.channels.telegram).toBeDefined()
+      expect(config.channels.telegram!.botToken).toBe("123:ABC")
+      expect(config.channels.telegram!.allowedUsers).toEqual(new Set([111, 222, 333]))
+    })
+
+    it("parses Telegram config with empty allowed users", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CHANNEL_TELEGRAM_BOT_TOKEN: "123:ABC",
+      })
+      expect(config.channels.telegram).toBeDefined()
+      expect(config.channels.telegram!.allowedUsers).toEqual(new Set())
+    })
+
+    it("throws on invalid Telegram user ID", () => {
+      expect(() =>
+        loadConfig({
+          DATABASE_URL: "postgres://localhost/test",
+          CHANNEL_TELEGRAM_BOT_TOKEN: "123:ABC",
+          CHANNEL_TELEGRAM_ALLOWED_USERS: "111,abc",
+        }),
+      ).toThrow('Invalid Telegram user ID in CHANNEL_TELEGRAM_ALLOWED_USERS: "abc"')
+    })
+
+    it("parses Discord config from env vars", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CHANNEL_DISCORD_TOKEN: "discord-token",
+        CHANNEL_DISCORD_GUILD_IDS: "guild1,guild2",
+        CHANNEL_DISCORD_ALLOWED_USERS: "user1,user2",
+      })
+      expect(config.channels.discord).toBeDefined()
+      expect(config.channels.discord!.token).toBe("discord-token")
+      expect(config.channels.discord!.guildIds).toEqual(["guild1", "guild2"])
+      expect(config.channels.discord!.allowedUsers).toEqual(new Set(["user1", "user2"]))
+    })
+
+    it("parses Discord config without allowed users", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CHANNEL_DISCORD_TOKEN: "discord-token",
+        CHANNEL_DISCORD_GUILD_IDS: "guild1",
+      })
+      expect(config.channels.discord).toBeDefined()
+      expect(config.channels.discord!.allowedUsers).toBeUndefined()
+    })
+
+    it("parses both Telegram and Discord simultaneously", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CHANNEL_TELEGRAM_BOT_TOKEN: "tg-token",
+        CHANNEL_DISCORD_TOKEN: "dc-token",
+        CHANNEL_DISCORD_GUILD_IDS: "g1",
+      })
+      expect(config.channels.telegram).toBeDefined()
+      expect(config.channels.discord).toBeDefined()
     })
   })
 })

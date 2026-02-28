@@ -22,7 +22,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@cortex/adapter-discord": "workspace:*",
+    "@cortex/adapter-telegram": "workspace:*",
     "@cortex/shared": "workspace:*",
+    "discord.js": "^14.18.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/env": "^5.0.0",
     "@fastify/websocket": "^11.0.0",

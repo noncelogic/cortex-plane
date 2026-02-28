@@ -102,6 +102,12 @@ importers:
       "@anthropic-ai/sdk":
         specifier: ^0.78.0
         version: 0.78.0(zod@4.3.6)
+      "@cortex/adapter-discord":
+        specifier: workspace:*
+        version: link:../adapter-discord
+      "@cortex/adapter-telegram":
+        specifier: workspace:*
+        version: link:../adapter-telegram
       "@cortex/shared":
         specifier: workspace:*
         version: link:../shared
@@ -123,6 +129,9 @@ importers:
       "@qdrant/js-client-rest":
         specifier: ^1.12.0
         version: 1.17.0(typescript@5.9.3)
+      discord.js:
+        specifier: ^14.18.0
+        version: 14.25.1
       fastify:
         specifier: ^5.2.0
         version: 5.7.4

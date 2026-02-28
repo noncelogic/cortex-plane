@@ -36,6 +36,18 @@ export interface AuthOAuthConfig {
   anthropic?: OAuthProviderConfig
 }
 
+export interface ChannelConfig {
+  telegram?: {
+    botToken: string
+    allowedUsers: Set<number>
+  }
+  discord?: {
+    token: string
+    guildIds: string[]
+    allowedUsers?: Set<string>
+  }
+}
+
 export interface Config {
   /** PostgreSQL connection string */
   databaseUrl: string
@@ -57,6 +69,8 @@ export interface Config {
   tracing: TracingConfig
   /** OAuth & dashboard authentication (optional — auth disabled if absent) */
   auth?: AuthOAuthConfig
+  /** Channel adapter configuration (Telegram, Discord) */
+  channels: ChannelConfig
 }
 
 /**
@@ -93,6 +107,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     }
   }
 
+  // Channel adapter config — optional, adapters disabled if tokens missing
+  const channels = parseChannelConfig(env)
+
   return {
     databaseUrl,
     port: parseIntOr(env.PORT, 4000),
@@ -110,6 +127,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       exporterType,
     },
     auth,
+    channels,
   }
 }
 
@@ -145,4 +163,52 @@ function parseOAuthProvider(
     authUrl: env[`OAUTH_${prefix}_AUTH_URL`],
     tokenUrl: env[`OAUTH_${prefix}_TOKEN_URL`],
   }
+}
+
+function parseChannelConfig(env: Record<string, string | undefined>): ChannelConfig {
+  const config: ChannelConfig = {}
+
+  // Telegram — enabled when CHANNEL_TELEGRAM_BOT_TOKEN is set
+  const telegramBotToken = env.CHANNEL_TELEGRAM_BOT_TOKEN
+  if (telegramBotToken) {
+    const allowedUsers = new Set<number>()
+    const raw = env.CHANNEL_TELEGRAM_ALLOWED_USERS ?? ""
+    for (const part of raw.split(",")) {
+      const trimmed = part.trim()
+      if (trimmed.length === 0) continue
+      const n = Number(trimmed)
+      if (!Number.isInteger(n) || n <= 0) {
+        throw new Error(`Invalid Telegram user ID in CHANNEL_TELEGRAM_ALLOWED_USERS: "${trimmed}"`)
+      }
+      allowedUsers.add(n)
+    }
+    config.telegram = { botToken: telegramBotToken, allowedUsers }
+  }
+
+  // Discord — enabled when CHANNEL_DISCORD_TOKEN is set
+  const discordToken = env.CHANNEL_DISCORD_TOKEN
+  if (discordToken) {
+    const guildIds: string[] = []
+    const guildsRaw = env.CHANNEL_DISCORD_GUILD_IDS ?? ""
+    for (const part of guildsRaw.split(",")) {
+      const trimmed = part.trim()
+      if (trimmed.length === 0) continue
+      guildIds.push(trimmed)
+    }
+
+    let allowedUsers: Set<string> | undefined
+    const usersRaw = env.CHANNEL_DISCORD_ALLOWED_USERS
+    if (usersRaw) {
+      allowedUsers = new Set<string>()
+      for (const part of usersRaw.split(",")) {
+        const trimmed = part.trim()
+        if (trimmed.length === 0) continue
+        allowedUsers.add(trimmed)
+      }
+    }
+
+    config.discord = { token: discordToken, guildIds, allowedUsers }
+  }
+
+  return config
 }
