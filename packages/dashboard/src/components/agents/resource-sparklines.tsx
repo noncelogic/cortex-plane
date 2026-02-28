@@ -104,7 +104,7 @@ const deltaColors: Record<string, string> = {
 
 export function ResourceSparklines({ metrics }: ResourceSparklinesProps): React.JSX.Element {
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3">
       {metrics.map((metric) => (
         <div
           key={metric.label}
@@ -131,7 +131,7 @@ export function ResourceSparklines({ metrics }: ResourceSparklinesProps): React.
             <span className="text-xl font-bold text-text-main">{metric.value}</span>
             <span className="text-sm font-normal text-slate-400">{metric.unit}</span>
           </div>
-          <Sparkline samples={metric.samples} width={140} height={28} />
+          <Sparkline samples={metric.samples} width={100} height={28} />
         </div>
       ))}
     </div>

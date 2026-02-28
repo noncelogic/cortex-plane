@@ -251,7 +251,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
       {/* Desktop: 3-column layout */}
       <div className="hidden flex-1 gap-6 lg:flex">
         {/* Left column: steering + lifecycle details */}
-        <div className="flex w-80 shrink-0 flex-col gap-6">
+        <div className="flex w-80 min-w-0 shrink-0 flex-col gap-6">
           <SteerInput agentId={agentId} />
           <LifecycleDetails transitions={transitions} currentState={currentState} />
         </div>
@@ -262,7 +262,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         </div>
 
         {/* Right column: resources */}
-        <div className="flex w-72 shrink-0 flex-col gap-6">
+        <div className="flex w-80 min-w-0 shrink-0 flex-col gap-6">
           <ResourcePanel metrics={metrics} />
         </div>
       </div>
