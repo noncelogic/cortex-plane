@@ -11,6 +11,8 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/control-plane/package.json ./packages/control-plane/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/config/package.json ./packages/config/
+COPY packages/adapter-telegram/package.json ./packages/adapter-telegram/
+COPY packages/adapter-discord/package.json ./packages/adapter-discord/
 
 RUN pnpm install --frozen-lockfile --prod
 
@@ -27,12 +29,16 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
 COPY packages/control-plane/package.json ./packages/control-plane/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/config/package.json ./packages/config/
+COPY packages/adapter-telegram/package.json ./packages/adapter-telegram/
+COPY packages/adapter-discord/package.json ./packages/adapter-discord/
 
 RUN pnpm install --frozen-lockfile
 
 COPY tsconfig.base.json ./
 COPY packages/config/ ./packages/config/
 COPY packages/shared/ ./packages/shared/
+COPY packages/adapter-telegram/ ./packages/adapter-telegram/
+COPY packages/adapter-discord/ ./packages/adapter-discord/
 COPY packages/control-plane/ ./packages/control-plane/
 
 RUN pnpm turbo run build --filter=@cortex/control-plane...
@@ -52,13 +58,19 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/control-plane/node_modules ./packages/control-plane/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/adapter-telegram/node_modules ./packages/adapter-telegram/node_modules
+COPY --from=deps /app/packages/adapter-discord/node_modules ./packages/adapter-discord/node_modules
 
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/adapter-telegram/dist ./packages/adapter-telegram/dist
+COPY --from=builder /app/packages/adapter-discord/dist ./packages/adapter-discord/dist
 COPY --from=builder /app/packages/control-plane/dist ./packages/control-plane/dist
 COPY --from=builder /app/packages/control-plane/migrations ./packages/control-plane/migrations
 
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+COPY --from=builder /app/packages/adapter-telegram/package.json ./packages/adapter-telegram/
+COPY --from=builder /app/packages/adapter-discord/package.json ./packages/adapter-discord/
 COPY --from=builder /app/packages/control-plane/package.json ./packages/control-plane/
 COPY --from=builder /app/pnpm-workspace.yaml ./
 
