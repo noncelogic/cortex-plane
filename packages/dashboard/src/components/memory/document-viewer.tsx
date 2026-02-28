@@ -136,6 +136,12 @@ export function DocumentViewer({
           </button>
           <button
             type="button"
+            onClick={() => {
+              if (!record) return
+              const blob = new Blob([record.content], { type: "text/plain" })
+              const url = URL.createObjectURL(blob)
+              window.open(url, "_blank")
+            }}
             className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700"
           >
             <span className="material-symbols-outlined text-sm">open_in_new</span>
