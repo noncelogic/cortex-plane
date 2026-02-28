@@ -23,7 +23,7 @@ export const ApprovalRequestSchema = z.object({
 
 export const ApprovalListResponseSchema = z.object({
   approvals: z.array(ApprovalRequestSchema),
-  pagination: PaginationSchema,
+  pagination: PaginationSchema.optional(),
 })
 
 export const ApprovalAuditEntrySchema = z.object({

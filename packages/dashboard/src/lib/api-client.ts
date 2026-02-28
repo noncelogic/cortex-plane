@@ -455,7 +455,7 @@ export async function listApprovals(params?: {
   offset?: number
 }): Promise<{
   approvals: import("./schemas/approvals").ApprovalRequest[]
-  pagination: import("./schemas/common").Pagination
+  pagination?: import("./schemas/common").Pagination
 }> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)

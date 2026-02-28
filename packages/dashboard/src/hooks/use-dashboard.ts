@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
 import type { ApiErrorCode, JobStatus } from "@/lib/api-client"
-import { listAgents, listApprovals, listJobs, searchMemory } from "@/lib/api-client"
+import { listAgents, listApprovals, listJobs } from "@/lib/api-client"
 
 export interface DashboardStats {
   totalAgents: number
@@ -55,27 +55,18 @@ export function useDashboard(): DashboardData {
     refetch: refetchApprovals,
   } = useApiQuery(() => listApprovals({ status: "PENDING", limit: 1 }), [])
 
-  const {
-    data: memoryData,
-    isLoading: memoryLoading,
-    error: memoryError,
-    errorCode: memoryErrorCode,
-    refetch: refetchMemory,
-  } = useApiQuery(() => searchMemory({ agent_id: "*", query: "all", limit: 1 }), [])
-
-  const isLoading = agentsLoading || jobsLoading || approvalsLoading || memoryLoading
-  const error = agentsError || jobsError || approvalsError || memoryError
-  const errorCode =
-    agentsErrorCode || jobsErrorCode || approvalsErrorCode || memoryErrorCode || null
+  const isLoading = agentsLoading || jobsLoading || approvalsLoading
+  const error = agentsError || jobsError || approvalsError
+  const errorCode = agentsErrorCode || jobsErrorCode || approvalsErrorCode || null
 
   const stats = useMemo<DashboardStats>(() => {
     return {
       totalAgents: agentData?.pagination?.total ?? 0,
       activeJobs: jobData?.pagination?.total ?? 0,
       pendingApprovals: approvalData?.pagination?.total ?? 0,
-      memoryRecords: memoryData?.results?.length ?? 0,
+      memoryRecords: 0,
     }
-  }, [agentData, jobData, approvalData, memoryData])
+  }, [agentData, jobData, approvalData])
 
   const recentJobs = useMemo<RecentJob[]>(() => {
     if (!jobData?.jobs || jobData.jobs.length === 0) return []
@@ -92,8 +83,7 @@ export function useDashboard(): DashboardData {
     void refetchAgents()
     void refetchJobs()
     void refetchApprovals()
-    void refetchMemory()
-  }, [refetchAgents, refetchJobs, refetchApprovals, refetchMemory])
+  }, [refetchAgents, refetchJobs, refetchApprovals])
 
   return { stats, recentJobs, isLoading, error, errorCode, refetch }
 }
