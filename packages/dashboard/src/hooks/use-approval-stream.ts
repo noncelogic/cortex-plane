@@ -11,27 +11,27 @@ import { useSSE } from "./use-sse"
 // ---------------------------------------------------------------------------
 
 export interface ApprovalCreatedPayload {
-  approvalRequestId: string
-  jobId: string
-  agentId: string
-  actionSummary: string
-  actionType: string
-  expiresAt: string
+  approval_request_id: string
+  job_id: string
+  agent_id: string
+  action_summary: string
+  action_type: string
+  expires_at: string
   timestamp: string
 }
 
 export interface ApprovalDecidedPayload {
-  approvalRequestId: string
-  jobId: string
+  approval_request_id: string
+  job_id: string
   decision: string
-  decidedBy: string
+  decided_by: string
   timestamp: string
 }
 
 export interface ApprovalExpiredPayload {
-  approvalRequestId: string
-  jobId: string
-  expiredAt: string
+  approval_request_id: string
+  job_id: string
+  expired_at: string
   timestamp: string
 }
 

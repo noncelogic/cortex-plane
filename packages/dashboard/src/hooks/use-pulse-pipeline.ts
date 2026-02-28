@@ -14,21 +14,21 @@ function computeStats(pieces: ContentPiece[]): ContentPipelineStats {
   todayStart.setHours(0, 0, 0, 0)
 
   const publishedToday = pieces.filter(
-    (p) => p.publishedAt && new Date(p.publishedAt).getTime() >= todayStart.getTime(),
+    (p) => p.published_at && new Date(p.published_at).getTime() >= todayStart.getTime(),
   ).length
 
   const reviewPieces = pieces.filter((p) => p.status === "IN_REVIEW")
   const avgReviewTimeMs =
     reviewPieces.length > 0
-      ? reviewPieces.reduce((sum, p) => sum + (now - new Date(p.createdAt).getTime()), 0) /
+      ? reviewPieces.reduce((sum, p) => sum + (now - new Date(p.created_at).getTime()), 0) /
         reviewPieces.length
       : 0
 
   return {
-    totalPieces: pieces.length,
-    publishedToday,
-    avgReviewTimeMs,
-    pendingReview: reviewPieces.length,
+    total_pieces: pieces.length,
+    published_today: publishedToday,
+    avg_review_time_ms: avgReviewTimeMs,
+    pending_review: reviewPieces.length,
   }
 }
 
@@ -72,13 +72,13 @@ export function usePulsePipeline() {
   const filteredPieces = useMemo(() => {
     return allPieces.filter((p) => {
       if (filters.type !== "ALL" && p.type !== filters.type) return false
-      if (filters.agent !== "ALL" && p.agentName !== filters.agent) return false
+      if (filters.agent !== "ALL" && p.agent_name !== filters.agent) return false
       if (filters.search) {
         const q = filters.search.toLowerCase()
         return (
           p.title.toLowerCase().includes(q) ||
           p.body.toLowerCase().includes(q) ||
-          p.agentName.toLowerCase().includes(q)
+          p.agent_name.toLowerCase().includes(q)
         )
       }
       return true
@@ -87,7 +87,7 @@ export function usePulsePipeline() {
 
   const stats = useMemo(() => computeStats(allPieces), [allPieces])
   const agentNames = useMemo(
-    () => [...new Set(allPieces.map((p) => p.agentName))].sort(),
+    () => [...new Set(allPieces.map((p) => p.agent_name))].sort(),
     [allPieces],
   )
 

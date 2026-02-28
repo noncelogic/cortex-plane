@@ -121,33 +121,33 @@ describe("JobTable filter and search logic", () => {
   const mockJobs: JobSummary[] = [
     {
       id: "job-0001-abc12345",
-      agentId: "agt-a1b2c3d4",
+      agent_id: "agt-a1b2c3d4",
       status: "COMPLETED",
       type: "inference",
-      createdAt: new Date(Date.now() - 3_600_000).toISOString(),
-      completedAt: new Date(Date.now() - 3_555_000).toISOString(),
+      created_at: new Date(Date.now() - 3_600_000).toISOString(),
+      completed_at: new Date(Date.now() - 3_555_000).toISOString(),
     },
     {
       id: "job-0002-def67890",
-      agentId: "agt-e5f6g7h8",
+      agent_id: "agt-e5f6g7h8",
       status: "FAILED",
       type: "tool-call",
-      createdAt: new Date(Date.now() - 7_200_000).toISOString(),
+      created_at: new Date(Date.now() - 7_200_000).toISOString(),
       error: "Timeout",
     },
     {
       id: "job-0003-ghi11111",
-      agentId: "agt-a1b2c3d4",
+      agent_id: "agt-a1b2c3d4",
       status: "RUNNING",
       type: "pipeline",
-      createdAt: new Date(Date.now() - 1_800_000).toISOString(),
+      created_at: new Date(Date.now() - 1_800_000).toISOString(),
     },
     {
       id: "job-0004-jkl22222",
-      agentId: "agt-i9j0k1l2",
+      agent_id: "agt-i9j0k1l2",
       status: "PENDING",
       type: "batch",
-      createdAt: new Date(Date.now() - 900_000).toISOString(),
+      created_at: new Date(Date.now() - 900_000).toISOString(),
     },
   ]
 
@@ -163,7 +163,7 @@ describe("JobTable filter and search logic", () => {
         const q = opts.search.toLowerCase()
         return (
           j.id.toLowerCase().includes(q) ||
-          j.agentId.toLowerCase().includes(q) ||
+          j.agent_id.toLowerCase().includes(q) ||
           j.type.toLowerCase().includes(q)
         )
       }
@@ -268,18 +268,18 @@ describe("JobDetailDrawer data", () => {
 
   it("JobMetrics interface has all required fields", () => {
     const metrics: JobMetrics = {
-      cpuPercent: 45,
-      memoryMb: 512,
-      networkInBytes: 2_500_000,
-      networkOutBytes: 800_000,
-      threadCount: 8,
+      cpu_percent: 45,
+      memory_mb: 512,
+      network_in_bytes: 2_500_000,
+      network_out_bytes: 800_000,
+      thread_count: 8,
     }
 
-    expect(metrics.cpuPercent).toBe(45)
-    expect(metrics.memoryMb).toBe(512)
-    expect(metrics.networkInBytes).toBe(2_500_000)
-    expect(metrics.networkOutBytes).toBe(800_000)
-    expect(metrics.threadCount).toBe(8)
+    expect(metrics.cpu_percent).toBe(45)
+    expect(metrics.memory_mb).toBe(512)
+    expect(metrics.network_in_bytes).toBe(2_500_000)
+    expect(metrics.network_out_bytes).toBe(800_000)
+    expect(metrics.thread_count).toBe(8)
   })
 
   it("JobLogEntry levels are mapped to correct colors conceptually", () => {
@@ -299,24 +299,24 @@ describe("JobDetailDrawer data", () => {
   it("JobDetail extends JobSummary with steps, metrics, logs", () => {
     const detail: JobDetail = {
       id: "job-001",
-      agentId: "agt-001",
+      agent_id: "agt-001",
       status: "COMPLETED",
       type: "inference",
-      createdAt: new Date().toISOString(),
-      agentName: "TestAgent",
-      agentVersion: "v1.2",
-      durationMs: 5000,
+      created_at: new Date().toISOString(),
+      agent_name: "TestAgent",
+      agent_version: "v1.2",
+      duration_ms: 5000,
       steps: [
-        { name: "Init", status: "COMPLETED", durationMs: 1000 },
-        { name: "Execute", status: "COMPLETED", durationMs: 3000 },
-        { name: "Cleanup", status: "COMPLETED", durationMs: 1000 },
+        { name: "Init", status: "COMPLETED", duration_ms: 1000 },
+        { name: "Execute", status: "COMPLETED", duration_ms: 3000 },
+        { name: "Cleanup", status: "COMPLETED", duration_ms: 1000 },
       ],
       metrics: {
-        cpuPercent: 30,
-        memoryMb: 256,
-        networkInBytes: 1_000_000,
-        networkOutBytes: 500_000,
-        threadCount: 4,
+        cpu_percent: 30,
+        memory_mb: 256,
+        network_in_bytes: 1_000_000,
+        network_out_bytes: 500_000,
+        thread_count: 4,
       },
       logs: [
         { timestamp: new Date().toISOString(), level: "INFO", message: "Job started" },
@@ -325,9 +325,9 @@ describe("JobDetailDrawer data", () => {
     }
 
     expect(detail.steps).toHaveLength(3)
-    expect(detail.metrics?.cpuPercent).toBe(30)
+    expect(detail.metrics?.cpu_percent).toBe(30)
     expect(detail.logs).toHaveLength(2)
-    expect(detail.agentName).toBe("TestAgent")
+    expect(detail.agent_name).toBe("TestAgent")
   })
 })
 
@@ -372,10 +372,10 @@ describe("getJob API", () => {
   it("fetches job detail by ID", async () => {
     const mockDetail: JobDetail = {
       id: "job-123",
-      agentId: "agt-456",
+      agent_id: "agt-456",
       status: "COMPLETED",
       type: "inference",
-      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       steps: [],
       logs: [],
     }
@@ -419,11 +419,11 @@ describe("retryJob API", () => {
   })
 
   it("sends POST to retry endpoint", async () => {
-    mockFetchResponse({ jobId: "job-123", status: "retrying" })
+    mockFetchResponse({ job_id: "job-123", status: "retrying" })
     const result = await retryJob("job-123")
 
     expect(result.status).toBe("retrying")
-    expect(result.jobId).toBe("job-123")
+    expect(result.job_id).toBe("job-123")
     expect(fetch).toHaveBeenCalledWith(
       `${API_BASE}/jobs/job-123/retry`,
       expect.objectContaining({ method: "POST" }),

@@ -20,7 +20,7 @@ import { approveRequest, getApprovalAudit, listApprovals } from "@/lib/api-clien
 type RiskLevel = "CRITICAL" | "MEDIUM" | "LOW"
 
 function classifyRisk(approval: ApprovalRequest): RiskLevel {
-  const t = approval.actionType.toLowerCase()
+  const t = approval.action_type.toLowerCase()
   if (t.includes("delete") || t.includes("deploy") || t.includes("prod")) return "CRITICAL"
   if (t.includes("scale") || t.includes("update") || t.includes("modify")) return "MEDIUM"
   return "LOW"
@@ -355,8 +355,8 @@ export default function ApprovalsPage(): React.JSX.Element {
           id: `${a.id}-decision`,
           type:
             a.status === "APPROVED" ? "approved" : a.status === "REJECTED" ? "rejected" : "expired",
-          actor: a.decidedBy ?? "System",
-          timestamp: a.decidedAt ?? a.requestedAt,
+          actor: a.decided_by ?? "System",
+          timestamp: a.decided_at ?? a.requested_at,
           reason: a.reason,
           channel: "dashboard",
         })
@@ -364,8 +364,8 @@ export default function ApprovalsPage(): React.JSX.Element {
       entries.push({
         id: `${a.id}-request`,
         type: "requested",
-        actor: a.agentId ?? "Unknown",
-        timestamp: a.requestedAt,
+        actor: a.agent_id ?? "Unknown",
+        timestamp: a.requested_at,
       })
     }
 
@@ -384,35 +384,35 @@ export default function ApprovalsPage(): React.JSX.Element {
     for (const ev of streamEvents) {
       if (ev.type === "created") {
         const d = ev.data
-        if (!map.has(d.approvalRequestId)) {
-          map.set(d.approvalRequestId, {
-            id: d.approvalRequestId,
-            jobId: d.jobId,
-            agentId: d.agentId,
+        if (!map.has(d.approval_request_id)) {
+          map.set(d.approval_request_id, {
+            id: d.approval_request_id,
+            job_id: d.job_id,
+            agent_id: d.agent_id,
             status: "PENDING",
-            actionType: d.actionType,
-            actionSummary: d.actionSummary,
-            requestedAt: d.timestamp,
-            expiresAt: d.expiresAt,
+            action_type: d.action_type,
+            action_summary: d.action_summary,
+            requested_at: d.timestamp,
+            expires_at: d.expires_at,
           })
         }
       } else if (ev.type === "decided") {
         const d = ev.data
-        const existing = map.get(d.approvalRequestId)
+        const existing = map.get(d.approval_request_id)
         if (existing) {
-          map.set(d.approvalRequestId, {
+          map.set(d.approval_request_id, {
             ...existing,
             status: d.decision as ApprovalStatus,
             decision: d.decision as "APPROVED" | "REJECTED",
-            decidedBy: d.decidedBy,
-            decidedAt: d.timestamp,
+            decided_by: d.decided_by,
+            decided_at: d.timestamp,
           })
         }
       } else if (ev.type === "expired") {
         const d = ev.data
-        const existing = map.get(d.approvalRequestId)
+        const existing = map.get(d.approval_request_id)
         if (existing) {
-          map.set(d.approvalRequestId, { ...existing, status: "EXPIRED" })
+          map.set(d.approval_request_id, { ...existing, status: "EXPIRED" })
         }
       }
     }
@@ -422,9 +422,9 @@ export default function ApprovalsPage(): React.JSX.Element {
       if (a.status === "PENDING" && b.status !== "PENDING") return -1
       if (a.status !== "PENDING" && b.status === "PENDING") return 1
       if (a.status === "PENDING" && b.status === "PENDING") {
-        return new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()
+        return new Date(a.expires_at).getTime() - new Date(b.expires_at).getTime()
       }
-      return new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
+      return new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime()
     })
   }, [data, streamEvents])
 

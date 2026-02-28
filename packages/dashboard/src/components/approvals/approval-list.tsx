@@ -28,7 +28,7 @@ export function ApprovalList({
   const filtered = approvals.filter((a) => {
     if (filter !== "ALL" && a.status !== filter) return false
     if (riskFilter !== "ALL") {
-      const t = a.actionType.toLowerCase()
+      const t = a.action_type.toLowerCase()
       if (
         riskFilter === "CRITICAL" &&
         !t.includes("delete") &&

@@ -10,9 +10,9 @@ export const MemoryRecordSchema = z.object({
   importance: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   confidence: z.number(),
   source: z.string(),
-  createdAt: z.number(),
-  accessCount: z.number(),
-  lastAccessedAt: z.number(),
+  created_at: z.number(),
+  access_count: z.number(),
+  last_accessed_at: z.number(),
   score: z.number().optional(),
 })
 

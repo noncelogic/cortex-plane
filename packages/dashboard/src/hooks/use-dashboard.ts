@@ -15,10 +15,10 @@ export interface DashboardStats {
 
 export interface RecentJob {
   id: string
-  agentName: string
+  agent_name: string
   status: JobStatus
   type: string
-  createdAt: string
+  created_at: string
 }
 
 export interface DashboardData {
@@ -61,7 +61,7 @@ export function useDashboard(): DashboardData {
     error: memoryError,
     errorCode: memoryErrorCode,
     refetch: refetchMemory,
-  } = useApiQuery(() => searchMemory({ agentId: "*", query: "all", limit: 1 }), [])
+  } = useApiQuery(() => searchMemory({ agent_id: "*", query: "all", limit: 1 }), [])
 
   const isLoading = agentsLoading || jobsLoading || approvalsLoading || memoryLoading
   const error = agentsError || jobsError || approvalsError || memoryError
@@ -81,10 +81,10 @@ export function useDashboard(): DashboardData {
     if (!jobData?.jobs || jobData.jobs.length === 0) return []
     return jobData.jobs.map((j) => ({
       id: j.id,
-      agentName: j.agentId,
+      agent_name: j.agent_id,
       status: j.status,
       type: j.type,
-      createdAt: j.createdAt,
+      created_at: j.created_at,
     }))
   }, [jobData])
 

@@ -171,9 +171,9 @@ function EventItem({ event, isLast }: { event: BrowserEvent; isLast: boolean }):
             {config.label}
           </span>
           <span className="font-mono text-[10px] text-slate-600">{time}</span>
-          {event.durationMs !== undefined && (
+          {event.duration_ms !== undefined && (
             <span className="font-mono text-[10px] text-slate-500">
-              {duration(event.durationMs)}
+              {duration(event.duration_ms)}
             </span>
           )}
         </div>

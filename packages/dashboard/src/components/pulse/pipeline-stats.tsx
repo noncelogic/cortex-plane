@@ -33,28 +33,28 @@ export function PipelineStats({ stats }: PipelineStatsProps): React.JSX.Element 
       <StatCard
         icon="article"
         label="Total Pieces"
-        value={stats.totalPieces}
+        value={stats.total_pieces}
         iconColor="text-blue-500"
         iconBg="bg-blue-500/10"
       />
       <StatCard
         icon="publish"
         label="Published Today"
-        value={stats.publishedToday}
+        value={stats.published_today}
         iconColor="text-emerald-500"
         iconBg="bg-emerald-500/10"
       />
       <StatCard
         icon="schedule"
         label="Avg Review Time"
-        value={duration(stats.avgReviewTimeMs)}
+        value={duration(stats.avg_review_time_ms)}
         iconColor="text-amber-500"
         iconBg="bg-amber-500/10"
       />
       <StatCard
         icon="pending_actions"
         label="Pending Review"
-        value={stats.pendingReview}
+        value={stats.pending_review}
         iconColor="text-purple-500"
         iconBg="bg-purple-500/10"
       />

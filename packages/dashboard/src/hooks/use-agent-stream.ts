@@ -12,7 +12,7 @@ import { useSSE } from "./use-sse"
 // ---------------------------------------------------------------------------
 
 const AgentOutputPayloadSchema = z.object({
-  agentId: z.string(),
+  agent_id: z.string(),
   timestamp: z.string(),
   output: z
     .object({
@@ -23,28 +23,28 @@ const AgentOutputPayloadSchema = z.object({
 })
 
 const AgentStatePayloadSchema = z.object({
-  agentId: z.string(),
+  agent_id: z.string(),
   timestamp: z.string(),
   state: z.string(),
   reason: z.string().optional(),
 })
 
 const AgentErrorPayloadSchema = z.object({
-  agentId: z.string(),
+  agent_id: z.string(),
   timestamp: z.string(),
   message: z.string(),
   code: z.string().optional(),
 })
 
 const AgentCompletePayloadSchema = z.object({
-  agentId: z.string(),
+  agent_id: z.string(),
   timestamp: z.string(),
   summary: z.string().optional(),
 })
 
 const SteerAckPayloadSchema = z.object({
-  agentId: z.string(),
-  steerMessageId: z.string(),
+  agent_id: z.string(),
+  steer_message_id: z.string(),
   timestamp: z.string(),
   status: z.enum(["accepted", "rejected"]),
   reason: z.string().optional(),

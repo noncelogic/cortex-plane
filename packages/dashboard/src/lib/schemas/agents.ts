@@ -14,8 +14,8 @@ export const AgentLifecycleStateSchema = z.enum([
 ])
 
 export const CheckpointSchema = z.object({
-  jobId: z.string(),
-  savedAt: z.string(),
+  job_id: z.string(),
+  saved_at: z.string(),
   crc32: z.number(),
   data: z.record(z.string(), z.unknown()).optional(),
 })
@@ -25,20 +25,20 @@ export const AgentSummarySchema = z.object({
   name: z.string(),
   slug: z.string(),
   role: z.string(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   status: AgentStatusSchema,
-  lifecycleState: AgentLifecycleStateSchema,
-  currentJobId: z.string().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string().optional(),
+  lifecycle_state: AgentLifecycleStateSchema.optional(),
+  current_job_id: z.string().optional().nullable(),
+  created_at: z.string(),
+  updated_at: z.string().optional().nullable(),
 })
 
 export const AgentDetailSchema = AgentSummarySchema.extend({
-  modelConfig: z.record(z.string(), z.unknown()).optional(),
-  skillConfig: z.record(z.string(), z.unknown()).optional(),
-  resourceLimits: z.record(z.string(), z.unknown()).optional(),
-  channelPermissions: z.record(z.string(), z.unknown()).optional(),
-  checkpoint: CheckpointSchema.optional(),
+  model_config: z.record(z.string(), z.unknown()).optional().nullable(),
+  skill_config: z.record(z.string(), z.unknown()).optional().nullable(),
+  resource_limits: z.record(z.string(), z.unknown()).optional().nullable(),
+  channel_permissions: z.record(z.string(), z.unknown()).optional().nullable(),
+  checkpoint: CheckpointSchema.optional().nullable(),
 })
 
 /**
@@ -62,7 +62,7 @@ export const AgentListResponseSchema = z
         total,
         limit: total,
         offset: 0,
-        hasMore: false,
+        has_more: false,
       },
     }
   })

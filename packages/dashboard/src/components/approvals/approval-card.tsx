@@ -27,7 +27,7 @@ interface ApprovalCardProps {
 // ---------------------------------------------------------------------------
 
 function classifyRisk(approval: ApprovalRequest): RiskLevel {
-  const t = approval.actionType.toLowerCase()
+  const t = approval.action_type.toLowerCase()
   if (t.includes("delete") || t.includes("deploy") || t.includes("prod")) return "CRITICAL"
   if (t.includes("scale") || t.includes("update") || t.includes("modify")) return "MEDIUM"
   return "LOW"
@@ -70,8 +70,8 @@ function deriveTags(
   approval: ApprovalRequest,
 ): { label: string; icon?: string; variant: string }[] {
   const tags: { label: string; icon?: string; variant: string }[] = []
-  const t = approval.actionType.toLowerCase()
-  const detail = approval.actionDetail ?? {}
+  const t = approval.action_type.toLowerCase()
+  const detail = approval.action_detail ?? {}
 
   if (t.includes("kubernetes") || t.includes("k8s") || detail.platform === "kubernetes") {
     tags.push({ label: "Kubernetes", icon: "dns", variant: "default" })
@@ -97,7 +97,7 @@ function deriveTags(
 
   // Always have at least one tag from the action type
   if (tags.length === 0) {
-    tags.push({ label: approval.actionType, variant: "default" })
+    tags.push({ label: approval.action_type, variant: "default" })
   }
 
   return tags
@@ -161,10 +161,10 @@ export function ApprovalCard({
   onRequestContext,
 }: ApprovalCardProps): React.JSX.Element {
   const risk = classifyRisk(approval)
-  const { display: countdown, expired, urgent } = useCountdown(approval.expiresAt)
+  const { display: countdown, expired, urgent } = useCountdown(approval.expires_at)
   const tags = deriveTags(approval)
   const isPending = approval.status === "PENDING"
-  const agentName = approval.agentId ?? "Unknown Agent"
+  const agentName = approval.agent_id ?? "Unknown Agent"
 
   return (
     <div
@@ -234,12 +234,12 @@ export function ApprovalCard({
           </div>
 
           {/* Title */}
-          <h3 className="truncate text-lg font-bold text-text-main">{approval.actionSummary}</h3>
+          <h3 className="truncate text-lg font-bold text-text-main">{approval.action_summary}</h3>
 
           {/* Description */}
-          {typeof approval.actionDetail?.description === "string" && (
+          {typeof approval.action_detail?.description === "string" && (
             <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-text-muted">
-              {approval.actionDetail.description}
+              {approval.action_detail.description}
             </p>
           )}
 
@@ -265,9 +265,9 @@ export function ApprovalCard({
             </div>
             <span className="text-xs text-text-muted">
               Requested by{" "}
-              {approval.agentId ? (
+              {approval.agent_id ? (
                 <Link
-                  href={`/agents/${approval.agentId}`}
+                  href={`/agents/${approval.agent_id}`}
                   className="font-medium text-text-main hover:text-primary"
                   onClick={(e) => e.stopPropagation()}
                 >

@@ -118,7 +118,7 @@ export function DocumentViewer({
           </span>
           <span className="flex items-center gap-1">
             <span className="material-symbols-outlined text-base">schedule</span>
-            Updated {relativeTimeFromEpoch(record.createdAt)}
+            Updated {relativeTimeFromEpoch(record.created_at)}
           </span>
         </div>
 
@@ -165,11 +165,15 @@ export function DocumentViewer({
             label="Confidence"
             value={`${Math.round(record.confidence * 100)}%`}
           />
-          <MetadataItem icon="visibility" label="Access Count" value={String(record.accessCount)} />
+          <MetadataItem
+            icon="visibility"
+            label="Access Count"
+            value={String(record.access_count)}
+          />
           <MetadataItem
             icon="schedule"
             label="Last Accessed"
-            value={relativeTimeFromEpoch(record.lastAccessedAt)}
+            value={relativeTimeFromEpoch(record.last_accessed_at)}
           />
           {record.tags.length > 0 && (
             <div className="col-span-2 sm:col-span-1">

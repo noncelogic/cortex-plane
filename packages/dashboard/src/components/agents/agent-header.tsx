@@ -29,7 +29,7 @@ function iconBgForState(state: AgentLifecycleState): string {
 }
 
 export function AgentHeader({ agent, onPause, onTerminate }: AgentHeaderProps): React.JSX.Element {
-  const hasError = agent.lifecycleState === "TERMINATED" && !!agent.currentJobId
+  const hasError = agent.lifecycle_state === "TERMINATED" && !!agent.current_job_id
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-surface-border bg-surface-light p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -44,7 +44,7 @@ export function AgentHeader({ agent, onPause, onTerminate }: AgentHeaderProps): 
 
         {/* Avatar */}
         <div
-          className={`flex size-12 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycleState)}`}
+          className={`flex size-12 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycle_state ?? "READY")}`}
         >
           {getInitials(agent.name)}
         </div>
@@ -55,7 +55,7 @@ export function AgentHeader({ agent, onPause, onTerminate }: AgentHeaderProps): 
             <h1 className="font-display text-2xl font-black tracking-tight text-text-main lg:text-3xl">
               {agent.name}
             </h1>
-            <AgentStatusBadge state={agent.lifecycleState} hasError={hasError} />
+            <AgentStatusBadge state={agent.lifecycle_state} hasError={hasError} />
           </div>
           <div className="flex items-center gap-3 text-xs text-text-muted">
             <span className="font-mono">{truncateUuid(agent.id)}</span>

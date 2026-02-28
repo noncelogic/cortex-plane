@@ -97,7 +97,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
         <tbody className="divide-y divide-surface-border">
           {agents.map((agent) => {
             const m = metricsMap[agent.id]
-            const hasError = agent.lifecycleState === "TERMINATED" && !!agent.currentJobId
+            const hasError = agent.lifecycle_state === "TERMINATED" && !!agent.current_job_id
 
             return (
               <tr
@@ -108,7 +108,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-4">
                     <div
-                      className={`flex size-10 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycleState, hasError)}`}
+                      className={`flex size-10 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycle_state ?? "READY", hasError)}`}
                     >
                       {getInitials(agent.name)}
                     </div>
@@ -123,23 +123,23 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
 
                 {/* Status */}
                 <td className="px-6 py-4">
-                  <AgentStatusBadge state={agent.lifecycleState} hasError={hasError} />
+                  <AgentStatusBadge state={agent.lifecycle_state} hasError={hasError} />
                 </td>
 
                 {/* Current Task / Heartbeat */}
                 <td className="px-6 py-4">
-                  {m?.currentTask ? (
+                  {m?.current_task ? (
                     <>
-                      <div className="text-sm font-medium text-text-main">{m.currentTask}</div>
-                      {m.lastHeartbeat && (
+                      <div className="text-sm font-medium text-text-main">{m.current_task}</div>
+                      {m.last_heartbeat && (
                         <div className="text-xs text-text-muted">
-                          {relativeTime(m.lastHeartbeat)}
+                          {relativeTime(m.last_heartbeat)}
                         </div>
                       )}
                     </>
                   ) : (
                     <div className="text-sm text-text-muted">
-                      {agent.currentJobId ? `Job: ${agent.currentJobId.slice(0, 8)}` : "Idle"}
+                      {agent.current_job_id ? `Job: ${agent.current_job_id.slice(0, 8)}` : "Idle"}
                     </div>
                   )}
                 </td>
@@ -148,8 +148,8 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                 <td className="px-6 py-4">
                   {m ? (
                     <ResourceBars
-                      cpuPercent={m.cpuPercent}
-                      memPercent={m.memPercent}
+                      cpuPercent={m.cpu_percent}
+                      memPercent={m.mem_percent}
                       dimmed={hasError}
                     />
                   ) : (

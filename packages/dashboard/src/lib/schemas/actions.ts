@@ -5,21 +5,21 @@ import { z } from "zod"
 // ---------------------------------------------------------------------------
 
 export const SteerResponseSchema = z.object({
-  steerMessageId: z.string(),
+  steer_message_id: z.string(),
   status: z.literal("accepted"),
-  agentId: z.string(),
+  agent_id: z.string(),
   priority: z.enum(["normal", "high"]),
 })
 
 export const PauseResponseSchema = z.object({
-  agentId: z.string(),
+  agent_id: z.string(),
   status: z.literal("pausing"),
 })
 
 export const ResumeResponseSchema = z.object({
-  agentId: z.string(),
+  agent_id: z.string(),
   status: z.literal("resuming"),
-  fromCheckpoint: z.string().optional(),
+  from_checkpoint: z.string().optional(),
 })
 
 export const CreateAgentJobResponseSchema = z.object({
@@ -35,9 +35,9 @@ export type CreateAgentJobResponse = z.infer<typeof CreateAgentJobResponseSchema
 // ---------------------------------------------------------------------------
 
 export const ApprovalDecisionResponseSchema = z.object({
-  approvalRequestId: z.string(),
+  approval_request_id: z.string(),
   decision: z.string(),
-  decidedAt: z.string(),
+  decided_at: z.string(),
 })
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ export const ApprovalDecisionResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const RetryJobResponseSchema = z.object({
-  jobId: z.string(),
+  job_id: z.string(),
   status: z.literal("retrying"),
 })
 
@@ -54,7 +54,7 @@ export const RetryJobResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const SyncMemoryResponseSchema = z.object({
-  syncId: z.string(),
+  sync_id: z.string(),
   status: z.string(),
   stats: z.object({
     upserted: z.number(),
@@ -68,12 +68,12 @@ export const SyncMemoryResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const PublishContentResponseSchema = z.object({
-  contentId: z.string(),
+  content_id: z.string(),
   status: z.literal("published"),
-  publishedAt: z.string(),
+  published_at: z.string(),
 })
 
 export const ArchiveContentResponseSchema = z.object({
-  contentId: z.string(),
+  content_id: z.string(),
   status: z.literal("archived"),
 })
