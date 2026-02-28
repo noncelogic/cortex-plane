@@ -7,7 +7,7 @@ import { useApiQuery } from "@/hooks/use-api"
 import type { MemoryRecord } from "@/lib/api-client"
 import { searchMemory, syncMemory } from "@/lib/api-client"
 
-const DEFAULT_AGENT_ID = "*"
+const DEFAULT_AGENT_ID = "default"
 
 function applyFilters(
   records: MemoryRecord[],
@@ -62,13 +62,19 @@ export function useMemoryExplorer() {
     timeRange: "ALL",
   })
 
+  // Skip the API call when the query is empty to avoid sending a wildcard
+  // that the backend would try to parse as a UUID (bug #216).
   const {
     data,
     isLoading,
     error: rawError,
     errorCode: rawErrorCode,
+    refetch,
   } = useApiQuery(
-    () => searchMemory({ agentId: DEFAULT_AGENT_ID, query: searchQuery || "all", limit: 50 }),
+    () =>
+      searchQuery.trim()
+        ? searchMemory({ agentId: DEFAULT_AGENT_ID, query: searchQuery.trim(), limit: 50 })
+        : Promise.resolve({ results: [] as MemoryRecord[] }),
     [searchQuery],
   )
 
@@ -107,7 +113,10 @@ export function useMemoryExplorer() {
 
   const handleSync = useCallback(async () => {
     await syncMemory(DEFAULT_AGENT_ID)
-  }, [])
+    if (searchQuery.trim()) {
+      await refetch()
+    }
+  }, [searchQuery, refetch])
 
   return {
     allRecords,

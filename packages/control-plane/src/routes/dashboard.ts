@@ -340,10 +340,17 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         const { agentId, query, limit = 20 } = request.query
         const likeQuery = `%${query}%`
 
-        const rows = await db
-          .selectFrom("memory_extract_message")
-          .selectAll()
-          .where("agent_id", "=", agentId)
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+        let q = db.selectFrom("memory_extract_message").selectAll()
+
+        // Only filter by agent_id when a valid UUID is provided to avoid
+        // Postgres "invalid input syntax for type uuid" errors (#216).
+        if (UUID_RE.test(agentId)) {
+          q = q.where("agent_id", "=", agentId)
+        }
+
+        const rows = await q
           .where("content", "ilike", likeQuery)
           .orderBy("occurred_at", "desc")
           .limit(limit)

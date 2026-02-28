@@ -94,6 +94,22 @@ export function MemoryResults({
         </span>
         <button
           type="button"
+          onClick={() => {
+            if (results.length === 0) return
+            const header = "id,type,content,importance,confidence,source,createdAt\n"
+            const rows = results.map((r) => {
+              const escaped = r.content.replace(/"/g, '""')
+              return `${r.id},${r.type},"${escaped}",${r.importance},${r.confidence},${r.source},${r.createdAt}`
+            })
+            const csv = header + rows.join("\n")
+            const blob = new Blob([csv], { type: "text/csv" })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = "memory-export.csv"
+            a.click()
+            URL.revokeObjectURL(url)
+          }}
           className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-300"
         >
           <span className="material-symbols-outlined text-sm">download</span>
