@@ -16,6 +16,9 @@ interface JobTableProps {
   jobs: JobSummary[]
   onSelectJob?: (jobId: string) => void
   onRetried?: () => void
+  /** Controlled status filter — when provided, the dropdown drives server-side filtering */
+  statusFilter?: JobStatus | "ALL"
+  onStatusFilterChange?: (status: JobStatus | "ALL") => void
 }
 
 const PAGE_SIZE = 15
@@ -39,16 +42,26 @@ const TYPE_OPTIONS = ["ALL", "inference", "tool-call", "pipeline", "batch", "sch
 // Component
 // ---------------------------------------------------------------------------
 
-export function JobTable({ jobs, onSelectJob, onRetried }: JobTableProps): React.JSX.Element {
+export function JobTable({
+  jobs,
+  onSelectJob,
+  onRetried,
+  statusFilter: controlledStatus,
+  onStatusFilterChange,
+}: JobTableProps): React.JSX.Element {
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<JobStatus | "ALL">("ALL")
+  const [localStatus, setLocalStatus] = useState<JobStatus | "ALL">("ALL")
   const [typeFilter, setTypeFilter] = useState<string>("ALL")
   const [page, setPage] = useState(0)
 
-  // Filter
+  // Use controlled status filter when provided (server-side filtering)
+  const statusFilter = controlledStatus ?? localStatus
+  const setStatusFilter = onStatusFilterChange ?? setLocalStatus
+
+  // Filter — skip status filtering when controlled (already filtered server-side)
   const filtered = useMemo(() => {
     return jobs.filter((j) => {
-      if (statusFilter !== "ALL" && j.status !== statusFilter) return false
+      if (!controlledStatus && statusFilter !== "ALL" && j.status !== statusFilter) return false
       if (typeFilter !== "ALL" && j.type !== typeFilter) return false
       if (search) {
         const q = search.toLowerCase()
@@ -60,7 +73,7 @@ export function JobTable({ jobs, onSelectJob, onRetried }: JobTableProps): React
       }
       return true
     })
-  }, [jobs, search, statusFilter, typeFilter])
+  }, [jobs, search, controlledStatus, statusFilter, typeFilter])
 
   // Paginate
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))

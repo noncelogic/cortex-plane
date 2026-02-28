@@ -1,5 +1,7 @@
 "use client"
 
+import { useState } from "react"
+
 import { JobCard } from "@/components/jobs/job-card"
 import { JobDetailDrawer } from "@/components/jobs/job-detail-drawer"
 import { JobTable } from "@/components/jobs/job-table"
@@ -18,11 +20,16 @@ export default function JobsPage(): React.JSX.Element {
     counts,
     selectedJobId,
     setSelectedJobId,
+    statusFilter,
+    setStatusFilter,
     isLoading,
     error,
     errorCode,
     handleRefresh,
+    exportJobs,
   } = useJobsPage()
+
+  const [showExportMenu, setShowExportMenu] = useState(false)
 
   // Loading skeleton
   if (isLoading && jobs.length === 0) {
@@ -56,13 +63,50 @@ export default function JobsPage(): React.JSX.Element {
           </p>
         </div>
         <div className="flex gap-3">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
-          >
-            <span className="material-symbols-outlined text-lg">download</span>
-            Export CSV
-          </button>
+          {/* Export dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowExportMenu((v) => !v)}
+              className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
+            >
+              <span className="material-symbols-outlined text-lg">download</span>
+              Export
+            </button>
+            {showExportMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                <div className="absolute right-0 z-50 mt-1 w-36 overflow-hidden rounded-lg border border-surface-border bg-surface-light shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      exportJobs("csv")
+                      setShowExportMenu(false)
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
+                  >
+                    <span className="material-symbols-outlined text-base text-text-muted">
+                      table_chart
+                    </span>
+                    CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      exportJobs("json")
+                      setShowExportMenu(false)
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
+                  >
+                    <span className="material-symbols-outlined text-base text-text-muted">
+                      data_object
+                    </span>
+                    JSON
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleRefresh}
@@ -114,7 +158,13 @@ export default function JobsPage(): React.JSX.Element {
         <>
           {/* Desktop: Table view */}
           <div className="hidden md:block">
-            <JobTable jobs={jobs} onSelectJob={setSelectedJobId} onRetried={handleRefresh} />
+            <JobTable
+              jobs={jobs}
+              onSelectJob={setSelectedJobId}
+              onRetried={handleRefresh}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+            />
           </div>
 
           {/* Mobile: Card view */}

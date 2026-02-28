@@ -4,6 +4,7 @@ import { use, useCallback, useMemo, useState } from "react"
 
 import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
+import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
 import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifecycle-timeline"
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
 import { SteerInput } from "@/components/agents/steer-input"
@@ -23,7 +24,7 @@ import {
 // Mobile tabs
 // ---------------------------------------------------------------------------
 
-const MOBILE_TABS = ["Output", "Details", "Browser", "Memory"] as const
+const MOBILE_TABS = ["Output", "Details", "Jobs", "Browser", "Memory"] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 
 // ---------------------------------------------------------------------------
@@ -290,6 +291,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
             <LifecycleDetails transitions={transitions} currentState={currentState} />
           </div>
         )}
+        {mobileTab === "Jobs" && <AgentJobsTab agentId={agentId} />}
         {mobileTab === "Browser" && (
           <div className="flex flex-1 items-center justify-center rounded-xl border border-surface-border bg-surface-dark p-8">
             <div className="text-center">

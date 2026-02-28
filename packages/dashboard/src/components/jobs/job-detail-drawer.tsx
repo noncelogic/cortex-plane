@@ -278,6 +278,21 @@ export function JobDetailDrawer({
           <div className="flex items-center justify-between border-t border-surface-border p-4">
             <button
               type="button"
+              onClick={() => {
+                if (!job.logs.length) return
+                const lines = job.logs.map(
+                  (l) => `${new Date(l.timestamp).toISOString()} [${l.level}] ${l.message}`,
+                )
+                const blob = new Blob([lines.join("\n")], { type: "text/plain" })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement("a")
+                a.href = url
+                a.download = `job-${jobId.slice(0, 8)}-logs.txt`
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+              }}
               className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-bold text-text-main transition-colors hover:bg-surface-border"
             >
               <span className="material-symbols-outlined text-lg">download</span>
