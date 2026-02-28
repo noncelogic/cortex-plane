@@ -343,11 +343,11 @@ describe("BrowserSessionSchema", () => {
   it("accepts valid session", () => {
     const session = {
       id: "bsess-001",
-      agent_id: "agt-001",
-      vnc_url: null,
+      agentId: "agt-001",
+      vncUrl: null,
       status: "connected",
       tabs: [{ id: "tab-1", title: "Google", url: "https://google.com", active: true }],
-      latency_ms: 42,
+      latencyMs: 42,
     }
     expect(BrowserSessionSchema.parse(session).status).toBe("connected")
   })
@@ -355,24 +355,24 @@ describe("BrowserSessionSchema", () => {
   it("accepts vncUrl as string", () => {
     const session = {
       id: "bsess-001",
-      agent_id: "agt-001",
-      vnc_url: "wss://vnc.example.com/session/123",
+      agentId: "agt-001",
+      vncUrl: "wss://vnc.example.com/session/123",
       status: "connected",
       tabs: [],
-      latency_ms: 30,
+      latencyMs: 30,
     }
-    expect(BrowserSessionSchema.parse(session).vnc_url).toBe("wss://vnc.example.com/session/123")
+    expect(BrowserSessionSchema.parse(session).vncUrl).toBe("wss://vnc.example.com/session/123")
   })
 
   it("rejects invalid status", () => {
     expect(() =>
       BrowserSessionSchema.parse({
         id: "b1",
-        agent_id: "a1",
-        vnc_url: null,
+        agentId: "a1",
+        vncUrl: null,
         status: "ACTIVE",
         tabs: [],
-        latency_ms: 0,
+        latencyMs: 0,
       }),
     ).toThrow()
   })
@@ -409,10 +409,10 @@ describe("ScreenshotSchema", () => {
   it("accepts valid screenshot", () => {
     const ss = {
       id: "ss-001",
-      agent_id: "agt-001",
+      agentId: "agt-001",
       timestamp: "2026-01-01T00:00:00Z",
-      thumbnail_url: "https://example.com/thumb.png",
-      full_url: "https://example.com/full.png",
+      thumbnailUrl: "https://example.com/thumb.png",
+      fullUrl: "https://example.com/full.png",
       dimensions: { width: 1920, height: 1080 },
     }
     expect(ScreenshotSchema.parse(ss).dimensions.width).toBe(1920)
@@ -422,10 +422,10 @@ describe("ScreenshotSchema", () => {
     expect(() =>
       ScreenshotSchema.parse({
         id: "ss-1",
-        agent_id: "a1",
+        agentId: "a1",
         timestamp: "t",
-        thumbnail_url: "u",
-        full_url: "u",
+        thumbnailUrl: "u",
+        fullUrl: "u",
       }),
     ).toThrow()
   })

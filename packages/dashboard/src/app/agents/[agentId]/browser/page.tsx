@@ -84,9 +84,9 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
             </h1>
             <p className="text-xs text-slate-500">
               {session.status === "connected"
-                ? `Live session · ${session.latency_ms}ms latency`
-                : session.last_heartbeat
-                  ? `Last active ${relativeTime(session.last_heartbeat)}`
+                ? `Live session · ${session.latencyMs}ms latency`
+                : session.lastHeartbeat
+                  ? `Last active ${relativeTime(session.lastHeartbeat)}`
                   : "No active session"}
             </p>
           </div>
@@ -127,9 +127,9 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
           <TabBar tabs={tabs} onSelectTab={handleSelectTab} onCloseTab={handleCloseTab} />
 
           <BrowserViewport
-            vncUrl={session.vnc_url}
+            vncUrl={session.vncUrl}
             status={session.status}
-            latencyMs={session.latency_ms}
+            latencyMs={session.latencyMs}
             latestScreenshot={latestScreenshot}
             onReconnect={handleReconnect}
           />
@@ -168,7 +168,7 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
             {/* Trace controls */}
             <TraceControls
               traceStatus={traceState.status}
-              startedAt={traceState.started_at}
+              startedAt={traceState.startedAt}
               onStartTrace={() => void handleStartTrace()}
               onStopTrace={() => void handleStopTrace()}
               isStarting={isStartingTrace}
@@ -195,11 +195,11 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
         {mobileTab === "Viewport" && (
           <div className="flex flex-col gap-4">
             {/* On mobile, show screenshots as primary if VNC unavailable */}
-            {session.vnc_url ? (
+            {session.vncUrl ? (
               <BrowserViewport
-                vncUrl={session.vnc_url}
+                vncUrl={session.vncUrl}
                 status={session.status}
-                latencyMs={session.latency_ms}
+                latencyMs={session.latencyMs}
                 latestScreenshot={latestScreenshot}
                 onReconnect={handleReconnect}
               />
@@ -216,7 +216,7 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
           <div className="flex flex-col gap-4">
             <TraceControls
               traceStatus={traceState.status}
-              startedAt={traceState.started_at}
+              startedAt={traceState.startedAt}
               onStartTrace={() => void handleStartTrace()}
               onStopTrace={() => void handleStopTrace()}
               isStarting={isStartingTrace}
