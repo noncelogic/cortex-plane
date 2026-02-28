@@ -6,6 +6,8 @@ import {
   deleteCredential,
   exchangeOAuthConnect,
   getAgent,
+  getApprovalAudit,
+  getApprovalDetail,
   initOAuthConnect,
   listAgents,
   listCredentials,
@@ -230,6 +232,59 @@ describe("API Client", () => {
         channel: "dashboard",
         reason: "LGTM",
       })
+    })
+
+    it("getApprovalDetail fetches by ID", async () => {
+      mockFetchResponse({
+        id: "apr-1",
+        jobId: "job-1",
+        agentId: "agent-1",
+        status: "PENDING",
+        actionType: "deploy",
+        actionSummary: "Deploy to production",
+        requestedAt: "2026-02-24T14:00:00Z",
+        expiresAt: "2026-02-25T14:00:00Z",
+      })
+
+      const result = await getApprovalDetail("apr-1")
+
+      expect(result.id).toBe("apr-1")
+      expect(result.status).toBe("PENDING")
+      expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(`${API_BASE}/approvals/apr-1`)
+    })
+
+    it("getApprovalAudit fetches audit trail", async () => {
+      mockFetchResponse({
+        audit: [
+          {
+            id: "audit-1",
+            approval_request_id: "apr-1",
+            job_id: "job-1",
+            event_type: "request_created",
+            actor_user_id: null,
+            actor_channel: null,
+            details: {},
+            created_at: "2026-02-24T14:00:00Z",
+          },
+          {
+            id: "audit-2",
+            approval_request_id: "apr-1",
+            job_id: "job-1",
+            event_type: "request_decided",
+            actor_user_id: "user-1",
+            actor_channel: "dashboard",
+            details: { decision: "APPROVED" },
+            created_at: "2026-02-24T14:05:00Z",
+          },
+        ],
+      })
+
+      const result = await getApprovalAudit("apr-1")
+
+      expect(result.audit).toHaveLength(2)
+      expect(result.audit[0]!.event_type).toBe("request_created")
+      expect(result.audit[1]!.event_type).toBe("request_decided")
+      expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(`${API_BASE}/approvals/apr-1/audit`)
     })
   })
 

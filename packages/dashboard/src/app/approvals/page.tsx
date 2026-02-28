@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { ApprovalActions } from "@/components/approvals/approval-actions"
 import { ApprovalList } from "@/components/approvals/approval-list"
@@ -10,8 +10,8 @@ import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { EmptyState } from "@/components/layout/empty-state"
 import { useApi, useApiQuery } from "@/hooks/use-api"
 import { useApprovalStream } from "@/hooks/use-approval-stream"
-import type { ApprovalRequest, ApprovalStatus } from "@/lib/api-client"
-import { approveRequest, listApprovals } from "@/lib/api-client"
+import type { ApprovalAuditEntry, ApprovalRequest, ApprovalStatus } from "@/lib/api-client"
+import { approveRequest, getApprovalAudit, listApprovals } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
 // Risk classification (shared with ApprovalCard)
@@ -111,6 +111,121 @@ function LoadingSkeleton(): React.JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
+// Confirm Dialog (for card-level approve/reject)
+// ---------------------------------------------------------------------------
+
+interface CardConfirmState {
+  approvalId: string
+  type: "approve" | "reject"
+}
+
+function CardConfirmDialog({
+  state,
+  submitting,
+  onConfirm,
+  onCancel,
+}: {
+  state: CardConfirmState
+  submitting: boolean
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const [reason, setReason] = useState("")
+  const isApprove = state.type === "approve"
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") onCancel()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onCancel}
+        role="presentation"
+      />
+      <div className="relative w-full max-w-md rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
+        <div className="mb-4 flex items-center gap-3">
+          <div
+            className={`flex size-10 items-center justify-center rounded-full ${
+              isApprove ? "bg-emerald-500/10" : "bg-red-500/10"
+            }`}
+          >
+            <span
+              className={`material-symbols-outlined text-[20px] ${
+                isApprove ? "text-emerald-500" : "text-red-500"
+              }`}
+            >
+              {isApprove ? "check_circle" : "cancel"}
+            </span>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-text-main">
+              {isApprove ? "Approve Request" : "Reject Request"}
+            </h3>
+            <p className="text-sm text-text-muted">
+              {isApprove
+                ? "This action will proceed with the requested operation."
+                : "This action will deny the requested operation."}
+            </p>
+          </div>
+        </div>
+        <div className="mb-4">
+          <label
+            htmlFor="card-decision-reason"
+            className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Reason {isApprove ? "(optional)" : "(recommended)"}
+          </label>
+          <textarea
+            id="card-decision-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={
+              isApprove ? "Approved per standard review..." : "Denied due to security concerns..."
+            }
+            rows={3}
+            className="w-full rounded-lg border border-surface-border bg-bg-light px-3 py-2 text-sm text-text-main placeholder-text-muted transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            autoFocus
+          />
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-muted transition-colors hover:bg-secondary disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(reason)}
+            disabled={submitting}
+            className={`flex items-center gap-2 rounded-lg px-6 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-all active:scale-95 disabled:opacity-50 ${
+              isApprove
+                ? "bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-700"
+                : "bg-red-600 shadow-red-600/20 hover:bg-red-700"
+            }`}
+          >
+            {submitting && (
+              <span className="material-symbols-outlined animate-spin text-[16px]">
+                progress_activity
+              </span>
+            )}
+            {isApprove ? "Confirm Approval" : "Confirm Rejection"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Mobile action bar
 // ---------------------------------------------------------------------------
 
@@ -129,6 +244,42 @@ function MobileActionBar({
 }
 
 // ---------------------------------------------------------------------------
+// Map backend audit entries to drawer AuditEntry format
+// ---------------------------------------------------------------------------
+
+function mapAuditEntries(raw: ApprovalAuditEntry[]): AuditEntry[] {
+  return raw.map((entry) => {
+    let type: AuditEntry["type"] = "requested"
+    const et = entry.event_type
+    if (et === "request_decided") {
+      const decision = entry.details?.decision
+      type = decision === "APPROVED" ? "approved" : decision === "REJECTED" ? "rejected" : "expired"
+    } else if (et === "request_expired") {
+      type = "expired"
+    } else if (et === "request_created") {
+      type = "requested"
+    } else if (et === "unauthorized_attempt") {
+      type = "rejected"
+    }
+
+    return {
+      id: entry.id,
+      type,
+      actor: entry.actor_user_id ?? entry.actor_channel ?? "System",
+      timestamp: entry.created_at,
+      reason: typeof entry.details?.reason === "string" ? entry.details.reason : undefined,
+      channel: entry.actor_channel ?? undefined,
+      ipAddress:
+        typeof entry.details?.actor === "object" &&
+        entry.details.actor !== null &&
+        "ip" in entry.details.actor
+          ? (entry.details.actor as { ip?: string }).ip
+          : undefined,
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -136,18 +287,23 @@ export default function ApprovalsPage(): React.JSX.Element {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL")
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("ALL")
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<CardConfirmState | null>(null)
 
-  // Fetch approvals from API
+  // Fetch approvals from API — wire status filter to query params
   const { data, isLoading, error, errorCode, refetch } = useApiQuery(
-    () => listApprovals({ limit: 100 }),
-    [],
+    () =>
+      listApprovals({
+        limit: 100,
+        status: statusFilter !== "ALL" ? statusFilter : undefined,
+      }),
+    [statusFilter],
   )
 
   // Real-time stream
   const { events: streamEvents, connected, pendingCount } = useApprovalStream()
 
   // Decision API
-  const { execute: decide } = useApi((...args: unknown[]) =>
+  const { execute: decide, isLoading: isDeciding } = useApi((...args: unknown[]) =>
     approveRequest(
       args[0] as string,
       args[1] as "APPROVED" | "REJECTED",
@@ -155,6 +311,67 @@ export default function ApprovalsPage(): React.JSX.Element {
       args[3] as string | undefined,
     ),
   )
+
+  // Fetch audit trail for selected approval
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+
+  useEffect(() => {
+    if (!selectedId) {
+      setAuditEntries([])
+      return
+    }
+
+    let cancelled = false
+    setAuditLoading(true)
+
+    getApprovalAudit(selectedId)
+      .then((res) => {
+        if (!cancelled) {
+          setAuditEntries(mapAuditEntries(res.audit))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAuditEntries([])
+      })
+      .finally(() => {
+        if (!cancelled) setAuditLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedId])
+
+  // Fallback audit entries from approvals list when no approval is selected
+  const globalAuditEntries = useMemo<AuditEntry[]>(() => {
+    if (selectedId) return [] // Will use per-approval audit entries instead
+    const base = data?.approvals ?? []
+    const entries: AuditEntry[] = []
+
+    for (const a of base) {
+      if (a.status !== "PENDING") {
+        entries.push({
+          id: `${a.id}-decision`,
+          type:
+            a.status === "APPROVED" ? "approved" : a.status === "REJECTED" ? "rejected" : "expired",
+          actor: a.decidedBy ?? "System",
+          timestamp: a.decidedAt ?? a.requestedAt,
+          reason: a.reason,
+          channel: "dashboard",
+        })
+      }
+      entries.push({
+        id: `${a.id}-request`,
+        type: "requested",
+        actor: a.agentId ?? "Unknown",
+        timestamp: a.requestedAt,
+      })
+    }
+
+    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    return entries.slice(0, 50)
+  }, [data, selectedId])
 
   // Merge SSE events into the approval list
   const approvals = useMemo(() => {
@@ -221,51 +438,32 @@ export default function ApprovalsPage(): React.JSX.Element {
     }
   }, [approvals])
 
-  // Build audit entries from stream events + existing approvals
-  const auditEntries = useMemo<AuditEntry[]>(() => {
-    const entries: AuditEntry[] = []
+  // Handlers — card-level approve/reject now open confirmation dialog
+  const handleApprove = useCallback((id: string) => {
+    setConfirmState({ approvalId: id, type: "approve" })
+  }, [])
 
-    // From existing approvals that have been decided
-    for (const a of approvals) {
-      if (a.status !== "PENDING") {
-        entries.push({
-          id: `${a.id}-decision`,
-          type:
-            a.status === "APPROVED" ? "approved" : a.status === "REJECTED" ? "rejected" : "expired",
-          actor: a.decidedBy ?? "System",
-          timestamp: a.decidedAt ?? a.requestedAt,
-          reason: a.reason,
-          channel: "dashboard",
-        })
+  const handleReject = useCallback((id: string) => {
+    setConfirmState({ approvalId: id, type: "reject" })
+  }, [])
+
+  const handleConfirmDecision = useCallback(
+    async (reason: string) => {
+      if (!confirmState) return
+      const decision =
+        confirmState.type === "approve" ? ("APPROVED" as const) : ("REJECTED" as const)
+      const result = await decide(
+        confirmState.approvalId,
+        decision,
+        "dashboard-user",
+        reason || undefined,
+      )
+      if (result) {
+        setConfirmState(null)
+        void refetch()
       }
-      entries.push({
-        id: `${a.id}-request`,
-        type: "requested",
-        actor: a.agentId ?? "Unknown",
-        timestamp: a.requestedAt,
-      })
-    }
-
-    // Sort newest first
-    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    return entries.slice(0, 50)
-  }, [approvals])
-
-  // Handlers
-  const handleApprove = useCallback(
-    async (id: string) => {
-      await decide(id, "APPROVED", "dashboard-user")
-      void refetch()
     },
-    [decide, refetch],
-  )
-
-  const handleReject = useCallback(
-    async (id: string) => {
-      await decide(id, "REJECTED", "dashboard-user")
-      void refetch()
-    },
-    [decide, refetch],
+    [confirmState, decide, refetch],
   )
 
   const handleDecided = useCallback(() => {
@@ -274,6 +472,9 @@ export default function ApprovalsPage(): React.JSX.Element {
   }, [refetch])
 
   const selectedApproval = approvals.find((a) => a.id === selectedId)
+
+  // Use per-approval audit entries when selected, otherwise global
+  const drawerEntries = selectedId ? auditEntries : globalAuditEntries
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -366,8 +567,8 @@ export default function ApprovalsPage(): React.JSX.Element {
                 approvals={approvals}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
-                onApprove={(id) => void handleApprove(id)}
-                onReject={(id) => void handleReject(id)}
+                onApprove={handleApprove}
+                onReject={handleReject}
                 onRequestContext={(id) => setSelectedId(id)}
                 filter={statusFilter}
                 riskFilter={riskFilter}
@@ -378,7 +579,22 @@ export default function ApprovalsPage(): React.JSX.Element {
       </div>
 
       {/* Audit drawer (desktop) */}
-      <AuditDrawer entries={auditEntries} />
+      <AuditDrawer
+        entries={drawerEntries}
+        loading={auditLoading}
+        selectedId={selectedId}
+        onClose={selectedId ? () => setSelectedId(null) : undefined}
+      />
+
+      {/* Confirmation dialog for card-level approve/reject */}
+      {confirmState && (
+        <CardConfirmDialog
+          state={confirmState}
+          submitting={isDeciding}
+          onConfirm={(reason) => void handleConfirmDecision(reason)}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
 
       {/* Mobile sticky action bar */}
       {selectedApproval && selectedApproval.status === "PENDING" && (

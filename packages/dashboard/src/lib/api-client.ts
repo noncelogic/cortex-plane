@@ -20,7 +20,11 @@ import {
   SyncMemoryResponseSchema,
 } from "./schemas/actions"
 import { AgentDetailSchema, AgentListResponseSchema } from "./schemas/agents"
-import { ApprovalListResponseSchema } from "./schemas/approvals"
+import {
+  ApprovalAuditResponseSchema,
+  ApprovalListResponseSchema,
+  ApprovalRequestSchema,
+} from "./schemas/approvals"
 import {
   BrowserEventListResponseSchema,
   BrowserSessionSchema,
@@ -46,7 +50,7 @@ export type {
   AgentSummary,
   Checkpoint,
 } from "./schemas/agents"
-export type { ApprovalRequest, ApprovalStatus } from "./schemas/approvals"
+export type { ApprovalAuditEntry, ApprovalRequest, ApprovalStatus } from "./schemas/approvals"
 export type {
   BrowserEvent,
   BrowserEventSeverity,
@@ -464,6 +468,18 @@ export async function approveRequest(
     body: { decision, decidedBy, channel: "dashboard", reason },
     schema: ApprovalDecisionResponseSchema,
   })
+}
+
+export async function getApprovalDetail(
+  approvalId: string,
+): Promise<import("./schemas/approvals").ApprovalRequest> {
+  return apiFetch(`/approvals/${approvalId}`, { schema: ApprovalRequestSchema })
+}
+
+export async function getApprovalAudit(
+  approvalId: string,
+): Promise<{ audit: import("./schemas/approvals").ApprovalAuditEntry[] }> {
+  return apiFetch(`/approvals/${approvalId}/audit`, { schema: ApprovalAuditResponseSchema })
 }
 
 export async function listJobs(params?: {

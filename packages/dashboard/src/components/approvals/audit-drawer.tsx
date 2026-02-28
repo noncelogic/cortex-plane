@@ -19,6 +19,8 @@ export interface AuditEntry {
 
 interface AuditDrawerProps {
   entries: AuditEntry[]
+  loading?: boolean
+  selectedId?: string | null
   onClose?: () => void
 }
 
@@ -91,14 +93,21 @@ function eventTitle(type: AuditEntry["type"]): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export function AuditDrawer({ entries, onClose }: AuditDrawerProps): React.JSX.Element {
+export function AuditDrawer({
+  entries,
+  loading,
+  selectedId,
+  onClose,
+}: AuditDrawerProps): React.JSX.Element {
   return (
     <aside className="hidden w-96 flex-shrink-0 flex-col border-l border-surface-border bg-surface-light shadow-xl xl:flex">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-surface-border bg-surface-light p-5">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[20px] text-primary">history</span>
-          <h2 className="text-base font-bold text-text-main">Audit Log</h2>
+          <h2 className="text-base font-bold text-text-main">
+            {selectedId ? "Approval Audit" : "Audit Log"}
+          </h2>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -123,10 +132,19 @@ export function AuditDrawer({ entries, onClose }: AuditDrawerProps): React.JSX.E
 
       {/* Timeline */}
       <div className="flex-1 overflow-y-auto p-5 scrollbar-hide">
-        {entries.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <span className="material-symbols-outlined mb-2 animate-spin text-4xl text-text-muted">
+              progress_activity
+            </span>
+            <p className="text-sm text-text-muted">Loading audit trail…</p>
+          </div>
+        ) : entries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <span className="material-symbols-outlined mb-2 text-4xl text-text-muted">history</span>
-            <p className="text-sm text-text-muted">No audit events yet.</p>
+            <p className="text-sm text-text-muted">
+              {selectedId ? "No audit events for this approval." : "No audit events yet."}
+            </p>
           </div>
         ) : (
           <div className="relative space-y-8 pl-2">
