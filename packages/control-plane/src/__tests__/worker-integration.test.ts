@@ -16,11 +16,10 @@ import { Kysely, PostgresDialect } from "kysely"
 import pg from "pg"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
-import { attachPoolErrorHandler, endPoolGracefully } from "./postgres-teardown.js"
-
 import type { Database } from "../db/types.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
+import { attachPoolErrorHandler, endPoolGracefully } from "./postgres-teardown.js"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const MIGRATIONS_DIR = join(__dirname, "../../migrations")

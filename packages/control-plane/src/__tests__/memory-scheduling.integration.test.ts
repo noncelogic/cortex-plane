@@ -17,8 +17,6 @@ import { Kysely, PostgresDialect } from "kysely"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { attachPoolErrorHandler, endPoolGracefully } from "./postgres-teardown.js"
-
 import type { Database } from "../db/types.js"
 import { createMemoryScheduler } from "../worker/memory-scheduler.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
@@ -27,6 +25,7 @@ import {
   type EmbeddingFn,
   type LLMCaller,
 } from "../worker/tasks/memory-extract.js"
+import { attachPoolErrorHandler, endPoolGracefully } from "./postgres-teardown.js"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const MIGRATIONS_DIR = join(__dirname, "../../migrations")
