@@ -411,7 +411,8 @@ export function authRoutes(deps: AuthRouteDeps) {
 
         const codeVerifier = generateCodeVerifier()
         const codeChallenge = generateCodeChallenge(codeVerifier)
-        const state = crypto.randomUUID()
+        // Anthropic uses the PKCE verifier as the state parameter (matches pi-ai SDK).
+        const state = provider === "anthropic" ? codeVerifier : crypto.randomUUID()
 
         const url = new URL(providerReg.authUrl)
         url.searchParams.set("client_id", providerReg.clientId)
@@ -510,6 +511,7 @@ export function authRoutes(deps: AuthRouteDeps) {
             code: parsed.code,
             callbackUrl: providerReg.redirectUri,
             codeVerifier,
+            state: parsed.state,
           })
 
           // Provider-specific post-exchange actions

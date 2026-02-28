@@ -223,13 +223,15 @@ export interface TokenExchangeParams {
   code: string
   callbackUrl: string
   codeVerifier?: string
+  /** OAuth state parameter — required by Anthropic in the token exchange body. */
+  state?: string
 }
 
 /**
  * Exchange an authorization code for tokens.
  */
 export async function exchangeCodeForTokens(params: TokenExchangeParams): Promise<TokenResponse> {
-  const { provider, config, code, callbackUrl, codeVerifier } = params
+  const { provider, config, code, callbackUrl, codeVerifier, state } = params
   const urls = getProviderUrls(provider, config)
 
   // Anthropic uses JSON body for token exchange
@@ -242,6 +244,7 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams): Promis
     }
     if (config.clientSecret) jsonBody.client_secret = config.clientSecret
     if (codeVerifier) jsonBody.code_verifier = codeVerifier
+    if (state) jsonBody.state = state
 
     const res = await fetch(urls.tokenUrl, {
       method: "POST",
