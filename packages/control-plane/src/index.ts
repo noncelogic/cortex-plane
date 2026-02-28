@@ -59,6 +59,7 @@ if (config.channels.discord) {
 }
 
 // Deferred enqueueJob — resolved after buildApp() creates workerUtils
+// eslint-disable-next-line prefer-const
 let _enqueueJob: ((jobId: string) => Promise<void>) | undefined
 const enqueueJobDeferred = async (jobId: string): Promise<void> => {
   if (!_enqueueJob) throw new Error("enqueueJob not yet initialized — buildApp() not called")

@@ -313,12 +313,15 @@ describe("watchJobCompletion", () => {
     const selectFn = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          executeTakeFirst: vi.fn().mockImplementation(async () => {
+          executeTakeFirst: vi.fn().mockImplementation(() => {
             callCount++
             if (callCount < 3) {
-              return { status: "RUNNING", result: null }
+              return Promise.resolve({ status: "RUNNING", result: null })
             }
-            return { status: "COMPLETED", result: { summary: "finally done" } }
+            return Promise.resolve({
+              status: "COMPLETED",
+              result: { summary: "finally done" },
+            })
           }),
         }),
       }),
