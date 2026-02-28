@@ -1,24 +1,35 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { useApiQuery } from "@/hooks/use-api"
+import { useApi, useApiQuery } from "@/hooks/use-api"
 import type {
   ApiErrorCode,
   BrowserEvent,
   BrowserSession,
   BrowserTab,
   Screenshot,
+  TraceState,
 } from "@/lib/api-client"
 import {
+  captureScreenshot,
   getAgent,
   getAgentBrowser,
   getAgentBrowserEvents,
   getAgentScreenshots,
+  getTraceState,
+  startTrace,
+  stopTrace,
 } from "@/lib/api-client"
+
+const AUTO_REFRESH_INTERVAL_MS = 5_000
 
 export function useBrowserObservation(agentId: string) {
   const [tabs, setTabs] = useState<BrowserTab[]>([])
+
+  // -------------------------------------------------------------------------
+  // Queries (auto-fetch on mount)
+  // -------------------------------------------------------------------------
 
   const {
     data: agentData,
@@ -48,6 +59,22 @@ export function useBrowserObservation(agentId: string) {
     errorCode: eventErrorCode,
     refetch: refetchEvents,
   } = useApiQuery(() => getAgentBrowserEvents(agentId), [agentId])
+  const { data: traceData, refetch: refetchTrace } = useApiQuery(
+    () => getTraceState(agentId),
+    [agentId],
+  )
+
+  // -------------------------------------------------------------------------
+  // Actions (manual trigger)
+  // -------------------------------------------------------------------------
+
+  const { execute: execCapture, isLoading: isCapturing } = useApi(() => captureScreenshot(agentId))
+  const { execute: execStartTrace, isLoading: isStartingTrace } = useApi(() => startTrace(agentId))
+  const { execute: execStopTrace, isLoading: isStoppingTrace } = useApi(() => stopTrace(agentId))
+
+  // -------------------------------------------------------------------------
+  // Derived state
+  // -------------------------------------------------------------------------
 
   useEffect(() => {
     setTabs(sessionData?.tabs ?? [])
@@ -74,11 +101,19 @@ export function useBrowserObservation(agentId: string) {
     return eventData?.events ?? []
   }, [eventData])
 
+  const traceState: TraceState = useMemo(() => {
+    return traceData ?? { status: "idle" as const }
+  }, [traceData])
+
   const agentName = agentData?.name ?? `Agent ${agentId.slice(0, 8)}`
   const isLoading = agentLoading || sessionLoading || screenshotLoading || eventLoading
   const error = agentError || sessionError || screenshotError || eventError
   const errorCode: ApiErrorCode | null =
     agentErrorCode || sessionErrorCode || screenshotErrorCode || eventErrorCode || null
+
+  // -------------------------------------------------------------------------
+  // Handlers
+  // -------------------------------------------------------------------------
 
   const handleSelectTab = (tabId: string) => {
     setTabs((prev) => prev.map((t) => ({ ...t, active: t.id === tabId })))
@@ -99,7 +134,48 @@ export function useBrowserObservation(agentId: string) {
     void refetchSession()
     void refetchScreenshots()
     void refetchEvents()
+    void refetchTrace()
   }
+
+  const handleCaptureScreenshot = useCallback(async () => {
+    await execCapture()
+    void refetchScreenshots()
+  }, [execCapture, refetchScreenshots])
+
+  const handleStartTrace = useCallback(async () => {
+    await execStartTrace()
+    void refetchTrace()
+  }, [execStartTrace, refetchTrace])
+
+  const handleStopTrace = useCallback(async () => {
+    await execStopTrace()
+    void refetchTrace()
+  }, [execStopTrace, refetchTrace])
+
+  // -------------------------------------------------------------------------
+  // Auto-refresh: periodically refetch screenshots + events when VNC is
+  // unavailable so the "live view" stays current.
+  // -------------------------------------------------------------------------
+
+  const sessionRef = useRef(session)
+  sessionRef.current = session
+
+  useEffect(() => {
+    // Only auto-refresh when there is no VNC and the session is not in error
+    if (session.vncUrl) return
+    if (session.status === "error") return
+
+    const id = setInterval(() => {
+      void refetchScreenshots()
+      void refetchEvents()
+    }, AUTO_REFRESH_INTERVAL_MS)
+
+    return () => clearInterval(id)
+  }, [session.vncUrl, session.status, refetchScreenshots, refetchEvents])
+
+  // -------------------------------------------------------------------------
+  // Return
+  // -------------------------------------------------------------------------
 
   const latestScreenshot = screenshots.length > 0 ? screenshots[0]! : null
 
@@ -108,13 +184,20 @@ export function useBrowserObservation(agentId: string) {
     tabs,
     screenshots,
     events,
+    traceState,
     agentName,
     latestScreenshot,
     isLoading,
+    isCapturing,
+    isStartingTrace,
+    isStoppingTrace,
     error,
     errorCode,
     handleSelectTab,
     handleCloseTab,
     handleReconnect,
+    handleCaptureScreenshot,
+    handleStartTrace,
+    handleStopTrace,
   }
 }

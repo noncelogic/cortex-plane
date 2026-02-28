@@ -28,7 +28,11 @@ import {
 import {
   BrowserEventListResponseSchema,
   BrowserSessionSchema,
+  CaptureScreenshotResponseSchema,
   ScreenshotListResponseSchema,
+  TraceStartResponseSchema,
+  TraceStateSchema,
+  TraceStopResponseSchema,
 } from "./schemas/browser"
 import { ContentListResponseSchema } from "./schemas/content"
 import {
@@ -58,7 +62,12 @@ export type {
   BrowserSession,
   BrowserSessionStatus,
   BrowserTab,
+  CaptureScreenshotResponse,
   Screenshot,
+  TraceStartResponse,
+  TraceState,
+  TraceStatus,
+  TraceStopResponse,
 } from "./schemas/browser"
 export type { Pagination } from "./schemas/common"
 export type {
@@ -599,6 +608,43 @@ export async function getAgentBrowserEvents(agentId: string, limit?: number, typ
   const qs = search.toString()
   return apiFetch(`/agents/${agentId}/browser/events${qs ? `?${qs}` : ""}`, {
     schema: BrowserEventListResponseSchema,
+  })
+}
+
+export async function captureScreenshot(
+  agentId: string,
+  options?: { format?: string; quality?: number; fullPage?: boolean },
+): Promise<import("./schemas/browser").CaptureScreenshotResponse> {
+  return apiFetch(`/agents/${agentId}/observe/screenshot`, {
+    method: "POST",
+    body: options,
+    schema: CaptureScreenshotResponseSchema,
+  })
+}
+
+export async function getTraceState(
+  agentId: string,
+): Promise<import("./schemas/browser").TraceState> {
+  return apiFetch(`/agents/${agentId}/observe/trace`, { schema: TraceStateSchema })
+}
+
+export async function startTrace(
+  agentId: string,
+  options?: { snapshots?: boolean; screenshots?: boolean; network?: boolean; console?: boolean },
+): Promise<import("./schemas/browser").TraceStartResponse> {
+  return apiFetch(`/agents/${agentId}/observe/trace/start`, {
+    method: "POST",
+    body: options,
+    schema: TraceStartResponseSchema,
+  })
+}
+
+export async function stopTrace(
+  agentId: string,
+): Promise<import("./schemas/browser").TraceStopResponse> {
+  return apiFetch(`/agents/${agentId}/observe/trace/stop`, {
+    method: "POST",
+    schema: TraceStopResponseSchema,
   })
 }
 
