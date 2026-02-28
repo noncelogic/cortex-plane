@@ -3,6 +3,7 @@ import type { Runner } from "graphile-worker"
 import type { Kysely } from "kysely"
 import { describe, expect, it, vi } from "vitest"
 
+import type { SessionData, SessionService } from "../auth/session-service.js"
 import type { Database } from "../db/types.js"
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import type { AgentLifecycleState } from "../lifecycle/state-machine.js"
@@ -62,9 +63,42 @@ const VALID_SESSION = {
   status: "active",
 }
 
+function mockSessionService(sessionData: SessionData | null = null): SessionService {
+  return {
+    validateSession: vi.fn().mockResolvedValue(sessionData),
+    createSession: vi.fn(),
+    destroySession: vi.fn(),
+    cleanupExpired: vi.fn(),
+    validateCsrf: vi.fn(),
+    serializeCookie: vi.fn(),
+    serializeClearCookie: vi.fn(),
+  } as unknown as SessionService
+}
+
+const VALID_DASHBOARD_SESSION: SessionData = {
+  session: {
+    id: "dash-session-1",
+    user_account_id: "dash-user-1",
+    csrf_token: "csrf-tok",
+    expires_at: new Date(Date.now() + 86400_000),
+    created_at: new Date(),
+    updated_at: new Date(),
+    refresh_token_hash: null,
+    refresh_expires_at: null,
+  },
+  user: {
+    userId: "dash-user-1",
+    email: "user@example.com",
+    displayName: "Dashboard User",
+    avatarUrl: null,
+    role: "admin",
+  },
+}
+
 async function buildTestApp(options: {
   session?: Record<string, unknown> | null
   lifecycleManager?: AgentLifecycleManager
+  sessionService?: SessionService
 }) {
   const app = Fastify({ logger: false })
   const db = mockDb("session" in options ? options.session : VALID_SESSION)
@@ -75,7 +109,13 @@ async function buildTestApp(options: {
   app.decorate("db", db)
 
   await app.register(healthRoutes)
-  await app.register(streamRoutes({ sseManager, lifecycleManager: lifecycle }))
+  await app.register(
+    streamRoutes({
+      sseManager,
+      lifecycleManager: lifecycle,
+      sessionService: options.sessionService,
+    }),
+  )
 
   return { app, sseManager, lifecycle, db }
 }
@@ -418,5 +458,87 @@ describe("POST /agents/:agentId/steer", () => {
     expect(output.content).toContain("[STEER] focus on tests")
 
     broadcastSpy.mockRestore()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: Cookie-based authentication (EventSource / SSE browser sessions)
+// ---------------------------------------------------------------------------
+
+describe("stream route cookie authentication", () => {
+  it("authenticates via session cookie when sessionService is provided", async () => {
+    const sessionService = mockSessionService(VALID_DASHBOARD_SESSION)
+    const steerFn = vi.fn()
+    const lifecycle = mockLifecycleManager({
+      getAgentState: () => "EXECUTING",
+      steer: steerFn,
+    })
+    const { app } = await buildTestApp({ sessionService, lifecycleManager: lifecycle })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/agent-1/steer",
+      headers: {
+        cookie: "cortex_session=dash-session-1",
+        "content-type": "application/json",
+      },
+      payload: { message: "cookie auth test" },
+    })
+
+    expect(res.statusCode).toBe(202)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(sessionService.validateSession).toHaveBeenCalledWith("dash-session-1")
+  })
+
+  it("falls back to Bearer token when cookie is not present", async () => {
+    const sessionService = mockSessionService(null)
+    const { app } = await buildTestApp({ session: VALID_SESSION, sessionService })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/agent-1/steer",
+      headers: {
+        authorization: "Bearer session-123",
+        "content-type": "application/json",
+      },
+      payload: { message: "bearer fallback" },
+    })
+
+    expect(res.statusCode).toBe(202)
+  })
+
+  it("returns 401 when cookie session is invalid and no Bearer provided", async () => {
+    const sessionService = mockSessionService(null)
+    const { app } = await buildTestApp({ sessionService })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/agent-1/steer",
+      headers: {
+        cookie: "cortex_session=invalid-session",
+        "content-type": "application/json",
+      },
+      payload: { message: "test" },
+    })
+
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("authenticates GET /stream via session cookie", async () => {
+    const sessionService = mockSessionService(VALID_DASHBOARD_SESSION)
+    const lifecycle = mockLifecycleManager({
+      getAgentState: () => "TERMINATED",
+    })
+    const { app } = await buildTestApp({ sessionService, lifecycleManager: lifecycle })
+
+    // Use the TERMINATED state so we get a 410 (meaning auth passed)
+    const res = await app.inject({
+      method: "GET",
+      url: "/agents/agent-1/stream",
+      headers: { cookie: "cortex_session=dash-session-1" },
+    })
+
+    expect(res.statusCode).toBe(410)
+    expect(res.json<{ error: string }>().error).toBe("gone")
   })
 })

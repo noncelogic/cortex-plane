@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto"
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
+import type { SessionService } from "../auth/session-service.js"
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import {
   type AuthenticatedRequest,
@@ -39,13 +40,14 @@ interface SteerBody {
 export interface StreamRouteDeps {
   sseManager: SSEConnectionManager
   lifecycleManager?: AgentLifecycleManager
+  sessionService?: SessionService
 }
 
 export function streamRoutes(deps: StreamRouteDeps) {
-  const { sseManager, lifecycleManager } = deps
+  const { sseManager, lifecycleManager, sessionService } = deps
 
   return function register(app: FastifyInstance): void {
-    const authHook = createStreamAuth(app.db)
+    const authHook = createStreamAuth({ db: app.db, sessionService })
 
     // -----------------------------------------------------------------
     // GET /agents/:agentId/stream — SSE live output

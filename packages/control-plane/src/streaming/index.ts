@@ -1,4 +1,9 @@
-export { type AuthContext, type AuthenticatedRequest, createStreamAuth } from "./auth.js"
+export {
+  type AuthContext,
+  type AuthenticatedRequest,
+  createStreamAuth,
+  type StreamAuthOptions,
+} from "./auth.js"
 export { SSEConnection } from "./connection.js"
 export { SSEConnectionManager } from "./manager.js"
 export type {
