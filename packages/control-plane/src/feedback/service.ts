@@ -8,6 +8,7 @@ import type {
   RemediationStatus,
 } from "@cortex/shared"
 import type { Kysely } from "kysely"
+
 import type { Database, FeedbackAction, FeedbackItem } from "../db/types.js"
 
 export interface FeedbackServiceDeps {

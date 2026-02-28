@@ -12,12 +12,12 @@
  */
 
 import {
-  MAX_APPROVAL_TTL_SECONDS,
   type ApprovalAuditEventType,
   type ApprovalDecisionResult,
   type ApprovalNotificationRecord,
   type ApprovalStatus,
   type CreateApprovalRequest,
+  MAX_APPROVAL_TTL_SECONDS,
   type RiskLevel,
 } from "@cortex/shared"
 import { CortexAttributes, withSpan } from "@cortex/shared/tracing"
@@ -292,7 +292,7 @@ export class ApprovalService {
 
     return {
       proposal: request,
-      resumePayload: (request.resume_payload as Record<string, unknown> | null) ?? null,
+      resumePayload: request.resume_payload ?? null,
     }
   }
 
@@ -456,7 +456,9 @@ export class ApprovalService {
         const hash = last.details.entry_hash
         if (typeof hash === "string") return hash
       }
-    } catch {}
+    } catch {
+      /* Ignore — best-effort hash lookup */
+    }
     return null
   }
 
@@ -480,6 +482,8 @@ export class ApprovalService {
           details: entry.details,
         })
         .execute()
-    } catch {}
+    } catch {
+      /* Ignore — best-effort audit write */
+    }
   }
 }

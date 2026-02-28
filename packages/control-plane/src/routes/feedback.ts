@@ -1,4 +1,3 @@
-import type { FastifyInstance } from "fastify"
 import type {
   FeedbackActionStatus,
   FeedbackActionType,
@@ -8,6 +7,8 @@ import type {
   FeedbackStatus,
   RemediationStatus,
 } from "@cortex/shared"
+import type { FastifyInstance } from "fastify"
+
 import type { FeedbackService } from "../feedback/service.js"
 
 interface CreateFeedbackBody {

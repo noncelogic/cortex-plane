@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Kysely } from "kysely"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
 import type { Database } from "../db/types.js"
 import { FeedbackService } from "../feedback/service.js"
 

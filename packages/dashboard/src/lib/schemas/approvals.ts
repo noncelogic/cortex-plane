@@ -26,5 +26,21 @@ export const ApprovalListResponseSchema = z.object({
   pagination: PaginationSchema,
 })
 
+export const ApprovalAuditEntrySchema = z.object({
+  id: z.string(),
+  approval_request_id: z.string().nullable(),
+  job_id: z.string().nullable(),
+  event_type: z.string(),
+  actor_user_id: z.string().nullable(),
+  actor_channel: z.string().nullable(),
+  details: z.record(z.string(), z.unknown()).optional(),
+  created_at: z.string(),
+})
+
+export const ApprovalAuditResponseSchema = z.object({
+  audit: z.array(ApprovalAuditEntrySchema),
+})
+
 export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>
+export type ApprovalAuditEntry = z.infer<typeof ApprovalAuditEntrySchema>
