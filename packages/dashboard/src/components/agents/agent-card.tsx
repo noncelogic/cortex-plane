@@ -10,12 +10,12 @@ import { AgentStatusBadge } from "./agent-status-badge"
 
 /** Minimal resource metrics attached via SSE or API extension. */
 export interface AgentMetrics {
-  cpuPercent: number
-  memPercent: number
+  cpu_percent: number
+  mem_percent: number
   /** Recent CPU samples (0-100) for sparkline, oldest first. */
-  cpuHistory?: number[]
-  lastHeartbeat?: string
-  currentTask?: string
+  cpu_history?: number[]
+  last_heartbeat?: string
+  current_task?: string
 }
 
 interface AgentCardProps {
@@ -75,7 +75,7 @@ function ResourceBar({ label, percent }: { label: string; percent: number }): Re
 
 export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element {
   const [actionsOpen, setActionsOpen] = useState(false)
-  const hasError = agent.lifecycleState === "TERMINATED" && !!agent.currentJobId
+  const hasError = agent.lifecycle_state === "TERMINATED" && !!agent.current_job_id
 
   return (
     <div className="rounded-xl border border-surface-border bg-surface-light p-4 shadow-sm">
@@ -83,7 +83,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
       <div className="mb-3 flex items-start justify-between">
         <div className="flex gap-3">
           <div
-            className={`flex size-10 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycleState, hasError)}`}
+            className={`flex size-10 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycle_state ?? "READY", hasError)}`}
           >
             {getInitials(agent.name)}
           </div>
@@ -94,13 +94,13 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
             </p>
           </div>
         </div>
-        <AgentStatusBadge state={agent.lifecycleState} hasError={hasError} />
+        <AgentStatusBadge state={agent.lifecycle_state} hasError={hasError} />
       </div>
 
       {/* Sparkline */}
       <div className="mb-3">
-        {metrics?.cpuHistory && metrics.cpuHistory.length > 0 ? (
-          <Sparkline samples={metrics.cpuHistory} />
+        {metrics?.cpu_history && metrics.cpu_history.length > 0 ? (
+          <Sparkline samples={metrics.cpu_history} />
         ) : (
           <div className="flex h-8 w-full items-center justify-center rounded bg-secondary">
             <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
@@ -113,20 +113,20 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
       {/* Resource bars */}
       {metrics && (
         <div className="mb-3 grid grid-cols-2 gap-3">
-          <ResourceBar label="CPU" percent={metrics.cpuPercent} />
-          <ResourceBar label="MEM" percent={metrics.memPercent} />
+          <ResourceBar label="CPU" percent={metrics.cpu_percent} />
+          <ResourceBar label="MEM" percent={metrics.mem_percent} />
         </div>
       )}
 
       {/* Current task */}
-      {metrics?.currentTask && (
-        <p className="mb-3 truncate text-sm italic text-text-muted">{metrics.currentTask}</p>
+      {metrics?.current_task && (
+        <p className="mb-3 truncate text-sm italic text-text-muted">{metrics.current_task}</p>
       )}
 
       {/* Footer: heartbeat + actions */}
       <div className="flex items-center justify-between border-t border-surface-border pt-3">
         <span className="text-[10px] font-medium text-text-muted">
-          {metrics?.lastHeartbeat ? relativeTime(metrics.lastHeartbeat) : agent.role}
+          {metrics?.last_heartbeat ? relativeTime(metrics.last_heartbeat) : agent.role}
         </span>
 
         {/* Desktop: inline action buttons */}

@@ -18,7 +18,7 @@ export function JobRetryButton({
 }: JobRetryButtonProps): React.JSX.Element {
   const [confirming, setConfirming] = useState(false)
   const { execute, isLoading, error } = useApi(
-    retryJob as (...args: unknown[]) => Promise<{ jobId: string; status: "retrying" }>,
+    retryJob as (...args: unknown[]) => Promise<{ job_id: string; status: "retrying" }>,
   )
   const [success, setSuccess] = useState(false)
 

@@ -38,13 +38,13 @@ function parseAgentStateEvent(
 ): { agentId: string; partial: Partial<AgentMetrics> } | null {
   try {
     const parsed = JSON.parse(data) as Record<string, unknown>
-    const agentId = parsed.agentId as string | undefined
+    const agentId = parsed.agent_id as string | undefined
     if (!agentId) return null
     const partial: Partial<AgentMetrics> = {}
-    if (typeof parsed.cpuPercent === "number") partial.cpuPercent = parsed.cpuPercent
-    if (typeof parsed.memPercent === "number") partial.memPercent = parsed.memPercent
-    if (typeof parsed.timestamp === "string") partial.lastHeartbeat = parsed.timestamp
-    if (typeof parsed.currentTask === "string") partial.currentTask = parsed.currentTask
+    if (typeof parsed.cpu_percent === "number") partial.cpu_percent = parsed.cpu_percent
+    if (typeof parsed.mem_percent === "number") partial.mem_percent = parsed.mem_percent
+    if (typeof parsed.timestamp === "string") partial.last_heartbeat = parsed.timestamp
+    if (typeof parsed.current_task === "string") partial.current_task = parsed.current_task
     return { agentId, partial }
   } catch {
     return null
@@ -85,15 +85,15 @@ export default function AgentsPage(): React.JSX.Element {
       const result = parseAgentStateEvent(event.data)
       if (result) {
         setMetricsMap((prev) => {
-          const existing = prev[result.agentId] ?? { cpuPercent: 0, memPercent: 0 }
+          const existing = prev[result.agentId] ?? { cpu_percent: 0, mem_percent: 0 }
           return {
             ...prev,
             [result.agentId]: {
               ...existing,
               ...result.partial,
-              cpuHistory: [
-                ...(existing.cpuHistory ?? []).slice(-6),
-                result.partial.cpuPercent ?? existing.cpuPercent,
+              cpu_history: [
+                ...(existing.cpu_history ?? []).slice(-6),
+                result.partial.cpu_percent ?? existing.cpu_percent,
               ],
             },
           }
@@ -107,7 +107,7 @@ export default function AgentsPage(): React.JSX.Element {
   // Filter by search + status
   const filtered = useMemo(() => {
     return agents.filter((a) => {
-      if (statusFilter !== "ALL" && a.lifecycleState !== statusFilter) return false
+      if (statusFilter !== "ALL" && a.lifecycle_state !== statusFilter) return false
       if (search) {
         const q = search.toLowerCase()
         return (
@@ -122,7 +122,7 @@ export default function AgentsPage(): React.JSX.Element {
 
   // Count online agents
   const onlineCount = agents.filter(
-    (a) => a.lifecycleState === "READY" || a.lifecycleState === "EXECUTING",
+    (a) => a.lifecycle_state === "READY" || a.lifecycle_state === "EXECUTING",
   ).length
 
   const handleRefresh = useCallback(() => {

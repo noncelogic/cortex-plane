@@ -51,13 +51,14 @@ const errorStyle = {
 }
 
 interface AgentStatusBadgeProps {
-  state: AgentLifecycleState
+  state: AgentLifecycleState | undefined
   hasError?: boolean
 }
 
 export function AgentStatusBadge({ state, hasError }: AgentStatusBadgeProps): React.JSX.Element {
-  const style = hasError ? errorStyle : stateStyles[state]
-  const label = hasError ? "ERROR" : state
+  const resolvedState = state ?? "READY"
+  const style = hasError ? errorStyle : stateStyles[resolvedState]
+  const label = hasError ? "ERROR" : resolvedState
 
   return (
     <span

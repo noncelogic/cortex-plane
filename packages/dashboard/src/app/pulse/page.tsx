@@ -206,7 +206,7 @@ function ContentDetailDrawer({
               {piece.type}
             </span>
             <span className="text-sm text-text-muted">
-              {piece.wordCount.toLocaleString()} words
+              {piece.word_count.toLocaleString()} words
             </span>
           </div>
 
@@ -216,21 +216,21 @@ function ContentDetailDrawer({
               <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
                 Agent
               </p>
-              <p className="text-sm font-medium text-text-main">{piece.agentName}</p>
+              <p className="text-sm font-medium text-text-main">{piece.agent_name}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
                 Created
               </p>
-              <p className="text-sm font-medium text-text-main">{relativeTime(piece.createdAt)}</p>
+              <p className="text-sm font-medium text-text-main">{relativeTime(piece.created_at)}</p>
             </div>
-            {piece.publishedAt && (
+            {piece.published_at && (
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
                   Published
                 </p>
                 <p className="text-sm font-medium text-text-main">
-                  {relativeTime(piece.publishedAt)}
+                  {relativeTime(piece.published_at)}
                 </p>
               </div>
             )}

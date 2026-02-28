@@ -42,8 +42,8 @@ function SettingsInner() {
   // Code-paste flow state
   const [codePasteFlow, setCodePasteFlow] = useState<{
     provider: string
-    authUrl: string
-    codeVerifier: string
+    auth_url: string
+    code_verifier: string
     state: string
     pastedUrl: string
   } | null>(null)
@@ -82,8 +82,8 @@ function SettingsInner() {
       const data = await initOAuthConnect(provider)
       setCodePasteFlow({
         provider,
-        authUrl: data.authUrl,
-        codeVerifier: data.codeVerifier,
+        auth_url: data.auth_url,
+        code_verifier: data.code_verifier,
         state: data.state,
         pastedUrl: "",
       })
@@ -101,7 +101,7 @@ function SettingsInner() {
     try {
       await exchangeOAuthConnect(codePasteFlow.provider, {
         pastedUrl: codePasteFlow.pastedUrl,
-        codeVerifier: codePasteFlow.codeVerifier,
+        code_verifier: codePasteFlow.code_verifier,
         state: codePasteFlow.state,
       })
 
@@ -220,7 +220,7 @@ function SettingsInner() {
         <div className="mt-4 space-y-3">
           {providers.map((p) => {
             const cred = getCredentialForProvider(p.id)
-            const isOAuth = p.authType === "oauth"
+            const isOAuth = p.auth_type === "oauth"
             const isCodePaste = CODE_PASTE_PROVIDER_IDS.has(p.id)
 
             return (
@@ -250,8 +250,8 @@ function SettingsInner() {
                     )}
                   </div>
                   <p className="text-xs text-text-muted">{p.description}</p>
-                  {cred?.maskedKey && (
-                    <p className="mt-1 font-mono text-xs text-text-muted">{cred.maskedKey}</p>
+                  {cred?.masked_key && (
+                    <p className="mt-1 font-mono text-xs text-text-muted">{cred.masked_key}</p>
                   )}
                 </div>
 
@@ -316,7 +316,7 @@ function SettingsInner() {
                   1. Click the link below to open the authorization page in a new tab.
                 </p>
                 <a
-                  href={codePasteFlow.authUrl}
+                  href={codePasteFlow.auth_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"

@@ -12,10 +12,10 @@ interface JobCardProps {
 
 export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
   const durationMs =
-    job.completedAt && job.createdAt
-      ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
-      : job.updatedAt && job.createdAt
-        ? new Date(job.updatedAt).getTime() - new Date(job.createdAt).getTime()
+    job.completed_at && job.created_at
+      ? new Date(job.completed_at).getTime() - new Date(job.created_at).getTime()
+      : job.updated_at && job.created_at
+        ? new Date(job.updated_at).getTime() - new Date(job.created_at).getTime()
         : null
 
   return (
@@ -38,7 +38,7 @@ export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
       <div className="mb-3 space-y-1">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-lg text-text-muted">smart_toy</span>
-          <span className="text-sm text-text-main">{truncateUuid(job.agentId)}</span>
+          <span className="text-sm text-text-main">{truncateUuid(job.agent_id)}</span>
         </div>
         <span className="inline-block rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-text-muted">
           {job.type}
@@ -50,7 +50,7 @@ export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
         <span className="font-mono text-xs text-text-muted">
           {durationMs !== null ? duration(durationMs) : "—"}
         </span>
-        <span className="text-xs text-text-muted">{relativeTime(job.createdAt)}</span>
+        <span className="text-xs text-text-muted">{relativeTime(job.created_at)}</span>
       </div>
 
       {/* Error preview */}

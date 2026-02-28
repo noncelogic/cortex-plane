@@ -45,7 +45,7 @@ function applyFilters(
         "90d": 90 * 86_400_000,
       }
       const maxAge = ranges[filters.timeRange]
-      if (maxAge && now - r.createdAt > maxAge) return false
+      if (maxAge && now - r.created_at > maxAge) return false
     }
 
     return true
@@ -73,7 +73,7 @@ export function useMemoryExplorer() {
   } = useApiQuery(
     () =>
       searchQuery.trim()
-        ? searchMemory({ agentId: DEFAULT_AGENT_ID, query: searchQuery.trim(), limit: 50 })
+        ? searchMemory({ agent_id: DEFAULT_AGENT_ID, query: searchQuery.trim(), limit: 50 })
         : Promise.resolve({ results: [] as MemoryRecord[] }),
     [searchQuery],
   )

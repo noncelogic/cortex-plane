@@ -28,12 +28,12 @@ export const BrowserTabSchema = z.object({
 
 export const BrowserSessionSchema = z.object({
   id: z.string(),
-  agentId: z.string(),
-  vncUrl: z.string().nullable(),
+  agent_id: z.string(),
+  vnc_url: z.string().nullable(),
   status: BrowserSessionStatusSchema,
   tabs: z.array(BrowserTabSchema),
-  latencyMs: z.number(),
-  lastHeartbeat: z.string().optional(),
+  latency_ms: z.number(),
+  last_heartbeat: z.string().optional(),
 })
 
 export const BrowserEventSchema = z.object({
@@ -43,16 +43,16 @@ export const BrowserEventSchema = z.object({
   url: z.string().optional(),
   selector: z.string().optional(),
   message: z.string().optional(),
-  durationMs: z.number().optional(),
+  duration_ms: z.number().optional(),
   severity: BrowserEventSeveritySchema.optional(),
 })
 
 export const ScreenshotSchema = z.object({
   id: z.string(),
-  agentId: z.string(),
+  agent_id: z.string(),
   timestamp: z.string(),
-  thumbnailUrl: z.string(),
-  fullUrl: z.string(),
+  thumbnail_url: z.string(),
+  full_url: z.string(),
   dimensions: z.object({
     width: z.number(),
     height: z.number(),
@@ -75,7 +75,7 @@ export const CaptureScreenshotResponseSchema = z.object({
   timestamp: z.string(),
   url: z.string().optional(),
   title: z.string().optional(),
-  filePath: z.string().optional(),
+  file_path: z.string().optional(),
 })
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ export const TraceStatusSchema = z.enum(["idle", "recording"])
 
 export const TraceStateSchema = z.object({
   status: TraceStatusSchema,
-  startedAt: z.string().optional(),
+  started_at: z.string().optional(),
   options: z
     .object({
       snapshots: z.boolean().optional(),
@@ -99,13 +99,13 @@ export const TraceStateSchema = z.object({
 
 export const TraceStartResponseSchema = z.object({
   status: z.string(),
-  startedAt: z.string().optional(),
+  started_at: z.string().optional(),
 })
 
 export const TraceStopResponseSchema = z.object({
   status: z.string(),
-  filePath: z.string().optional(),
-  durationMs: z.number().optional(),
+  file_path: z.string().optional(),
+  duration_ms: z.number().optional(),
 })
 
 export type BrowserSessionStatus = z.infer<typeof BrowserSessionStatusSchema>

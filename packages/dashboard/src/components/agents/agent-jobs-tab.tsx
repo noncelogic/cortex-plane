@@ -15,7 +15,7 @@ interface AgentJobsTabProps {
 
 export function AgentJobsTab({ agentId }: AgentJobsTabProps): React.JSX.Element {
   const { data, isLoading, error, refetch } = useApiQuery(
-    () => listJobs({ agentId, limit: 50 }),
+    () => listJobs({ agent_id: agentId, limit: 50 }),
     [agentId],
   )
 
@@ -128,8 +128,8 @@ export function AgentJobsTab({ agentId }: AgentJobsTabProps): React.JSX.Element 
           <div className="divide-y divide-surface-border">
             {jobs.map((job) => {
               const durationMs =
-                job.completedAt && job.createdAt
-                  ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
+                job.completed_at && job.created_at
+                  ? new Date(job.completed_at).getTime() - new Date(job.created_at).getTime()
                   : null
               return (
                 <button
@@ -148,7 +148,7 @@ export function AgentJobsTab({ agentId }: AgentJobsTabProps): React.JSX.Element 
                   <span className="ml-auto font-mono text-xs text-text-muted">
                     {durationMs !== null ? duration(durationMs) : "—"}
                   </span>
-                  <span className="text-xs text-text-muted">{relativeTime(job.createdAt)}</span>
+                  <span className="text-xs text-text-muted">{relativeTime(job.created_at)}</span>
                 </button>
               )
             })}

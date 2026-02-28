@@ -18,7 +18,7 @@ import { MemoryRecordSchema, MemorySearchResponseSchema } from "@/lib/schemas/me
 
 describe("PaginationSchema", () => {
   it("accepts valid pagination", () => {
-    const data = { total: 42, limit: 20, offset: 0, hasMore: true }
+    const data = { total: 42, limit: 20, offset: 0, has_more: true }
     expect(PaginationSchema.parse(data)).toEqual(data)
   })
 
@@ -28,7 +28,7 @@ describe("PaginationSchema", () => {
 
   it("rejects wrong types", () => {
     expect(() =>
-      PaginationSchema.parse({ total: "1", limit: 20, offset: 0, hasMore: false }),
+      PaginationSchema.parse({ total: "1", limit: 20, offset: 0, has_more: false }),
     ).toThrow()
   })
 })
@@ -44,8 +44,8 @@ describe("AgentSummarySchema", () => {
     slug: "test-agent",
     role: "tester",
     status: "ACTIVE",
-    lifecycleState: "READY",
-    createdAt: "2026-01-01T00:00:00Z",
+    lifecycle_state: "READY",
+    created_at: "2026-01-01T00:00:00Z",
   }
 
   it("accepts valid agent summary", () => {
@@ -56,8 +56,8 @@ describe("AgentSummarySchema", () => {
     const withOptional = {
       ...validAgent,
       description: "A test agent",
-      currentJobId: "job-1",
-      updatedAt: "2026-01-02T00:00:00Z",
+      current_job_id: "job-1",
+      updated_at: "2026-01-02T00:00:00Z",
     }
     expect(AgentSummarySchema.parse(withOptional)).toEqual(withOptional)
   })
@@ -67,7 +67,7 @@ describe("AgentSummarySchema", () => {
   })
 
   it("rejects invalid lifecycleState", () => {
-    expect(() => AgentSummarySchema.parse({ ...validAgent, lifecycleState: "RUNNING" })).toThrow()
+    expect(() => AgentSummarySchema.parse({ ...validAgent, lifecycle_state: "RUNNING" })).toThrow()
   })
 
   it("rejects missing required fields", () => {
@@ -82,14 +82,14 @@ describe("AgentDetailSchema", () => {
     slug: "test-agent",
     role: "tester",
     status: "ACTIVE",
-    lifecycleState: "READY",
-    createdAt: "2026-01-01T00:00:00Z",
+    lifecycle_state: "READY",
+    created_at: "2026-01-01T00:00:00Z",
   }
 
   it("accepts detail with checkpoint", () => {
     const detail = {
       ...validAgent,
-      checkpoint: { jobId: "job-1", savedAt: "2026-01-01T00:00:00Z", crc32: 12345 },
+      checkpoint: { job_id: "job-1", saved_at: "2026-01-01T00:00:00Z", crc32: 12345 },
     }
     expect(AgentDetailSchema.parse(detail)).toEqual(detail)
   })
@@ -97,8 +97,8 @@ describe("AgentDetailSchema", () => {
   it("accepts config maps", () => {
     const detail = {
       ...validAgent,
-      modelConfig: { temperature: 0.7 },
-      skillConfig: { tools: ["web"] },
+      model_config: { temperature: 0.7 },
+      skill_config: { tools: ["web"] },
     }
     expect(AgentDetailSchema.parse(detail)).toEqual(detail)
   })
@@ -114,11 +114,11 @@ describe("AgentListResponseSchema", () => {
           slug: "a",
           role: "r",
           status: "ACTIVE",
-          lifecycleState: "READY",
-          createdAt: "2026-01-01T00:00:00Z",
+          lifecycle_state: "READY",
+          created_at: "2026-01-01T00:00:00Z",
         },
       ],
-      pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
+      pagination: { total: 1, limit: 20, offset: 0, has_more: false },
     }
     expect(AgentListResponseSchema.parse(data).agents).toHaveLength(1)
   })
@@ -131,10 +131,10 @@ describe("AgentListResponseSchema", () => {
 describe("JobSummarySchema", () => {
   const validJob = {
     id: "job-001",
-    agentId: "agt-001",
+    agent_id: "agt-001",
     status: "RUNNING",
     type: "inference",
-    createdAt: "2026-01-01T00:00:00Z",
+    created_at: "2026-01-01T00:00:00Z",
   }
 
   it("accepts valid job summary", () => {
@@ -167,18 +167,18 @@ describe("JobDetailSchema", () => {
   it("accepts valid job detail with steps and logs", () => {
     const detail = {
       id: "job-001",
-      agentId: "agt-001",
+      agent_id: "agt-001",
       status: "COMPLETED",
       type: "inference",
-      createdAt: "2026-01-01T00:00:00Z",
-      steps: [{ name: "init", status: "COMPLETED", durationMs: 100 }],
+      created_at: "2026-01-01T00:00:00Z",
+      steps: [{ name: "init", status: "COMPLETED", duration_ms: 100 }],
       logs: [{ timestamp: "2026-01-01T00:00:01Z", level: "INFO", message: "Started" }],
       metrics: {
-        cpuPercent: 50,
-        memoryMb: 256,
-        networkInBytes: 1024,
-        networkOutBytes: 512,
-        threadCount: 4,
+        cpu_percent: 50,
+        memory_mb: 256,
+        network_in_bytes: 1024,
+        network_out_bytes: 512,
+        thread_count: 4,
       },
     }
     expect(JobDetailSchema.parse(detail).steps).toHaveLength(1)
@@ -189,7 +189,7 @@ describe("JobListResponseSchema", () => {
   it("accepts empty jobs list", () => {
     const data = {
       jobs: [],
-      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
+      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
     }
     expect(JobListResponseSchema.parse(data).jobs).toHaveLength(0)
   })
@@ -202,12 +202,12 @@ describe("JobListResponseSchema", () => {
 describe("ApprovalRequestSchema", () => {
   const validApproval = {
     id: "apr-001",
-    jobId: "job-001",
+    job_id: "job-001",
     status: "PENDING",
-    actionType: "deploy",
-    actionSummary: "Deploy to production",
-    requestedAt: "2026-01-01T00:00:00Z",
-    expiresAt: "2026-01-01T01:00:00Z",
+    action_type: "deploy",
+    action_summary: "Deploy to production",
+    requested_at: "2026-01-01T00:00:00Z",
+    expires_at: "2026-01-01T01:00:00Z",
   }
 
   it("accepts valid approval", () => {
@@ -229,7 +229,7 @@ describe("ApprovalListResponseSchema", () => {
   it("accepts valid response", () => {
     const data = {
       approvals: [],
-      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
+      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
     }
     expect(ApprovalListResponseSchema.parse(data).approvals).toHaveLength(0)
   })
@@ -250,9 +250,9 @@ describe("MemoryRecordSchema", () => {
     importance: 3 as const,
     confidence: 0.9,
     source: "test",
-    createdAt: 1700000000000,
-    accessCount: 5,
-    lastAccessedAt: 1700000100000,
+    created_at: 1700000000000,
+    access_count: 5,
+    last_accessed_at: 1700000100000,
   }
 
   it("accepts valid memory record", () => {
@@ -298,10 +298,10 @@ describe("ContentPieceSchema", () => {
     body: "Test body",
     type: "blog",
     status: "DRAFT",
-    agentId: "agt-001",
-    agentName: "TestBot",
-    wordCount: 100,
-    createdAt: "2026-01-01T00:00:00Z",
+    agent_id: "agt-001",
+    agent_name: "TestBot",
+    word_count: 100,
+    created_at: "2026-01-01T00:00:00Z",
   }
 
   it("accepts valid content piece", () => {
@@ -329,7 +329,7 @@ describe("ContentListResponseSchema", () => {
   it("accepts valid response", () => {
     const data = {
       content: [],
-      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
+      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
     }
     expect(ContentListResponseSchema.parse(data).content).toHaveLength(0)
   })
@@ -343,11 +343,11 @@ describe("BrowserSessionSchema", () => {
   it("accepts valid session", () => {
     const session = {
       id: "bsess-001",
-      agentId: "agt-001",
-      vncUrl: null,
+      agent_id: "agt-001",
+      vnc_url: null,
       status: "connected",
       tabs: [{ id: "tab-1", title: "Google", url: "https://google.com", active: true }],
-      latencyMs: 42,
+      latency_ms: 42,
     }
     expect(BrowserSessionSchema.parse(session).status).toBe("connected")
   })
@@ -355,24 +355,24 @@ describe("BrowserSessionSchema", () => {
   it("accepts vncUrl as string", () => {
     const session = {
       id: "bsess-001",
-      agentId: "agt-001",
-      vncUrl: "wss://vnc.example.com/session/123",
+      agent_id: "agt-001",
+      vnc_url: "wss://vnc.example.com/session/123",
       status: "connected",
       tabs: [],
-      latencyMs: 30,
+      latency_ms: 30,
     }
-    expect(BrowserSessionSchema.parse(session).vncUrl).toBe("wss://vnc.example.com/session/123")
+    expect(BrowserSessionSchema.parse(session).vnc_url).toBe("wss://vnc.example.com/session/123")
   })
 
   it("rejects invalid status", () => {
     expect(() =>
       BrowserSessionSchema.parse({
         id: "b1",
-        agentId: "a1",
-        vncUrl: null,
+        agent_id: "a1",
+        vnc_url: null,
         status: "ACTIVE",
         tabs: [],
-        latencyMs: 0,
+        latency_ms: 0,
       }),
     ).toThrow()
   })
@@ -398,7 +398,7 @@ describe("BrowserEventSchema", () => {
       timestamp: "2026-01-01T00:00:00Z",
       selector: "button.submit",
       message: "Clicked submit",
-      durationMs: 150,
+      duration_ms: 150,
       severity: "info",
     }
     expect(BrowserEventSchema.parse(event).selector).toBe("button.submit")
@@ -409,10 +409,10 @@ describe("ScreenshotSchema", () => {
   it("accepts valid screenshot", () => {
     const ss = {
       id: "ss-001",
-      agentId: "agt-001",
+      agent_id: "agt-001",
       timestamp: "2026-01-01T00:00:00Z",
-      thumbnailUrl: "https://example.com/thumb.png",
-      fullUrl: "https://example.com/full.png",
+      thumbnail_url: "https://example.com/thumb.png",
+      full_url: "https://example.com/full.png",
       dimensions: { width: 1920, height: 1080 },
     }
     expect(ScreenshotSchema.parse(ss).dimensions.width).toBe(1920)
@@ -422,10 +422,10 @@ describe("ScreenshotSchema", () => {
     expect(() =>
       ScreenshotSchema.parse({
         id: "ss-1",
-        agentId: "a1",
+        agent_id: "a1",
         timestamp: "t",
-        thumbnailUrl: "u",
-        fullUrl: "u",
+        thumbnail_url: "u",
+        full_url: "u",
       }),
     ).toThrow()
   })

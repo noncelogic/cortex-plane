@@ -62,7 +62,7 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps): Reac
           >
             <div className="aspect-video w-full bg-chrome-deep">
               <img
-                src={screenshot.thumbnailUrl}
+                src={screenshot.thumbnail_url}
                 alt={`Screenshot at ${new Date(screenshot.timestamp).toLocaleTimeString()}`}
                 className="size-full object-cover"
                 loading="lazy"
@@ -156,7 +156,7 @@ function Lightbox({
       {/* Image */}
       <div className="max-h-[85vh] max-w-[90vw]">
         <img
-          src={screenshot.fullUrl}
+          src={screenshot.full_url}
           alt={`Screenshot at ${new Date(screenshot.timestamp).toLocaleTimeString()}`}
           className="max-h-[85vh] w-auto rounded-lg object-contain"
         />

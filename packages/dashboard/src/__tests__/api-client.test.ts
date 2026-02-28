@@ -100,11 +100,11 @@ describe("API Client", () => {
             slug: "a1",
             role: "test",
             status: "ACTIVE",
-            lifecycleState: "READY",
-            createdAt: "2026-01-01T00:00:00Z",
+            lifecycle_state: "READY",
+            created_at: "2026-01-01T00:00:00Z",
           },
         ],
-        pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
+        pagination: { total: 1, limit: 20, offset: 0, has_more: false },
       }
       mockFetchResponse(body)
 
@@ -130,8 +130,8 @@ describe("API Client", () => {
             slug: "a1",
             role: "test",
             status: "ACTIVE",
-            lifecycleState: "READY",
-            createdAt: "2026-01-01T00:00:00Z",
+            lifecycle_state: "READY",
+            created_at: "2026-01-01T00:00:00Z",
           },
         ],
         count: 1,
@@ -143,7 +143,7 @@ describe("API Client", () => {
       expect(result.agents).toHaveLength(1)
       expect(result.pagination).toBeDefined()
       expect(result.pagination.total).toBe(1)
-      expect(result.pagination.hasMore).toBe(false)
+      expect(result.pagination.has_more).toBe(false)
     })
 
     it("listAgents handles empty {agents:[], count:0} response", async () => {
@@ -153,7 +153,7 @@ describe("API Client", () => {
 
       expect(result.agents).toEqual([])
       expect(result.pagination.total).toBe(0)
-      expect(result.pagination.hasMore).toBe(false)
+      expect(result.pagination.has_more).toBe(false)
     })
 
     it("getAgent fetches by ID", async () => {
@@ -163,8 +163,8 @@ describe("API Client", () => {
         slug: "test-agent",
         role: "tester",
         status: "ACTIVE",
-        lifecycleState: "READY",
-        createdAt: "2026-01-01T00:00:00Z",
+        lifecycle_state: "READY",
+        created_at: "2026-01-01T00:00:00Z",
       })
 
       const result = await getAgent("agent-1")
@@ -175,9 +175,9 @@ describe("API Client", () => {
 
     it("steerAgent sends POST with body", async () => {
       mockFetchResponse({
-        steerMessageId: "sm-1",
+        steer_message_id: "sm-1",
         status: "accepted",
-        agentId: "agent-1",
+        agent_id: "agent-1",
         priority: "high",
       })
 
@@ -194,10 +194,10 @@ describe("API Client", () => {
     it("listJobs passes query parameters", async () => {
       mockFetchResponse({
         jobs: [],
-        pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
+        pagination: { total: 0, limit: 20, offset: 0, has_more: false },
       })
 
-      await listJobs({ agentId: "a1", status: "RUNNING" })
+      await listJobs({ agent_id: "a1", status: "RUNNING" })
 
       const url = vi.mocked(fetch).mock.calls[0]![0] as string
       expect(url).toContain("agentId=a1")
@@ -207,7 +207,7 @@ describe("API Client", () => {
     it("searchMemory passes query and agentId", async () => {
       mockFetchResponse({ results: [] })
 
-      await searchMemory({ agentId: "a1", query: "deployment", limit: 5 })
+      await searchMemory({ agent_id: "a1", query: "deployment", limit: 5 })
 
       const url = vi.mocked(fetch).mock.calls[0]![0] as string
       expect(url).toContain("agentId=a1")
@@ -217,9 +217,9 @@ describe("API Client", () => {
 
     it("approveRequest sends decision", async () => {
       mockFetchResponse({
-        approvalRequestId: "apr-1",
+        approval_request_id: "apr-1",
         decision: "APPROVED",
-        decidedAt: "2026-02-24T14:35:00Z",
+        decided_at: "2026-02-24T14:35:00Z",
       })
 
       const result = await approveRequest("apr-1", "APPROVED", "joe@test.com", "LGTM")
@@ -228,7 +228,7 @@ describe("API Client", () => {
       const [, opts] = vi.mocked(fetch).mock.calls[0]!
       expect(JSON.parse(opts!.body as string)).toEqual({
         decision: "APPROVED",
-        decidedBy: "joe@test.com",
+        decided_by: "joe@test.com",
         channel: "dashboard",
         reason: "LGTM",
       })
@@ -237,13 +237,13 @@ describe("API Client", () => {
     it("getApprovalDetail fetches by ID", async () => {
       mockFetchResponse({
         id: "apr-1",
-        jobId: "job-1",
-        agentId: "agent-1",
+        job_id: "job-1",
+        agent_id: "agent-1",
         status: "PENDING",
-        actionType: "deploy",
-        actionSummary: "Deploy to production",
-        requestedAt: "2026-02-24T14:00:00Z",
-        expiresAt: "2026-02-25T14:00:00Z",
+        action_type: "deploy",
+        action_summary: "Deploy to production",
+        requested_at: "2026-02-24T14:00:00Z",
+        expires_at: "2026-02-25T14:00:00Z",
       })
 
       const result = await getApprovalDetail("apr-1")
@@ -297,8 +297,8 @@ describe("API Client", () => {
         slug: "a1",
         role: "test",
         status: "ACTIVE",
-        lifecycleState: "READY",
-        createdAt: "2026-01-01T00:00:00Z",
+        lifecycle_state: "READY",
+        created_at: "2026-01-01T00:00:00Z",
       })
 
       await getAgent("a1")
@@ -314,8 +314,8 @@ describe("API Client", () => {
         slug: "a1",
         role: "test",
         status: "ACTIVE",
-        lifecycleState: "READY",
-        createdAt: "2026-01-01T00:00:00Z",
+        lifecycle_state: "READY",
+        created_at: "2026-01-01T00:00:00Z",
       })
 
       await getAgent("a1")
@@ -497,7 +497,7 @@ describe("API Client", () => {
       mockFetchSequence(
         { body: { message: "Unavailable" }, status: 503 },
         {
-          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } },
+          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, has_more: false } },
           status: 200,
         },
       )
@@ -512,7 +512,7 @@ describe("API Client", () => {
       mockFetchSequence(
         { error: true },
         {
-          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } },
+          body: { agents: [], pagination: { total: 0, limit: 20, offset: 0, has_more: false } },
           status: 200,
         },
       )
@@ -578,7 +578,7 @@ describe("API Client", () => {
     it("listProviders fetches GET /credentials/providers", async () => {
       const body = {
         providers: [
-          { id: "anthropic", name: "Anthropic", authType: "oauth", description: "Claude models" },
+          { id: "anthropic", name: "Anthropic", auth_type: "oauth", description: "Claude models" },
         ],
       }
       mockFetchResponse(body)
@@ -596,12 +596,12 @@ describe("API Client", () => {
           {
             id: "cred-1",
             provider: "anthropic",
-            credentialType: "oauth",
-            displayLabel: null,
-            maskedKey: null,
+            credential_type: "oauth",
+            display_label: null,
+            masked_key: null,
             status: "active",
-            lastUsedAt: null,
-            createdAt: "2026-01-01T00:00:00Z",
+            last_used_at: null,
+            created_at: "2026-01-01T00:00:00Z",
           },
         ],
       }
@@ -616,16 +616,16 @@ describe("API Client", () => {
 
     it("initOAuthConnect fetches GET /auth/connect/:provider/init", async () => {
       const body = {
-        authUrl: "https://accounts.google.com/o/oauth2/auth?...",
-        codeVerifier: "verifier-123",
+        auth_url: "https://accounts.google.com/o/oauth2/auth?...",
+        code_verifier: "verifier-123",
         state: "state-abc",
       }
       mockFetchResponse(body)
 
       const result = await initOAuthConnect("google-antigravity")
 
-      expect(result.authUrl).toBe(body.authUrl)
-      expect(result.codeVerifier).toBe("verifier-123")
+      expect(result.auth_url).toBe(body.auth_url)
+      expect(result.code_verifier).toBe("verifier-123")
       expect(result.state).toBe("state-abc")
       expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(
         `${API_BASE}/auth/connect/google-antigravity/init`,
@@ -637,7 +637,7 @@ describe("API Client", () => {
 
       await exchangeOAuthConnect("anthropic", {
         pastedUrl: "http://localhost:3100/callback?code=abc",
-        codeVerifier: "verifier-123",
+        code_verifier: "verifier-123",
         state: "state-abc",
       })
 
@@ -646,7 +646,7 @@ describe("API Client", () => {
       expect(opts!.method).toBe("POST")
       expect(JSON.parse(opts!.body as string)).toEqual({
         pastedUrl: "http://localhost:3100/callback?code=abc",
-        codeVerifier: "verifier-123",
+        code_verifier: "verifier-123",
         state: "state-abc",
       })
     })

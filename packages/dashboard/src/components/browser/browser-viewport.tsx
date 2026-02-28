@@ -119,7 +119,7 @@ function ScreenshotFallback({ screenshot }: { screenshot: Screenshot }): React.J
     <div className="flex size-full flex-col items-center justify-center gap-3 p-4">
       <div className="relative overflow-hidden rounded-lg border border-chrome-border">
         <img
-          src={screenshot.fullUrl}
+          src={screenshot.full_url}
           alt={`Screenshot from ${new Date(screenshot.timestamp).toLocaleTimeString()}`}
           className="max-h-[60vh] w-auto object-contain"
         />

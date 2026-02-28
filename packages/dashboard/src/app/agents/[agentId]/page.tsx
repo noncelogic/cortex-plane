@@ -42,10 +42,10 @@ function buildMetrics(events: AgentEventPayload[]) {
   for (const event of events) {
     if (event.type === "agent:output") {
       const output = event.data.output
-      if (typeof output.cpuPercent === "number") cpuSamples.push(output.cpuPercent)
-      if (typeof output.memPercent === "number") memSamples.push(output.memPercent)
-      if (typeof output.networkKbps === "number") networkSamples.push(output.networkKbps)
-      if (typeof output.tokensPerSec === "number") tokenSamples.push(output.tokensPerSec)
+      if (typeof output.cpu_percent === "number") cpuSamples.push(output.cpu_percent)
+      if (typeof output.mem_percent === "number") memSamples.push(output.mem_percent)
+      if (typeof output.network_kbps === "number") networkSamples.push(output.network_kbps)
+      if (typeof output.tokens_per_sec === "number") tokenSamples.push(output.tokens_per_sec)
     }
   }
 
@@ -121,7 +121,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   // Current lifecycle state
   const currentState: AgentLifecycleState = useMemo(() => {
     const lastState = transitions[transitions.length - 1]
-    return lastState?.state ?? agent?.lifecycleState ?? "BOOTING"
+    return lastState?.state ?? agent?.lifecycle_state ?? "BOOTING"
   }, [transitions, agent])
 
   // Resource metrics from events
@@ -160,7 +160,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   }
 
   // Build agent with possibly-updated lifecycle state
-  const liveAgent: AgentDetail = { ...agent, lifecycleState: currentState }
+  const liveAgent: AgentDetail = { ...agent, lifecycle_state: currentState }
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">

@@ -92,10 +92,10 @@ describe("ConnectionStatus states", () => {
   })
 
   it("latency quality classifications", () => {
-    function qualityLabel(latencyMs: number): string {
-      if (latencyMs < 50) return "Excellent"
-      if (latencyMs < 100) return "Good"
-      if (latencyMs < 200) return "Fair"
+    function qualityLabel(latency_ms: number): string {
+      if (latency_ms < 50) return "Excellent"
+      if (latency_ms < 100) return "Good"
+      if (latency_ms < 200) return "Fair"
       return "Poor"
     }
 
@@ -211,26 +211,26 @@ describe("ScreenshotGallery rendering logic", () => {
   const mockScreenshots: Screenshot[] = [
     {
       id: "ss-001",
-      agentId: "agt-123",
+      agent_id: "agt-123",
       timestamp: new Date(Date.now() - 15_000).toISOString(),
-      thumbnailUrl: "https://placeholder/thumb-1.png",
-      fullUrl: "https://placeholder/full-1.png",
+      thumbnail_url: "https://placeholder/thumb-1.png",
+      full_url: "https://placeholder/full-1.png",
       dimensions: { width: 1920, height: 1080 },
     },
     {
       id: "ss-002",
-      agentId: "agt-123",
+      agent_id: "agt-123",
       timestamp: new Date(Date.now() - 60_000).toISOString(),
-      thumbnailUrl: "https://placeholder/thumb-2.png",
-      fullUrl: "https://placeholder/full-2.png",
+      thumbnail_url: "https://placeholder/thumb-2.png",
+      full_url: "https://placeholder/full-2.png",
       dimensions: { width: 1920, height: 1080 },
     },
     {
       id: "ss-003",
-      agentId: "agt-123",
+      agent_id: "agt-123",
       timestamp: new Date(Date.now() - 120_000).toISOString(),
-      thumbnailUrl: "https://placeholder/thumb-3.png",
-      fullUrl: "https://placeholder/full-3.png",
+      thumbnail_url: "https://placeholder/thumb-3.png",
+      full_url: "https://placeholder/full-3.png",
       dimensions: { width: 1280, height: 720 },
     },
   ]
@@ -248,10 +248,10 @@ describe("ScreenshotGallery rendering logic", () => {
   it("screenshots have required properties", () => {
     for (const ss of mockScreenshots) {
       expect(ss.id).toBeDefined()
-      expect(ss.agentId).toBeDefined()
+      expect(ss.agent_id).toBeDefined()
       expect(ss.timestamp).toBeDefined()
-      expect(ss.thumbnailUrl).toBeDefined()
-      expect(ss.fullUrl).toBeDefined()
+      expect(ss.thumbnail_url).toBeDefined()
+      expect(ss.full_url).toBeDefined()
       expect(ss.dimensions.width).toBeGreaterThan(0)
       expect(ss.dimensions.height).toBeGreaterThan(0)
     }
@@ -319,7 +319,7 @@ describe("TraceTimeline rendering logic", () => {
       type: "GET",
       timestamp: new Date(Date.now() - 295_000).toISOString(),
       url: "https://github.com/cortex-plane/dashboard",
-      durationMs: 340,
+      duration_ms: 340,
     },
     {
       id: "evt-003",
@@ -418,8 +418,8 @@ describe("TraceTimeline rendering logic", () => {
   })
 
   it("duration is only shown when present", () => {
-    const withDuration = mockEvents.filter((e) => e.durationMs !== undefined)
-    const withoutDuration = mockEvents.filter((e) => e.durationMs === undefined)
+    const withDuration = mockEvents.filter((e) => e.duration_ms !== undefined)
+    const withoutDuration = mockEvents.filter((e) => e.duration_ms === undefined)
 
     expect(withDuration.length).toBeGreaterThan(0)
     expect(withoutDuration.length).toBeGreaterThan(0)
@@ -441,8 +441,8 @@ describe("TraceTimeline rendering logic", () => {
 
 describe("BrowserViewport rendering logic", () => {
   // Helper that mirrors the component logic without TypeScript narrowing issues
-  function canShowVnc(vncUrl: string | null, status: BrowserSessionStatus): boolean {
-    return Boolean(vncUrl && (status === "connected" || status === "connecting"))
+  function canShowVnc(vnc_url: string | null, status: BrowserSessionStatus): boolean {
+    return Boolean(vnc_url && (status === "connected" || status === "connecting"))
   }
 
   it("shows VNC iframe when vncUrl is available and status is connected", () => {
@@ -482,8 +482,8 @@ describe("BrowserSession interface", () => {
   it("has all required fields", () => {
     const session: BrowserSession = {
       id: "bsess-123",
-      agentId: "agt-456",
-      vncUrl: "wss://vnc.example.com/session-123",
+      agent_id: "agt-456",
+      vnc_url: "wss://vnc.example.com/session-123",
       status: "connected",
       tabs: [
         {
@@ -493,28 +493,28 @@ describe("BrowserSession interface", () => {
           active: true,
         },
       ],
-      latencyMs: 42,
+      latency_ms: 42,
     }
 
     expect(session.id).toBe("bsess-123")
-    expect(session.agentId).toBe("agt-456")
-    expect(session.vncUrl).toBe("wss://vnc.example.com/session-123")
+    expect(session.agent_id).toBe("agt-456")
+    expect(session.vnc_url).toBe("wss://vnc.example.com/session-123")
     expect(session.status).toBe("connected")
     expect(session.tabs).toHaveLength(1)
-    expect(session.latencyMs).toBe(42)
+    expect(session.latency_ms).toBe(42)
   })
 
   it("vncUrl can be null", () => {
     const session: BrowserSession = {
       id: "bsess-123",
-      agentId: "agt-456",
-      vncUrl: null,
+      agent_id: "agt-456",
+      vnc_url: null,
       status: "disconnected",
       tabs: [],
-      latencyMs: 0,
+      latency_ms: 0,
     }
 
-    expect(session.vncUrl).toBeNull()
+    expect(session.vnc_url).toBeNull()
   })
 })
 
@@ -531,11 +531,11 @@ describe("getAgentBrowser API", () => {
   it("fetches browser session by agent ID", async () => {
     const mockSession: BrowserSession = {
       id: "bsess-123",
-      agentId: "agt-456",
-      vncUrl: "wss://vnc.example.com/session-123",
+      agent_id: "agt-456",
+      vnc_url: "wss://vnc.example.com/session-123",
       status: "connected",
       tabs: [],
-      latencyMs: 35,
+      latency_ms: 35,
     }
 
     mockFetchResponse(mockSession)
@@ -700,7 +700,7 @@ describe("getTraceState API", () => {
   it("returns recording state with startedAt", async () => {
     const mockState: TraceState = {
       status: "recording",
-      startedAt: "2026-02-28T10:00:00Z",
+      started_at: "2026-02-28T10:00:00Z",
       options: { snapshots: true, screenshots: true },
     }
 
@@ -708,7 +708,7 @@ describe("getTraceState API", () => {
     const result = await getTraceState("agt-456")
 
     expect(result.status).toBe("recording")
-    expect(result.startedAt).toBe("2026-02-28T10:00:00Z")
+    expect(result.started_at).toBe("2026-02-28T10:00:00Z")
     expect(result.options?.snapshots).toBe(true)
   })
 })
@@ -725,16 +725,16 @@ describe("TraceState interface", () => {
 
   it("idle state has no startedAt", () => {
     const state: TraceState = { status: "idle" }
-    expect(state.startedAt).toBeUndefined()
+    expect(state.started_at).toBeUndefined()
   })
 
   it("recording state has startedAt", () => {
     const state: TraceState = {
       status: "recording",
-      startedAt: "2026-02-28T10:00:00Z",
+      started_at: "2026-02-28T10:00:00Z",
     }
     expect(state.status).toBe("recording")
-    expect(state.startedAt).toBeDefined()
+    expect(state.started_at).toBeDefined()
   })
 })
 
@@ -749,7 +749,7 @@ describe("startTrace API", () => {
   })
 
   it("posts to observe/trace/start", async () => {
-    mockFetchResponse({ status: "recording", startedAt: "2026-02-28T10:00:00Z" })
+    mockFetchResponse({ status: "recording", started_at: "2026-02-28T10:00:00Z" })
     const result = await startTrace("agt-456")
 
     expect(result.status).toBe("recording")
@@ -785,12 +785,12 @@ describe("stopTrace API", () => {
   })
 
   it("posts to observe/trace/stop", async () => {
-    mockFetchResponse({ status: "idle", filePath: "/tmp/trace.zip", durationMs: 5000 })
+    mockFetchResponse({ status: "idle", file_path: "/tmp/trace.zip", duration_ms: 5000 })
     const result = await stopTrace("agt-456")
 
     expect(result.status).toBe("idle")
-    expect(result.filePath).toBe("/tmp/trace.zip")
-    expect(result.durationMs).toBe(5000)
+    expect(result.file_path).toBe("/tmp/trace.zip")
+    expect(result.duration_ms).toBe(5000)
     expect(fetch).toHaveBeenCalledWith(
       `${API_BASE}/agents/agt-456/observe/trace/stop`,
       expect.objectContaining({ method: "POST" }),

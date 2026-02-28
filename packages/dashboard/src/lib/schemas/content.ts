@@ -12,20 +12,20 @@ export const ContentPieceSchema = z.object({
   body: z.string(),
   type: ContentTypeSchema,
   status: ContentStatusSchema,
-  agentId: z.string(),
-  agentName: z.string(),
-  wordCount: z.number(),
-  createdAt: z.string(),
-  updatedAt: z.string().optional(),
-  publishedAt: z.string().optional(),
+  agent_id: z.string(),
+  agent_name: z.string(),
+  word_count: z.number(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+  published_at: z.string().optional(),
   channel: z.string().optional(),
 })
 
 export const ContentPipelineStatsSchema = z.object({
-  totalPieces: z.number(),
-  publishedToday: z.number(),
-  avgReviewTimeMs: z.number(),
-  pendingReview: z.number(),
+  total_pieces: z.number(),
+  published_today: z.number(),
+  avg_review_time_ms: z.number(),
+  pending_review: z.number(),
 })
 
 export const ContentListResponseSchema = z.object({

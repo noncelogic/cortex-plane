@@ -49,11 +49,11 @@ function createMockPiece(overrides: Partial<ContentPiece> = {}): ContentPiece {
     body: "This is a test article body with enough words to be realistic.",
     type: "blog",
     status: "DRAFT",
-    agentId: "agt-writer-01",
-    agentName: "ContentBot",
-    wordCount: 1500,
-    createdAt: "2026-02-20T10:00:00Z",
-    updatedAt: "2026-02-20T12:00:00Z",
+    agent_id: "agt-writer-01",
+    agent_name: "ContentBot",
+    word_count: 1500,
+    created_at: "2026-02-20T10:00:00Z",
+    updated_at: "2026-02-20T12:00:00Z",
     ...overrides,
   }
 }
@@ -66,7 +66,7 @@ function createPieceSet(): ContentPiece[] {
       title: "Draft Social Thread",
       status: "DRAFT",
       type: "social",
-      agentName: "SocialPulse",
+      agent_name: "SocialPulse",
     }),
     createMockPiece({
       id: "c3",
@@ -79,7 +79,7 @@ function createPieceSet(): ContentPiece[] {
       title: "Review: Report Q4",
       status: "IN_REVIEW",
       type: "report",
-      agentName: "AnalyticsBot",
+      agent_name: "AnalyticsBot",
     }),
     createMockPiece({ id: "c5", title: "Queued Blog", status: "QUEUED", type: "blog" }),
     createMockPiece({
@@ -87,7 +87,7 @@ function createPieceSet(): ContentPiece[] {
       title: "Published Article",
       status: "PUBLISHED",
       type: "blog",
-      publishedAt: "2026-02-25T08:00:00Z",
+      published_at: "2026-02-25T08:00:00Z",
       channel: "website",
     }),
     createMockPiece({
@@ -95,9 +95,9 @@ function createPieceSet(): ContentPiece[] {
       title: "Published Social",
       status: "PUBLISHED",
       type: "social",
-      publishedAt: "2026-02-24T14:00:00Z",
+      published_at: "2026-02-24T14:00:00Z",
       channel: "social",
-      agentName: "SocialPulse",
+      agent_name: "SocialPulse",
     }),
   ]
 }
@@ -114,18 +114,18 @@ describe("ContentPiece type structure", () => {
     expect(piece.body).toBeDefined()
     expect(piece.type).toBe("blog")
     expect(piece.status).toBe("DRAFT")
-    expect(piece.agentId).toBe("agt-writer-01")
-    expect(piece.agentName).toBe("ContentBot")
-    expect(piece.wordCount).toBe(1500)
-    expect(piece.createdAt).toBeDefined()
+    expect(piece.agent_id).toBe("agt-writer-01")
+    expect(piece.agent_name).toBe("ContentBot")
+    expect(piece.word_count).toBe(1500)
+    expect(piece.created_at).toBeDefined()
   })
 
   it("supports optional fields", () => {
     const piece = createMockPiece({
-      publishedAt: "2026-02-25T12:00:00Z",
+      published_at: "2026-02-25T12:00:00Z",
       channel: "website",
     })
-    expect(piece.publishedAt).toBe("2026-02-25T12:00:00Z")
+    expect(piece.published_at).toBe("2026-02-25T12:00:00Z")
     expect(piece.channel).toBe("website")
   })
 
@@ -204,13 +204,13 @@ describe("Filter and search logic", () => {
   ): ContentPiece[] {
     return items.filter((p) => {
       if (filters.type !== "ALL" && p.type !== filters.type) return false
-      if (filters.agent !== "ALL" && p.agentName !== filters.agent) return false
+      if (filters.agent !== "ALL" && p.agent_name !== filters.agent) return false
       if (filters.search) {
         const q = filters.search.toLowerCase()
         return (
           p.title.toLowerCase().includes(q) ||
           p.body.toLowerCase().includes(q) ||
-          p.agentName.toLowerCase().includes(q)
+          p.agent_name.toLowerCase().includes(q)
         )
       }
       return true
@@ -225,7 +225,7 @@ describe("Filter and search logic", () => {
 
   it("filters by agent name", () => {
     const result = applyFilters(pieces, { search: "", type: "ALL", agent: "SocialPulse" })
-    expect(result.every((p) => p.agentName === "SocialPulse")).toBe(true)
+    expect(result.every((p) => p.agent_name === "SocialPulse")).toBe(true)
     expect(result).toHaveLength(2)
   })
 
@@ -242,7 +242,7 @@ describe("Filter and search logic", () => {
 
   it("combines multiple filters", () => {
     const result = applyFilters(pieces, { search: "", type: "social", agent: "SocialPulse" })
-    expect(result.every((p) => p.type === "social" && p.agentName === "SocialPulse")).toBe(true)
+    expect(result.every((p) => p.type === "social" && p.agent_name === "SocialPulse")).toBe(true)
   })
 
   it("returns all items with no filters", () => {
@@ -263,62 +263,62 @@ describe("Stats calculations", () => {
     todayStart.setHours(0, 0, 0, 0)
 
     const publishedToday = pieces.filter(
-      (p) => p.publishedAt && new Date(p.publishedAt).getTime() >= todayStart.getTime(),
+      (p) => p.published_at && new Date(p.published_at).getTime() >= todayStart.getTime(),
     ).length
 
     const reviewPieces = pieces.filter((p) => p.status === "IN_REVIEW")
     const avgReviewTimeMs =
       reviewPieces.length > 0
-        ? reviewPieces.reduce((sum, p) => sum + (now - new Date(p.createdAt).getTime()), 0) /
+        ? reviewPieces.reduce((sum, p) => sum + (now - new Date(p.created_at).getTime()), 0) /
           reviewPieces.length
         : 0
 
     return {
-      totalPieces: pieces.length,
-      publishedToday,
-      avgReviewTimeMs,
-      pendingReview: reviewPieces.length,
+      total_pieces: pieces.length,
+      published_today: publishedToday,
+      avg_review_time_ms: avgReviewTimeMs,
+      pending_review: reviewPieces.length,
     }
   }
 
   it("counts total pieces", () => {
     const pieces = createPieceSet()
     const stats = computeStats(pieces)
-    expect(stats.totalPieces).toBe(7)
+    expect(stats.total_pieces).toBe(7)
   })
 
   it("counts pending review pieces", () => {
     const pieces = createPieceSet()
     const stats = computeStats(pieces)
-    expect(stats.pendingReview).toBe(2)
+    expect(stats.pending_review).toBe(2)
   })
 
   it("computes avg review time > 0 for pieces in review", () => {
     const pieces = createPieceSet()
     const stats = computeStats(pieces)
-    expect(stats.avgReviewTimeMs).toBeGreaterThan(0)
+    expect(stats.avg_review_time_ms).toBeGreaterThan(0)
   })
 
   it("handles empty array", () => {
     const stats = computeStats([])
-    expect(stats.totalPieces).toBe(0)
-    expect(stats.publishedToday).toBe(0)
-    expect(stats.avgReviewTimeMs).toBe(0)
-    expect(stats.pendingReview).toBe(0)
+    expect(stats.total_pieces).toBe(0)
+    expect(stats.published_today).toBe(0)
+    expect(stats.avg_review_time_ms).toBe(0)
+    expect(stats.pending_review).toBe(0)
   })
 
   it("counts published today correctly", () => {
     const todayPiece = createMockPiece({
       status: "PUBLISHED",
-      publishedAt: new Date().toISOString(),
+      published_at: new Date().toISOString(),
     })
     const oldPiece = createMockPiece({
       id: "c-old",
       status: "PUBLISHED",
-      publishedAt: "2026-01-01T00:00:00Z",
+      published_at: "2026-01-01T00:00:00Z",
     })
     const stats = computeStats([todayPiece, oldPiece])
-    expect(stats.publishedToday).toBe(1)
+    expect(stats.published_today).toBe(1)
   })
 })
 
@@ -344,7 +344,7 @@ describe("Content API endpoints", () => {
   it("listContent passes query parameters", async () => {
     mockFetchResponse({
       content: [],
-      pagination: { total: 0, limit: 20, offset: 0, hasMore: false },
+      pagination: { total: 0, limit: 20, offset: 0, has_more: false },
     })
 
     await listContent({ status: "DRAFT", type: "blog", limit: 10 })
@@ -358,7 +358,7 @@ describe("Content API endpoints", () => {
   it("listContent works without parameters", async () => {
     mockFetchResponse({
       content: [createMockPiece()],
-      pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
+      pagination: { total: 1, limit: 20, offset: 0, has_more: false },
     })
 
     const result = await listContent()
@@ -367,9 +367,9 @@ describe("Content API endpoints", () => {
 
   it("publishContent sends POST with channel", async () => {
     mockFetchResponse({
-      contentId: "c-1",
+      content_id: "c-1",
       status: "published",
-      publishedAt: "2026-02-25T12:00:00Z",
+      published_at: "2026-02-25T12:00:00Z",
     })
 
     const result = await publishContent("c-1", "website")
@@ -381,7 +381,7 @@ describe("Content API endpoints", () => {
   })
 
   it("archiveContent sends POST", async () => {
-    mockFetchResponse({ contentId: "c-1", status: "archived" })
+    mockFetchResponse({ content_id: "c-1", status: "archived" })
 
     const result = await archiveContent("c-1")
 

@@ -343,7 +343,7 @@ export class ApiError extends Error {
 
 export async function listAgents(params?: {
   status?: string
-  lifecycleState?: string
+  lifecycle_state?: string
   limit?: number
   offset?: number
 }): Promise<{
@@ -352,7 +352,7 @@ export async function listAgents(params?: {
 }> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
-  if (params?.lifecycleState) search.set("lifecycleState", params.lifecycleState)
+  if (params?.lifecycle_state) search.set("lifecycle_state", params.lifecycle_state)
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
@@ -450,7 +450,7 @@ export async function resumeAgent(
 
 export async function listApprovals(params?: {
   status?: string
-  jobId?: string
+  job_id?: string
   limit?: number
   offset?: number
 }): Promise<{
@@ -459,7 +459,7 @@ export async function listApprovals(params?: {
 }> {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
-  if (params?.jobId) search.set("jobId", params.jobId)
+  if (params?.job_id) search.set("jobId", params.job_id)
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
@@ -474,7 +474,7 @@ export async function approveRequest(
 ) {
   return apiFetch(`/approval/${approvalId}/decide`, {
     method: "POST",
-    body: { decision, decidedBy, channel: "dashboard", reason },
+    body: { decision, decided_by: decidedBy, channel: "dashboard", reason },
     schema: ApprovalDecisionResponseSchema,
   })
 }
@@ -492,7 +492,7 @@ export async function getApprovalAudit(
 }
 
 export async function listJobs(params?: {
-  agentId?: string
+  agent_id?: string
   status?: string
   limit?: number
   offset?: number
@@ -501,7 +501,7 @@ export async function listJobs(params?: {
   pagination: import("./schemas/common").Pagination
 }> {
   const search = new URLSearchParams()
-  if (params?.agentId) search.set("agentId", params.agentId)
+  if (params?.agent_id) search.set("agentId", params.agent_id)
   if (params?.status) search.set("status", params.status)
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
@@ -521,12 +521,12 @@ export async function retryJob(jobId: string) {
 }
 
 export async function searchMemory(params: {
-  agentId: string
+  agent_id: string
   query: string
   limit?: number
 }): Promise<{ results: import("./schemas/memory").MemoryRecord[] }> {
   const search = new URLSearchParams()
-  search.set("agentId", params.agentId)
+  search.set("agentId", params.agent_id)
   search.set("query", params.query)
   if (params.limit) search.set("limit", String(params.limit))
   return apiFetch(`/memory/search?${search.toString()}`, { schema: MemorySearchResponseSchema })
@@ -538,7 +538,7 @@ export async function syncMemory(
 ) {
   return apiFetch("/memory/sync", {
     method: "POST",
-    body: { agentId, direction },
+    body: { agent_id: agentId, direction },
     schema: SyncMemoryResponseSchema,
   })
 }
@@ -550,7 +550,7 @@ export async function syncMemory(
 export async function listContent(params?: {
   status?: string
   type?: string
-  agentId?: string
+  agent_id?: string
   limit?: number
   offset?: number
 }): Promise<{
@@ -560,7 +560,7 @@ export async function listContent(params?: {
   const search = new URLSearchParams()
   if (params?.status) search.set("status", params.status)
   if (params?.type) search.set("type", params.type)
-  if (params?.agentId) search.set("agentId", params.agentId)
+  if (params?.agent_id) search.set("agentId", params.agent_id)
   if (params?.limit) search.set("limit", String(params.limit))
   if (params?.offset) search.set("offset", String(params.offset))
   const qs = search.toString()
@@ -674,7 +674,7 @@ export async function initOAuthConnect(
 
 export async function exchangeOAuthConnect(
   provider: string,
-  body: { pastedUrl: string; codeVerifier: string; state: string },
+  body: { pastedUrl: string; code_verifier: string; state: string },
 ): Promise<unknown> {
   return apiFetch(`/auth/connect/${provider}/exchange`, {
     method: "POST",

@@ -91,18 +91,18 @@ export function ContentCard({
             <div className="flex items-center gap-1.5">
               <div className="flex size-5 items-center justify-center rounded-full bg-blue-500/10">
                 <span className="text-[8px] font-bold text-primary">
-                  {getInitials(piece.agentName)}
+                  {getInitials(piece.agent_name)}
                 </span>
               </div>
-              <span className="text-xs text-text-muted">{piece.agentName}</span>
+              <span className="text-xs text-text-muted">{piece.agent_name}</span>
             </div>
             <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${typeClass}`}>
               {piece.type}
             </span>
             <span className="text-[10px] text-slate-400">
-              {piece.wordCount.toLocaleString()} words
+              {piece.word_count.toLocaleString()} words
             </span>
-            <span className="text-[10px] text-slate-400">{relativeTime(piece.createdAt)}</span>
+            <span className="text-[10px] text-slate-400">{relativeTime(piece.created_at)}</span>
           </div>
 
           {/* Actions */}

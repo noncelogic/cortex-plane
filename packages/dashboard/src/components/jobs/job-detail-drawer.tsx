@@ -48,9 +48,9 @@ function StepTimeline({ steps }: { steps: JobStep[] }): React.JSX.Element {
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-bold text-text-main">{step.name}</span>
-              {step.durationMs !== undefined && (
+              {step.duration_ms !== undefined && (
                 <span className="font-mono text-xs text-text-muted">
-                  {duration(step.durationMs)}
+                  {duration(step.duration_ms)}
                 </span>
               )}
             </div>
@@ -71,22 +71,22 @@ function MetricsGrid({ metrics }: { metrics: JobMetrics }): React.JSX.Element {
   const items = [
     {
       label: "CPU",
-      value: `${metrics.cpuPercent}%`,
+      value: `${metrics.cpu_percent}%`,
       icon: "memory",
     },
     {
       label: "Memory",
-      value: `${metrics.memoryMb} MB`,
+      value: `${metrics.memory_mb} MB`,
       icon: "storage",
     },
     {
       label: "Network I/O",
-      value: `${bytes(metrics.networkInBytes)} / ${bytes(metrics.networkOutBytes)}`,
+      value: `${bytes(metrics.network_in_bytes)} / ${bytes(metrics.network_out_bytes)}`,
       icon: "swap_vert",
     },
     {
       label: "Threads",
-      value: String(metrics.threadCount),
+      value: String(metrics.thread_count),
       icon: "account_tree",
     },
   ]
@@ -171,9 +171,9 @@ export function JobDetailDrawer({
     job?.status === "FAILED" || job?.status === "TIMED_OUT" || job?.status === "DEAD_LETTER"
 
   const durationMs =
-    job?.durationMs ??
-    (job?.completedAt && job.createdAt
-      ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
+    job?.duration_ms ??
+    (job?.completed_at && job.created_at
+      ? new Date(job.completed_at).getTime() - new Date(job.created_at).getTime()
       : null)
 
   return (
@@ -196,16 +196,16 @@ export function JobDetailDrawer({
               <div className="flex flex-wrap items-center gap-3 text-sm text-text-muted">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm">smart_toy</span>
-                  {job.agentName ?? job.agentId.slice(0, 12)}
-                  {job.agentVersion && (
-                    <span className="text-xs text-text-muted"> {job.agentVersion}</span>
+                  {job.agent_name ?? job.agent_id.slice(0, 12)}
+                  {job.agent_version && (
+                    <span className="text-xs text-text-muted"> {job.agent_version}</span>
                   )}
                 </span>
                 <span className="rounded-md bg-secondary px-2 py-0.5 text-xs">{job.type}</span>
                 {durationMs !== null && (
                   <span className="font-mono text-xs">{duration(durationMs)}</span>
                 )}
-                <span className="text-xs">{relativeTime(job.createdAt)}</span>
+                <span className="text-xs">{relativeTime(job.created_at)}</span>
               </div>
             )}
           </div>

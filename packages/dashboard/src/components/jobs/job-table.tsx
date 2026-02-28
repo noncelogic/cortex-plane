@@ -67,7 +67,7 @@ export function JobTable({
         const q = search.toLowerCase()
         return (
           j.id.toLowerCase().includes(q) ||
-          j.agentId.toLowerCase().includes(q) ||
+          j.agent_id.toLowerCase().includes(q) ||
           j.type.toLowerCase().includes(q)
         )
       }
@@ -206,10 +206,10 @@ export function JobTable({
             ) : (
               paginated.map((job) => {
                 const durationMs =
-                  job.completedAt && job.createdAt
-                    ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
-                    : job.updatedAt && job.createdAt
-                      ? new Date(job.updatedAt).getTime() - new Date(job.createdAt).getTime()
+                  job.completed_at && job.created_at
+                    ? new Date(job.completed_at).getTime() - new Date(job.created_at).getTime()
+                    : job.updated_at && job.created_at
+                      ? new Date(job.updated_at).getTime() - new Date(job.created_at).getTime()
                       : null
 
                 return (
@@ -236,7 +236,7 @@ export function JobTable({
                         <span className="material-symbols-outlined text-lg text-text-muted">
                           smart_toy
                         </span>
-                        <span className="text-sm text-text-main">{truncateUuid(job.agentId)}</span>
+                        <span className="text-sm text-text-main">{truncateUuid(job.agent_id)}</span>
                       </div>
                     </td>
 
@@ -256,7 +256,9 @@ export function JobTable({
 
                     {/* Started */}
                     <td className="px-6 py-4">
-                      <span className="text-sm text-text-muted">{relativeTime(job.createdAt)}</span>
+                      <span className="text-sm text-text-muted">
+                        {relativeTime(job.created_at)}
+                      </span>
                     </td>
 
                     {/* Actions */}

@@ -96,10 +96,10 @@ export function MemoryResults({
           type="button"
           onClick={() => {
             if (results.length === 0) return
-            const header = "id,type,content,importance,confidence,source,createdAt\n"
+            const header = "id,type,content,importance,confidence,source,created_at\n"
             const rows = results.map((r) => {
               const escaped = r.content.replace(/"/g, '""')
-              return `${r.id},${r.type},"${escaped}",${r.importance},${r.confidence},${r.source},${r.createdAt}`
+              return `${r.id},${r.type},"${escaped}",${r.importance},${r.confidence},${r.source},${r.created_at}`
             })
             const csv = header + rows.join("\n")
             const blob = new Blob([csv], { type: "text/csv" })
@@ -173,7 +173,7 @@ export function MemoryResults({
                       {typeLabel(record.type)}
                     </span>
                     <span className="ml-auto text-xs text-slate-500">
-                      {relativeTimeFromEpoch(record.createdAt)}
+                      {relativeTimeFromEpoch(record.created_at)}
                     </span>
                   </div>
                 </button>

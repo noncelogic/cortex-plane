@@ -27,7 +27,7 @@ export function SteerInput({ agentId, onStop }: SteerInputProps): React.JSX.Elem
 
       try {
         const res = await steerAgent(agentId, { message: message.trim(), priority })
-        setConfirmation(`Instruction accepted (${res.steerMessageId.slice(0, 8)})`)
+        setConfirmation(`Instruction accepted (${res.steer_message_id.slice(0, 8)})`)
         setMessage("")
         setTimeout(() => setConfirmation(null), 4000)
       } catch (err) {

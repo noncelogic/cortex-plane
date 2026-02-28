@@ -3,19 +3,19 @@ import { z } from "zod"
 export const ProviderInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
-  authType: z.enum(["oauth", "api_key"]),
+  auth_type: z.enum(["oauth", "api_key"]),
   description: z.string(),
 })
 
 export const CredentialSchema = z.object({
   id: z.string(),
   provider: z.string(),
-  credentialType: z.string(),
-  displayLabel: z.string().nullable(),
-  maskedKey: z.string().nullable(),
+  credential_type: z.string(),
+  display_label: z.string().nullable(),
+  masked_key: z.string().nullable(),
   status: z.string(),
-  lastUsedAt: z.string().nullable(),
-  createdAt: z.string(),
+  last_used_at: z.string().nullable(),
+  created_at: z.string(),
 })
 
 export const ProviderListResponseSchema = z.object({
@@ -27,8 +27,8 @@ export const CredentialListResponseSchema = z.object({
 })
 
 export const OAuthInitResultSchema = z.object({
-  authUrl: z.string(),
-  codeVerifier: z.string(),
+  auth_url: z.string(),
+  code_verifier: z.string(),
   state: z.string(),
 })
 

@@ -46,9 +46,9 @@ function createMockRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
     importance: 5,
     confidence: 0.95,
     source: "agent-observation",
-    createdAt: now - 86_400_000,
-    accessCount: 47,
-    lastAccessedAt: now - 3_600_000,
+    created_at: now - 86_400_000,
+    access_count: 47,
+    last_accessed_at: now - 3_600_000,
     score: 0.97,
     ...overrides,
   }
@@ -99,7 +99,7 @@ describe("MemorySearch filter logic", () => {
           "90d": 90 * 86_400_000,
         }
         const maxAge = ranges[filters.timeRange]
-        if (maxAge && now - r.createdAt > maxAge) return false
+        if (maxAge && now - r.created_at > maxAge) return false
       }
       return true
     })
@@ -122,7 +122,7 @@ describe("MemorySearch filter logic", () => {
       importance: 5,
       confidence: 0.95,
       score: 0.97,
-      createdAt: now - 2 * 86_400_000,
+      created_at: now - 2 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-2",
@@ -131,7 +131,7 @@ describe("MemorySearch filter logic", () => {
       tags: ["deployment"],
       importance: 4,
       score: 0.91,
-      createdAt: now - 5 * 86_400_000,
+      created_at: now - 5 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-3",
@@ -140,7 +140,7 @@ describe("MemorySearch filter logic", () => {
       tags: ["incident", "redis"],
       importance: 5,
       score: 0.84,
-      createdAt: now - 72 * 86_400_000,
+      created_at: now - 72 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-4",
@@ -150,7 +150,7 @@ describe("MemorySearch filter logic", () => {
       importance: 5,
       confidence: 1.0,
       score: 0.78,
-      createdAt: now - 30 * 86_400_000,
+      created_at: now - 30 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-5",
@@ -159,7 +159,7 @@ describe("MemorySearch filter logic", () => {
       tags: ["logging"],
       importance: 3,
       score: 0.72,
-      createdAt: now - 60 * 86_400_000,
+      created_at: now - 60 * 86_400_000,
     }),
   ]
 
@@ -429,9 +429,9 @@ describe("MemoryRecord type", () => {
     expect(typeof record.importance).toBe("number")
     expect(typeof record.confidence).toBe("number")
     expect(typeof record.source).toBe("string")
-    expect(typeof record.createdAt).toBe("number")
-    expect(typeof record.accessCount).toBe("number")
-    expect(typeof record.lastAccessedAt).toBe("number")
+    expect(typeof record.created_at).toBe("number")
+    expect(typeof record.access_count).toBe("number")
+    expect(typeof record.last_accessed_at).toBe("number")
   })
 
   it("type field accepts all 4 values", () => {
@@ -472,7 +472,7 @@ describe("searchMemory API", () => {
 
   it("passes query parameters correctly", async () => {
     mockFetchResponse({ results: [] })
-    await searchMemory({ agentId: "agt-1", query: "kubernetes", limit: 10 })
+    await searchMemory({ agent_id: "agt-1", query: "kubernetes", limit: 10 })
 
     const url = vi.mocked(fetch).mock.calls[0]![0] as string
     expect(url).toContain("agentId=agt-1")
@@ -484,7 +484,7 @@ describe("searchMemory API", () => {
     const mockResults = [createMockRecord()]
     mockFetchResponse({ results: mockResults })
 
-    const result = await searchMemory({ agentId: "agt-1", query: "test" })
+    const result = await searchMemory({ agent_id: "agt-1", query: "test" })
     expect(result.results).toHaveLength(1)
     expect(result.results[0]!.type).toBe("fact")
   })
@@ -492,13 +492,13 @@ describe("searchMemory API", () => {
   it("returns empty results for no matches", async () => {
     mockFetchResponse({ results: [] })
 
-    const result = await searchMemory({ agentId: "agt-1", query: "nonexistent" })
+    const result = await searchMemory({ agent_id: "agt-1", query: "nonexistent" })
     expect(result.results).toHaveLength(0)
   })
 
   it("throws ApiError on server error", async () => {
     mockFetchResponse({ message: "Internal error" }, 500)
-    await expect(searchMemory({ agentId: "agt-1", query: "test" })).rejects.toThrow(ApiError)
+    await expect(searchMemory({ agent_id: "agt-1", query: "test" })).rejects.toThrow(ApiError)
   })
 })
 
@@ -510,14 +510,14 @@ describe("syncMemory API", () => {
 
   it("sends POST to sync endpoint", async () => {
     mockFetchResponse({
-      syncId: "sync-001",
+      sync_id: "sync-001",
       status: "completed",
       stats: { upserted: 5, deleted: 1, unchanged: 10 },
     })
 
     const result = await syncMemory("agt-1")
 
-    expect(result.syncId).toBe("sync-001")
+    expect(result.sync_id).toBe("sync-001")
     expect(result.stats.upserted).toBe(5)
     expect(result.stats.deleted).toBe(1)
     expect(result.stats.unchanged).toBe(10)
@@ -529,7 +529,7 @@ describe("syncMemory API", () => {
 
   it("passes direction parameter", async () => {
     mockFetchResponse({
-      syncId: "sync-002",
+      sync_id: "sync-002",
       status: "completed",
       stats: { upserted: 0, deleted: 0, unchanged: 15 },
     })
@@ -537,8 +537,8 @@ describe("syncMemory API", () => {
     await syncMemory("agt-1", "file_to_qdrant")
 
     const [, opts] = vi.mocked(fetch).mock.calls[0]!
-    const body = JSON.parse(opts!.body as string) as { agentId: string; direction: string }
-    expect(body.agentId).toBe("agt-1")
+    const body = JSON.parse(opts!.body as string) as { agent_id: string; direction: string }
+    expect(body.agent_id).toBe("agt-1")
     expect(body.direction).toBe("file_to_qdrant")
   })
 
