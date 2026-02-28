@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import type { ContentFilterState } from "@/components/pulse/content-filters"
 import { useApiQuery } from "@/hooks/use-api"
+import { useContentStream } from "@/hooks/use-content-stream"
 import type { ContentPiece, ContentPipelineStats } from "@/lib/api-client"
 import { archiveContent, listContent, publishContent } from "@/lib/api-client"
 
@@ -38,17 +39,30 @@ export function usePulsePipeline() {
     agent: "ALL",
   })
   const [publishingId, setPublishingId] = useState<string | null>(null)
+  const [archivingId, setArchivingId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const {
     data,
     isLoading,
     error: rawError,
     errorCode: rawErrorCode,
+    refetch,
   } = useApiQuery(() => listContent({ limit: 100 }), [])
 
   // A 404 means the /content route isn't deployed — not a connection failure.
   const error = rawErrorCode === "NOT_FOUND" ? null : rawError
   const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
+
+  // Real-time content stream — refetch when events arrive
+  const { events: streamEvents } = useContentStream({ maxEvents: 50 })
+  const streamEventCount = streamEvents.length
+
+  useEffect(() => {
+    if (streamEventCount > 0) {
+      void refetch()
+    }
+  }, [streamEventCount, refetch])
 
   const allPieces: ContentPiece[] = useMemo(() => {
     if (data?.content) return data.content
@@ -82,13 +96,32 @@ export function usePulsePipeline() {
     [allPieces, publishingId],
   )
 
-  const handlePublish = useCallback(async (contentId: string, channel: string): Promise<void> => {
-    await publishContent(contentId, channel)
-  }, [])
+  const archivingPiece = useMemo(
+    () => allPieces.find((p) => p.id === archivingId),
+    [allPieces, archivingId],
+  )
 
-  const handleArchive = useCallback(async (contentId: string): Promise<void> => {
-    await archiveContent(contentId)
-  }, [])
+  const selectedPiece = useMemo(
+    () => allPieces.find((p) => p.id === selectedId),
+    [allPieces, selectedId],
+  )
+
+  const handlePublish = useCallback(
+    async (contentId: string, channel: string): Promise<void> => {
+      await publishContent(contentId, channel)
+      void refetch()
+    },
+    [refetch],
+  )
+
+  const handleArchive = useCallback(
+    async (contentId: string): Promise<void> => {
+      await archiveContent(contentId)
+      setArchivingId(null)
+      void refetch()
+    },
+    [refetch],
+  )
 
   return {
     pieces: allPieces,
@@ -100,10 +133,17 @@ export function usePulsePipeline() {
     publishingId,
     setPublishingId,
     publishingPiece,
+    archivingId,
+    setArchivingId,
+    archivingPiece,
+    selectedId,
+    setSelectedId,
+    selectedPiece,
     handlePublish,
     handleArchive,
+    refetch,
     isLoading,
     error,
-    errorCode: errorCode,
+    errorCode,
   }
 }
