@@ -42,8 +42,8 @@ function SettingsInner() {
   // Code-paste flow state
   const [codePasteFlow, setCodePasteFlow] = useState<{
     provider: string
-    auth_url: string
-    code_verifier: string
+    authUrl: string
+    codeVerifier: string
     state: string
     pastedUrl: string
   } | null>(null)
@@ -82,8 +82,8 @@ function SettingsInner() {
       const data = await initOAuthConnect(provider)
       setCodePasteFlow({
         provider,
-        auth_url: data.auth_url,
-        code_verifier: data.code_verifier,
+        authUrl: data.authUrl,
+        codeVerifier: data.codeVerifier,
         state: data.state,
         pastedUrl: "",
       })
@@ -101,7 +101,7 @@ function SettingsInner() {
     try {
       await exchangeOAuthConnect(codePasteFlow.provider, {
         pastedUrl: codePasteFlow.pastedUrl,
-        code_verifier: codePasteFlow.code_verifier,
+        codeVerifier: codePasteFlow.codeVerifier,
         state: codePasteFlow.state,
       })
 
@@ -316,7 +316,7 @@ function SettingsInner() {
                   1. Click the link below to open the authorization page in a new tab.
                 </p>
                 <a
-                  href={codePasteFlow.auth_url}
+                  href={codePasteFlow.authUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"

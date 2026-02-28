@@ -34,8 +34,8 @@ export const CredentialListResponseSchema = z.object({
 })
 
 export const OAuthInitResultSchema = z.object({
-  auth_url: z.string(),
-  code_verifier: z.string(),
+  authUrl: z.string(),
+  codeVerifier: z.string(),
   state: z.string(),
 })
 

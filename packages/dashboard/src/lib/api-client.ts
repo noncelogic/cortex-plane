@@ -675,7 +675,7 @@ export async function initOAuthConnect(
 
 export async function exchangeOAuthConnect(
   provider: string,
-  body: { pastedUrl: string; code_verifier: string; state: string },
+  body: { pastedUrl: string; codeVerifier: string; state: string },
 ): Promise<unknown> {
   return apiFetch(`/auth/connect/${provider}/exchange`, {
     method: "POST",

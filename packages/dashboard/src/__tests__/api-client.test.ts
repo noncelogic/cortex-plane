@@ -616,16 +616,16 @@ describe("API Client", () => {
 
     it("initOAuthConnect fetches GET /auth/connect/:provider/init", async () => {
       const body = {
-        auth_url: "https://accounts.google.com/o/oauth2/auth?...",
-        code_verifier: "verifier-123",
+        authUrl: "https://accounts.google.com/o/oauth2/auth?...",
+        codeVerifier: "verifier-123",
         state: "state-abc",
       }
       mockFetchResponse(body)
 
       const result = await initOAuthConnect("google-antigravity")
 
-      expect(result.auth_url).toBe(body.auth_url)
-      expect(result.code_verifier).toBe("verifier-123")
+      expect(result.authUrl).toBe(body.authUrl)
+      expect(result.codeVerifier).toBe("verifier-123")
       expect(result.state).toBe("state-abc")
       expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(
         `${API_BASE}/auth/connect/google-antigravity/init`,
@@ -637,7 +637,7 @@ describe("API Client", () => {
 
       await exchangeOAuthConnect("anthropic", {
         pastedUrl: "http://localhost:3100/callback?code=abc",
-        code_verifier: "verifier-123",
+        codeVerifier: "verifier-123",
         state: "state-abc",
       })
 
@@ -646,7 +646,7 @@ describe("API Client", () => {
       expect(opts!.method).toBe("POST")
       expect(JSON.parse(opts!.body as string)).toEqual({
         pastedUrl: "http://localhost:3100/callback?code=abc",
-        code_verifier: "verifier-123",
+        codeVerifier: "verifier-123",
         state: "state-abc",
       })
     })
