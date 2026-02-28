@@ -220,7 +220,7 @@ function SettingsInner() {
         <div className="mt-4 space-y-3">
           {providers.map((p) => {
             const cred = getCredentialForProvider(p.id)
-            const isOAuth = p.auth_type === "oauth"
+            const isOAuth = p.authType === "oauth"
             const isCodePaste = CODE_PASTE_PROVIDER_IDS.has(p.id)
 
             return (
@@ -250,8 +250,8 @@ function SettingsInner() {
                     )}
                   </div>
                   <p className="text-xs text-text-muted">{p.description}</p>
-                  {cred?.masked_key && (
-                    <p className="mt-1 font-mono text-xs text-text-muted">{cred.masked_key}</p>
+                  {cred?.maskedKey && (
+                    <p className="mt-1 font-mono text-xs text-text-muted">{cred.maskedKey}</p>
                   )}
                 </div>
 

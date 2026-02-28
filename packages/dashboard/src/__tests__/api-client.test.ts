@@ -578,7 +578,7 @@ describe("API Client", () => {
     it("listProviders fetches GET /credentials/providers", async () => {
       const body = {
         providers: [
-          { id: "anthropic", name: "Anthropic", auth_type: "oauth", description: "Claude models" },
+          { id: "anthropic", name: "Anthropic", authType: "oauth", description: "Claude models" },
         ],
       }
       mockFetchResponse(body)
@@ -596,12 +596,12 @@ describe("API Client", () => {
           {
             id: "cred-1",
             provider: "anthropic",
-            credential_type: "oauth",
-            display_label: null,
-            masked_key: null,
+            credentialType: "oauth",
+            displayLabel: null,
+            maskedKey: null,
             status: "active",
-            last_used_at: null,
-            created_at: "2026-01-01T00:00:00Z",
+            lastUsedAt: null,
+            createdAt: "2026-01-01T00:00:00Z",
           },
         ],
       }

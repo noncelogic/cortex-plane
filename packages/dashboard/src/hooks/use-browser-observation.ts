@@ -84,11 +84,11 @@ export function useBrowserObservation(agentId: string) {
     return (
       sessionData ?? {
         id: `session-${agentId}`,
-        agent_id: agentId,
-        vnc_url: null,
+        agentId: agentId,
+        vncUrl: null,
         status: sessionError ? "error" : "connecting",
         tabs: [],
-        latency_ms: 0,
+        latencyMs: 0,
       }
     )
   }, [sessionData, sessionError, agentId])
@@ -162,7 +162,7 @@ export function useBrowserObservation(agentId: string) {
 
   useEffect(() => {
     // Only auto-refresh when there is no VNC and the session is not in error
-    if (session.vnc_url) return
+    if (session.vncUrl) return
     if (session.status === "error") return
 
     const id = setInterval(() => {
@@ -171,7 +171,7 @@ export function useBrowserObservation(agentId: string) {
     }, AUTO_REFRESH_INTERVAL_MS)
 
     return () => clearInterval(id)
-  }, [session.vnc_url, session.status, refetchScreenshots, refetchEvents])
+  }, [session.vncUrl, session.status, refetchScreenshots, refetchEvents])
 
   // -------------------------------------------------------------------------
   // Return
