@@ -1,0 +1,27 @@
+{
+  "approvals": [
+    {
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "job_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "requested_by_agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "status": "PENDING",
+      "action_type": "shell_command",
+      "action_summary": "Execute rm -rf /tmp/cache",
+      "action_detail": { "command": "rm -rf /tmp/cache", "cwd": "/workspace" },
+      "approver_user_account_id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "requested_at": "2025-01-15T11:02:00.000Z",
+      "decided_at": null,
+      "decided_by": null,
+      "expires_at": "2025-01-16T11:02:00.000Z",
+      "decision_note": null,
+      "risk_level": "P1",
+      "blast_radius": "Deletes temporary cache files"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "limit": 50,
+    "offset": 0,
+    "hasMore": false
+  }
+}

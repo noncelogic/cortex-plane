@@ -91,10 +91,10 @@ export default function DashboardPage(): React.JSX.Element {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-text-main truncate">
-                        {job.agent_name}
+                        {job.agentName}
                         <span className="ml-2 text-text-muted font-normal">{job.type}</span>
                       </p>
-                      <p className="text-xs text-text-muted">{relativeTime(job.created_at)}</p>
+                      <p className="text-xs text-text-muted">{relativeTime(job.createdAt)}</p>
                     </div>
                     <JobStatusBadge status={job.status} />
                   </div>

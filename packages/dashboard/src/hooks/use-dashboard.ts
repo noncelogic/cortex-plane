@@ -15,10 +15,10 @@ export interface DashboardStats {
 
 export interface RecentJob {
   id: string
-  agent_name: string
+  agentName: string
   status: JobStatus
   type: string
-  created_at: string
+  createdAt: string
 }
 
 export interface DashboardData {
@@ -72,10 +72,10 @@ export function useDashboard(): DashboardData {
     if (!jobData?.jobs || jobData.jobs.length === 0) return []
     return jobData.jobs.map((j) => ({
       id: j.id,
-      agent_name: j.agent_id,
+      agentName: j.agentId,
       status: j.status,
       type: j.type,
-      created_at: j.created_at,
+      createdAt: j.createdAt,
     }))
   }, [jobData])
 

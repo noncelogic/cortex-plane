@@ -128,8 +128,8 @@ export function AgentJobsTab({ agentId }: AgentJobsTabProps): React.JSX.Element 
           <div className="divide-y divide-surface-border">
             {jobs.map((job) => {
               const durationMs =
-                job.completed_at && job.created_at
-                  ? new Date(job.completed_at).getTime() - new Date(job.created_at).getTime()
+                job.completedAt && job.createdAt
+                  ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
                   : null
               return (
                 <button
@@ -148,7 +148,7 @@ export function AgentJobsTab({ agentId }: AgentJobsTabProps): React.JSX.Element 
                   <span className="ml-auto font-mono text-xs text-text-muted">
                     {durationMs !== null ? duration(durationMs) : "—"}
                   </span>
-                  <span className="text-xs text-text-muted">{relativeTime(job.created_at)}</span>
+                  <span className="text-xs text-text-muted">{relativeTime(job.createdAt)}</span>
                 </button>
               )
             })}

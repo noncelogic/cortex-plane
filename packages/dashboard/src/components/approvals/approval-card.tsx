@@ -164,7 +164,7 @@ export function ApprovalCard({
   const { display: countdown, expired, urgent } = useCountdown(approval.expires_at)
   const tags = deriveTags(approval)
   const isPending = approval.status === "PENDING"
-  const agentName = approval.agent_id ?? "Unknown Agent"
+  const agentName = approval.requested_by_agent_id ?? "Unknown Agent"
 
   return (
     <div
@@ -265,9 +265,9 @@ export function ApprovalCard({
             </div>
             <span className="text-xs text-text-muted">
               Requested by{" "}
-              {approval.agent_id ? (
+              {approval.requested_by_agent_id ? (
                 <Link
-                  href={`/agents/${approval.agent_id}`}
+                  href={`/agents/${approval.requested_by_agent_id}`}
                   className="font-medium text-text-main hover:text-primary"
                   onClick={(e) => e.stopPropagation()}
                 >

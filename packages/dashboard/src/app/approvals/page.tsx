@@ -357,14 +357,14 @@ export default function ApprovalsPage(): React.JSX.Element {
             a.status === "APPROVED" ? "approved" : a.status === "REJECTED" ? "rejected" : "expired",
           actor: a.decided_by ?? "System",
           timestamp: a.decided_at ?? a.requested_at,
-          reason: a.reason,
+          reason: a.decision_note ?? undefined,
           channel: "dashboard",
         })
       }
       entries.push({
         id: `${a.id}-request`,
         type: "requested",
-        actor: a.agent_id ?? "Unknown",
+        actor: a.requested_by_agent_id ?? "Unknown",
         timestamp: a.requested_at,
       })
     }
@@ -388,10 +388,11 @@ export default function ApprovalsPage(): React.JSX.Element {
           map.set(d.approval_request_id, {
             id: d.approval_request_id,
             job_id: d.job_id,
-            agent_id: d.agent_id,
+            requested_by_agent_id: d.agent_id,
             status: "PENDING",
             action_type: d.action_type,
             action_summary: d.action_summary,
+            action_detail: {},
             requested_at: d.timestamp,
             expires_at: d.expires_at,
           })
@@ -403,7 +404,6 @@ export default function ApprovalsPage(): React.JSX.Element {
           map.set(d.approval_request_id, {
             ...existing,
             status: d.decision as ApprovalStatus,
-            decision: d.decision as "APPROVED" | "REJECTED",
             decided_by: d.decided_by,
             decided_at: d.timestamp,
           })

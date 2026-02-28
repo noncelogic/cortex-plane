@@ -48,9 +48,9 @@ function StepTimeline({ steps }: { steps: JobStep[] }): React.JSX.Element {
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-bold text-text-main">{step.name}</span>
-              {step.duration_ms !== undefined && (
+              {step.durationMs !== undefined && (
                 <span className="font-mono text-xs text-text-muted">
-                  {duration(step.duration_ms)}
+                  {duration(step.durationMs)}
                 </span>
               )}
             </div>
@@ -171,9 +171,9 @@ export function JobDetailDrawer({
     job?.status === "FAILED" || job?.status === "TIMED_OUT" || job?.status === "DEAD_LETTER"
 
   const durationMs =
-    job?.duration_ms ??
-    (job?.completed_at && job.created_at
-      ? new Date(job.completed_at).getTime() - new Date(job.created_at).getTime()
+    job?.durationMs ??
+    (job?.completedAt && job.createdAt
+      ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
       : null)
 
   return (
@@ -196,16 +196,13 @@ export function JobDetailDrawer({
               <div className="flex flex-wrap items-center gap-3 text-sm text-text-muted">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm">smart_toy</span>
-                  {job.agent_name ?? job.agent_id.slice(0, 12)}
-                  {job.agent_version && (
-                    <span className="text-xs text-text-muted"> {job.agent_version}</span>
-                  )}
+                  {job.agentName ?? job.agentId.slice(0, 12)}
                 </span>
                 <span className="rounded-md bg-secondary px-2 py-0.5 text-xs">{job.type}</span>
                 {durationMs !== null && (
                   <span className="font-mono text-xs">{duration(durationMs)}</span>
                 )}
-                <span className="text-xs">{relativeTime(job.created_at)}</span>
+                <span className="text-xs">{relativeTime(job.createdAt)}</span>
               </div>
             )}
           </div>

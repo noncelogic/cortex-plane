@@ -46,9 +46,9 @@ function createMockRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
     importance: 5,
     confidence: 0.95,
     source: "agent-observation",
-    created_at: now - 86_400_000,
-    access_count: 47,
-    last_accessed_at: now - 3_600_000,
+    createdAt: now - 86_400_000,
+    accessCount: 47,
+    lastAccessedAt: now - 3_600_000,
     score: 0.97,
     ...overrides,
   }
@@ -99,7 +99,7 @@ describe("MemorySearch filter logic", () => {
           "90d": 90 * 86_400_000,
         }
         const maxAge = ranges[filters.timeRange]
-        if (maxAge && now - r.created_at > maxAge) return false
+        if (maxAge && now - r.createdAt > maxAge) return false
       }
       return true
     })
@@ -122,7 +122,7 @@ describe("MemorySearch filter logic", () => {
       importance: 5,
       confidence: 0.95,
       score: 0.97,
-      created_at: now - 2 * 86_400_000,
+      createdAt: now - 2 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-2",
@@ -131,7 +131,7 @@ describe("MemorySearch filter logic", () => {
       tags: ["deployment"],
       importance: 4,
       score: 0.91,
-      created_at: now - 5 * 86_400_000,
+      createdAt: now - 5 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-3",
@@ -140,7 +140,7 @@ describe("MemorySearch filter logic", () => {
       tags: ["incident", "redis"],
       importance: 5,
       score: 0.84,
-      created_at: now - 72 * 86_400_000,
+      createdAt: now - 72 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-4",
@@ -150,7 +150,7 @@ describe("MemorySearch filter logic", () => {
       importance: 5,
       confidence: 1.0,
       score: 0.78,
-      created_at: now - 30 * 86_400_000,
+      createdAt: now - 30 * 86_400_000,
     }),
     createMockRecord({
       id: "mem-5",
@@ -159,7 +159,7 @@ describe("MemorySearch filter logic", () => {
       tags: ["logging"],
       importance: 3,
       score: 0.72,
-      created_at: now - 60 * 86_400_000,
+      createdAt: now - 60 * 86_400_000,
     }),
   ]
 
@@ -429,9 +429,9 @@ describe("MemoryRecord type", () => {
     expect(typeof record.importance).toBe("number")
     expect(typeof record.confidence).toBe("number")
     expect(typeof record.source).toBe("string")
-    expect(typeof record.created_at).toBe("number")
-    expect(typeof record.access_count).toBe("number")
-    expect(typeof record.last_accessed_at).toBe("number")
+    expect(typeof record.createdAt).toBe("number")
+    expect(typeof record.accessCount).toBe("number")
+    expect(typeof record.lastAccessedAt).toBe("number")
   })
 
   it("type field accepts all 4 values", () => {

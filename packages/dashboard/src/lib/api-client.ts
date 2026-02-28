@@ -162,6 +162,43 @@ function isNetworkError(err: unknown): boolean {
   return err instanceof TypeError || (err instanceof DOMException && err.name === "AbortError")
 }
 
+/**
+ * In development, log a warning when the API response contains keys
+ * that the Zod schema does not expect (would be silently stripped).
+ */
+function warnUnexpectedKeys(path: string, schema: z.ZodTypeAny, data: unknown): void {
+  try {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return
+
+    const shape = extractSchemaShape(schema)
+    if (!shape) return
+
+    const schemaKeys = new Set(Object.keys(shape))
+    const dataKeys = Object.keys(data)
+    const extra = dataKeys.filter((k) => !schemaKeys.has(k))
+
+    if (extra.length > 0) {
+      console.warn(`[api-client] ${path}: API response has keys not in schema: ${extra.join(", ")}`)
+    }
+  } catch {
+    // Never break production over a dev warning
+  }
+}
+
+/** Walk through schema wrappers (transforms, refinements) to find the object shape. */
+function extractSchemaShape(schema: z.ZodTypeAny): Record<string, unknown> | null {
+  // z.object() exposes a .shape property
+  if ("shape" in schema && schema.shape && typeof schema.shape === "object") {
+    return schema.shape as Record<string, unknown>
+  }
+  // Wrapped schemas (.transform(), .refine()) store the inner schema in _def
+  const def = (schema as unknown as { _def?: Record<string, unknown> })._def
+  if (def && typeof def === "object" && "schema" in def && def.schema) {
+    return extractSchemaShape(def.schema as z.ZodTypeAny)
+  }
+  return null
+}
+
 async function apiFetch<T>(
   path: string,
   options: FetchOptions & { schema?: z.ZodType<T> } = {},
@@ -254,6 +291,12 @@ async function apiFetch<T>(
       }
 
       const data: unknown = await res.json()
+
+      // In development, warn about unexpected keys the schema will strip
+      if (process.env.NODE_ENV === "development" && schema && data && typeof data === "object") {
+        warnUnexpectedKeys(path, schema, data)
+      }
+
       return schema ? schema.parse(data) : (data as T)
     } catch (err) {
       clearTimeout(timeoutId)

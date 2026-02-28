@@ -131,10 +131,10 @@ describe("AgentListResponseSchema", () => {
 describe("JobSummarySchema", () => {
   const validJob = {
     id: "job-001",
-    agent_id: "agt-001",
+    agentId: "agt-001",
     status: "RUNNING",
     type: "inference",
-    created_at: "2026-01-01T00:00:00Z",
+    createdAt: "2026-01-01T00:00:00Z",
   }
 
   it("accepts valid job summary", () => {
@@ -167,11 +167,11 @@ describe("JobDetailSchema", () => {
   it("accepts valid job detail with steps and logs", () => {
     const detail = {
       id: "job-001",
-      agent_id: "agt-001",
+      agentId: "agt-001",
       status: "COMPLETED",
       type: "inference",
-      created_at: "2026-01-01T00:00:00Z",
-      steps: [{ name: "init", status: "COMPLETED", duration_ms: 100 }],
+      createdAt: "2026-01-01T00:00:00Z",
+      steps: [{ name: "init", status: "COMPLETED", durationMs: 100 }],
       logs: [{ timestamp: "2026-01-01T00:00:01Z", level: "INFO", message: "Started" }],
       metrics: {
         cpu_percent: 50,
@@ -206,6 +206,7 @@ describe("ApprovalRequestSchema", () => {
     status: "PENDING",
     action_type: "deploy",
     action_summary: "Deploy to production",
+    action_detail: { command: "deploy --prod" },
     requested_at: "2026-01-01T00:00:00Z",
     expires_at: "2026-01-01T01:00:00Z",
   }
@@ -250,9 +251,9 @@ describe("MemoryRecordSchema", () => {
     importance: 3 as const,
     confidence: 0.9,
     source: "test",
-    created_at: 1700000000000,
-    access_count: 5,
-    last_accessed_at: 1700000100000,
+    createdAt: 1700000000000,
+    accessCount: 5,
+    lastAccessedAt: 1700000100000,
   }
 
   it("accepts valid memory record", () => {
