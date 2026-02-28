@@ -262,8 +262,11 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams): Promis
     code,
     redirect_uri: callbackUrl,
     client_id: config.clientId,
-    client_secret: config.clientSecret,
   })
+
+  if (config.clientSecret) {
+    body.set("client_secret", config.clientSecret)
+  }
 
   if (codeVerifier) {
     body.set("code_verifier", codeVerifier)
@@ -333,8 +336,11 @@ export async function refreshAccessToken(params: RefreshTokenParams): Promise<To
     grant_type: "refresh_token",
     refresh_token: refreshToken,
     client_id: config.clientId,
-    client_secret: config.clientSecret,
   })
+
+  if (config.clientSecret) {
+    body.set("client_secret", config.clientSecret)
+  }
 
   const res = await fetch(urls.tokenUrl, {
     method: "POST",
