@@ -4,8 +4,10 @@ import Link from "next/link"
 import { use, useState } from "react"
 
 import { BrowserViewport } from "@/components/browser/browser-viewport"
+import { ScreenshotButton } from "@/components/browser/screenshot-button"
 import { ScreenshotGallery } from "@/components/browser/screenshot-gallery"
 import { TabBar } from "@/components/browser/tab-bar"
+import { TraceControls } from "@/components/browser/trace-controls"
 import { TraceTimeline } from "@/components/browser/trace-timeline"
 import { useBrowserObservation } from "@/hooks/use-browser-observation"
 import { relativeTime } from "@/lib/format"
@@ -35,11 +37,18 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
     tabs,
     screenshots,
     events,
+    traceState,
     agentName,
     latestScreenshot,
+    isCapturing,
+    isStartingTrace,
+    isStoppingTrace,
     handleSelectTab,
     handleCloseTab,
     handleReconnect,
+    handleCaptureScreenshot,
+    handleStartTrace,
+    handleStopTrace,
   } = useBrowserObservation(agentId)
 
   return (
@@ -82,6 +91,12 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
             </p>
           </div>
         </div>
+
+        {/* Screenshot button */}
+        <ScreenshotButton
+          onCapture={() => void handleCaptureScreenshot()}
+          isCapturing={isCapturing}
+        />
       </div>
 
       {/* Mobile tabs */}
@@ -147,17 +162,30 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
           </div>
         </div>
 
-        {/* Right sidebar: trace timeline */}
+        {/* Right sidebar: trace controls + timeline */}
         <div className="w-[360px] shrink-0">
-          <div className="sticky top-6">
-            <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
-              <span className="material-symbols-outlined text-sm text-primary">timeline</span>
-              Trace Events
-              <span className="rounded-md bg-[#282839] px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
-                {events.length}
-              </span>
-            </h3>
-            <TraceTimeline events={events} />
+          <div className="sticky top-6 flex flex-col gap-4">
+            {/* Trace controls */}
+            <TraceControls
+              traceStatus={traceState.status}
+              startedAt={traceState.startedAt}
+              onStartTrace={() => void handleStartTrace()}
+              onStopTrace={() => void handleStopTrace()}
+              isStarting={isStartingTrace}
+              isStopping={isStoppingTrace}
+            />
+
+            {/* Trace events timeline */}
+            <div>
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+                <span className="material-symbols-outlined text-sm text-primary">timeline</span>
+                Trace Events
+                <span className="rounded-md bg-[#282839] px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
+                  {events.length}
+                </span>
+              </h3>
+              <TraceTimeline events={events} />
+            </div>
           </div>
         </div>
       </div>
@@ -184,7 +212,19 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
           </div>
         )}
         {mobileTab === "Screenshots" && <ScreenshotGallery screenshots={screenshots} />}
-        {mobileTab === "Trace" && <TraceTimeline events={events} />}
+        {mobileTab === "Trace" && (
+          <div className="flex flex-col gap-4">
+            <TraceControls
+              traceStatus={traceState.status}
+              startedAt={traceState.startedAt}
+              onStartTrace={() => void handleStartTrace()}
+              onStopTrace={() => void handleStopTrace()}
+              isStarting={isStartingTrace}
+              isStopping={isStoppingTrace}
+            />
+            <TraceTimeline events={events} />
+          </div>
+        )}
       </div>
     </div>
   )

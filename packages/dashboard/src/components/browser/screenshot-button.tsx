@@ -1,19 +1,25 @@
 "use client"
 
 interface ScreenshotButtonProps {
-  agentId: string
+  onCapture: () => void
+  isCapturing: boolean
 }
 
-export function ScreenshotButton({ agentId }: ScreenshotButtonProps): React.JSX.Element {
-  // TODO: POST /agents/:id/observe/screenshot
-  void agentId
-
+export function ScreenshotButton({
+  onCapture,
+  isCapturing,
+}: ScreenshotButtonProps): React.JSX.Element {
   return (
     <button
       type="button"
-      className="rounded-md border border-surface-border px-3 py-1.5 text-sm text-text-muted hover:bg-secondary"
+      onClick={onCapture}
+      disabled={isCapturing}
+      className="flex items-center gap-1.5 rounded-lg border border-chrome-border bg-chrome-bg px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-surface-border hover:text-white disabled:pointer-events-none disabled:opacity-50"
     >
-      Screenshot
+      <span className={`material-symbols-outlined text-sm ${isCapturing ? "animate-spin" : ""}`}>
+        {isCapturing ? "sync" : "photo_camera"}
+      </span>
+      {isCapturing ? "Capturing..." : "Screenshot"}
     </button>
   )
 }

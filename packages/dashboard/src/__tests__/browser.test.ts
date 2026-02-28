@@ -7,10 +7,17 @@ import {
   type BrowserSession,
   type BrowserSessionStatus,
   type BrowserTab,
+  captureScreenshot,
+  type CaptureScreenshotResponse,
   getAgentBrowser,
   getAgentBrowserEvents,
   getAgentScreenshots,
+  getTraceState,
   type Screenshot,
+  startTrace,
+  stopTrace,
+  type TraceState,
+  type TraceStatus,
 } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -615,5 +622,183 @@ describe("getAgentBrowserEvents API", () => {
   it("throws on server error", async () => {
     mockFetchResponse({ message: "Internal error" }, 500)
     await expect(getAgentBrowserEvents("agt-456")).rejects.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// captureScreenshot API
+// ---------------------------------------------------------------------------
+
+describe("captureScreenshot API", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it("posts to observe/screenshot and returns response", async () => {
+    const mockResult: CaptureScreenshotResponse = {
+      timestamp: "2026-02-28T10:00:00Z",
+      url: "https://example.com",
+      title: "Example",
+    }
+
+    mockFetchResponse(mockResult)
+    const result = await captureScreenshot("agt-456")
+
+    expect(result.timestamp).toBe("2026-02-28T10:00:00Z")
+    expect(result.url).toBe("https://example.com")
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE}/agents/agt-456/observe/screenshot`,
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("sends options in request body", async () => {
+    mockFetchResponse({ timestamp: "2026-02-28T10:00:00Z" })
+    await captureScreenshot("agt-456", { format: "png", quality: 80, fullPage: true })
+
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE}/agents/agt-456/observe/screenshot`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ format: "png", quality: 80, fullPage: true }),
+      }),
+    )
+  })
+
+  it("throws on server error", async () => {
+    mockFetchResponse({ message: "Capture failed" }, 502)
+    await expect(captureScreenshot("agt-456")).rejects.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getTraceState API
+// ---------------------------------------------------------------------------
+
+describe("getTraceState API", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it("fetches trace state by agent ID", async () => {
+    const mockState: TraceState = {
+      status: "idle",
+    }
+
+    mockFetchResponse(mockState)
+    const result = await getTraceState("agt-456")
+
+    expect(result.status).toBe("idle")
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE}/agents/agt-456/observe/trace`,
+      expect.objectContaining({ method: "GET" }),
+    )
+  })
+
+  it("returns recording state with startedAt", async () => {
+    const mockState: TraceState = {
+      status: "recording",
+      startedAt: "2026-02-28T10:00:00Z",
+      options: { snapshots: true, screenshots: true },
+    }
+
+    mockFetchResponse(mockState)
+    const result = await getTraceState("agt-456")
+
+    expect(result.status).toBe("recording")
+    expect(result.startedAt).toBe("2026-02-28T10:00:00Z")
+    expect(result.options?.snapshots).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// TraceState type tests
+// ---------------------------------------------------------------------------
+
+describe("TraceState interface", () => {
+  it("covers idle and recording statuses", () => {
+    const statuses: TraceStatus[] = ["idle", "recording"]
+    expect(statuses).toHaveLength(2)
+  })
+
+  it("idle state has no startedAt", () => {
+    const state: TraceState = { status: "idle" }
+    expect(state.startedAt).toBeUndefined()
+  })
+
+  it("recording state has startedAt", () => {
+    const state: TraceState = {
+      status: "recording",
+      startedAt: "2026-02-28T10:00:00Z",
+    }
+    expect(state.status).toBe("recording")
+    expect(state.startedAt).toBeDefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// startTrace / stopTrace API
+// ---------------------------------------------------------------------------
+
+describe("startTrace API", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it("posts to observe/trace/start", async () => {
+    mockFetchResponse({ status: "recording", startedAt: "2026-02-28T10:00:00Z" })
+    const result = await startTrace("agt-456")
+
+    expect(result.status).toBe("recording")
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE}/agents/agt-456/observe/trace/start`,
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("sends options in request body", async () => {
+    mockFetchResponse({ status: "recording" })
+    await startTrace("agt-456", { snapshots: true, network: true })
+
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE}/agents/agt-456/observe/trace/start`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ snapshots: true, network: true }),
+      }),
+    )
+  })
+
+  it("throws on conflict (already recording)", async () => {
+    mockFetchResponse({ message: "Trace already in progress" }, 409)
+    await expect(startTrace("agt-456")).rejects.toThrow()
+  })
+})
+
+describe("stopTrace API", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it("posts to observe/trace/stop", async () => {
+    mockFetchResponse({ status: "idle", filePath: "/tmp/trace.zip", durationMs: 5000 })
+    const result = await stopTrace("agt-456")
+
+    expect(result.status).toBe("idle")
+    expect(result.filePath).toBe("/tmp/trace.zip")
+    expect(result.durationMs).toBe(5000)
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE}/agents/agt-456/observe/trace/stop`,
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("throws on conflict (no active trace)", async () => {
+    mockFetchResponse({ message: "No active trace" }, 409)
+    await expect(stopTrace("agt-456")).rejects.toThrow()
   })
 })
