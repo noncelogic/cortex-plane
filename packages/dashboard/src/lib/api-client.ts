@@ -34,6 +34,7 @@ import {
   TraceStateSchema,
   TraceStopResponseSchema,
 } from "./schemas/browser"
+import { AgentChannelBindingListResponseSchema } from "./schemas/channels"
 import { ContentListResponseSchema } from "./schemas/content"
 import {
   CredentialListResponseSchema,
@@ -693,4 +694,37 @@ export async function saveProviderApiKey(body: {
 
 export async function deleteCredential(id: string): Promise<unknown> {
   return apiFetch(`/credentials/${id}`, { method: "DELETE", schema: z.unknown() })
+}
+
+// ---------------------------------------------------------------------------
+// Agent channel binding endpoint functions
+// ---------------------------------------------------------------------------
+
+export type { AgentChannelBinding } from "./schemas/channels"
+
+export async function listAgentChannels(agentId: string): Promise<{
+  bindings: import("./schemas/channels").AgentChannelBinding[]
+}> {
+  return apiFetch(`/agents/${agentId}/channels`, {
+    schema: AgentChannelBindingListResponseSchema,
+  })
+}
+
+export async function bindAgentChannel(
+  agentId: string,
+  channelType: string,
+  chatId: string,
+): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/channels`, {
+    method: "POST",
+    body: { channel_type: channelType, chat_id: chatId },
+    schema: z.unknown(),
+  })
+}
+
+export async function unbindAgentChannel(agentId: string, bindingId: string): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/channels/${bindingId}`, {
+    method: "DELETE",
+    schema: z.unknown(),
+  })
 }

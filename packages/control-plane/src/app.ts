@@ -15,12 +15,14 @@ import { HttpLlmBackend } from "./backends/http-llm.js"
 import { AuthHandoffService } from "./browser/auth-handoff.js"
 import { ScreenshotModeService } from "./browser/screenshot-mode.js"
 import { TraceCaptureService } from "./browser/trace-capture.js"
+import { AgentChannelService } from "./channels/agent-channel-service.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import { FeedbackService } from "./feedback/service.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
+import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { authRoutes } from "./routes/auth.js"
@@ -163,6 +165,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       enqueueJob: async (jobId: string) => {
         await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
       },
+    }),
+  )
+
+  // Register agent channel binding routes
+  const agentChannelService = new AgentChannelService(db)
+  await app.register(
+    agentChannelRoutes({
+      service: agentChannelService,
+      authConfig,
+      sessionService,
     }),
   )
 

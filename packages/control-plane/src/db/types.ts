@@ -348,6 +348,21 @@ export type NewProviderCredential = Insertable<ProviderCredentialTable>
 export type ProviderCredentialUpdate = Updateable<ProviderCredentialTable>
 
 // ---------------------------------------------------------------------------
+// Table: agent_channel_binding
+// ---------------------------------------------------------------------------
+export interface AgentChannelBindingTable {
+  id: Generated<string>
+  agent_id: string
+  channel_type: string
+  chat_id: string
+  is_default: ColumnType<boolean, boolean | undefined, boolean>
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AgentChannelBinding = Selectable<AgentChannelBindingTable>
+export type NewAgentChannelBinding = Insertable<AgentChannelBindingTable>
+
+// ---------------------------------------------------------------------------
 // Table: credential_audit_log
 // ---------------------------------------------------------------------------
 export interface CredentialAuditLogTable {
@@ -386,4 +401,5 @@ export interface Database {
   dashboard_session: DashboardSessionTable
   provider_credential: ProviderCredentialTable
   credential_audit_log: CredentialAuditLogTable
+  agent_channel_binding: AgentChannelBindingTable
 }
