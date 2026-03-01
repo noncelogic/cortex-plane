@@ -117,6 +117,7 @@ export interface SessionTable {
   id: Generated<string>
   agent_id: string
   user_account_id: string
+  channel_id: string | null
   status: ColumnType<string, string | undefined, string>
   metadata: ColumnType<
     Record<string, unknown> | null,
@@ -130,6 +131,25 @@ export interface SessionTable {
 export type Session = Selectable<SessionTable>
 export type NewSession = Insertable<SessionTable>
 export type SessionUpdate = Updateable<SessionTable>
+
+// ---------------------------------------------------------------------------
+// Table: session_message
+// ---------------------------------------------------------------------------
+export interface SessionMessageTable {
+  id: Generated<string>
+  session_id: string
+  role: string
+  content: string
+  created_at: ColumnType<Date, Date | undefined, never>
+  metadata: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+}
+
+export type SessionMessage = Selectable<SessionMessageTable>
+export type NewSessionMessage = Insertable<SessionMessageTable>
 
 // ---------------------------------------------------------------------------
 // Table: memory_extract_session_state
@@ -396,6 +416,7 @@ export interface Database {
   user_account: UserAccountTable
   channel_mapping: ChannelMappingTable
   session: SessionTable
+  session_message: SessionMessageTable
   memory_extract_session_state: MemoryExtractSessionStateTable
   memory_extract_message: MemoryExtractMessageTable
   job: JobTable

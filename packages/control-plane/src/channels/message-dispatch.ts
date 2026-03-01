@@ -6,9 +6,11 @@
  * 2. Look up agent binding for (channelType, chatId) via AgentChannelService
  * 3. If no binding, check for default agent for this channel type
  * 4. If still no agent, send a reply: "No agent is assigned to this chat."
- * 5. If agent found, find or create a session for (agent_id, user_account_id)
- * 6. Create a job row and enqueue agent_execute via Graphile Worker
- * 7. Watch for job completion and relay the response back to the chat channel
+ * 5. If agent found, find or create a session for (agent_id, user_account_id, channel_id)
+ * 6. Store the inbound message in session_message
+ * 7. Load conversation history from session_message
+ * 8. Create a job row and enqueue agent_execute via Graphile Worker
+ * 9. Watch for job completion, store assistant response, and relay back to chat
  */
 
 import type { JobStatus } from "@cortex/shared"
@@ -33,6 +35,9 @@ const JOB_POLL_INTERVAL_MS = 2_000
 
 /** Maximum time (ms) to wait for a job to complete before giving up. */
 const JOB_POLL_TIMEOUT_MS = 120_000
+
+/** Maximum number of recent messages to include as conversation history. */
+const MAX_HISTORY_MESSAGES = 50
 
 const TERMINAL_STATUSES: ReadonlySet<string> = new Set<JobStatus>([
   "COMPLETED",
@@ -65,8 +70,24 @@ export function createMessageDispatch(
       return
     }
 
-    // Find or create a session for (agent_id, user_account_id)
-    const session = await findOrCreateSession(db, agentId, routed.userAccountId)
+    // Build channel_id as "channelType:chatId" for session scoping
+    const channelId = `${channelType}:${chatId}`
+
+    // Find or create a session for (agent_id, user_account_id, channel_id)
+    const session = await findOrCreateSession(db, agentId, routed.userAccountId, channelId)
+
+    // Store inbound user message
+    await db
+      .insertInto("session_message")
+      .values({
+        session_id: session.id,
+        role: "user",
+        content: routed.message.text,
+      })
+      .execute()
+
+    // Load conversation history from session_message
+    const conversationHistory = await loadConversationHistory(db, session.id)
 
     // Create a job row
     const job = await db
@@ -78,7 +99,7 @@ export function createMessageDispatch(
           type: "CHAT_RESPONSE",
           prompt: routed.message.text,
           goalType: "research",
-          conversationHistory: [],
+          conversationHistory,
         },
         priority: 0,
         max_attempts: 3,
@@ -122,6 +143,16 @@ export function createMessageDispatch(
       async (result) => {
         const summary = result?.summary
         if (typeof summary === "string" && summary.length > 0) {
+          // Store assistant response in session_message
+          await db
+            .insertInto("session_message")
+            .values({
+              session_id: session.id,
+              role: "assistant",
+              content: summary,
+            })
+            .execute()
+
           await router.send(channelType, chatId, { text: summary })
         }
       },
@@ -180,19 +211,53 @@ export function watchJobCompletion(
   }, intervalMs)
 }
 
+/**
+ * Load the last N conversation messages for a session, ordered chronologically.
+ */
+export async function loadConversationHistory(
+  db: Kysely<Database>,
+  sessionId: string,
+  limit: number = MAX_HISTORY_MESSAGES,
+): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+  const rows = await db
+    .selectFrom("session_message")
+    .select(["role", "content"])
+    .where("session_id", "=", sessionId)
+    .where("role", "in", ["user", "assistant"])
+    .orderBy("created_at", "desc")
+    .limit(limit)
+    .execute()
+
+  // Reverse so oldest messages come first (chronological order)
+  // Exclude the very last user message since it's the current prompt
+  const chronological = rows.reverse()
+  const last = chronological[chronological.length - 1]
+  if (last && last.role === "user") {
+    chronological.pop()
+  }
+
+  return chronological as Array<{ role: "user" | "assistant"; content: string }>
+}
+
 async function findOrCreateSession(
   db: Kysely<Database>,
   agentId: string,
   userAccountId: string,
+  channelId?: string,
 ): Promise<{ id: string }> {
-  // Try to find existing active session
-  const existing = await db
+  // Try to find existing active session scoped by channel
+  let query = db
     .selectFrom("session")
     .select("id")
     .where("agent_id", "=", agentId)
     .where("user_account_id", "=", userAccountId)
     .where("status", "=", "active")
-    .executeTakeFirst()
+
+  if (channelId) {
+    query = query.where("channel_id", "=", channelId)
+  }
+
+  const existing = await query.executeTakeFirst()
 
   if (existing) return existing
 
@@ -202,6 +267,7 @@ async function findOrCreateSession(
     .values({
       agent_id: agentId,
       user_account_id: userAccountId,
+      channel_id: channelId ?? null,
       status: "active",
     })
     .returning("id")
