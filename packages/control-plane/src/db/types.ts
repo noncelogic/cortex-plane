@@ -57,6 +57,11 @@ export interface AgentTable {
     Record<string, unknown> | undefined,
     Record<string, unknown>
   >
+  config: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
   status: ColumnType<AgentStatus, AgentStatus | undefined, AgentStatus>
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, never>

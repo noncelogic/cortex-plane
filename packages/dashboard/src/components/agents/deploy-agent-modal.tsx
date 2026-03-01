@@ -19,6 +19,7 @@ export function DeployAgentModal({
   const [role, setRole] = useState("")
   const [description, setDescription] = useState("")
   const [systemPrompt, setSystemPrompt] = useState("")
+  const [configJson, setConfigJson] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,6 +28,7 @@ export function DeployAgentModal({
     setRole("")
     setDescription("")
     setSystemPrompt("")
+    setConfigJson("")
     setError(null)
   }, [])
 
@@ -45,11 +47,23 @@ export function DeployAgentModal({
       setError(null)
 
       try {
+        let parsedConfig: Record<string, unknown> | undefined
+        if (configJson.trim()) {
+          try {
+            parsedConfig = JSON.parse(configJson.trim()) as Record<string, unknown>
+          } catch {
+            setError("Invalid JSON in configuration")
+            setSubmitting(false)
+            return
+          }
+        }
+
         const body: CreateAgentRequest = {
           name: name.trim(),
           role: role.trim(),
           description: description.trim() || undefined,
           model_config: systemPrompt.trim() ? { systemPrompt: systemPrompt.trim() } : undefined,
+          config: parsedConfig,
         }
         await createAgent(body)
         resetForm()
@@ -60,7 +74,7 @@ export function DeployAgentModal({
         setSubmitting(false)
       }
     },
-    [name, role, description, systemPrompt, submitting, resetForm, onSuccess],
+    [name, role, description, systemPrompt, configJson, submitting, resetForm, onSuccess],
   )
 
   if (!open) return null
@@ -151,6 +165,23 @@ export function DeployAgentModal({
               rows={4}
               disabled={submitting}
               className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+
+          {/* Configuration (JSON) */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Configuration (JSON)
+            </label>
+            <textarea
+              value={configJson}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setConfigJson(e.target.value)
+              }
+              placeholder='{"key": "value"}'
+              rows={3}
+              disabled={submitting}
+              className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             />
           </div>
 

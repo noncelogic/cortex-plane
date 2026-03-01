@@ -43,6 +43,7 @@ interface CreateAgentBody {
   skill_config?: Record<string, unknown>
   resource_limits?: Record<string, unknown>
   channel_permissions?: Record<string, unknown>
+  config?: Record<string, unknown>
 }
 
 interface UpdateAgentBody {
@@ -53,6 +54,7 @@ interface UpdateAgentBody {
   skill_config?: Record<string, unknown>
   resource_limits?: Record<string, unknown>
   channel_permissions?: Record<string, unknown>
+  config?: Record<string, unknown>
   status?: AgentStatus
 }
 
@@ -219,6 +221,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
               skill_config: { type: "object" },
               resource_limits: { type: "object" },
               channel_permissions: { type: "object" },
+              config: { type: "object" },
             },
             required: ["name", "role"],
           },
@@ -244,6 +247,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
             skill_config: body.skill_config ?? {},
             resource_limits: body.resource_limits ?? {},
             channel_permissions: body.channel_permissions ?? {},
+            config: body.config ?? {},
           })
           .returningAll()
           .executeTakeFirstOrThrow()
@@ -373,6 +377,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
               skill_config: { type: "object" },
               resource_limits: { type: "object" },
               channel_permissions: { type: "object" },
+              config: { type: "object" },
               status: { type: "string", enum: ["ACTIVE", "DISABLED", "ARCHIVED"] },
             },
           },
@@ -395,6 +400,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
         if (body.resource_limits !== undefined) updateValues.resource_limits = body.resource_limits
         if (body.channel_permissions !== undefined)
           updateValues.channel_permissions = body.channel_permissions
+        if (body.config !== undefined) updateValues.config = body.config
         if (body.status !== undefined) updateValues.status = body.status
 
         if (Object.keys(updateValues).length === 0) {
