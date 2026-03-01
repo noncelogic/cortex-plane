@@ -1,5 +1,6 @@
 "use client"
 
+import { EmptyState } from "@/components/layout/empty-state"
 import type { MemoryRecord } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -120,15 +121,12 @@ export function MemoryResults({
       {/* Results list */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         {results.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <span className="material-symbols-outlined mb-3 text-4xl text-slate-600">
-              neurology
-            </span>
-            <p className="text-sm font-medium text-slate-400">No memories found</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Try a different query or adjust your filters.
-            </p>
-          </div>
+          <EmptyState
+            icon="neurology"
+            title="No memories found"
+            description="Try a different query or adjust your filters."
+            compact
+          />
         ) : (
           <div className="space-y-1 p-2">
             {results.map((record) => {

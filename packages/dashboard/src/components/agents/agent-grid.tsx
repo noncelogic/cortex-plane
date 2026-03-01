@@ -1,5 +1,6 @@
 "use client"
 
+import { EmptyState } from "@/components/layout/empty-state"
 import type { AgentSummary } from "@/lib/api-client"
 
 import { AgentCard, type AgentMetrics } from "./agent-card"
@@ -12,9 +13,12 @@ interface AgentGridProps {
 export function AgentGrid({ agents, metricsMap }: AgentGridProps): React.JSX.Element {
   if (agents.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-surface-border p-12 text-center text-text-muted">
-        No agents registered. Deploy a new agent to see it here.
-      </div>
+      <EmptyState
+        icon="search_off"
+        title="No agents match"
+        description="Try adjusting your search or filters to find agents."
+        compact
+      />
     )
   }
 

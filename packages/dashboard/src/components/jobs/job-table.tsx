@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 
+import { EmptyState } from "@/components/layout/empty-state"
 import type { JobStatus, JobSummary } from "@/lib/api-client"
 import { duration, relativeTime, truncateUuid } from "@/lib/format"
 
@@ -86,15 +87,12 @@ export function JobTable({
   // Empty state
   if (jobs.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-surface-border p-12 text-center">
-        <span className="material-symbols-outlined mb-3 text-4xl text-text-muted">
-          work_history
-        </span>
-        <p className="text-sm font-medium text-text-muted">No jobs found.</p>
-        <p className="mt-1 text-xs text-text-muted">
-          Jobs will appear here once agents start executing tasks.
-        </p>
-      </div>
+      <EmptyState
+        icon="work_history"
+        title="No jobs found"
+        description="Jobs will appear here once agents start executing tasks."
+        compact
+      />
     )
   }
 

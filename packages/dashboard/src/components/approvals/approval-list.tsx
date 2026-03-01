@@ -1,5 +1,6 @@
 "use client"
 
+import { EmptyState } from "@/components/layout/empty-state"
 import type { ApprovalRequest, ApprovalStatus } from "@/lib/api-client"
 
 import { ApprovalCard } from "./approval-card"
@@ -59,15 +60,12 @@ export function ApprovalList({
 
   if (filtered.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="mb-6 flex size-48 items-center justify-center rounded-full border-2 border-dashed border-surface-border">
-          <span className="material-symbols-outlined text-6xl text-text-muted">verified_user</span>
-        </div>
-        <h3 className="mb-2 text-lg font-bold text-text-main">All Clear</h3>
-        <p className="max-w-sm text-text-muted">
-          No approval requests match the current filters. Adjust your filters or check back later.
-        </p>
-      </div>
+      <EmptyState
+        icon="verified_user"
+        title="All clear"
+        description="No approval requests match the current filters. Adjust your filters or check back later."
+        compact
+      />
     )
   }
 
