@@ -153,6 +153,8 @@ export default function JobsPage(): React.JSX.Element {
           icon="list_alt"
           title="No jobs yet"
           description="Jobs will appear here when agents begin executing tasks."
+          actionLabel="Go to Agents"
+          actionHref="/agents"
         />
       ) : (
         <>

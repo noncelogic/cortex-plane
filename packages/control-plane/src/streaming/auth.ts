@@ -49,7 +49,13 @@ export function createStreamAuth(dbOrOptions: Kysely<Database> | StreamAuthOptio
   ): Promise<FastifyReply | void> {
     const agentId = request.params.agentId
 
-    // 1. Try session cookie (dashboard sessions — EventSource cannot send headers)
+    // 1. Try session cookie (dashboard sessions — EventSource cannot send headers).
+    //
+    // CSRF note: SSE endpoints are GET-only and never mutate state, so the
+    // risk of cross-site request forgery via cookie auth is minimal. The
+    // session cookie is also set with SameSite=Lax (see
+    // SessionService.serializeCookie), which blocks cross-origin sub-requests
+    // from third-party sites.
     if (sessionService) {
       const cookieHeader = request.headers.cookie
       const sessionId = parseCookieValue(cookieHeader, SESSION_COOKIE_NAME)

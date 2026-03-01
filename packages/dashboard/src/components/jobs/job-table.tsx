@@ -91,6 +91,8 @@ export function JobTable({
         icon="work_history"
         title="No jobs found"
         description="Jobs will appear here once agents start executing tasks."
+        actionLabel="Go to Agents"
+        actionHref="/agents"
         compact
       />
     )
