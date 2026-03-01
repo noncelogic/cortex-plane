@@ -3,6 +3,10 @@
  *
  * Calls LLM APIs directly over HTTP (Anthropic Claude or OpenAI-compatible).
  * Streams responses and emits OutputEvent events.
+ *
+ * Supports an agentic iteration loop: when the LLM responds with tool_use
+ * blocks, the backend executes the requested tools and feeds results back
+ * to the LLM, repeating until a text-only response or maxTurns is reached.
  */
 
 import Anthropic from "@anthropic-ai/sdk"
@@ -16,10 +20,18 @@ import type {
   OutputCompleteEvent,
   OutputEvent,
   OutputTextEvent,
+  OutputToolResultEvent,
+  OutputToolUseEvent,
   OutputUsageEvent,
   TokenUsage,
 } from "@cortex/shared/backends"
 import OpenAI from "openai"
+
+import {
+  createDefaultToolRegistry,
+  type ToolDefinition,
+  type ToolRegistry,
+} from "./tool-executor.js"
 
 type LlmProvider = "anthropic" | "openai"
 
@@ -42,6 +54,16 @@ export class HttpLlmBackend implements ExecutionBackend {
 
   private anthropicClient: Anthropic | null = null
   private openaiClient: OpenAI | null = null
+  private toolRegistry: ToolRegistry
+
+  constructor() {
+    this.toolRegistry = createDefaultToolRegistry()
+  }
+
+  /** Register a custom tool for the agentic loop. */
+  registerTool(tool: ToolDefinition): void {
+    this.toolRegistry.register(tool)
+  }
 
   start(config: Record<string, unknown>): Promise<void> {
     this.provider = (config.provider as LlmProvider) ?? process.env.LLM_PROVIDER ?? "anthropic"
@@ -142,11 +164,15 @@ export class HttpLlmBackend implements ExecutionBackend {
     const startTime = Date.now()
 
     if (this.provider === "anthropic" && this.anthropicClient) {
-      return Promise.resolve(new AnthropicHandle(task, this.anthropicClient, model, startTime))
+      return Promise.resolve(
+        new AnthropicHandle(task, this.anthropicClient, model, startTime, this.toolRegistry),
+      )
     }
 
     if (this.openaiClient) {
-      return Promise.resolve(new OpenAIHandle(task, this.openaiClient, model, startTime))
+      return Promise.resolve(
+        new OpenAIHandle(task, this.openaiClient, model, startTime, this.toolRegistry),
+      )
     }
 
     return Promise.reject(new Error("No LLM client initialized"))
@@ -176,6 +202,41 @@ export class HttpLlmBackend implements ExecutionBackend {
 }
 
 // ──────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────
+
+function accumulateAnthropicUsage(usage: TokenUsage, raw: Anthropic.Usage): void {
+  usage.inputTokens += raw.input_tokens
+  usage.outputTokens += raw.output_tokens
+  if ("cache_read_input_tokens" in raw) {
+    usage.cacheReadTokens += (raw as unknown as Record<string, number>).cache_read_input_tokens ?? 0
+  }
+  if ("cache_creation_input_tokens" in raw) {
+    usage.cacheCreationTokens +=
+      (raw as unknown as Record<string, number>).cache_creation_input_tokens ?? 0
+  }
+}
+
+function toAnthropicTools(defs: ToolDefinition[]): Anthropic.Tool[] {
+  return defs.map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+  }))
+}
+
+function toOpenAITools(defs: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
+  return defs.map((t) => ({
+    type: "function" as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.inputSchema,
+    },
+  }))
+}
+
+// ──────────────────────────────────────────────────
 // Anthropic Handle
 // ──────────────────────────────────────────────────
 
@@ -193,6 +254,7 @@ class AnthropicHandle implements ExecutionHandle {
     private readonly client: Anthropic,
     private readonly model: string,
     private readonly startTime: number,
+    private readonly toolRegistry: ToolRegistry,
   ) {
     this.taskId = task.id
     this.resultPromise = new Promise<ExecutionResult>((resolve) => {
@@ -215,44 +277,100 @@ class AnthropicHandle implements ExecutionHandle {
 
     messages.push({ role: "user", content: this.task.instruction.prompt })
 
+    // Resolve available tools based on task constraints
+    const toolDefs = this.toolRegistry.resolve(
+      this.task.constraints.allowedTools,
+      this.task.constraints.deniedTools,
+    )
+    const anthropicTools = toAnthropicTools(toolDefs)
+
     let fullText = ""
     const usage: TokenUsage = { ...ZERO_TOKEN_USAGE }
+    const maxTurns = Math.max(this.task.constraints.maxTurns, 1)
 
     try {
-      const stream = this.client.messages.stream(
-        {
-          model: this.model,
-          max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
-          system: systemPrompt,
-          messages,
-        },
-        { signal: this.abortController.signal },
-      )
-
-      for await (const event of stream) {
+      for (let turn = 0; turn < maxTurns; turn++) {
         if (this.cancelled) break
 
-        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          fullText += event.delta.text
-          const textEvent: OutputTextEvent = {
-            type: "text",
-            timestamp: new Date().toISOString(),
-            content: event.delta.text,
-          }
-          yield textEvent
-        }
-      }
+        const stream = this.client.messages.stream(
+          {
+            model: this.model,
+            max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
+            system: systemPrompt,
+            messages,
+            ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
+          },
+          { signal: this.abortController.signal },
+        )
 
-      const finalMessage = await stream.finalMessage()
-      usage.inputTokens = finalMessage.usage.input_tokens
-      usage.outputTokens = finalMessage.usage.output_tokens
-      if ("cache_read_input_tokens" in finalMessage.usage) {
-        usage.cacheReadTokens =
-          (finalMessage.usage as unknown as Record<string, number>).cache_read_input_tokens ?? 0
-      }
-      if ("cache_creation_input_tokens" in finalMessage.usage) {
-        usage.cacheCreationTokens =
-          (finalMessage.usage as unknown as Record<string, number>).cache_creation_input_tokens ?? 0
+        for await (const event of stream) {
+          if (this.cancelled) break
+
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            fullText += event.delta.text
+            const textEvent: OutputTextEvent = {
+              type: "text",
+              timestamp: new Date().toISOString(),
+              content: event.delta.text,
+            }
+            yield textEvent
+          }
+        }
+
+        const finalMessage = await stream.finalMessage()
+        accumulateAnthropicUsage(usage, finalMessage.usage)
+
+        // Check for tool_use blocks
+        const toolUseBlocks = finalMessage.content.filter(
+          (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+        )
+
+        if (toolUseBlocks.length === 0 || finalMessage.stop_reason !== "tool_use") {
+          break // text-only response — done
+        }
+
+        // Cannot loop again — we've used our last allowed turn
+        if (turn + 1 >= maxTurns) break
+
+        // Add the assistant response (with tool_use blocks) to the conversation
+        messages.push({ role: "assistant", content: finalMessage.content })
+
+        // Execute each tool and build tool_result blocks
+        const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+        for (const block of toolUseBlocks) {
+          const toolUseEvent: OutputToolUseEvent = {
+            type: "tool_use",
+            timestamp: new Date().toISOString(),
+            toolName: block.name,
+            toolInput: block.input as Record<string, unknown>,
+          }
+          yield toolUseEvent
+
+          const { output, isError } = await this.toolRegistry.execute(
+            block.name,
+            block.input as Record<string, unknown>,
+          )
+
+          const toolResultEvent: OutputToolResultEvent = {
+            type: "tool_result",
+            timestamp: new Date().toISOString(),
+            toolName: block.name,
+            output,
+            isError,
+          }
+          yield toolResultEvent
+
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: output,
+            is_error: isError,
+          })
+        }
+
+        // Add tool results as the next user message
+        messages.push({ role: "user", content: toolResults })
       }
 
       const usageEvent: OutputUsageEvent = {
@@ -348,6 +466,13 @@ class AnthropicHandle implements ExecutionHandle {
 // OpenAI Handle
 // ──────────────────────────────────────────────────
 
+/** Accumulator for OpenAI streamed tool calls. */
+interface OpenAIToolCallAccumulator {
+  id: string
+  name: string
+  arguments: string
+}
+
 class OpenAIHandle implements ExecutionHandle {
   readonly taskId: string
 
@@ -362,6 +487,7 @@ class OpenAIHandle implements ExecutionHandle {
     private readonly client: OpenAI,
     private readonly model: string,
     private readonly startTime: number,
+    private readonly toolRegistry: ToolRegistry,
   ) {
     this.taskId = task.id
     this.resultPromise = new Promise<ExecutionResult>((resolve) => {
@@ -388,38 +514,132 @@ class OpenAIHandle implements ExecutionHandle {
 
     messages.push({ role: "user", content: this.task.instruction.prompt })
 
+    // Resolve available tools
+    const toolDefs = this.toolRegistry.resolve(
+      this.task.constraints.allowedTools,
+      this.task.constraints.deniedTools,
+    )
+    const openaiTools = toOpenAITools(toolDefs)
+
     let fullText = ""
     const usage: TokenUsage = { ...ZERO_TOKEN_USAGE }
+    const maxTurns = Math.max(this.task.constraints.maxTurns, 1)
 
     try {
-      const stream = await this.client.chat.completions.create(
-        {
-          model: this.model,
-          max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
-          messages,
-          stream: true,
-          stream_options: { include_usage: true },
-        },
-        { signal: this.abortController.signal },
-      )
-
-      for await (const chunk of stream) {
+      for (let turn = 0; turn < maxTurns; turn++) {
         if (this.cancelled) break
 
-        const delta = chunk.choices[0]?.delta?.content
-        if (delta) {
-          fullText += delta
-          const textEvent: OutputTextEvent = {
-            type: "text",
-            timestamp: new Date().toISOString(),
-            content: delta,
+        const stream = await this.client.chat.completions.create(
+          {
+            model: this.model,
+            max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
+            messages,
+            stream: true,
+            stream_options: { include_usage: true },
+            ...(openaiTools.length > 0 ? { tools: openaiTools } : {}),
+          },
+          { signal: this.abortController.signal },
+        )
+
+        let iterationText = ""
+        const toolCallAccumulators = new Map<number, OpenAIToolCallAccumulator>()
+        let hasToolCalls = false
+
+        for await (const chunk of stream) {
+          if (this.cancelled) break
+
+          const choice = chunk.choices[0]
+
+          // Accumulate text deltas
+          const delta = choice?.delta?.content
+          if (delta) {
+            iterationText += delta
+            fullText += delta
+            const textEvent: OutputTextEvent = {
+              type: "text",
+              timestamp: new Date().toISOString(),
+              content: delta,
+            }
+            yield textEvent
           }
-          yield textEvent
+
+          // Accumulate tool call deltas
+          if (choice?.delta?.tool_calls) {
+            hasToolCalls = true
+            for (const tc of choice.delta.tool_calls) {
+              if (!toolCallAccumulators.has(tc.index)) {
+                toolCallAccumulators.set(tc.index, {
+                  id: tc.id ?? "",
+                  name: tc.function?.name ?? "",
+                  arguments: "",
+                })
+              }
+              const acc = toolCallAccumulators.get(tc.index)!
+              if (tc.id) acc.id = tc.id
+              if (tc.function?.name) acc.name = tc.function.name
+              if (tc.function?.arguments) acc.arguments += tc.function.arguments
+            }
+          }
+
+          if (chunk.usage) {
+            usage.inputTokens += chunk.usage.prompt_tokens ?? 0
+            usage.outputTokens += chunk.usage.completion_tokens ?? 0
+          }
         }
 
-        if (chunk.usage) {
-          usage.inputTokens = chunk.usage.prompt_tokens ?? 0
-          usage.outputTokens = chunk.usage.completion_tokens ?? 0
+        // No tool calls — done
+        if (!hasToolCalls || toolCallAccumulators.size === 0) {
+          break
+        }
+
+        // Cannot loop again
+        if (turn + 1 >= maxTurns) break
+
+        // Reconstruct the assistant message with tool_calls
+        const toolCalls = [...toolCallAccumulators.values()]
+        messages.push({
+          role: "assistant",
+          content: iterationText || null,
+          tool_calls: toolCalls.map((tc) => ({
+            id: tc.id,
+            type: "function" as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        })
+
+        // Execute each tool and add results
+        for (const tc of toolCalls) {
+          let input: Record<string, unknown> = {}
+          try {
+            input = JSON.parse(tc.arguments) as Record<string, unknown>
+          } catch {
+            // Malformed JSON from the model — pass empty input
+          }
+
+          const toolUseEvent: OutputToolUseEvent = {
+            type: "tool_use",
+            timestamp: new Date().toISOString(),
+            toolName: tc.name,
+            toolInput: input,
+          }
+          yield toolUseEvent
+
+          const { output, isError } = await this.toolRegistry.execute(tc.name, input)
+
+          const toolResultEvent: OutputToolResultEvent = {
+            type: "tool_result",
+            timestamp: new Date().toISOString(),
+            toolName: tc.name,
+            output,
+            isError,
+          }
+          yield toolResultEvent
+
+          messages.push({
+            role: "tool" as const,
+            tool_call_id: tc.id,
+            content: output,
+          })
         }
       }
 
