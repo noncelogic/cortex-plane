@@ -200,7 +200,9 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
 
   // Always register streaming + observation routes
   // (lifecycleManager is optional — routes handle its absence gracefully)
-  await app.register(streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager }))
+  await app.register(
+    streamRoutes({ sseManager, lifecycleManager: options.lifecycleManager, sessionService }),
+  )
   await app.register(
     voiceRoutes({
       db,
