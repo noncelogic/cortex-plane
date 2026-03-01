@@ -28,6 +28,7 @@ import type {
 import OpenAI from "openai"
 
 import {
+  createAgentToolRegistry,
   createDefaultToolRegistry,
   type ToolDefinition,
   type ToolRegistry,
@@ -155,27 +156,40 @@ export class HttpLlmBackend implements ExecutionBackend {
     }
   }
 
-  executeTask(task: ExecutionTask): Promise<ExecutionHandle> {
+  /**
+   * Execute a task. Accepts an optional per-task ToolRegistry that
+   * includes agent-specific custom tools (e.g. webhook tools from
+   * agent config). Falls back to the shared default registry.
+   */
+  executeTask(task: ExecutionTask, taskToolRegistry?: ToolRegistry): Promise<ExecutionHandle> {
     if (!this.started) {
       return Promise.reject(new Error("HttpLlmBackend not started"))
     }
 
     const model = task.constraints.model || this.model
     const startTime = Date.now()
+    const registry = taskToolRegistry ?? this.toolRegistry
 
     if (this.provider === "anthropic" && this.anthropicClient) {
       return Promise.resolve(
-        new AnthropicHandle(task, this.anthropicClient, model, startTime, this.toolRegistry),
+        new AnthropicHandle(task, this.anthropicClient, model, startTime, registry),
       )
     }
 
     if (this.openaiClient) {
-      return Promise.resolve(
-        new OpenAIHandle(task, this.openaiClient, model, startTime, this.toolRegistry),
-      )
+      return Promise.resolve(new OpenAIHandle(task, this.openaiClient, model, startTime, registry))
     }
 
     return Promise.reject(new Error("No LLM client initialized"))
+  }
+
+  /**
+   * Create a per-agent ToolRegistry from the agent's config JSONB.
+   * Includes all built-in tools plus any custom webhook tools defined
+   * in agentConfig.tools.
+   */
+  createAgentRegistry(agentConfig: Record<string, unknown>): ToolRegistry {
+    return createAgentToolRegistry(agentConfig)
   }
 
   getCapabilities(): BackendCapabilities {

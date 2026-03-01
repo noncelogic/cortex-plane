@@ -5,6 +5,12 @@
  * Tools are registered with a name, description, JSON Schema, and handler.
  */
 
+import { createHttpRequestTool } from "./tools/http-request.js"
+import { createMemoryQueryTool } from "./tools/memory-query.js"
+import { createMemoryStoreTool } from "./tools/memory-store.js"
+import { createWebSearchTool } from "./tools/web-search.js"
+import { createWebhookTool, parseWebhookTools } from "./tools/webhook.js"
+
 export interface ToolDefinition {
   /** Unique tool name (sent to the LLM). */
   name: string
@@ -86,5 +92,26 @@ export const echoTool: ToolDefinition = {
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry()
   registry.register(echoTool)
+  registry.register(createWebSearchTool())
+  registry.register(createMemoryQueryTool())
+  registry.register(createMemoryStoreTool())
+  registry.register(createHttpRequestTool())
+  return registry
+}
+
+/**
+ * Create a tool registry for a specific agent.
+ *
+ * Starts with the default built-in tools, then registers any custom
+ * webhook tools defined in the agent's config.tools array.
+ */
+export function createAgentToolRegistry(agentConfig: Record<string, unknown>): ToolRegistry {
+  const registry = createDefaultToolRegistry()
+
+  const webhookSpecs = parseWebhookTools(agentConfig)
+  for (const spec of webhookSpecs) {
+    registry.register(createWebhookTool(spec))
+  }
+
   return registry
 }

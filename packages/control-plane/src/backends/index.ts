@@ -15,11 +15,21 @@ export { ClaudeCodeBackend } from "./claude-code.js"
 export { EchoBackend } from "./echo-backend.js"
 export { HttpLlmBackend } from "./http-llm.js"
 export {
+  createAgentToolRegistry,
   createDefaultToolRegistry,
   echoTool,
   type ToolDefinition,
   ToolRegistry,
 } from "./tool-executor.js"
+export {
+  createHttpRequestTool,
+  createMemoryQueryTool,
+  createMemoryStoreTool,
+  createWebhookTool,
+  createWebSearchTool,
+  parseWebhookTools,
+  type WebhookToolSpec,
+} from "./tools/index.js"
 
 /** Default concurrency limits per backend type. */
 export const DEFAULT_CONCURRENCY: Record<string, number> = {
