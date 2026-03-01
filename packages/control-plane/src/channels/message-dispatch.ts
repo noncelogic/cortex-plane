@@ -140,20 +140,33 @@ export function createMessageDispatch(
     watchJobCompletion(
       db,
       job.id,
-      async (result) => {
-        const summary = result?.summary
-        if (typeof summary === "string" && summary.length > 0) {
+      async (result, status) => {
+        // Prefer the full response text (stdout) over the truncated summary
+        const responseText =
+          typeof result?.stdout === "string" && result.stdout.length > 0
+            ? result.stdout
+            : typeof result?.summary === "string" && result.summary.length > 0
+              ? result.summary
+              : null
+
+        if (responseText) {
           // Store assistant response in session_message
           await db
             .insertInto("session_message")
             .values({
               session_id: session.id,
               role: "assistant",
-              content: summary,
+              content: responseText,
             })
             .execute()
 
-          await router.send(channelType, chatId, { text: summary })
+          await router.send(channelType, chatId, { text: responseText })
+        } else if (status === "FAILED" || status === "TIMED_OUT") {
+          const errMsg =
+            status === "TIMED_OUT"
+              ? "The request timed out. Please try again."
+              : "Something went wrong processing your message. Please try again."
+          await router.send(channelType, chatId, { text: errMsg })
         }
       },
       logger,
@@ -168,7 +181,7 @@ export function createMessageDispatch(
 export function watchJobCompletion(
   db: Kysely<Database>,
   jobId: string,
-  onComplete: (result: Record<string, unknown> | null) => Promise<void>,
+  onComplete: (result: Record<string, unknown> | null, status: string) => Promise<void>,
   logger: { warn: (...args: unknown[]) => void },
   opts: { intervalMs?: number; timeoutMs?: number } = {},
 ): void {
@@ -199,7 +212,7 @@ export function watchJobCompletion(
         if (TERMINAL_STATUSES.has(row.status)) {
           clearInterval(timer)
           try {
-            await onComplete(row.result)
+            await onComplete(row.result, row.status)
           } catch (err) {
             logger.warn({ err, jobId }, "Failed to relay job completion to chat")
           }

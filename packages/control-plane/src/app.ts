@@ -26,6 +26,7 @@ import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { authRoutes } from "./routes/auth.js"
+import { chatRoutes } from "./routes/chat.js"
 import { credentialRoutes } from "./routes/credentials.js"
 import { dashboardRoutes } from "./routes/dashboard.js"
 import { feedbackRoutes } from "./routes/feedback.js"
@@ -185,6 +186,18 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     sessionRoutes({
       db,
       authConfig,
+      sessionService,
+    }),
+  )
+
+  // Register chat routes (REST-based chat endpoint)
+  await app.register(
+    chatRoutes({
+      db,
+      authConfig,
+      enqueueJob: async (jobId: string) => {
+        await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
+      },
       sessionService,
     }),
   )
