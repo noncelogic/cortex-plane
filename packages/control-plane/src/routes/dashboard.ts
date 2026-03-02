@@ -225,19 +225,31 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
 
           lastSeen.set(row.id, { status: row.status, updatedAt })
         }
+
+        // Prune entries for jobs no longer in the query window
+        const activeIds = new Set(rows.map((r) => r.id))
+        for (const id of lastSeen.keys()) {
+          if (!activeIds.has(id)) lastSeen.delete(id)
+        }
       }
 
       const pollInterval = setInterval(() => {
-        void poll().catch(() => {
-          // Keep stream alive even if a poll fails.
-        })
+        void poll()
+          .catch((err) => {
+            _request.log.warn({ err }, "Initial jobs stream poll failed")
+          })
+          .catch(() => {
+            // Keep stream alive even if a poll fails.
+          })
       }, 2000)
 
       const heartbeatInterval = setInterval(() => {
         if (!closed) raw.write(": heartbeat\n\n")
       }, 15000)
 
-      void poll()
+      void poll().catch((err) => {
+        _request.log.warn({ err }, "Initial jobs stream poll failed")
+      })
 
       raw.on("close", () => {
         closed = true
@@ -362,12 +374,14 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
 
         const job = await db
           .selectFrom("job")
-          .select("id")
+          .select(["id", "status"])
           .where("id", "=", jobId)
           .executeTakeFirst()
         if (!job) {
           return reply.status(404).send({ error: "not_found", message: "Job not found" })
         }
+
+        const previousStatus = job.status
 
         await db
           .updateTable("job")
@@ -384,7 +398,15 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         try {
           await enqueueJob(jobId)
         } catch (err) {
+          await db
+            .updateTable("job")
+            .set({ status: previousStatus })
+            .where("id", "=", jobId)
+            .execute()
           request.log.error({ err, jobId }, "Failed to enqueue retried job")
+          return reply
+            .status(503)
+            .send({ error: "enqueue_failed", message: "Retry enqueue failed" })
         }
 
         return reply.status(202).send({ jobId, status: "retrying" })
