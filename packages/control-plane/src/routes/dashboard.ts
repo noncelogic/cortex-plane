@@ -6,7 +6,7 @@
  * - Content pipeline: list, publish, archive
  * - Memory: search, sync
  * - Browser observation aliases
- * - SSE: /api/jobs/stream
+ * - SSE: /jobs/stream (/api/jobs/stream alias)
  */
 
 import { randomUUID } from "node:crypto"
@@ -163,6 +163,91 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         })
       },
     )
+
+    const jobsStreamHandler = async (_request: FastifyRequest, reply: FastifyReply) => {
+      reply.hijack()
+
+      const raw = reply.raw
+      raw.setHeader("Content-Type", "text/event-stream")
+      raw.setHeader("Cache-Control", "no-cache")
+      raw.setHeader("Connection", "keep-alive")
+      raw.write(": connected\n\n")
+
+      const lastSeen = new Map<string, { status: JobStatus; updatedAt: number }>()
+      let closed = false
+
+      const sendEvent = (event: string, data: Record<string, unknown>) => {
+        raw.write(`event: ${event}\n`)
+        raw.write(`data: ${JSON.stringify(data)}\n\n`)
+      }
+
+      const poll = async () => {
+        if (closed) return
+        const rows = await db
+          .selectFrom("job")
+          .select(["id", "status", "updated_at", "created_at", "error"])
+          .orderBy("updated_at", "desc")
+          .limit(200)
+          .execute()
+
+        for (const row of rows) {
+          const updatedAt = new Date(row.updated_at).getTime()
+          const prev = lastSeen.get(row.id)
+          const error =
+            row.error && typeof row.error === "object" && typeof row.error.message === "string"
+              ? row.error.message
+              : undefined
+
+          if (!prev) {
+            sendEvent("job:created", {
+              jobId: row.id,
+              status: row.status,
+              timestamp: toIso(row.created_at),
+              error,
+            })
+          } else if (prev.status !== row.status || prev.updatedAt !== updatedAt) {
+            let event = "job:updated"
+            if (row.status === "COMPLETED") event = "job:completed"
+            else if (
+              row.status === "FAILED" ||
+              row.status === "TIMED_OUT" ||
+              row.status === "DEAD_LETTER"
+            )
+              event = "job:failed"
+
+            sendEvent(event, {
+              jobId: row.id,
+              status: row.status,
+              timestamp: toIso(row.updated_at),
+              error,
+            })
+          }
+
+          lastSeen.set(row.id, { status: row.status, updatedAt })
+        }
+      }
+
+      const pollInterval = setInterval(() => {
+        void poll().catch(() => {
+          // Keep stream alive even if a poll fails.
+        })
+      }, 2000)
+
+      const heartbeatInterval = setInterval(() => {
+        if (!closed) raw.write(": heartbeat\n\n")
+      }, 15000)
+
+      void poll()
+
+      raw.on("close", () => {
+        closed = true
+        clearInterval(pollInterval)
+        clearInterval(heartbeatInterval)
+      })
+    }
+
+    app.get("/jobs/stream", jobsStreamHandler)
+    app.get("/api/jobs/stream", jobsStreamHandler)
 
     app.get<{ Params: JobParams }>("/jobs/:jobId", async (request, reply) => {
       const { jobId } = request.params
@@ -438,87 +523,5 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         return reply.send({ events: [] })
       },
     )
-
-    app.get("/api/jobs/stream", async (_request: FastifyRequest, reply: FastifyReply) => {
-      reply.hijack()
-
-      const raw = reply.raw
-      raw.setHeader("Content-Type", "text/event-stream")
-      raw.setHeader("Cache-Control", "no-cache")
-      raw.setHeader("Connection", "keep-alive")
-      raw.write(": connected\n\n")
-
-      const lastSeen = new Map<string, { status: JobStatus; updatedAt: number }>()
-      let closed = false
-
-      const sendEvent = (event: string, data: Record<string, unknown>) => {
-        raw.write(`event: ${event}\n`)
-        raw.write(`data: ${JSON.stringify(data)}\n\n`)
-      }
-
-      const poll = async () => {
-        if (closed) return
-        const rows = await db
-          .selectFrom("job")
-          .select(["id", "status", "updated_at", "created_at", "error"])
-          .orderBy("updated_at", "desc")
-          .limit(200)
-          .execute()
-
-        for (const row of rows) {
-          const updatedAt = new Date(row.updated_at).getTime()
-          const prev = lastSeen.get(row.id)
-          const error =
-            row.error && typeof row.error === "object" && typeof row.error.message === "string"
-              ? row.error.message
-              : undefined
-
-          if (!prev) {
-            sendEvent("job:created", {
-              jobId: row.id,
-              status: row.status,
-              timestamp: toIso(row.created_at),
-              error,
-            })
-          } else if (prev.status !== row.status || prev.updatedAt !== updatedAt) {
-            let event = "job:updated"
-            if (row.status === "COMPLETED") event = "job:completed"
-            else if (
-              row.status === "FAILED" ||
-              row.status === "TIMED_OUT" ||
-              row.status === "DEAD_LETTER"
-            )
-              event = "job:failed"
-
-            sendEvent(event, {
-              jobId: row.id,
-              status: row.status,
-              timestamp: toIso(row.updated_at),
-              error,
-            })
-          }
-
-          lastSeen.set(row.id, { status: row.status, updatedAt })
-        }
-      }
-
-      const pollInterval = setInterval(() => {
-        void poll().catch(() => {
-          // Keep stream alive even if a poll fails.
-        })
-      }, 2000)
-
-      const heartbeatInterval = setInterval(() => {
-        if (!closed) raw.write(": heartbeat\n\n")
-      }, 15000)
-
-      void poll()
-
-      raw.on("close", () => {
-        closed = true
-        clearInterval(pollInterval)
-        clearInterval(heartbeatInterval)
-      })
-    })
   }
 }
