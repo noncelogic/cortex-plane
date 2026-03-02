@@ -374,14 +374,20 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
 
         const job = await db
           .selectFrom("job")
-          .select(["id", "status"])
+          .select(["id", "status", "error", "started_at", "completed_at", "heartbeat_at"])
           .where("id", "=", jobId)
           .executeTakeFirst()
         if (!job) {
           return reply.status(404).send({ error: "not_found", message: "Job not found" })
         }
 
-        const previousStatus = job.status
+        const previous = {
+          status: job.status,
+          error: job.error,
+          started_at: job.started_at,
+          completed_at: job.completed_at,
+          heartbeat_at: job.heartbeat_at,
+        }
 
         await db
           .updateTable("job")
@@ -400,7 +406,13 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         } catch (err) {
           await db
             .updateTable("job")
-            .set({ status: previousStatus })
+            .set({
+              status: previous.status,
+              error: previous.error,
+              started_at: previous.started_at,
+              completed_at: previous.completed_at,
+              heartbeat_at: previous.heartbeat_at,
+            })
             .where("id", "=", jobId)
             .execute()
           request.log.error({ err, jobId }, "Failed to enqueue retried job")
