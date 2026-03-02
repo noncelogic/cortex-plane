@@ -199,7 +199,21 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           }
 
           // ── Step 8: Execute task ──
-          handle = await backend.executeTask(task)
+          // If the backend supports per-agent tool registries (HttpLlmBackend),
+          // build one that includes custom webhook tools from agent config.
+          if (
+            "createAgentRegistry" in backend &&
+            typeof backend.createAgentRegistry === "function"
+          ) {
+            const agentRegistry = (
+              backend as { createAgentRegistry: (c: Record<string, unknown>) => unknown }
+            ).createAgentRegistry(agent.config ?? {})
+            handle = await (
+              backend as { executeTask: (t: ExecutionTask, r: unknown) => Promise<ExecutionHandle> }
+            ).executeTask(task, agentRegistry)
+          } else {
+            handle = await backend.executeTask(task)
+          }
 
           // Store the user prompt as a session message for memory extraction batching.
           if (job.session_id && task.instruction.prompt.trim().length > 0) {
