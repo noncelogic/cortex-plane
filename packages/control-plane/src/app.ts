@@ -31,6 +31,7 @@ import { dashboardRoutes } from "./routes/dashboard.js"
 import { feedbackRoutes } from "./routes/feedback.js"
 import { healthRoutes } from "./routes/health.js"
 import { observationRoutes } from "./routes/observation.js"
+import { sessionRoutes } from "./routes/sessions.js"
 import { streamRoutes } from "./routes/stream.js"
 import { voiceRoutes } from "./routes/voice.js"
 import { SSEConnectionManager } from "./streaming/manager.js"
@@ -174,6 +175,15 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   await app.register(
     agentChannelRoutes({
       service: agentChannelService,
+      authConfig,
+      sessionService,
+    }),
+  )
+
+  // Register session (conversation history) routes
+  await app.register(
+    sessionRoutes({
+      db,
       authConfig,
       sessionService,
     }),

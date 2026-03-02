@@ -47,7 +47,16 @@ function mockRouter() {
 function selectChain(rows: Record<string, unknown>[]) {
   const executeTakeFirst = vi.fn().mockResolvedValue(rows[0] ?? null)
   const executeTakeFirstOrThrow = vi.fn().mockResolvedValue(rows[0])
-  const terminal = { executeTakeFirst, executeTakeFirstOrThrow }
+  const execute = vi.fn().mockResolvedValue(rows)
+  const limitFn = vi.fn().mockReturnValue({ execute })
+  const orderByFn = vi.fn().mockReturnValue({ limit: limitFn, execute })
+  const terminal = {
+    executeTakeFirst,
+    executeTakeFirstOrThrow,
+    orderBy: orderByFn,
+    limit: limitFn,
+    execute,
+  }
   const whereFn: ReturnType<typeof vi.fn> = vi.fn()
   whereFn.mockReturnValue({ where: whereFn, ...terminal })
   const selectAll = vi.fn().mockReturnValue({ where: whereFn, ...terminal })
@@ -58,8 +67,9 @@ function selectChain(rows: Record<string, unknown>[]) {
 
 function insertChain(row: Record<string, unknown>) {
   const executeTakeFirstOrThrow = vi.fn().mockResolvedValue(row)
+  const execute = vi.fn().mockResolvedValue(undefined)
   const returning = vi.fn().mockReturnValue({ executeTakeFirstOrThrow })
-  const values = vi.fn().mockReturnValue({ returning })
+  const values = vi.fn().mockReturnValue({ returning, execute })
   return { values }
 }
 
@@ -95,11 +105,12 @@ function mockDb(
     .fn()
     .mockImplementation(() => selectChain(existingSession ? [existingSession] : []))
 
-  // Track insertInto calls: session first (if needed), then job
+  // Track insertInto calls: session (if needed), session_message, then job
   const insertCalls: ReturnType<typeof insertChain>[] = []
   if (!existingSession) {
     insertCalls.push(insertChain({ id: "new-session-id" }))
   }
+  insertCalls.push(insertChain({})) // session_message insert
   insertCalls.push(insertChain(jobRow))
 
   let insertCallIndex = 0
