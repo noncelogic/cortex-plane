@@ -33,7 +33,7 @@ export function useJobStream(options?: { maxEvents?: number }): UseJobStreamRetu
     connected,
     status,
   } = useSSE({
-    url: resolveSSEUrl("/api/jobs/stream"),
+    url: resolveSSEUrl("/jobs/stream"),
     eventTypes: ["job:created", "job:updated", "job:completed", "job:failed"],
     maxEvents: options?.maxEvents ?? 500,
   })
