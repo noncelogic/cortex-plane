@@ -342,6 +342,8 @@ export default function PulsePage(): React.JSX.Element {
           icon="hub"
           title="No content yet"
           description="Content pieces will appear here as agents generate drafts, newsletters, and reports."
+          actionLabel="Go to Agents"
+          actionHref="/agents"
         />
       ) : null}
 

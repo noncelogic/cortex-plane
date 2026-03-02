@@ -78,6 +78,8 @@ export default function DashboardPage(): React.JSX.Element {
               icon="list_alt"
               title="No jobs yet"
               description="Once agents begin executing tasks, recent activity will appear here."
+              actionLabel="Go to Agents"
+              actionHref="/agents"
             />
           ) : (
             <div className="rounded-xl border border-surface-border bg-surface-light overflow-hidden">

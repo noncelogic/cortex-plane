@@ -89,6 +89,8 @@ export default function MemoryPage(): React.JSX.Element {
           icon="memory"
           title="No memory records"
           description="Memory records will appear here once agents begin extracting and storing knowledge."
+          actionLabel="Go to Agents"
+          actionHref="/agents"
         />
       ) : (
         /* Split view: Results (left) | Document Viewer (right) */
