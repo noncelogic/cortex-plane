@@ -5,10 +5,13 @@ import { describe, expect, it, vi } from "vitest"
 import type { Database } from "../db/types.js"
 import { dashboardRoutes } from "../routes/dashboard.js"
 
+const JOB_UUID = "00000000-0000-4000-8000-000000000001"
+const AGENT_UUID = "00000000-0000-4000-8000-000000000002"
+
 function makeJob(overrides: Record<string, unknown> = {}) {
   return {
-    id: "job-1",
-    agent_id: "agent-1",
+    id: JOB_UUID,
+    agent_id: AGENT_UUID,
     session_id: null,
     status: "FAILED",
     priority: 0,
@@ -63,7 +66,7 @@ function mockDb() {
     const selectAll = vi
       .fn()
       .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
-    const select = vi.fn().mockReturnValue({ where: whereFn, ...terminal })
+    const select = vi.fn().mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
     return { selectAll, select }
   }
 
@@ -77,7 +80,7 @@ function mockDb() {
   return {
     selectFrom: vi.fn().mockImplementation((table: string) => {
       if (table === "job") return selectChain(jobs)
-      if (table === "agent") return selectChain([{ id: "agent-1", name: "Agent One" }])
+      if (table === "agent") return selectChain([{ id: AGENT_UUID, name: "Agent One" }])
       if (table === "memory_extract_message") return selectChain(memoryRows)
       return selectChain([])
     }),
@@ -131,8 +134,8 @@ describe("dashboard routes", () => {
     expect(Array.isArray(body.jobs)).toBe(true)
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.jobs[0]).toMatchObject({
-      id: "job-1",
-      agentId: "agent-1",
+      id: JOB_UUID,
+      agentId: AGENT_UUID,
       status: "FAILED",
       type: "research",
     })
@@ -143,18 +146,26 @@ describe("dashboard routes", () => {
   it("returns job detail and retry response", async () => {
     const { app } = await buildTestApp()
 
-    const detail = await app.inject({ method: "GET", url: "/jobs/job-1" })
+    const detail = await app.inject({ method: "GET", url: `/jobs/${JOB_UUID}` })
     expect(detail.statusCode).toBe(200)
     expect(detail.json()).toMatchObject({
-      id: "job-1",
-      agentId: "agent-1",
+      id: JOB_UUID,
+      agentId: AGENT_UUID,
       steps: [],
       logs: [],
     })
 
-    const retry = await app.inject({ method: "POST", url: "/jobs/job-1/retry" })
+    const retry = await app.inject({ method: "POST", url: `/jobs/${JOB_UUID}/retry` })
     expect(retry.statusCode).toBe(202)
-    expect(retry.json()).toEqual({ jobId: "job-1", status: "retrying" })
+    expect(retry.json()).toEqual({ jobId: JOB_UUID, status: "retrying" })
+  })
+
+  it("rejects non-UUID jobId with 400", async () => {
+    const { app } = await buildTestApp()
+
+    // "not-a-uuid" is not a valid UUID, so /jobs/:jobId returns 400
+    const bad = await app.inject({ method: "GET", url: "/jobs/not-a-uuid" })
+    expect(bad.statusCode).toBe(400)
   })
 
   it("serves content, memory, and browser endpoints", async () => {

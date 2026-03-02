@@ -6,7 +6,7 @@
  * - Content pipeline: list, publish, archive
  * - Memory: search, sync
  * - Browser observation aliases
- * - SSE: /api/jobs/stream
+ * - SSE: /jobs/stream
  */
 
 import { randomUUID } from "node:crypto"
@@ -164,113 +164,232 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
       },
     )
 
-    app.get<{ Params: JobParams }>("/jobs/:jobId", async (request, reply) => {
-      const { jobId } = request.params
+    app.get("/jobs/stream", async (_request: FastifyRequest, reply: FastifyReply) => {
+      reply.hijack()
 
-      const job = await db.selectFrom("job").selectAll().where("id", "=", jobId).executeTakeFirst()
+      const raw = reply.raw
+      raw.setHeader("Content-Type", "text/event-stream")
+      raw.setHeader("Cache-Control", "no-cache")
+      raw.setHeader("Connection", "keep-alive")
+      raw.write(": connected\n\n")
 
-      if (!job) {
-        return reply.status(404).send({ error: "not_found", message: "Job not found" })
+      const lastSeen = new Map<string, { status: JobStatus; updatedAt: number }>()
+      let closed = false
+
+      const sendEvent = (event: string, data: Record<string, unknown>) => {
+        raw.write(`event: ${event}\n`)
+        raw.write(`data: ${JSON.stringify(data)}\n\n`)
       }
 
-      const agent = await db
-        .selectFrom("agent")
-        .select(["id", "name"])
-        .where("id", "=", job.agent_id)
-        .executeTakeFirst()
+      const poll = async () => {
+        if (closed) return
+        const rows = await db
+          .selectFrom("job")
+          .select(["id", "status", "updated_at", "created_at", "error"])
+          .orderBy("updated_at", "desc")
+          .limit(200)
+          .execute()
 
-      const stepsRaw =
-        job.result && typeof job.result === "object" && Array.isArray(job.result.steps)
-          ? job.result.steps
-          : []
-      const logsRaw =
-        job.result && typeof job.result === "object" && Array.isArray(job.result.logs)
-          ? job.result.logs
-          : []
+        for (const row of rows) {
+          const updatedAt = new Date(row.updated_at).getTime()
+          const prev = lastSeen.get(row.id)
+          const error =
+            row.error && typeof row.error === "object" && typeof row.error.message === "string"
+              ? row.error.message
+              : undefined
 
-      const steps = stepsRaw
-        .filter(
-          (step): step is Record<string, unknown> => typeof step === "object" && step !== null,
-        )
-        .map((step) => ({
-          name: typeof step.name === "string" ? step.name : "step",
-          status:
-            step.status === "COMPLETED" ||
-            step.status === "FAILED" ||
-            step.status === "RUNNING" ||
-            step.status === "PENDING"
-              ? step.status
-              : "COMPLETED",
-          startedAt: typeof step.startedAt === "string" ? step.startedAt : undefined,
-          completedAt: typeof step.completedAt === "string" ? step.completedAt : undefined,
-          durationMs: typeof step.durationMs === "number" ? step.durationMs : undefined,
-          worker: typeof step.worker === "string" ? step.worker : undefined,
-          error: typeof step.error === "string" ? step.error : undefined,
-        }))
+          if (!prev) {
+            sendEvent("job:created", {
+              jobId: row.id,
+              status: row.status,
+              timestamp: toIso(row.created_at),
+              error,
+            })
+          } else if (prev.status !== row.status || prev.updatedAt !== updatedAt) {
+            let event = "job:updated"
+            if (row.status === "COMPLETED") event = "job:completed"
+            else if (
+              row.status === "FAILED" ||
+              row.status === "TIMED_OUT" ||
+              row.status === "DEAD_LETTER"
+            )
+              event = "job:failed"
 
-      const logs = logsRaw
-        .filter(
-          (entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null,
-        )
-        .map((entry) => ({
-          timestamp:
-            typeof entry.timestamp === "string"
-              ? entry.timestamp
-              : (toIso(job.updated_at) ?? new Date().toISOString()),
-          level:
-            entry.level === "INFO" ||
-            entry.level === "WARN" ||
-            entry.level === "ERR" ||
-            entry.level === "DEBUG"
-              ? entry.level
-              : "INFO",
-          message: typeof entry.message === "string" ? entry.message : "",
-        }))
+            sendEvent(event, {
+              jobId: row.id,
+              status: row.status,
+              timestamp: toIso(row.updated_at),
+              error,
+            })
+          }
 
-      const startedAtMs = job.started_at ? new Date(job.started_at).getTime() : undefined
-      const completedAtMs = job.completed_at ? new Date(job.completed_at).getTime() : undefined
-      const durationMs =
-        startedAtMs !== undefined && completedAtMs !== undefined
-          ? Math.max(0, completedAtMs - startedAtMs)
-          : undefined
+          lastSeen.set(row.id, { status: row.status, updatedAt })
+        }
+      }
 
-      return reply.send({
-        ...toJobSummary(job),
-        agentName: agent?.name ?? undefined,
-        durationMs,
-        steps,
-        logs,
+      const pollInterval = setInterval(() => {
+        void poll().catch(() => {
+          // Keep stream alive even if a poll fails.
+        })
+      }, 2000)
+
+      const heartbeatInterval = setInterval(() => {
+        if (!closed) raw.write(": heartbeat\n\n")
+      }, 15000)
+
+      void poll()
+
+      raw.on("close", () => {
+        closed = true
+        clearInterval(pollInterval)
+        clearInterval(heartbeatInterval)
       })
     })
 
-    app.post<{ Params: JobParams }>("/jobs/:jobId/retry", async (request, reply) => {
-      const { jobId } = request.params
+    app.get<{ Params: JobParams }>(
+      "/jobs/:jobId",
+      {
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              jobId: { type: "string", format: "uuid" },
+            },
+            required: ["jobId"],
+          },
+        },
+      },
+      async (request, reply) => {
+        const { jobId } = request.params
 
-      const job = await db.selectFrom("job").select("id").where("id", "=", jobId).executeTakeFirst()
-      if (!job) {
-        return reply.status(404).send({ error: "not_found", message: "Job not found" })
-      }
+        const job = await db
+          .selectFrom("job")
+          .selectAll()
+          .where("id", "=", jobId)
+          .executeTakeFirst()
 
-      await db
-        .updateTable("job")
-        .set({
-          status: "RETRYING" as JobStatus,
-          error: null,
-          started_at: null,
-          completed_at: null,
-          heartbeat_at: null,
+        if (!job) {
+          return reply.status(404).send({ error: "not_found", message: "Job not found" })
+        }
+
+        const agent = await db
+          .selectFrom("agent")
+          .select(["id", "name"])
+          .where("id", "=", job.agent_id)
+          .executeTakeFirst()
+
+        const stepsRaw =
+          job.result && typeof job.result === "object" && Array.isArray(job.result.steps)
+            ? job.result.steps
+            : []
+        const logsRaw =
+          job.result && typeof job.result === "object" && Array.isArray(job.result.logs)
+            ? job.result.logs
+            : []
+
+        const steps = stepsRaw
+          .filter(
+            (step): step is Record<string, unknown> => typeof step === "object" && step !== null,
+          )
+          .map((step) => ({
+            name: typeof step.name === "string" ? step.name : "step",
+            status:
+              step.status === "COMPLETED" ||
+              step.status === "FAILED" ||
+              step.status === "RUNNING" ||
+              step.status === "PENDING"
+                ? step.status
+                : "COMPLETED",
+            startedAt: typeof step.startedAt === "string" ? step.startedAt : undefined,
+            completedAt: typeof step.completedAt === "string" ? step.completedAt : undefined,
+            durationMs: typeof step.durationMs === "number" ? step.durationMs : undefined,
+            worker: typeof step.worker === "string" ? step.worker : undefined,
+            error: typeof step.error === "string" ? step.error : undefined,
+          }))
+
+        const logs = logsRaw
+          .filter(
+            (entry): entry is Record<string, unknown> =>
+              typeof entry === "object" && entry !== null,
+          )
+          .map((entry) => ({
+            timestamp:
+              typeof entry.timestamp === "string"
+                ? entry.timestamp
+                : (toIso(job.updated_at) ?? new Date().toISOString()),
+            level:
+              entry.level === "INFO" ||
+              entry.level === "WARN" ||
+              entry.level === "ERR" ||
+              entry.level === "DEBUG"
+                ? entry.level
+                : "INFO",
+            message: typeof entry.message === "string" ? entry.message : "",
+          }))
+
+        const startedAtMs = job.started_at ? new Date(job.started_at).getTime() : undefined
+        const completedAtMs = job.completed_at ? new Date(job.completed_at).getTime() : undefined
+        const durationMs =
+          startedAtMs !== undefined && completedAtMs !== undefined
+            ? Math.max(0, completedAtMs - startedAtMs)
+            : undefined
+
+        return reply.send({
+          ...toJobSummary(job),
+          agentName: agent?.name ?? undefined,
+          durationMs,
+          steps,
+          logs,
         })
-        .where("id", "=", jobId)
-        .execute()
+      },
+    )
 
-      try {
-        await enqueueJob(jobId)
-      } catch (err) {
-        request.log.error({ err, jobId }, "Failed to enqueue retried job")
-      }
+    app.post<{ Params: JobParams }>(
+      "/jobs/:jobId/retry",
+      {
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              jobId: { type: "string", format: "uuid" },
+            },
+            required: ["jobId"],
+          },
+        },
+      },
+      async (request, reply) => {
+        const { jobId } = request.params
 
-      return reply.status(202).send({ jobId, status: "retrying" })
-    })
+        const job = await db
+          .selectFrom("job")
+          .select("id")
+          .where("id", "=", jobId)
+          .executeTakeFirst()
+        if (!job) {
+          return reply.status(404).send({ error: "not_found", message: "Job not found" })
+        }
+
+        await db
+          .updateTable("job")
+          .set({
+            status: "RETRYING" as JobStatus,
+            error: null,
+            started_at: null,
+            completed_at: null,
+            heartbeat_at: null,
+          })
+          .where("id", "=", jobId)
+          .execute()
+
+        try {
+          await enqueueJob(jobId)
+        } catch (err) {
+          request.log.error({ err, jobId }, "Failed to enqueue retried job")
+        }
+
+        return reply.status(202).send({ jobId, status: "retrying" })
+      },
+    )
 
     app.get<{ Querystring: ListContentQuery }>(
       "/content",
@@ -445,87 +564,5 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         return reply.send({ events: [] })
       },
     )
-
-    app.get("/api/jobs/stream", async (_request: FastifyRequest, reply: FastifyReply) => {
-      reply.hijack()
-
-      const raw = reply.raw
-      raw.setHeader("Content-Type", "text/event-stream")
-      raw.setHeader("Cache-Control", "no-cache")
-      raw.setHeader("Connection", "keep-alive")
-      raw.write(": connected\n\n")
-
-      const lastSeen = new Map<string, { status: JobStatus; updatedAt: number }>()
-      let closed = false
-
-      const sendEvent = (event: string, data: Record<string, unknown>) => {
-        raw.write(`event: ${event}\n`)
-        raw.write(`data: ${JSON.stringify(data)}\n\n`)
-      }
-
-      const poll = async () => {
-        if (closed) return
-        const rows = await db
-          .selectFrom("job")
-          .select(["id", "status", "updated_at", "created_at", "error"])
-          .orderBy("updated_at", "desc")
-          .limit(200)
-          .execute()
-
-        for (const row of rows) {
-          const updatedAt = new Date(row.updated_at).getTime()
-          const prev = lastSeen.get(row.id)
-          const error =
-            row.error && typeof row.error === "object" && typeof row.error.message === "string"
-              ? row.error.message
-              : undefined
-
-          if (!prev) {
-            sendEvent("job:created", {
-              jobId: row.id,
-              status: row.status,
-              timestamp: toIso(row.created_at),
-              error,
-            })
-          } else if (prev.status !== row.status || prev.updatedAt !== updatedAt) {
-            let event = "job:updated"
-            if (row.status === "COMPLETED") event = "job:completed"
-            else if (
-              row.status === "FAILED" ||
-              row.status === "TIMED_OUT" ||
-              row.status === "DEAD_LETTER"
-            )
-              event = "job:failed"
-
-            sendEvent(event, {
-              jobId: row.id,
-              status: row.status,
-              timestamp: toIso(row.updated_at),
-              error,
-            })
-          }
-
-          lastSeen.set(row.id, { status: row.status, updatedAt })
-        }
-      }
-
-      const pollInterval = setInterval(() => {
-        void poll().catch(() => {
-          // Keep stream alive even if a poll fails.
-        })
-      }, 2000)
-
-      const heartbeatInterval = setInterval(() => {
-        if (!closed) raw.write(": heartbeat\n\n")
-      }, 15000)
-
-      void poll()
-
-      raw.on("close", () => {
-        closed = true
-        clearInterval(pollInterval)
-        clearInterval(heartbeatInterval)
-      })
-    })
   }
 }

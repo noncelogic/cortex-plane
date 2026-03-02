@@ -1713,7 +1713,7 @@ paths:
   # -------------------------------------------------------------------------
   # SSE
   # -------------------------------------------------------------------------
-  /api/jobs/stream:
+  /jobs/stream:
     get:
       operationId: streamJobs
       summary: Stream real-time job updates via SSE
