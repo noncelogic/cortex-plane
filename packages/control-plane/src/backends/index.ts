@@ -14,6 +14,12 @@ import { HttpLlmBackend } from "./http-llm.js"
 export { ClaudeCodeBackend } from "./claude-code.js"
 export { EchoBackend } from "./echo-backend.js"
 export { HttpLlmBackend } from "./http-llm.js"
+export {
+  createDefaultToolRegistry,
+  echoTool,
+  type ToolDefinition,
+  ToolRegistry,
+} from "./tool-executor.js"
 
 /** Default concurrency limits per backend type. */
 export const DEFAULT_CONCURRENCY: Record<string, number> = {
