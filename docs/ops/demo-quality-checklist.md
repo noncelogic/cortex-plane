@@ -20,7 +20,7 @@ return real responses (200) or proper errors (404/500) — never silently replac
 
 - [ ] Dashboard home loads KPI cards from live API (`/agents`, `/jobs`, `/approvals`)
 - [ ] Agents page lists real agents from `/agents` endpoint
-- [ ] Jobs page loads from `/agents/:id/jobs` (or top-level `/jobs` once implemented)
+- [ ] Jobs page loads from `/jobs` (top-level) or `/agents/:id/jobs` (per-agent)
 - [ ] Approvals page loads from `/approvals` — SSE stream connects
 - [ ] No 404 errors in browser console for known dashboard routes
 - [ ] Error banner shows correct classification:

@@ -116,6 +116,12 @@ servers:
 tags:
   - name: Agents
     description: Agent lifecycle, streaming, and steering
+  - name: Chat
+    description: Chat messaging and conversation sessions
+  - name: Channels
+    description: Agent-channel binding for message routing
+  - name: Sessions
+    description: Conversation session management
   - name: Jobs
     description: Job approval gates
   - name: Memory
@@ -179,6 +185,27 @@ components:
   # Reusable schemas
   # -----------------------------------------------------------------------
   schemas:
+    # --- Channel Binding ---
+    ChannelBinding:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+        channel_type:
+          type: string
+          enum: [telegram, discord]
+        chat_id:
+          type: string
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
     # --- Problem Details (RFC 7807) ---
     ProblemDetail:
       type: object
@@ -2017,3 +2044,302 @@ paths:
                 checks:
                   worker: true
                   db: false
+
+  # -------------------------------------------------------------------------
+  # Chat
+  # -------------------------------------------------------------------------
+  /agents/{agentId}/chat:
+    post:
+      operationId: sendChatMessage
+      summary: Send a chat message to an agent
+      description: |
+        Sends a text message to the agent, creates a CHAT_RESPONSE job, and
+        either returns immediately (async) or waits for the LLM response (sync).
+        Conversation history is automatically loaded from the session buffer.
+      tags:
+        - Chat
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+        - name: wait
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: If true, block until the LLM responds or timeout.
+        - name: timeout
+          in: query
+          schema:
+            type: integer
+            minimum: 1000
+            maximum: 120000
+            default: 60000
+          description: Max wait time in ms (only used when wait=true).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 50000
+                  description: The user's message text.
+                session_id:
+                  type: string
+                  format: uuid
+                  description: Optional session ID to continue an existing conversation.
+      responses:
+        "200":
+          description: Message accepted (async) or response ready (sync).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                  session_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [SCHEDULED, RUNNING, COMPLETED, FAILED, TIMED_OUT]
+                  response:
+                    type: string
+                    description: LLM response text (only present when wait=true and job completed).
+        "404":
+          description: Agent not found or not active.
+
+  # -------------------------------------------------------------------------
+  # Sessions
+  # -------------------------------------------------------------------------
+  /agents/{agentId}/sessions:
+    get:
+      operationId: listAgentSessions
+      summary: List conversation sessions for an agent
+      tags:
+        - Sessions
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions, pagination]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        agent_id:
+                          type: string
+                          format: uuid
+                        channel_id:
+                          type: string
+                        status:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+
+  /sessions/{sessionId}/messages:
+    get:
+      operationId: getSessionMessages
+      summary: Get conversation history for a session
+      tags:
+        - Sessions
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages, pagination]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        session_id:
+                          type: string
+                          format: uuid
+                        role:
+                          type: string
+                          enum: [user, assistant, system, tool]
+                        content:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+                        metadata:
+                          type: object
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "404":
+          description: Session not found.
+
+    delete:
+      operationId: clearSession
+      summary: Clear a session (delete messages, mark as ended)
+      tags:
+        - Sessions
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Session cleared.
+        "404":
+          description: Session not found.
+
+  # -------------------------------------------------------------------------
+  # Agent Channel Binding
+  # -------------------------------------------------------------------------
+  /agents/{agentId}/channels:
+    get:
+      operationId: listAgentChannels
+      summary: List channel bindings for an agent
+      tags:
+        - Channels
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      responses:
+        "200":
+          description: List of channel bindings.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bindings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChannelBinding"
+
+    post:
+      operationId: bindAgentChannel
+      summary: Bind an agent to a chat channel
+      tags:
+        - Channels
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel_type, chat_id]
+              properties:
+                channel_type:
+                  type: string
+                  enum: [telegram, discord]
+                chat_id:
+                  type: string
+                  description: Platform-specific chat/group ID.
+      responses:
+        "201":
+          description: Channel binding created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelBinding"
+        "409":
+          description: Binding already exists for this channel.
+
+  /agents/{agentId}/channels/{bindingId}:
+    delete:
+      operationId: unbindAgentChannel
+      summary: Remove a channel binding
+      tags:
+        - Channels
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+        - name: bindingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Binding removed.
+        "404":
+          description: Binding not found.
+
+  /agents/{agentId}/channels/default:
+    post:
+      operationId: setDefaultAgentChannel
+      summary: Set an agent as the default for a channel type
+      tags:
+        - Channels
+      parameters:
+        - $ref: "#/components/parameters/agentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel_type]
+              properties:
+                channel_type:
+                  type: string
+                  enum: [telegram, discord]
+      responses:
+        "200":
+          description: Default binding set.
