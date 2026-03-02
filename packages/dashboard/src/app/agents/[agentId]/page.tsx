@@ -18,6 +18,7 @@ import {
   getAgent,
   pauseAgent,
   resumeAgent,
+  updateAgent,
 } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -250,9 +251,10 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
 
       {/* Desktop: 3-column layout */}
       <div className="hidden flex-1 gap-6 lg:flex">
-        {/* Left column: steering + lifecycle details */}
+        {/* Left column: steering + config + lifecycle details */}
         <div className="flex w-80 min-w-0 shrink-0 flex-col gap-6">
           <SteerInput agentId={agentId} />
+          <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
           <LifecycleDetails transitions={transitions} currentState={currentState} />
         </div>
 
@@ -288,6 +290,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         {mobileTab === "Details" && (
           <div className="flex flex-col gap-4">
             <SteerInput agentId={agentId} />
+            <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
             <LifecycleDetails transitions={transitions} currentState={currentState} />
           </div>
         )}
@@ -330,6 +333,113 @@ function LoadingSkeleton(): React.JSX.Element {
         <Skeleton className="h-96 flex-1" />
         <Skeleton className="h-96 w-72" />
       </div>
+    </div>
+  )
+}
+
+function AgentConfigPanel({
+  agent,
+  onSave,
+}: {
+  agent: AgentDetail
+  onSave: () => void
+}): React.JSX.Element {
+  const [editing, setEditing] = useState(false)
+  const [configJson, setConfigJson] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const configData = agent.config ?? {}
+
+  const handleEdit = useCallback(() => {
+    setConfigJson(JSON.stringify(configData, null, 2))
+    setError(null)
+    setEditing(true)
+  }, [configData])
+
+  const handleCancel = useCallback(() => {
+    setEditing(false)
+    setError(null)
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const parsed = JSON.parse(configJson) as Record<string, unknown>
+      await updateAgent(agent.id, { config: parsed })
+      setEditing(false)
+      onSave()
+    } catch (err) {
+      setError(err instanceof SyntaxError ? "Invalid JSON" : "Failed to save configuration")
+    } finally {
+      setSaving(false)
+    }
+  }, [agent.id, configJson, onSave])
+
+  const entries = Object.entries(configData)
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-primary/10 dark:bg-primary/5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary">tune</span>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            Configuration
+          </h3>
+        </div>
+        {!editing && (
+          <button
+            onClick={handleEdit}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            <span className="material-symbols-outlined text-sm">edit</span>
+            Edit
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-3">
+          <textarea
+            value={configJson}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConfigJson(e.target.value)}
+            rows={6}
+            disabled={saving}
+            className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+          {error && <p className="text-xs font-medium text-red-500">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={handleCancel}
+              disabled={saving}
+              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+      ) : entries.length === 0 ? (
+        <p className="text-sm text-slate-500">No configuration set.</p>
+      ) : (
+        <div className="space-y-2">
+          {entries.map(([key, value]) => (
+            <div key={key} className="flex items-start justify-between gap-2">
+              <span className="text-xs font-medium text-slate-500">{key}</span>
+              <span className="text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                {JSON.stringify(value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

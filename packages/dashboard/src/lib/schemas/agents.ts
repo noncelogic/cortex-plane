@@ -38,6 +38,7 @@ export const AgentDetailSchema = AgentSummarySchema.extend({
   skill_config: z.record(z.string(), z.unknown()).optional().nullable(),
   resource_limits: z.record(z.string(), z.unknown()).optional().nullable(),
   channel_permissions: z.record(z.string(), z.unknown()).optional().nullable(),
+  config: z.record(z.string(), z.unknown()).optional().nullable(),
   checkpoint: CheckpointSchema.optional().nullable(),
 })
 

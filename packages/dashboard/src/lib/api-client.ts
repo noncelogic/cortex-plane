@@ -416,6 +416,7 @@ export interface CreateAgentRequest {
   skill_config?: Record<string, unknown>
   resource_limits?: Record<string, unknown>
   channel_permissions?: Record<string, unknown>
+  config?: Record<string, unknown>
 }
 
 export interface UpdateAgentRequest {
@@ -426,6 +427,7 @@ export interface UpdateAgentRequest {
   skill_config?: Record<string, unknown>
   resource_limits?: Record<string, unknown>
   channel_permissions?: Record<string, unknown>
+  config?: Record<string, unknown>
   status?: "ACTIVE" | "DISABLED" | "ARCHIVED"
 }
 

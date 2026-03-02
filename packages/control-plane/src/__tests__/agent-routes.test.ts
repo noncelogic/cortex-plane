@@ -26,6 +26,7 @@ function makeAgent(overrides: Record<string, unknown> = {}) {
     skill_config: {},
     resource_limits: {},
     channel_permissions: {},
+    config: {},
     status: "ACTIVE",
     created_at: new Date(),
     updated_at: new Date(),
