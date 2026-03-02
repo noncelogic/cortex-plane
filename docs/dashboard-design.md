@@ -281,7 +281,8 @@ src/
 │   ├── layout/
 │   │   ├── nav-shell.tsx             ← Sidebar nav + top bar + mobile drawer
 │   │   ├── page-header.tsx           ← Page title + breadcrumbs
-│   │   └── notification-bell.tsx     ← Approval count badge (SSE-driven)
+│   │   ├── notification-bell.tsx     ← Approval count badge (SSE-driven)
+│   │   └── empty-state.tsx          ← Shared empty state (default + compact variants)
 │   │
 │   ├── agents/
 │   │   ├── agent-card.tsx            ← Grid card (status, task, resources)
@@ -385,6 +386,13 @@ src/
 ├─────────────────────────────────────┼─────────────────────────────────┤
 │ GET  /healthz                       │ nav-shell (system health dot)   │
 │ GET  /readyz                        │ nav-shell (readiness indicator) │
+├─────────────────────────────────────┼─────────────────────────────────┤
+│ GET  /agents/:id/sessions           │ /agents/[agentId] (sessions)    │
+│ GET  /sessions/:id/messages         │ /agents/[agentId] (chat history)│
+│ POST /agents/:id/chat               │ (REST chat — no dashboard view) │
+├─────────────────────────────────────┼─────────────────────────────────┤
+│ GET  /agents/:id/channels           │ (API-only, no dashboard UI yet) │
+│ POST /agents/:id/channels           │ (API-only, no dashboard UI yet) │
 └─────────────────────────────────────┴─────────────────────────────────┘
 ```
 
@@ -454,16 +462,13 @@ browser:annotation:ack→ vnc-viewer cursor feedback
 ```
 1. User opens dashboard
 2. Dashboard has no session → redirect to /login
-3. User authenticates (future: OAuth, for now: API key input)
-4. Control plane returns session token (UUID)
-5. Token stored in httpOnly cookie
-6. All REST calls include: Authorization: Bearer <session-id>
-7. SSE connections include same Bearer token
-8. Session validated per-request against `session` table in PG
+3. User authenticates via OAuth (GitHub configured, Google backend-ready)
+4. Control plane creates session, sets httpOnly cookie
+5. All REST calls authenticated via session cookie
+6. SSE connections use session cookie or per-session Bearer token
+7. Session validated per-request against `session` table in PG
+8. LLM provider credentials connected via OAuth (Anthropic PKCE code-paste flow) or API key entry
 ```
-
-For the initial scaffold, authentication is deferred — the dashboard uses
-a configurable API key via environment variable (`CORTEX_API_KEY`).
 
 ---
 
@@ -574,10 +579,13 @@ resources:
 
 | Item                                | Status               | Notes                                           |
 | ----------------------------------- | -------------------- | ----------------------------------------------- |
-| OAuth / OIDC login                  | Deferred             | Use API key for MVP                             |
+| OAuth login (GitHub)                | Implemented          | Cookie-based sessions, CSRF tokens              |
+| Anthropic OAuth (PKCE)              | Implemented          | Code-paste flow for LLM credentials             |
 | Qdrant direct search from dashboard | Deferred             | Needs new REST endpoint on control plane        |
-| Job retry from dashboard            | Design ready         | Needs `POST /jobs/:id/retry` endpoint           |
-| Content pipeline ("AI Pulse")       | Design ready         | Needs content-specific REST endpoints           |
+| Job retry from dashboard            | Implemented          | `POST /jobs/:id/retry` endpoint live            |
+| Content pipeline ("AI Pulse")       | Implemented          | CRUD + pipeline stages + dashboard UI           |
+| Agent channel binding UI            | Not started          | Binding is API-only, no dashboard settings page |
+| Session / chat history UI           | Not started          | API exists, no dashboard view yet               |
 | Dark mode                           | Included in scaffold | Tailwind `dark:` variant with system preference |
 | Keyboard shortcuts                  | Deferred             | Consider `j/k` nav, `a/r` approve/reject        |
 | Notifications (push/audio)          | Deferred             | Browser Notification API for approvals          |
