@@ -6,7 +6,7 @@ Agents receive messages via Telegram, Discord, or REST API. The control plane ro
 
 ## Architecture
 
-```
+````text
   Telegram / Discord / REST API
               │
               ▼
@@ -35,7 +35,7 @@ Agents receive messages via Telegram, Discord, or REST API. The control plane ro
 │  Agents · Jobs · Approvals   │
 │  Memory · Browser · Settings │
 └──────────────────────────────┘
-```
+```text
 
 ## Quick Start (local dev)
 
@@ -60,7 +60,7 @@ make db-seed
 
 # 5. Start dev servers (control-plane :4000 + dashboard :3100)
 make dev
-```
+````
 
 ### Create an agent and send it a message
 
@@ -126,12 +126,12 @@ make up-full
 
 Agents can use built-in tools during execution:
 
-| Tool            | Description                               |
-| --------------- | ----------------------------------------- |
-| `web_search`    | Search the web via Brave Search API       |
-| `http_request`  | Make HTTP requests (GET/POST/PUT/DELETE)  |
-| `memory_query`  | Query agent's vector memory (Qdrant)      |
-| `memory_store`  | Store facts in agent's vector memory      |
+| Tool           | Description                              |
+| -------------- | ---------------------------------------- |
+| `web_search`   | Search the web via Brave Search API      |
+| `http_request` | Make HTTP requests (GET/POST/PUT/DELETE) |
+| `memory_query` | Query agent's vector memory (Qdrant)     |
+| `memory_store` | Store facts in agent's vector memory     |
 
 Agents can also have custom **webhook tools** defined in their config — these call external HTTP endpoints when the LLM invokes them. See `agent.config.tools` in the API.
 
@@ -176,20 +176,20 @@ cortex-plane/
 
 Copy `.env.example` to `.env`. Key variables:
 
-| Variable             | Required | Default                            | Description                      |
-| -------------------- | -------- | ---------------------------------- | -------------------------------- |
-| `DATABASE_URL`       | Yes      | `postgres://...localhost:5432/...`  | PostgreSQL connection string     |
-| `ANTHROPIC_API_KEY`  | *        | —                                  | Anthropic API key (for Claude)   |
-| `OPENAI_API_KEY`     | *        | —                                  | OpenAI API key (alternative)     |
-| `QDRANT_URL`         | No       | `http://localhost:6333`            | Qdrant vector store URL          |
-| `PORT`               | No       | `4000`                             | Control-plane HTTP port          |
-| `LOG_LEVEL`          | No       | `info`                             | Pino log level                   |
-| `TELEGRAM_BOT_TOKEN` | No       | —                                  | Enables Telegram adapter         |
-| `DISCORD_BOT_TOKEN`  | No       | —                                  | Enables Discord adapter          |
-| `CREDENTIAL_MASTER_KEY` | No    | —                                  | Enables OAuth + credential encryption |
-| `CORTEX_API_URL`     | No       | `http://localhost:4000`            | Dashboard → control-plane URL    |
+| Variable                | Required | Default                            | Description                           |
+| ----------------------- | -------- | ---------------------------------- | ------------------------------------- |
+| `DATABASE_URL`          | Yes      | `postgres://...localhost:5432/...` | PostgreSQL connection string          |
+| `ANTHROPIC_API_KEY`     | \*       | —                                  | Anthropic API key (for Claude)        |
+| `OPENAI_API_KEY`        | \*       | —                                  | OpenAI API key (alternative)          |
+| `QDRANT_URL`            | No       | `http://localhost:6333`            | Qdrant vector store URL               |
+| `PORT`                  | No       | `4000`                             | Control-plane HTTP port               |
+| `LOG_LEVEL`             | No       | `info`                             | Pino log level                        |
+| `TELEGRAM_BOT_TOKEN`    | No       | —                                  | Enables Telegram adapter              |
+| `DISCORD_BOT_TOKEN`     | No       | —                                  | Enables Discord adapter               |
+| `CREDENTIAL_MASTER_KEY` | No       | —                                  | Enables OAuth + credential encryption |
+| `CORTEX_API_URL`        | No       | `http://localhost:4000`            | Dashboard → control-plane URL         |
 
-*At least one LLM API key is required for agent execution.
+\*At least one LLM API key is required for agent execution.
 
 Full list with descriptions: [`.env.example`](.env.example)
 
@@ -223,13 +223,13 @@ See `.github/workflows/docker-publish.yml`.
 
 ## Documentation
 
-| Document                              | Description                              |
-| ------------------------------------- | ---------------------------------------- |
-| [docs/VISION.md](docs/VISION.md)     | Design philosophy and architecture       |
-| [docs/STATUS.md](docs/STATUS.md)     | Implementation status tracker            |
-| [docs/spec.md](docs/spec.md)         | Full architecture specification (v1.1.0) |
-| [docs/spikes/](docs/spikes/)         | Design spikes and decision records       |
-| [docs/deploy/](docs/deploy/)         | Deployment runbooks (k3s, Railway)       |
+| Document                         | Description                              |
+| -------------------------------- | ---------------------------------------- |
+| [docs/VISION.md](docs/VISION.md) | Design philosophy and architecture       |
+| [docs/STATUS.md](docs/STATUS.md) | Implementation status tracker            |
+| [docs/spec.md](docs/spec.md)     | Full architecture specification (v1.1.0) |
+| [docs/spikes/](docs/spikes/)     | Design spikes and decision records       |
+| [docs/deploy/](docs/deploy/)     | Deployment runbooks (k3s, Railway)       |
 
 ## License
 

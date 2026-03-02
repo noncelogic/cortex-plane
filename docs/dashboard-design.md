@@ -387,8 +387,8 @@ src/
 │ GET  /healthz                       │ nav-shell (system health dot)   │
 │ GET  /readyz                        │ nav-shell (readiness indicator) │
 ├─────────────────────────────────────┼─────────────────────────────────┤
-│ GET  /agents/:id/sessions           │ /agents/[agentId] (sessions)    │
-│ GET  /sessions/:id/messages         │ /agents/[agentId] (chat history)│
+│ GET  /agents/:id/sessions           │ (API-only, no dashboard UI yet) │
+│ GET  /sessions/:id/messages         │ (API-only, no dashboard UI yet)│
 │ POST /agents/:id/chat               │ (REST chat — no dashboard view) │
 ├─────────────────────────────────────┼─────────────────────────────────┤
 │ GET  /agents/:id/channels           │ (API-only, no dashboard UI yet) │

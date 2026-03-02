@@ -55,7 +55,7 @@ Every decision is traceable. Every approval has an audit trail. Every job has lo
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │                    Chat Channels                      │
 │              Telegram · Discord · REST API             │

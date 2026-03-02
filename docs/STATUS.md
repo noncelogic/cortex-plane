@@ -54,7 +54,7 @@ This document tracks what's built, what's in progress, and what's missing relati
 | Agent lifecycle state machine | ✅     | PROVISIONING → BOOTING → READY → ACTIVE → ...                    |
 | Lifecycle health monitoring   | ✅     | Heartbeat-based health detection                                 |
 | Idle detection                | ✅     | Auto-pause after inactivity                                      |
-| Agent execution (LLM call)    | ✅     | Chat → dispatch → Graphile Worker → backend → LLM → response    |
+| Agent execution (LLM call)    | ✅     | Chat → dispatch → Graphile Worker → backend → LLM → response     |
 | Agentic execution loop        | ✅     | Multi-turn tool calling with streaming output                    |
 | Tool framework                | ✅     | Built-in tools + per-agent webhook tools (see below)             |
 | Sub-agent spawning            | ❌     | No parent→child agent orchestration                              |
@@ -75,7 +75,7 @@ This document tracks what's built, what's in progress, and what's missing relati
 
 ## Chat & Channels (Spec §15)
 
-| Component               | Status | Notes                                                           |
+| Component                | Status | Notes                                                           |
 | ------------------------ | ------ | --------------------------------------------------------------- |
 | ChannelAdapter interface | ✅     | Uniform contract for all platforms                              |
 | Telegram adapter         | ✅     | grammY-based, tested                                            |
@@ -85,65 +85,65 @@ This document tracks what's built, what's in progress, and what's missing relati
 | ChannelAdapterRegistry   | ✅     | Lifecycle management                                            |
 | Startup wiring           | ✅     | Adapters instantiated at boot, message router bound (#236–#244) |
 | Agent ↔ channel binding  | ✅     | `agent_channel_binding` table, API routes, default agent lookup |
-| Chat REST endpoint       | ✅     | `POST /agents/:agentId/chat` with sync/async modes             |
+| Chat REST endpoint       | ✅     | `POST /agents/:agentId/chat` with sync/async modes              |
 | Slack adapter            | ❌     | Not started                                                     |
 | WhatsApp adapter         | ❌     | Not started                                                     |
 
 ## Session & Conversation (Spec §10)
 
-| Component            | Status | Notes                                                       |
-| -------------------- | ------ | ----------------------------------------------------------- |
-| Session management   | ✅     | Per-agent, per-user, per-channel session scoping            |
-| Session message store| ✅     | `session_message` table (role, content, metadata)           |
-| Conversation history | ✅     | Loads last 50 messages for LLM context                      |
-| Session CRUD API     | ✅     | List sessions, get messages, clear/reset session            |
-| JSONL buffer writer  | ✅     | Streams execution output to session buffer for extraction   |
+| Component             | Status | Notes                                                     |
+| --------------------- | ------ | --------------------------------------------------------- |
+| Session management    | ✅     | Per-agent, per-user, per-channel session scoping          |
+| Session message store | ✅     | `session_message` table (role, content, metadata)         |
+| Conversation history  | ✅     | Loads last 50 messages for LLM context                    |
+| Session CRUD API      | ✅     | List sessions, get messages, clear/reset session          |
+| JSONL buffer writer   | ✅     | Streams execution output to session buffer for extraction |
 
 ## Job System (Spec §6)
 
 | Component               | Status | Notes                                                      |
-| ------------------------ | ------ | ---------------------------------------------------------- |
-| Job state machine        | ✅     | PENDING → SCHEDULED → RUNNING → COMPLETED/FAILED/TIMED_OUT |
-| Job CRUD API             | ✅     | List, get, retry                                           |
-| Job SSE streaming        | ✅     | Real-time status updates (route collision fixed, #269)     |
-| Job creation from chat   | ✅     | Chat message → CHAT_RESPONSE job → enqueue                 |
-| Job retry logic          | ✅     | Configurable retry with exponential backoff                |
-| Worker error classifn    | ✅     | Transient/permanent/timeout/resource classification        |
-| Job creation from agent  | ❌     | No code path: agent mid-execution → create sub-job         |
+| ----------------------- | ------ | ---------------------------------------------------------- |
+| Job state machine       | ✅     | PENDING → SCHEDULED → RUNNING → COMPLETED/FAILED/TIMED_OUT |
+| Job CRUD API            | ✅     | List, get, retry                                           |
+| Job SSE streaming       | ✅     | Real-time status updates (route collision fixed, #269)     |
+| Job creation from chat  | ✅     | Chat message → CHAT_RESPONSE job → enqueue                 |
+| Job retry logic         | ✅     | Configurable retry with exponential backoff                |
+| Worker error classifn   | ✅     | Transient/permanent/timeout/resource classification        |
+| Job creation from agent | ❌     | No code path: agent mid-execution → create sub-job         |
 
 ## Execution Backends
 
-| Component            | Status | Notes                                                      |
-| -------------------- | ------ | ---------------------------------------------------------- |
-| BackendRegistry      | ✅     | Registration, lifecycle, health cache, WIP semaphores      |
-| HttpLlmBackend       | ✅     | Anthropic Claude + OpenAI-compatible, streaming, tool loop |
-| ClaudeCodeBackend    | ✅     | Spawns `claude` CLI, parses stream-json output             |
-| EchoBackend          | ✅     | Test stub with configurable latency/failure rate           |
-| Circuit breaker      | ✅     | Per-backend failure tracking, cascading failure protection |
-| Provider router      | ✅     | Failover-aware backend selection by health + priority      |
+| Component         | Status | Notes                                                      |
+| ----------------- | ------ | ---------------------------------------------------------- |
+| BackendRegistry   | ✅     | Registration, lifecycle, health cache, WIP semaphores      |
+| HttpLlmBackend    | ✅     | Anthropic Claude + OpenAI-compatible, streaming, tool loop |
+| ClaudeCodeBackend | ✅     | Spawns `claude` CLI, parses stream-json output             |
+| EchoBackend       | ✅     | Test stub with configurable latency/failure rate           |
+| Circuit breaker   | ✅     | Per-backend failure tracking, cascading failure protection |
+| Provider router   | ✅     | Failover-aware backend selection by health + priority      |
 
 ## Approval Gates (Spec §9)
 
-| Component                      | Status | Notes                                                  |
-| ------------------------------ | ------ | ------------------------------------------------------ |
-| Approval request creation      | ✅     | API + DB schema                                        |
-| Approve/reject API             | ✅     | With audit trail                                       |
-| Risk tier classification       | ✅     | Hamel's approval risk tiers                            |
-| Telegram approval notifications| ✅     | Inline approve/reject buttons                          |
-| Approval expiration            | ✅     | Graphile Worker task                                   |
-| Approval gate in execution     | ✅     | `model_config.requiresApproval` blocks job until approved |
-| Triggered by agent decisions   | ❌     | No agent self-initiated approval gate flow             |
+| Component                       | Status | Notes                                                     |
+| ------------------------------- | ------ | --------------------------------------------------------- |
+| Approval request creation       | ✅     | API + DB schema                                           |
+| Approve/reject API              | ✅     | With audit trail                                          |
+| Risk tier classification        | ✅     | Hamel's approval risk tiers                               |
+| Telegram approval notifications | ✅     | Inline approve/reject buttons                             |
+| Approval expiration             | ✅     | Graphile Worker task                                      |
+| Approval gate in execution      | ✅     | `model_config.requiresApproval` blocks job until approved |
+| Triggered by agent decisions    | ❌     | No agent self-initiated approval gate flow                |
 
 ## Memory System (Spec §8, §17)
 
-| Component                      | Status | Notes                                          |
-| ------------------------------ | ------ | ---------------------------------------------- |
-| Memory extraction prompt       | ✅     | LLM-based extraction from conversations        |
-| Memory scheduling              | ✅     | Threshold-based extraction trigger             |
-| Memory search API              | ✅     | Full-text search with agent_id filter          |
-| Qdrant vector storage          | 🔧     | Schema deployed, not populated at scale        |
-| Memory tools (query/store)     | ✅     | Agents can read/write memory via tool calls    |
-| Extraction from conversations  | 🔧     | Pipeline wired to execution output stream      |
+| Component                     | Status | Notes                                       |
+| ----------------------------- | ------ | ------------------------------------------- |
+| Memory extraction prompt      | ✅     | LLM-based extraction from conversations     |
+| Memory scheduling             | ✅     | Threshold-based extraction trigger          |
+| Memory search API             | ✅     | Full-text search with agent_id filter       |
+| Qdrant vector storage         | 🔧     | Schema deployed, not populated at scale     |
+| Memory tools (query/store)    | ✅     | Agents can read/write memory via tool calls |
+| Extraction from conversations | 🔧     | Pipeline wired to execution output stream   |
 
 ## Browser Orchestration (Spec §14)
 
@@ -158,21 +158,21 @@ This document tracks what's built, what's in progress, and what's missing relati
 
 ## Dashboard
 
-| Component                | Status | Notes                                               |
-| ------------------------ | ------ | --------------------------------------------------- |
-| Login page               | ✅     | GitHub OAuth                                        |
-| Auth guard (all routes)  | ✅     | 4-state auth model                                  |
-| Agent list + detail      | ✅     | Grid/table view, lifecycle, metrics                 |
-| Jobs page                | ✅     | Filters, SSE, export                                |
-| Approvals page           | ✅     | Approve/reject, audit drawer                        |
-| Memory explorer          | ✅     | Search, viewer, editor                              |
-| Browser observation      | ✅     | Screenshots, VNC, trace controls                    |
-| Pulse (content pipeline) | ✅     | Archive, detail drawer, SSE                         |
-| Settings (providers)     | ✅     | OAuth connect, API key entry                        |
-| Empty state handling     | ✅     | Shared `EmptyState` component, default + compact variants |
-| User menu                | ✅     | Profile, theme toggle, logout                       |
-| Settings (channels)      | ❌     | No UI for chat channel config                       |
-| Settings (login providers)| ❌    | Env-var only, no UI                                 |
+| Component                  | Status | Notes                                                     |
+| -------------------------- | ------ | --------------------------------------------------------- |
+| Login page                 | ✅     | GitHub OAuth                                              |
+| Auth guard (all routes)    | ✅     | 4-state auth model                                        |
+| Agent list + detail        | ✅     | Grid/table view, lifecycle, metrics                       |
+| Jobs page                  | ✅     | Filters, SSE, export                                      |
+| Approvals page             | ✅     | Approve/reject, audit drawer                              |
+| Memory explorer            | ✅     | Search, viewer, editor                                    |
+| Browser observation        | ✅     | Screenshots, VNC, trace controls                          |
+| Pulse (content pipeline)   | ✅     | Archive, detail drawer, SSE                               |
+| Settings (providers)       | ✅     | OAuth connect, API key entry                              |
+| Empty state handling       | ✅     | Shared `EmptyState` component, default + compact variants |
+| User menu                  | ✅     | Profile, theme toggle, logout                             |
+| Settings (channels)        | ❌     | No UI for chat channel config                             |
+| Settings (login providers) | ❌     | Env-var only, no UI                                       |
 
 ## Scheduling
 
@@ -197,19 +197,19 @@ This document tracks what's built, what's in progress, and what's missing relati
 
 The orchestration engine feature chain delivered the core runtime loop:
 
-| PR    | Feature                                                  |
-| ----- | -------------------------------------------------------- |
-| #236  | Agent ↔ channel binding with contract tests              |
-| #237  | Anthropic OAuth PKCE code-paste flow                     |
-| #238  | SSE stream auth (per-session Bearer token)               |
-| #242  | Agentic execution loop with tool calling                 |
-| #243  | Built-in tools + per-agent webhook tool framework        |
-| #244  | E2E chat flow: adapter → dispatch → session → execute    |
-| #251  | Shared EmptyState component for dashboard                |
-| #255  | Agent config JSONB column                                |
-| #254  | Session buffer (`session_message` table + history)       |
-| #256  | Tool framework wiring into execution                     |
-| #269  | `/jobs/stream` route collision fix                        |
+| PR   | Feature                                               |
+| ---- | ----------------------------------------------------- |
+| #236 | Agent ↔ channel binding with contract tests           |
+| #237 | Anthropic OAuth PKCE code-paste flow                  |
+| #238 | SSE stream auth (per-session Bearer token)            |
+| #242 | Agentic execution loop with tool calling              |
+| #243 | Built-in tools + per-agent webhook tool framework     |
+| #244 | E2E chat flow: adapter → dispatch → session → execute |
+| #251 | Shared EmptyState component for dashboard             |
+| #255 | Agent config JSONB column                             |
+| #254 | Session buffer (`session_message` table + history)    |
+| #256 | Tool framework wiring into execution                  |
+| #269 | `/jobs/stream` route collision fix                    |
 
 ---
 
@@ -244,25 +244,25 @@ The core chat → agent → LLM → response loop is working. Remaining gaps:
 
 ## Spec Sections vs Implementation
 
-| Spec Section              | Impl Status | Gap                                                   |
-| ------------------------- | ----------- | ----------------------------------------------------- |
-| §4 System Architecture    | ✅          | —                                                     |
-| §5 Control Plane          | ✅          | —                                                     |
-| §6 Job State Machine      | ✅          | Chat creates jobs; agents can't create sub-jobs yet   |
-| §7 Agent Registry         | ✅          | —                                                     |
-| §8 Memory System          | ✅          | Tools + extraction wired; needs real-world data       |
-| §9 Approval Gates         | 🔧          | Config-based gate works; agents can't self-initiate   |
-| §10 Session Buffer        | ✅          | `session_message` table + JSONL buffer writer         |
-| §11 Orchestration         | ✅          | Graphile Worker operational                           |
-| §12 Agent Lifecycle       | ✅          | —                                                     |
-| §13 Security Model        | 🔧          | Auth done, pod security not tested                    |
-| §14 Browser Orchestration | 🔧          | APIs built, no agent→browser trigger                  |
-| §15 Channel Integration   | ✅          | Adapters wired at runtime, binding live               |
-| §16 Voice Integration     | ❌          | Signaling routes exist, no implementation             |
-| §17 Memory Extraction     | ✅          | Pipeline wired to execution stream                    |
-| §18 PostgreSQL            | ✅          | CNPG single-node                                      |
-| §19 Observability         | 🔧          | Pino logging, OTel config exists                      |
+| Spec Section              | Impl Status | Gap                                                      |
+| ------------------------- | ----------- | -------------------------------------------------------- |
+| §4 System Architecture    | ✅          | —                                                        |
+| §5 Control Plane          | ✅          | —                                                        |
+| §6 Job State Machine      | ✅          | Chat creates jobs; agents can't create sub-jobs yet      |
+| §7 Agent Registry         | ✅          | —                                                        |
+| §8 Memory System          | ✅          | Tools + extraction wired; needs real-world data          |
+| §9 Approval Gates         | 🔧          | Config-based gate works; agents can't self-initiate      |
+| §10 Session Buffer        | ✅          | `session_message` table + JSONL buffer writer            |
+| §11 Orchestration         | ✅          | Graphile Worker operational                              |
+| §12 Agent Lifecycle       | ✅          | —                                                        |
+| §13 Security Model        | 🔧          | Auth done, pod security not tested                       |
+| §14 Browser Orchestration | 🔧          | APIs built, no agent→browser trigger                     |
+| §15 Channel Integration   | ✅          | Adapters wired at runtime, binding live                  |
+| §16 Voice Integration     | ❌          | Signaling routes exist, no implementation                |
+| §17 Memory Extraction     | ✅          | Pipeline wired to execution stream                       |
+| §18 PostgreSQL            | ✅          | CNPG single-node                                         |
+| §19 Observability         | 🔧          | Pino logging, OTel config exists                         |
 | §20 LLM Failover          | ✅          | Error classification + circuit breaker + provider router |
-| §21 Skills Framework      | ❌          | Not started                                           |
-| §22 Dashboard             | ✅          | All screens built + empty states                      |
-| §23 Infrastructure        | ✅          | k3s + CI/CD + Tailscale                               |
+| §21 Skills Framework      | ❌          | Not started                                              |
+| §22 Dashboard             | ✅          | All screens built + empty states                         |
+| §23 Infrastructure        | ✅          | k3s + CI/CD + Tailscale                                  |

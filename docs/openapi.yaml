@@ -2135,6 +2135,7 @@ paths:
           in: query
           schema:
             type: integer
+            minimum: 0
             default: 0
       responses:
         "200":
@@ -2143,6 +2144,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [sessions, pagination]
                 properties:
                   sessions:
                     type: array
@@ -2162,8 +2164,8 @@ paths:
                         created_at:
                           type: string
                           format: date-time
-                  count:
-                    type: integer
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
 
   /sessions/{sessionId}/messages:
     get:
@@ -2189,6 +2191,7 @@ paths:
           in: query
           schema:
             type: integer
+            minimum: 0
             default: 0
       responses:
         "200":
@@ -2197,6 +2200,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [messages, pagination]
                 properties:
                   messages:
                     type: array
@@ -2219,8 +2223,8 @@ paths:
                           format: date-time
                         metadata:
                           type: object
-                  count:
-                    type: integer
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
         "404":
           description: Session not found.
 
