@@ -297,7 +297,7 @@ describe("session buffer — watchJobCompletion stores assistant response", () =
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(onComplete).toHaveBeenCalledWith(completedResult)
+    expect(onComplete).toHaveBeenCalledWith(completedResult, "COMPLETED")
     expect(sessionMessageInserts).toContainEqual(
       expect.objectContaining({
         session_id: "session-123",

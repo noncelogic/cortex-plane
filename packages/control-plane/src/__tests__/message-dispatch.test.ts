@@ -292,7 +292,7 @@ describe("watchJobCompletion", () => {
     // Advance timers past one interval
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(onComplete).toHaveBeenCalledWith(completedResult)
+    expect(onComplete).toHaveBeenCalledWith(completedResult, "COMPLETED")
   })
 
   it("calls onComplete when job reaches FAILED status", async () => {
@@ -316,7 +316,7 @@ describe("watchJobCompletion", () => {
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(onComplete).toHaveBeenCalledWith(failedResult)
+    expect(onComplete).toHaveBeenCalledWith(failedResult, "FAILED")
   })
 
   it("keeps polling while job is still RUNNING", async () => {
@@ -350,7 +350,7 @@ describe("watchJobCompletion", () => {
     // Third interval: completed
     await vi.advanceTimersByTimeAsync(100)
 
-    expect(onComplete).toHaveBeenCalledWith({ summary: "finally done" })
+    expect(onComplete).toHaveBeenCalledWith({ summary: "finally done" }, "COMPLETED")
     expect(callCount).toBe(3)
   })
 

@@ -580,6 +580,7 @@ function executionResultToJson(result: ExecutionResult): Record<string, unknown>
     status: result.status,
     exitCode: result.exitCode,
     summary: result.summary,
+    stdout: result.stdout,
     fileChanges: result.fileChanges,
     tokenUsage: result.tokenUsage,
     artifacts: result.artifacts,
