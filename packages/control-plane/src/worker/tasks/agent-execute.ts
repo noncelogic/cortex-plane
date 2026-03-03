@@ -16,6 +16,7 @@ import type {
   ExecutionResult,
   ExecutionStatus,
   ExecutionTask,
+  LlmCredentialRef,
   OutputEvent,
 } from "@cortex/shared/backends"
 import type { BufferWriter } from "@cortex/shared/buffer"
@@ -23,7 +24,9 @@ import type { ResolvedSkills } from "@cortex/shared/skills"
 import { CortexAttributes, injectTraceContext, withSpan } from "@cortex/shared/tracing"
 import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
+import pino from "pino"
 
+import type { CredentialService } from "../../auth/credential-service.js"
 import type { Database, Job } from "../../db/types.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
@@ -32,6 +35,8 @@ import { classifyError } from "../error-classifier.js"
 import { startHeartbeat } from "../heartbeat.js"
 import { createMemoryScheduler } from "../memory-scheduler.js"
 import { calculateRunAt } from "../retry.js"
+
+const credLogger = pino({ name: "agent-execute:credentials" })
 
 export interface AgentExecutePayload {
   jobId: string
@@ -47,6 +52,8 @@ export interface AgentExecuteDeps {
   skillIndex?: import("@cortex/shared/skills").SkillIndex
   /** Optional MCP tool router for resolving MCP tools into agent registries. */
   mcpToolRouter?: McpToolRouter
+  /** Optional credential service for LLM and tool credential injection. */
+  credentialService?: CredentialService
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -68,6 +75,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     memoryExtractThreshold = 50,
     skillIndex,
     mcpToolRouter,
+    credentialService,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -182,6 +190,48 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           }
         }
 
+        // ── Step 4b: Resolve credentials ──
+        // Resolve userId from the session (needed for per-user credential scoping)
+        let userId: string | null = null
+        if (job.session_id) {
+          const session = await db
+            .selectFrom("session")
+            .select("user_account_id")
+            .where("id", "=", job.session_id)
+            .executeTakeFirst()
+          userId = session?.user_account_id ?? null
+        }
+
+        // Resolve LLM credential binding for this agent + user
+        if (credentialService && userId) {
+          try {
+            const llmCredential = await resolveLlmCredential(
+              db,
+              credentialService,
+              agent.id,
+              userId,
+            )
+            if (llmCredential) {
+              task.constraints.llmCredential = llmCredential
+              credLogger.info(
+                {
+                  agent_id: agent.id,
+                  job_id: jobId,
+                  credential_id: llmCredential.credentialId,
+                  provider: llmCredential.provider,
+                },
+                "llm_credential_injected",
+              )
+            }
+          } catch (err) {
+            // LLM credential resolution is non-fatal — fall back to env var
+            credLogger.warn(
+              { agent_id: agent.id, job_id: jobId, err },
+              "llm_credential_resolution_failed",
+            )
+          }
+        }
+
         // ── Step 5: Resolve backend via router (failover-aware) or direct lookup ──
         const preferredBackendId =
           typeof agentConfig.backendId === "string" ? agentConfig.backendId : undefined
@@ -204,8 +254,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
           // ── Step 8: Execute task ──
           // If the backend supports per-agent tool registries (HttpLlmBackend),
-          // build one that includes custom webhook tools from agent config
-          // and MCP tools when a router is available.
+          // build one that includes custom webhook tools from agent config,
+          // MCP tools when a router is available, and credential injection.
           if (
             "createAgentRegistry" in backend &&
             typeof backend.createAgentRegistry === "function"
@@ -220,11 +270,28 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 }
               : undefined
 
+            // Build optional credential deps for tool injection
+            const credDeps =
+              credentialService && userId
+                ? {
+                    credentialService,
+                    executionContext: {
+                      userId,
+                      jobId: job.id,
+                      agentId: agent.id,
+                    },
+                  }
+                : undefined
+
             const agentRegistry = await (
               backend as {
-                createAgentRegistry: (c: Record<string, unknown>, m?: unknown) => Promise<unknown>
+                createAgentRegistry: (
+                  c: Record<string, unknown>,
+                  m?: unknown,
+                  cr?: unknown,
+                ) => Promise<unknown>
               }
-            ).createAgentRegistry(agent.config ?? {}, mcpDeps)
+            ).createAgentRegistry(agent.config ?? {}, mcpDeps, credDeps)
             handle = await (
               backend as { executeTask: (t: ExecutionTask, r: unknown) => Promise<ExecutionHandle> }
             ).executeTask(task, agentRegistry)
@@ -535,6 +602,54 @@ function buildExecutionTask(
       networkAccess,
       shellAccess,
     },
+  }
+}
+
+// ── Helper: resolve LLM credential for an agent ──
+
+/**
+ * Query agent_credential_binding for an LLM credential bound to this agent,
+ * scoped to the job's user. Returns a LlmCredentialRef with a decrypted token
+ * or null if no binding exists (caller falls back to env var).
+ *
+ * Expired OAuth tokens are auto-refreshed by credentialService.getAccessToken().
+ */
+async function resolveLlmCredential(
+  db: Kysely<Database>,
+  credentialService: CredentialService,
+  agentId: string,
+  userId: string,
+): Promise<LlmCredentialRef | null> {
+  // Find an LLM credential bound to this agent and owned by this user
+  const binding = await db
+    .selectFrom("agent_credential_binding")
+    .innerJoin(
+      "provider_credential",
+      "provider_credential.id",
+      "agent_credential_binding.provider_credential_id",
+    )
+    .select([
+      "provider_credential.id as credential_id",
+      "provider_credential.provider",
+      "provider_credential.user_account_id",
+      "provider_credential.credential_class",
+    ])
+    .where("agent_credential_binding.agent_id", "=", agentId)
+    .where("provider_credential.credential_class", "=", "llm_provider")
+    .where("provider_credential.user_account_id", "=", userId)
+    .where("provider_credential.status", "=", "active")
+    .executeTakeFirst()
+
+  if (!binding) return null
+
+  // Decrypt token (handles auto-refresh for expired OAuth)
+  const accessResult = await credentialService.getAccessToken(userId, binding.provider)
+  if (!accessResult) return null
+
+  return {
+    provider: binding.provider,
+    token: accessResult.token,
+    credentialId: accessResult.credentialId,
   }
 }
 

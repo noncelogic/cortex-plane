@@ -24,9 +24,11 @@ import type {
   OutputToolUseEvent,
   OutputUsageEvent,
   TokenUsage,
+  ToolExecutionContext,
 } from "@cortex/shared/backends"
 import OpenAI from "openai"
 
+import type { CredentialService } from "../auth/credential-service.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 import {
   createAgentToolRegistry,
@@ -40,6 +42,11 @@ export interface McpDeps {
   agentId: string
   allowedTools?: string[]
   deniedTools?: string[]
+}
+
+export interface CredentialDeps {
+  credentialService: CredentialService
+  executionContext: ToolExecutionContext
 }
 
 type LlmProvider = "anthropic" | "openai"
@@ -168,6 +175,11 @@ export class HttpLlmBackend implements ExecutionBackend {
    * Execute a task. Accepts an optional per-task ToolRegistry that
    * includes agent-specific custom tools (e.g. webhook tools from
    * agent config). Falls back to the shared default registry.
+   *
+   * When the task carries a per-job LLM credential override
+   * (task.constraints.llmCredential), a one-shot API client is
+   * created using that credential instead of the backend-level client.
+   * The one-shot client is scoped to this single execution.
    */
   executeTask(task: ExecutionTask, taskToolRegistry?: ToolRegistry): Promise<ExecutionHandle> {
     if (!this.started) {
@@ -177,6 +189,25 @@ export class HttpLlmBackend implements ExecutionBackend {
     const model = task.constraints.model || this.model
     const startTime = Date.now()
     const registry = taskToolRegistry ?? this.toolRegistry
+
+    const cred = task.constraints.llmCredential
+    if (cred) {
+      // Create a one-shot client using the per-job credential
+      const provider = this.resolveProvider(cred.provider)
+      if (provider === "anthropic") {
+        const client = new Anthropic({
+          apiKey: cred.token,
+          ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+        })
+        return Promise.resolve(new AnthropicHandle(task, client, model, startTime, registry))
+      } else {
+        const client = new OpenAI({
+          apiKey: cred.token,
+          ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+        })
+        return Promise.resolve(new OpenAIHandle(task, client, model, startTime, registry))
+      }
+    }
 
     if (this.provider === "anthropic" && this.anthropicClient) {
       return Promise.resolve(
@@ -195,23 +226,31 @@ export class HttpLlmBackend implements ExecutionBackend {
    * Create a per-agent ToolRegistry from the agent's config JSONB.
    * Includes all built-in tools plus any custom webhook tools defined
    * in agentConfig.tools. When mcpDeps are provided, MCP tools are
-   * resolved and merged into the registry.
+   * resolved and merged into the registry. When credDeps are provided,
+   * tool credentials are resolved and injected into webhook headers
+   * and built-in tools (e.g. web_search with Brave API key).
    */
   async createAgentRegistry(
     agentConfig: Record<string, unknown>,
     mcpDeps?: McpDeps,
+    credDeps?: CredentialDeps,
   ): Promise<ToolRegistry> {
-    return createAgentToolRegistry(
-      agentConfig,
-      mcpDeps
+    return createAgentToolRegistry(agentConfig, {
+      ...(mcpDeps
         ? {
             agentId: mcpDeps.agentId,
             mcpRouter: mcpDeps.mcpRouter,
             allowedTools: mcpDeps.allowedTools,
             deniedTools: mcpDeps.deniedTools,
           }
-        : undefined,
-    )
+        : {}),
+      ...(credDeps
+        ? {
+            credentialService: credDeps.credentialService,
+            executionContext: credDeps.executionContext,
+          }
+        : {}),
+    })
   }
 
   getCapabilities(): BackendCapabilities {
@@ -234,6 +273,12 @@ export class HttpLlmBackend implements ExecutionBackend {
 
   private defaultModel(): string {
     return this.provider === "anthropic" ? "claude-sonnet-4-5-20250929" : "gpt-4o"
+  }
+
+  /** Map a credential provider string to the LLM provider type. */
+  private resolveProvider(credProvider: string): LlmProvider {
+    if (credProvider === "openai" || credProvider === "openai-codex") return "openai"
+    return "anthropic" // anthropic, google-antigravity, etc.
   }
 }
 

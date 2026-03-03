@@ -106,6 +106,46 @@ export interface TaskConstraints {
 
   /** Whether the backend may execute shell commands. */
   shellAccess: boolean
+
+  /** Per-job LLM credential override (resolved from agent credential binding). */
+  llmCredential?: LlmCredentialRef
+}
+
+// ──────────────────────────────────────────────────
+// Credential Injection Types
+// ──────────────────────────────────────────────────
+
+export interface LlmCredentialRef {
+  /** LLM provider identifier (e.g. "anthropic", "openai"). */
+  provider: string
+  /** Decrypted access token or API key — held in memory only. */
+  token: string
+  /** Credential ID for audit trail. */
+  credentialId: string
+}
+
+export interface ToolCredentialRef {
+  /** Credential class to resolve. */
+  credentialClass: "user_service" | "tool_secret"
+  /** Provider identifier (e.g. "google-workspace", "brave"). */
+  provider: string
+  /** How to inject the resolved token. */
+  injectAs: "header" | "env"
+  /** Header name when injectAs is "header" (e.g. "Authorization"). */
+  headerName?: string
+  /** Environment variable name when injectAs is "env". */
+  envName?: string
+  /** Token format: "bearer" wraps as "Bearer <token>", "raw" passes as-is. */
+  format?: "bearer" | "raw"
+}
+
+export interface ToolExecutionContext {
+  /** The user who owns this job (for per-user credential resolution). */
+  userId: string
+  /** Job ID for audit logging. */
+  jobId: string
+  /** Agent ID for audit logging. */
+  agentId: string
 }
 
 // ──────────────────────────────────────────────────
