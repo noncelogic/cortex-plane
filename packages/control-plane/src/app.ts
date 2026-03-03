@@ -31,6 +31,7 @@ import { credentialRoutes } from "./routes/credentials.js"
 import { dashboardRoutes } from "./routes/dashboard.js"
 import { feedbackRoutes } from "./routes/feedback.js"
 import { healthRoutes } from "./routes/health.js"
+import { mcpServerRoutes } from "./routes/mcp-servers.js"
 import { observationRoutes } from "./routes/observation.js"
 import { sessionRoutes } from "./routes/sessions.js"
 import { streamRoutes } from "./routes/stream.js"
@@ -178,6 +179,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       service: agentChannelService,
       authConfig,
       sessionService,
+    }),
+  )
+
+  // Register MCP server CRUD routes
+  await app.register(
+    mcpServerRoutes({
+      db,
+      authConfig,
+      sessionService,
+      connectionEncryptionKey: process.env.CREDENTIAL_MASTER_KEY,
     }),
   )
 
