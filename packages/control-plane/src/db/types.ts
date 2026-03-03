@@ -29,6 +29,11 @@ export type CredentialType = "oauth" | "api_key"
 export type CredentialStatus = "active" | "expired" | "revoked" | "error"
 
 // ---------------------------------------------------------------------------
+// Enum: credential_class
+// ---------------------------------------------------------------------------
+export type CredentialClass = "llm_provider" | "mcp_server" | "tool_specific" | "custom"
+
+// ---------------------------------------------------------------------------
 // Enum: mcp_server_status
 // ---------------------------------------------------------------------------
 export type McpServerStatus = "PENDING" | "ACTIVE" | "DEGRADED" | "ERROR" | "DISABLED"
@@ -374,6 +379,13 @@ export interface ProviderCredentialTable {
   last_refresh_at: Date | null
   error_count: ColumnType<number, number | undefined, number>
   last_error: string | null
+  credential_class: ColumnType<CredentialClass, CredentialClass | undefined, CredentialClass>
+  tool_name: string | null
+  metadata: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, Date>
 }
@@ -396,6 +408,20 @@ export interface AgentChannelBindingTable {
 
 export type AgentChannelBinding = Selectable<AgentChannelBindingTable>
 export type NewAgentChannelBinding = Insertable<AgentChannelBindingTable>
+
+// ---------------------------------------------------------------------------
+// Table: agent_credential_binding
+// ---------------------------------------------------------------------------
+export interface AgentCredentialBindingTable {
+  id: Generated<string>
+  agent_id: string
+  provider_credential_id: string
+  scope: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AgentCredentialBinding = Selectable<AgentCredentialBindingTable>
+export type NewAgentCredentialBinding = Insertable<AgentCredentialBindingTable>
 
 // ---------------------------------------------------------------------------
 // Table: credential_audit_log
@@ -500,6 +526,7 @@ export interface Database {
   provider_credential: ProviderCredentialTable
   credential_audit_log: CredentialAuditLogTable
   agent_channel_binding: AgentChannelBindingTable
+  agent_credential_binding: AgentCredentialBindingTable
   mcp_server: McpServerTable
   mcp_server_tool: McpServerToolTable
 }
