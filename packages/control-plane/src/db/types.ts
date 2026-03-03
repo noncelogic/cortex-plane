@@ -426,11 +426,7 @@ export interface McpServerTable {
   name: string
   slug: string
   transport: McpTransport
-  connection: ColumnType<
-    Record<string, unknown>,
-    Record<string, unknown>,
-    Record<string, unknown>
-  >
+  connection: ColumnType<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
   agent_scope: ColumnType<string[], string[] | undefined, string[]>
   description: string | null
   status: ColumnType<McpServerStatus, McpServerStatus | undefined, McpServerStatus>
