@@ -29,6 +29,16 @@ export type CredentialType = "oauth" | "api_key"
 export type CredentialStatus = "active" | "expired" | "revoked" | "error"
 
 // ---------------------------------------------------------------------------
+// Enum: mcp_server_status
+// ---------------------------------------------------------------------------
+export type McpServerStatus = "PENDING" | "ACTIVE" | "DEGRADED" | "ERROR" | "DISABLED"
+
+// ---------------------------------------------------------------------------
+// Enum: mcp_transport
+// ---------------------------------------------------------------------------
+export type McpTransport = "streamable-http" | "stdio"
+
+// ---------------------------------------------------------------------------
 // Table: agent
 // ---------------------------------------------------------------------------
 export interface AgentTable {
@@ -409,6 +419,68 @@ export type CredentialAuditLog = Selectable<CredentialAuditLogTable>
 export type NewCredentialAuditLog = Insertable<CredentialAuditLogTable>
 
 // ---------------------------------------------------------------------------
+// Table: mcp_server
+// ---------------------------------------------------------------------------
+export interface McpServerTable {
+  id: Generated<string>
+  name: string
+  slug: string
+  transport: McpTransport
+  connection: ColumnType<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
+  agent_scope: ColumnType<string[], string[] | undefined, string[]>
+  description: string | null
+  status: ColumnType<McpServerStatus, McpServerStatus | undefined, McpServerStatus>
+  protocol_version: string | null
+  server_info: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  capabilities: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  health_probe_interval_ms: ColumnType<number, number | undefined, number>
+  last_healthy_at: Date | null
+  error_message: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type McpServer = Selectable<McpServerTable>
+export type NewMcpServer = Insertable<McpServerTable>
+export type McpServerUpdate = Updateable<McpServerTable>
+
+// ---------------------------------------------------------------------------
+// Table: mcp_server_tool
+// ---------------------------------------------------------------------------
+export interface McpServerToolTable {
+  id: Generated<string>
+  mcp_server_id: string
+  name: string
+  qualified_name: string
+  description: string | null
+  input_schema: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown>,
+    Record<string, unknown>
+  >
+  annotations: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  status: ColumnType<string, string | undefined, string>
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type McpServerTool = Selectable<McpServerToolTable>
+export type NewMcpServerTool = Insertable<McpServerToolTable>
+export type McpServerToolUpdate = Updateable<McpServerToolTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -428,4 +500,6 @@ export interface Database {
   provider_credential: ProviderCredentialTable
   credential_audit_log: CredentialAuditLogTable
   agent_channel_binding: AgentChannelBindingTable
+  mcp_server: McpServerTable
+  mcp_server_tool: McpServerToolTable
 }
