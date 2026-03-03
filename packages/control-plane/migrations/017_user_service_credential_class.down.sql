@@ -1,0 +1,4 @@
+-- Cannot remove an enum value in PostgreSQL without recreating the type.
+-- This migration is effectively irreversible. The 'user_service' value will
+-- remain harmless even if no credentials use it.
+-- To fully roll back, recreate the enum and migrate existing rows.

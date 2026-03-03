@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  buildAuthorizeUrl,
   decodeOAuthState,
   encodeOAuthState,
   generateCodeChallenge,
   generateCodeVerifier,
   type OAuthState,
 } from "../auth/oauth-service.js"
+import type { OAuthProviderConfig } from "../config.js"
 
 // ---------------------------------------------------------------------------
 // PKCE
@@ -103,5 +105,94 @@ describe("OAuth state encoding/decoding", () => {
     const encoded = encodeOAuthState(state, secret)
     const decoded = decodeOAuthState(encoded, secret)
     expect(decoded!.codeVerifier).toBe("my-verifier-value")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// buildAuthorizeUrl for user service providers
+// ---------------------------------------------------------------------------
+
+describe("buildAuthorizeUrl — user service providers", () => {
+  const mockConfig: OAuthProviderConfig = {
+    clientId: "test-client-id",
+    clientSecret: "test-client-secret",
+  }
+
+  it("builds Google Workspace OAuth URL with calendar/gmail scopes", () => {
+    const url = buildAuthorizeUrl({
+      provider: "google-workspace",
+      config: mockConfig,
+      callbackUrl: "http://localhost:3100/api/auth/connect/callback/google-workspace",
+      state: "test-state",
+    })
+
+    const parsed = new URL(url)
+    expect(parsed.origin).toBe("https://accounts.google.com")
+    expect(parsed.searchParams.get("client_id")).toBe("test-client-id")
+    expect(parsed.searchParams.get("scope")).toContain("calendar.readonly")
+    expect(parsed.searchParams.get("scope")).toContain("gmail.send")
+    expect(parsed.searchParams.get("scope")).toContain("drive.readonly")
+    expect(parsed.searchParams.get("access_type")).toBe("offline")
+    expect(parsed.searchParams.get("prompt")).toBe("consent")
+  })
+
+  it("builds Google Workspace URL with PKCE when challenge is provided", () => {
+    const verifier = generateCodeVerifier()
+    const challenge = generateCodeChallenge(verifier)
+
+    const url = buildAuthorizeUrl({
+      provider: "google-workspace",
+      config: mockConfig,
+      callbackUrl: "http://localhost:3100/callback",
+      state: "test-state",
+      codeChallenge: challenge,
+    })
+
+    const parsed = new URL(url)
+    expect(parsed.searchParams.get("code_challenge")).toBe(challenge)
+    expect(parsed.searchParams.get("code_challenge_method")).toBe("S256")
+  })
+
+  it("builds GitHub user OAuth URL with repo scopes", () => {
+    const url = buildAuthorizeUrl({
+      provider: "github-user",
+      config: mockConfig,
+      callbackUrl: "http://localhost:3100/api/auth/connect/callback/github-user",
+      state: "test-state",
+    })
+
+    const parsed = new URL(url)
+    expect(parsed.origin).toBe("https://github.com")
+    expect(parsed.searchParams.get("scope")).toContain("repo")
+    expect(parsed.searchParams.get("scope")).toContain("read:user")
+    expect(parsed.searchParams.get("scope")).toContain("user:email")
+  })
+
+  it("builds Slack user OAuth URL with user_scope param", () => {
+    const url = buildAuthorizeUrl({
+      provider: "slack-user",
+      config: mockConfig,
+      callbackUrl: "http://localhost:3100/api/auth/connect/callback/slack-user",
+      state: "test-state",
+    })
+
+    const parsed = new URL(url)
+    expect(parsed.origin).toBe("https://slack.com")
+    expect(parsed.searchParams.get("user_scope")).toContain("channels:read")
+    expect(parsed.searchParams.get("user_scope")).toContain("chat:write")
+    expect(parsed.searchParams.get("user_scope")).toContain("users:read")
+  })
+
+  it("allows custom scopes to override defaults", () => {
+    const url = buildAuthorizeUrl({
+      provider: "google-workspace",
+      config: mockConfig,
+      callbackUrl: "http://localhost:3100/callback",
+      state: "test-state",
+      scopes: ["https://www.googleapis.com/auth/calendar"],
+    })
+
+    const parsed = new URL(url)
+    expect(parsed.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/calendar")
   })
 })
