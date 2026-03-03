@@ -79,15 +79,22 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
     id: "google-workspace",
     name: "Google Workspace",
     authType: "oauth",
-    description: "Google Workspace services (Calendar, Drive, etc.)",
-    credentialClass: "custom",
+    description: "Google Calendar, Gmail, Drive (acting as the user)",
+    credentialClass: "user_service",
   },
   {
     id: "github-user",
     name: "GitHub (user)",
     authType: "oauth",
-    description: "GitHub user account access",
-    credentialClass: "custom",
+    description: "GitHub repos, issues, PRs (acting as the user)",
+    credentialClass: "user_service",
+  },
+  {
+    id: "slack-user",
+    name: "Slack (user)",
+    authType: "oauth",
+    description: "Slack channels, messages (acting as the user)",
+    credentialClass: "user_service",
   },
   {
     id: "brave",
@@ -612,6 +619,13 @@ export class CredentialService {
         }
         return undefined
       }
+      // User service providers
+      case "google-workspace":
+        return this.authConfig.googleWorkspace
+      case "github-user":
+        return this.authConfig.githubUser
+      case "slack-user":
+        return this.authConfig.slackUser
       default:
         return undefined
     }

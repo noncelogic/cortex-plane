@@ -31,7 +31,12 @@ export type CredentialStatus = "active" | "expired" | "revoked" | "error"
 // ---------------------------------------------------------------------------
 // Enum: credential_class
 // ---------------------------------------------------------------------------
-export type CredentialClass = "llm_provider" | "mcp_server" | "tool_specific" | "custom"
+export type CredentialClass =
+  | "llm_provider"
+  | "mcp_server"
+  | "tool_specific"
+  | "user_service"
+  | "custom"
 
 // ---------------------------------------------------------------------------
 // Enum: mcp_server_status

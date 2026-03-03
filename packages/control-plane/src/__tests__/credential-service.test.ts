@@ -436,16 +436,21 @@ describe("backward compatibility", () => {
 // ---------------------------------------------------------------------------
 
 describe("SUPPORTED_PROVIDERS", () => {
-  it("includes user service providers", () => {
+  it("includes user service providers with user_service class", () => {
     const googleWorkspace = SUPPORTED_PROVIDERS.find((p) => p.id === "google-workspace")
     expect(googleWorkspace).toBeDefined()
     expect(googleWorkspace!.authType).toBe("oauth")
-    expect(googleWorkspace!.credentialClass).toBe("custom")
+    expect(googleWorkspace!.credentialClass).toBe("user_service")
 
     const githubUser = SUPPORTED_PROVIDERS.find((p) => p.id === "github-user")
     expect(githubUser).toBeDefined()
     expect(githubUser!.authType).toBe("oauth")
-    expect(githubUser!.credentialClass).toBe("custom")
+    expect(githubUser!.credentialClass).toBe("user_service")
+
+    const slackUser = SUPPORTED_PROVIDERS.find((p) => p.id === "slack-user")
+    expect(slackUser).toBeDefined()
+    expect(slackUser!.authType).toBe("oauth")
+    expect(slackUser!.credentialClass).toBe("user_service")
   })
 
   it("includes tool secret providers", () => {

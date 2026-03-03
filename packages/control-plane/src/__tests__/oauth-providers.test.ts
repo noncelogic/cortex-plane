@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest"
 import {
   CODE_PASTE_PROVIDERS,
   getCodePasteProvider,
+  getUserServiceProvider,
+  isUserServiceProvider,
   listCodePasteProviders,
+  listUserServiceProviders,
+  USER_SERVICE_PROVIDERS,
 } from "../auth/oauth-providers.js"
 import { generateCodeChallenge, generateCodeVerifier } from "../auth/oauth-service.js"
 
@@ -98,5 +102,86 @@ describe("code-paste init flow builds correct OAuth URL", () => {
       "https://console.anthropic.com/oauth/code/callback",
     )
     expect(url.searchParams.get("scope")).toContain("org:create_api_key")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// User service provider registry
+// ---------------------------------------------------------------------------
+
+describe("user-service-providers registry", () => {
+  it("contains google-workspace, github-user, and slack-user", () => {
+    const ids = Object.keys(USER_SERVICE_PROVIDERS)
+    expect(ids).toContain("google-workspace")
+    expect(ids).toContain("github-user")
+    expect(ids).toContain("slack-user")
+  })
+
+  it("all user service providers have credentialClass = user_service", () => {
+    for (const provider of listUserServiceProviders()) {
+      expect(provider.credentialClass).toBe("user_service")
+    }
+  })
+
+  it("getUserServiceProvider returns config for known providers", () => {
+    const gw = getUserServiceProvider("google-workspace")
+    expect(gw).toBeDefined()
+    expect(gw!.name).toBe("Google Workspace")
+    expect(gw!.defaultScopes).toContain("https://www.googleapis.com/auth/calendar.readonly")
+    expect(gw!.defaultScopes).toContain("https://www.googleapis.com/auth/gmail.send")
+    expect(gw!.usePkce).toBe(true)
+
+    const gh = getUserServiceProvider("github-user")
+    expect(gh).toBeDefined()
+    expect(gh!.name).toBe("GitHub (user)")
+    expect(gh!.defaultScopes).toContain("repo")
+    expect(gh!.usePkce).toBe(false)
+
+    const sl = getUserServiceProvider("slack-user")
+    expect(sl).toBeDefined()
+    expect(sl!.name).toBe("Slack (user)")
+    expect(sl!.defaultScopes).toContain("channels:read")
+    expect(sl!.usePkce).toBe(false)
+  })
+
+  it("getUserServiceProvider returns undefined for unknown provider", () => {
+    expect(getUserServiceProvider("unknown-provider")).toBeUndefined()
+  })
+
+  it("getUserServiceProvider returns undefined for LLM providers", () => {
+    expect(getUserServiceProvider("google-antigravity")).toBeUndefined()
+    expect(getUserServiceProvider("openai-codex")).toBeUndefined()
+  })
+
+  it("listUserServiceProviders returns all user service providers", () => {
+    const list = listUserServiceProviders()
+    expect(list.length).toBe(3)
+    expect(list.map((p) => p.id).sort()).toEqual(["github-user", "google-workspace", "slack-user"])
+  })
+
+  it("isUserServiceProvider correctly identifies provider types", () => {
+    expect(isUserServiceProvider("google-workspace")).toBe(true)
+    expect(isUserServiceProvider("github-user")).toBe(true)
+    expect(isUserServiceProvider("slack-user")).toBe(true)
+    expect(isUserServiceProvider("google-antigravity")).toBe(false)
+    expect(isUserServiceProvider("openai-codex")).toBe(false)
+    expect(isUserServiceProvider("unknown")).toBe(false)
+  })
+
+  it("Google Workspace and Google Antigravity are distinct providers", () => {
+    const workspace = getUserServiceProvider("google-workspace")
+    const antigravity = getCodePasteProvider("google-antigravity")
+
+    expect(workspace).toBeDefined()
+    expect(antigravity).toBeDefined()
+
+    // Different credential classes
+    expect(workspace!.credentialClass).toBe("user_service")
+    // Antigravity is an LLM provider (code-paste flow, no credentialClass field)
+
+    // Different scopes
+    expect(workspace!.defaultScopes).toContain("https://www.googleapis.com/auth/calendar.readonly")
+    expect(antigravity!.scopes).toContain("https://www.googleapis.com/auth/cloud-platform")
+    expect(antigravity!.scopes).not.toContain("https://www.googleapis.com/auth/calendar.readonly")
   })
 })
