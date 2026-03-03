@@ -16,6 +16,7 @@ import type { Kysely } from "kysely"
 import type { Pool } from "pg"
 
 import type { Database } from "../db/types.js"
+import type { McpToolRouter } from "../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
 import { createApprovalExpireTask } from "./tasks/approval-expire.js"
@@ -31,6 +32,8 @@ export interface WorkerOptions {
   sessionBufferFactory?: (jobId: string, agentId: string) => BufferWriter
   memoryExtractThreshold?: number
   concurrency?: number
+  /** Optional MCP tool router for resolving MCP tools in agent registries. */
+  mcpToolRouter?: McpToolRouter
 }
 
 /**
@@ -46,6 +49,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     sessionBufferFactory,
     memoryExtractThreshold,
     concurrency,
+    mcpToolRouter,
   } = options
 
   const workerConcurrency =
@@ -58,6 +62,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
       streamManager,
       sessionBufferFactory,
       memoryExtractThreshold,
+      mcpToolRouter,
     }),
     memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),

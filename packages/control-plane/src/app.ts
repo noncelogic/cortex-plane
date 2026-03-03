@@ -16,7 +16,9 @@ import { AuthHandoffService } from "./browser/auth-handoff.js"
 import { ScreenshotModeService } from "./browser/screenshot-mode.js"
 import { TraceCaptureService } from "./browser/trace-capture.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
+import { HttpMcpClientPool } from "./mcp/client-pool.js"
 import { McpHealthSupervisor } from "./mcp/health-supervisor.js"
+import { McpToolRouter } from "./mcp/tool-router.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import { FeedbackService } from "./feedback/service.js"
@@ -84,6 +86,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   const sseManager = new SSEConnectionManager()
   const channelSupervisor = options.channelSupervisor
 
+  // MCP client pool + tool router — resolves MCP tools for agent registries
+  const mcpClientPool = new HttpMcpClientPool({ db })
+  const mcpToolRouter = new McpToolRouter({ db, clientPool: mcpClientPool })
+
   // Start Graphile Worker alongside Fastify — shared pg.Pool
   const runner = await createWorker({
     pgPool: pool,
@@ -92,6 +98,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     streamManager: sseManager,
     memoryExtractThreshold: config.memoryExtractThreshold,
     concurrency: config.workerConcurrency,
+    mcpToolRouter,
   })
 
   // Worker utils for job enqueueing from routes
@@ -117,6 +124,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   if (channelSupervisor) {
     app.decorate("channelSupervisor", channelSupervisor)
   }
+
+  // Decorate Fastify with MCP client pool + tool router
+  app.decorate("mcpClientPool", mcpClientPool)
+  app.decorate("mcpToolRouter", mcpToolRouter)
 
   // MCP health supervisor — periodic probing of registered MCP servers
   const mcpHealthSupervisor = new McpHealthSupervisor({ db, sseManager })

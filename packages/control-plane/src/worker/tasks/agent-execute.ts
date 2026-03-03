@@ -25,6 +25,7 @@ import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { Database, Job } from "../../db/types.js"
+import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
 import { classifyError } from "../error-classifier.js"
@@ -44,6 +45,8 @@ export interface AgentExecuteDeps {
   memoryExtractThreshold?: number
   /** Optional skill index for dynamic skill loading. */
   skillIndex?: import("@cortex/shared/skills").SkillIndex
+  /** Optional MCP tool router for resolving MCP tools into agent registries. */
+  mcpToolRouter?: McpToolRouter
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -64,6 +67,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     sessionBufferFactory,
     memoryExtractThreshold = 50,
     skillIndex,
+    mcpToolRouter,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -200,14 +204,27 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
           // ── Step 8: Execute task ──
           // If the backend supports per-agent tool registries (HttpLlmBackend),
-          // build one that includes custom webhook tools from agent config.
+          // build one that includes custom webhook tools from agent config
+          // and MCP tools when a router is available.
           if (
             "createAgentRegistry" in backend &&
             typeof backend.createAgentRegistry === "function"
           ) {
-            const agentRegistry = (
-              backend as { createAgentRegistry: (c: Record<string, unknown>) => unknown }
-            ).createAgentRegistry(agent.config ?? {})
+            // Build optional MCP deps from the tool router + task constraints
+            const mcpDeps = mcpToolRouter
+              ? {
+                  mcpRouter: mcpToolRouter,
+                  agentId: agent.id,
+                  allowedTools: task.constraints.allowedTools,
+                  deniedTools: task.constraints.deniedTools,
+                }
+              : undefined
+
+            const agentRegistry = await (
+              backend as {
+                createAgentRegistry: (c: Record<string, unknown>, m?: unknown) => Promise<unknown>
+              }
+            ).createAgentRegistry(agent.config ?? {}, mcpDeps)
             handle = await (
               backend as { executeTask: (t: ExecutionTask, r: unknown) => Promise<ExecutionHandle> }
             ).executeTask(task, agentRegistry)
