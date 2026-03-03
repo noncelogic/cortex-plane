@@ -696,8 +696,8 @@ describe("createDefaultToolRegistry — built-in tools", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("createAgentToolRegistry", () => {
-  it("includes all default tools when no custom tools configured", () => {
-    const registry = createAgentToolRegistry({})
+  it("includes all default tools when no custom tools configured", async () => {
+    const registry = await createAgentToolRegistry({})
     expect(registry.get("echo")).toBeDefined()
     expect(registry.get("web_search")).toBeDefined()
     expect(registry.get("memory_query")).toBeDefined()
@@ -705,8 +705,8 @@ describe("createAgentToolRegistry", () => {
     expect(registry.get("http_request")).toBeDefined()
   })
 
-  it("registers custom webhook tools from agent config", () => {
-    const registry = createAgentToolRegistry({
+  it("registers custom webhook tools from agent config", async () => {
+    const registry = await createAgentToolRegistry({
       tools: [
         {
           name: "custom_tool",
@@ -721,8 +721,8 @@ describe("createAgentToolRegistry", () => {
     expect(registry.get("custom_tool")!.description).toBe("Custom webhook tool")
   })
 
-  it("includes both default and custom tools", () => {
-    const registry = createAgentToolRegistry({
+  it("includes both default and custom tools", async () => {
+    const registry = await createAgentToolRegistry({
       tools: [
         {
           name: "agent_tool",
@@ -738,8 +738,8 @@ describe("createAgentToolRegistry", () => {
     expect(registry.get("agent_tool")).toBeDefined()
   })
 
-  it("resolves custom tools via allowed list", () => {
-    const registry = createAgentToolRegistry({
+  it("resolves custom tools via allowed list", async () => {
+    const registry = await createAgentToolRegistry({
       tools: [
         {
           name: "agent_tool",
@@ -755,8 +755,8 @@ describe("createAgentToolRegistry", () => {
     expect(resolved.map((t) => t.name)).toContain("agent_tool")
   })
 
-  it("custom tools can be denied", () => {
-    const registry = createAgentToolRegistry({
+  it("custom tools can be denied", async () => {
+    const registry = await createAgentToolRegistry({
       tools: [
         {
           name: "agent_tool",
@@ -770,5 +770,53 @@ describe("createAgentToolRegistry", () => {
     const resolved = registry.resolve(["echo", "agent_tool"], ["agent_tool"])
     expect(resolved).toHaveLength(1)
     expect(resolved[0].name).toBe("echo")
+  })
+
+  it("merges MCP tools when mcpRouter is provided", async () => {
+    const mockMcpRouter = {
+      resolveAll: vi.fn().mockResolvedValue([
+        {
+          name: "mcp:srv:read_file",
+          description: "Read a file",
+          inputSchema: { type: "object", properties: {} },
+          execute: vi.fn().mockResolvedValue("file-contents"),
+        },
+      ]),
+      resolve: vi.fn(),
+      invalidateCache: vi.fn(),
+    }
+
+    const registry = await createAgentToolRegistry(
+      {},
+      {
+        agentId: "agent-1",
+        mcpRouter: mockMcpRouter as never,
+        allowedTools: ["mcp:srv:read_file"],
+        deniedTools: [],
+      },
+    )
+
+    expect(registry.get("mcp:srv:read_file")).toBeDefined()
+    expect(mockMcpRouter.resolveAll).toHaveBeenCalledWith("agent-1", ["mcp:srv:read_file"], [])
+  })
+
+  it("skips MCP resolution when no agentId provided", async () => {
+    const mockMcpRouter = {
+      resolveAll: vi.fn(),
+      resolve: vi.fn(),
+      invalidateCache: vi.fn(),
+    }
+
+    const registry = await createAgentToolRegistry({}, { mcpRouter: mockMcpRouter as never })
+
+    expect(mockMcpRouter.resolveAll).not.toHaveBeenCalled()
+    expect(registry.get("echo")).toBeDefined()
+  })
+
+  it("skips MCP resolution when no mcpRouter provided", async () => {
+    const registry = await createAgentToolRegistry({}, { agentId: "agent-1" })
+
+    // Should still work, just no MCP tools
+    expect(registry.get("echo")).toBeDefined()
   })
 })

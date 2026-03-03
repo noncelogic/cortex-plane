@@ -5,6 +5,7 @@
  * Tools are registered with a name, description, JSON Schema, and handler.
  */
 
+import type { McpToolRouter } from "../mcp/tool-router.js"
 import { createHttpRequestTool } from "./tools/http-request.js"
 import { createMemoryQueryTool } from "./tools/memory-query.js"
 import { createMemoryStoreTool } from "./tools/memory-store.js"
@@ -104,13 +105,36 @@ export function createDefaultToolRegistry(): ToolRegistry {
  *
  * Starts with the default built-in tools, then registers any custom
  * webhook tools defined in the agent's config.tools array.
+ *
+ * When an McpToolRouter is provided, MCP tools available to the agent
+ * are resolved and merged into the registry.
  */
-export function createAgentToolRegistry(agentConfig: Record<string, unknown>): ToolRegistry {
+export async function createAgentToolRegistry(
+  agentConfig: Record<string, unknown>,
+  opts?: {
+    agentId?: string
+    mcpRouter?: McpToolRouter
+    allowedTools?: string[]
+    deniedTools?: string[]
+  },
+): Promise<ToolRegistry> {
   const registry = createDefaultToolRegistry()
 
   const webhookSpecs = parseWebhookTools(agentConfig)
   for (const spec of webhookSpecs) {
     registry.register(createWebhookTool(spec))
+  }
+
+  // Merge MCP tools when a router is available
+  if (opts?.mcpRouter && opts.agentId) {
+    const mcpTools = await opts.mcpRouter.resolveAll(
+      opts.agentId,
+      opts.allowedTools ?? [],
+      opts.deniedTools ?? [],
+    )
+    for (const tool of mcpTools) {
+      registry.register(tool)
+    }
   }
 
   return registry
