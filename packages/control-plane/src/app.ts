@@ -16,6 +16,7 @@ import { AuthHandoffService } from "./browser/auth-handoff.js"
 import { ScreenshotModeService } from "./browser/screenshot-mode.js"
 import { TraceCaptureService } from "./browser/trace-capture.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
+import { McpHealthSupervisor } from "./mcp/health-supervisor.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import { FeedbackService } from "./feedback/service.js"
@@ -117,6 +118,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     app.decorate("channelSupervisor", channelSupervisor)
   }
 
+  // MCP health supervisor — periodic probing of registered MCP servers
+  const mcpHealthSupervisor = new McpHealthSupervisor({ db, sseManager })
+  app.decorate("mcpHealthSupervisor", mcpHealthSupervisor)
+
   // Approval service — core approval gate logic
   const approvalService = new ApprovalService({ db })
   const feedbackService = new FeedbackService({ db })
@@ -144,6 +149,9 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   }
 
   await app.register(healthRoutes)
+
+  // Start MCP health supervisor
+  mcpHealthSupervisor.start()
 
   let unsubscribeChannelSupervisor: (() => void) | undefined
   if (channelSupervisor) {
@@ -276,6 +284,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     if (unsubscribeChannelSupervisor) {
       unsubscribeChannelSupervisor()
     }
+    mcpHealthSupervisor.stop()
     channelSupervisor?.stop()
     sseManager.shutdown()
     screenshotModeService.shutdown()
