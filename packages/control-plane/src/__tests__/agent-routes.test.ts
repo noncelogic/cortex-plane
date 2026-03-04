@@ -64,6 +64,7 @@ function mockDb(
   opts: {
     agents?: Record<string, unknown>[]
     jobs?: Record<string, unknown>[]
+    agentEvents?: Record<string, unknown>[]
     insertedAgent?: Record<string, unknown>
     updatedAgent?: Record<string, unknown> | null
     insertedJob?: Record<string, unknown>
@@ -72,6 +73,7 @@ function mockDb(
   const {
     agents = [makeAgent()],
     jobs = [],
+    agentEvents = [],
     insertedAgent = makeAgent(),
     updatedAgent = makeAgent(),
     insertedJob = makeJob(),
@@ -83,6 +85,7 @@ function mockDb(
     const executeTakeFirstOrThrow = vi.fn().mockResolvedValue(rows[0] ?? {})
     const execute = vi.fn().mockResolvedValue(rows)
     const terminal = { execute, executeTakeFirst, executeTakeFirstOrThrow }
+    const groupBy = vi.fn().mockReturnValue(terminal)
     const offset = vi.fn().mockReturnValue(terminal)
     const limit = vi.fn().mockReturnValue({ ...terminal, offset })
     const orderBy = vi.fn().mockReturnValue({ ...terminal, limit, offset })
@@ -92,11 +95,12 @@ function mockDb(
       orderBy,
       limit,
       offset,
+      groupBy,
       ...terminal,
     })
     const selectAll = vi
       .fn()
-      .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
+      .mockReturnValue({ where: whereFn, orderBy, limit, offset, groupBy, ...terminal })
     // Count queries use select(fn.countAll().as("total")) — return { total: rows.length }
     // Regular selects (e.g. select("id")) still need where/executeTakeFirst
     const countResult = { total: rows.length }
@@ -108,9 +112,19 @@ function mockDb(
     const selectWhereFn: ReturnType<typeof vi.fn> = vi.fn()
     selectWhereFn.mockReturnValue({
       where: selectWhereFn,
+      groupBy,
+      orderBy,
+      limit,
       ...selectTerminal,
     })
-    const select = vi.fn().mockReturnValue({ where: selectWhereFn, ...selectTerminal })
+    // select is self-referencing to support chained .select().select() calls
+    const selectNode: Record<string, unknown> = {
+      where: selectWhereFn,
+      groupBy,
+      ...selectTerminal,
+    }
+    const select = vi.fn().mockReturnValue(selectNode)
+    selectNode.select = select
     return { selectAll, select }
   }
 
@@ -140,6 +154,7 @@ function mockDb(
     selectFrom: vi.fn().mockImplementation((table: string) => {
       if (table === "agent") return selectChain(agents)
       if (table === "job") return selectChain(jobs)
+      if (table === "agent_event") return selectChain(agentEvents)
       return selectChain([])
     }),
     insertInto: vi.fn().mockImplementation((table: string) => {
@@ -198,6 +213,37 @@ describe("GET /agents", () => {
 
     expect(res.statusCode).toBe(200)
   })
+
+  it("includes costToday, healthStatus, and runningJobId per agent", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent()],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const first = body.agents[0] as Record<string, unknown>
+    expect(first.costToday).toBe(0)
+    expect(first.healthStatus).toBe("healthy")
+    expect(first.runningJobId).toBeNull()
+  })
+
+  it("maps DISABLED agent to quarantined healthStatus", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent({ status: "DISABLED" })],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const first = body.agents[0] as Record<string, unknown>
+    expect(first.healthStatus).toBe("quarantined")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -230,6 +276,33 @@ describe("GET /agents/:id", () => {
     })
 
     expect(res.statusCode).toBe(404)
+  })
+
+  it("includes costSummary, healthStatus, runningJobId, and circuitBreakerState", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    expect(body).toHaveProperty("costSummary")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.costSummary).toEqual({ totalToday: 0, byModel: {} })
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.healthStatus).toBe("healthy")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.runningJobId).toBeNull()
+    expect(body).toHaveProperty("circuitBreakerState")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.circuitBreakerState).toEqual({
+      tripped: false,
+      consecutiveFailures: 0,
+      tripReason: null,
+    })
   })
 })
 

@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto"
 
 import type { AgentStatus, JobStatus } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
-import type { Kysely } from "kysely"
+import { sql, type Kysely } from "kysely"
 
 import type { SessionService } from "../auth/session-service.js"
 import type { Database } from "../db/types.js"
@@ -95,6 +95,38 @@ interface ResumeAgentBody {
 }
 
 // ---------------------------------------------------------------------------
+// Health / cost helpers
+// ---------------------------------------------------------------------------
+
+type HealthStatus = "healthy" | "degraded" | "quarantined" | "unknown"
+
+interface CostSummary {
+  totalToday: number
+  byModel: Record<string, number>
+}
+
+interface CircuitBreakerState {
+  tripped: boolean
+  consecutiveFailures: number
+  tripReason: string | null
+}
+
+/**
+ * Map the persisted agent status to the API-level health enum.
+ * ACTIVE → healthy, DISABLED → quarantined, everything else → unknown.
+ */
+function deriveHealthStatus(agentStatus: AgentStatus): HealthStatus {
+  switch (agentStatus) {
+    case "ACTIVE":
+      return "healthy"
+    case "DISABLED":
+      return "quarantined"
+    default:
+      return "unknown"
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
 
@@ -148,8 +180,46 @@ export function agentRoutes(deps: AgentRouteDeps) {
 
         const total = Number(countResult.total)
 
+        // Batch-fetch cost + running-job summaries for the returned agents
+        const agentIds = agents.map((a) => a.id)
+
+        let costMap = new Map<string, number>()
+        let runningJobMap = new Map<string, string>()
+
+        if (agentIds.length > 0) {
+          const todayStart = new Date()
+          todayStart.setHours(0, 0, 0, 0)
+
+          const [costRows, runningJobs] = await Promise.all([
+            db
+              .selectFrom("agent_event")
+              .select(["agent_id"])
+              .select(sql<number>`coalesce(sum(cost_usd), 0)`.as("cost_today"))
+              .where("agent_id", "in", agentIds)
+              .where("created_at", ">=", todayStart)
+              .groupBy("agent_id")
+              .execute(),
+            db
+              .selectFrom("job")
+              .select(["agent_id", "id"])
+              .where("agent_id", "in", agentIds)
+              .where("status", "=", "RUNNING" as JobStatus)
+              .execute(),
+          ])
+
+          costMap = new Map(costRows.map((r) => [r.agent_id, Number(r.cost_today)]))
+          runningJobMap = new Map(runningJobs.map((r) => [r.agent_id, r.id]))
+        }
+
+        const enrichedAgents = agents.map((agent) => ({
+          ...agent,
+          costToday: costMap.get(agent.id) ?? 0,
+          healthStatus: deriveHealthStatus(agent.status),
+          runningJobId: runningJobMap.get(agent.id) ?? null,
+        }))
+
         return reply.status(200).send({
-          agents,
+          agents: enrichedAgents,
           count: agents.length,
           pagination: {
             total,
@@ -188,16 +258,81 @@ export function agentRoutes(deps: AgentRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Agent not found" })
         }
 
-        // Fetch latest job for this agent
-        const latestJob = await db
-          .selectFrom("job")
-          .selectAll()
-          .where("agent_id", "=", agent.id)
-          .orderBy("created_at", "desc")
-          .limit(1)
-          .executeTakeFirst()
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
 
-        return reply.status(200).send({ ...agent, latest_job: latestJob ?? null })
+        const [latestJob, runningJob, costRows, recentFailures] = await Promise.all([
+          // Latest job
+          db
+            .selectFrom("job")
+            .selectAll()
+            .where("agent_id", "=", agent.id)
+            .orderBy("created_at", "desc")
+            .limit(1)
+            .executeTakeFirst(),
+          // Currently running job
+          db
+            .selectFrom("job")
+            .select("id")
+            .where("agent_id", "=", agent.id)
+            .where("status", "=", "RUNNING" as JobStatus)
+            .limit(1)
+            .executeTakeFirst(),
+          // Cost breakdown by model (today)
+          db
+            .selectFrom("agent_event")
+            .select(["model"])
+            .select(sql<number>`coalesce(sum(cost_usd), 0)`.as("total"))
+            .where("agent_id", "=", agent.id)
+            .where("created_at", ">=", todayStart)
+            .groupBy("model")
+            .execute(),
+          // Consecutive recent failures for circuit-breaker heuristic
+          db
+            .selectFrom("job")
+            .select(["status"])
+            .where("agent_id", "=", agent.id)
+            .where("status", "in", ["COMPLETED", "FAILED", "TIMED_OUT"] as JobStatus[])
+            .orderBy("completed_at", "desc")
+            .limit(10)
+            .execute(),
+        ])
+
+        // Build costSummary
+        let totalToday = 0
+        const byModel: Record<string, number> = {}
+        for (const row of costRows) {
+          const amount = Number(row.total)
+          totalToday += amount
+          const key = row.model ?? "unknown"
+          byModel[key] = (byModel[key] ?? 0) + amount
+        }
+        const costSummary: CostSummary = { totalToday, byModel }
+
+        // Derive circuit-breaker state from consecutive failures
+        let consecutiveFailures = 0
+        for (const j of recentFailures) {
+          if (j.status === "FAILED" || j.status === "TIMED_OUT") {
+            consecutiveFailures++
+          } else {
+            break
+          }
+        }
+        const circuitBreakerState: CircuitBreakerState = {
+          tripped: consecutiveFailures >= 5,
+          consecutiveFailures,
+          tripReason:
+            consecutiveFailures >= 5 ? `${consecutiveFailures} consecutive job failures` : null,
+        }
+
+        return reply.status(200).send({
+          ...agent,
+          latest_job: latestJob ?? null,
+          costSummary,
+          healthStatus: deriveHealthStatus(agent.status),
+          runningJobId: runningJob?.id ?? null,
+          circuitBreakerState,
+        })
       },
     )
 

@@ -512,6 +512,27 @@ export type NewMcpServerTool = Insertable<McpServerToolTable>
 export type McpServerToolUpdate = Updateable<McpServerToolTable>
 
 // ---------------------------------------------------------------------------
+// Table: agent_event
+// ---------------------------------------------------------------------------
+export interface AgentEventTable {
+  id: Generated<string>
+  agent_id: string
+  job_id: string | null
+  event_type: string
+  model: string | null
+  cost_usd: ColumnType<number, number | undefined, number>
+  metadata: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AgentEvent = Selectable<AgentEventTable>
+export type NewAgentEvent = Insertable<AgentEventTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -534,4 +555,5 @@ export interface Database {
   agent_credential_binding: AgentCredentialBindingTable
   mcp_server: McpServerTable
   mcp_server_tool: McpServerToolTable
+  agent_event: AgentEventTable
 }
