@@ -16,6 +16,7 @@ import type { Kysely } from "kysely"
 
 import type { AuthOAuthConfig, OAuthProviderConfig } from "../config.js"
 import type {
+  CredentialClass,
   CredentialStatus,
   Database,
   NewCredentialAuditLog,
@@ -40,6 +41,7 @@ export interface ProviderInfo {
   name: string
   authType: "oauth" | "api_key"
   description: string
+  credentialClass?: CredentialClass
 }
 
 export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
@@ -73,6 +75,27 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
     authType: "api_key",
     description: "Gemini models via API key",
   },
+  {
+    id: "google-workspace",
+    name: "Google Workspace",
+    authType: "oauth",
+    description: "Google Workspace services (Calendar, Drive, etc.)",
+    credentialClass: "custom",
+  },
+  {
+    id: "github-user",
+    name: "GitHub (user)",
+    authType: "oauth",
+    description: "GitHub user account access",
+    credentialClass: "custom",
+  },
+  {
+    id: "brave",
+    name: "Brave Search",
+    authType: "api_key",
+    description: "Brave Search API for web search tools",
+    credentialClass: "tool_specific",
+  },
 ]
 
 /** Credential summary returned to the dashboard (no secrets). */
@@ -80,6 +103,8 @@ export interface CredentialSummary {
   id: string
   provider: string
   credentialType: "oauth" | "api_key"
+  credentialClass: CredentialClass
+  toolName: string | null
   displayLabel: string | null
   status: CredentialStatus
   accountId: string | null
@@ -99,6 +124,8 @@ function toSummary(cred: ProviderCredential, maskedKey: string | null): Credenti
     id: cred.id,
     provider: cred.provider,
     credentialType: cred.credential_type as "oauth" | "api_key",
+    credentialClass: cred.credential_class,
+    toolName: cred.tool_name ?? null,
     displayLabel: cred.display_label,
     status: cred.status,
     accountId: cred.account_id,
@@ -158,7 +185,12 @@ export class CredentialService {
     userId: string,
     provider: string,
     tokens: TokenResponse,
-    opts?: { accountId?: string; displayLabel?: string; scopes?: string[] },
+    opts?: {
+      accountId?: string
+      displayLabel?: string
+      scopes?: string[]
+      credentialClass?: CredentialClass
+    },
   ): Promise<CredentialSummary> {
     const userKey = await this.ensureUserKey(userId)
 
@@ -166,6 +198,7 @@ export class CredentialService {
       user_account_id: userId,
       provider,
       credential_type: "oauth",
+      credential_class: opts?.credentialClass ?? "llm_provider",
       access_token_enc: encryptCredential(tokens.access_token, userKey),
       refresh_token_enc: tokens.refresh_token
         ? encryptCredential(tokens.refresh_token, userKey)
@@ -226,7 +259,7 @@ export class CredentialService {
     userId: string,
     provider: string,
     apiKey: string,
-    opts?: { displayLabel?: string },
+    opts?: { displayLabel?: string; credentialClass?: CredentialClass },
   ): Promise<CredentialSummary> {
     const userKey = await this.ensureUserKey(userId)
 
@@ -234,6 +267,7 @@ export class CredentialService {
       user_account_id: userId,
       provider,
       credential_type: "api_key",
+      credential_class: opts?.credentialClass ?? "llm_provider",
       api_key_enc: encryptCredential(apiKey, userKey),
       display_label: opts?.displayLabel ?? provider,
       status: "active",
@@ -279,15 +313,22 @@ export class CredentialService {
 
   /**
    * List all credentials for a user (no secrets).
+   * Optionally filter by credential class.
    */
-  async listCredentials(userId: string): Promise<CredentialSummary[]> {
-    const creds = await this.db
+  async listCredentials(
+    userId: string,
+    opts?: { credentialClass?: CredentialClass },
+  ): Promise<CredentialSummary[]> {
+    let query = this.db
       .selectFrom("provider_credential")
       .selectAll()
       .where("user_account_id", "=", userId)
-      .orderBy("provider", "asc")
-      .orderBy("created_at", "asc")
-      .execute()
+
+    if (opts?.credentialClass) {
+      query = query.where("credential_class", "=", opts.credentialClass)
+    }
+
+    const creds = await query.orderBy("provider", "asc").orderBy("created_at", "asc").execute()
 
     const userKey = creds.length > 0 ? await this.ensureUserKey(userId) : null
 
@@ -303,6 +344,119 @@ export class CredentialService {
       }
       return toSummary(cred, maskedKey)
     })
+  }
+
+  /**
+   * Store a tool secret credential (API key for an MCP tool).
+   * Only admins may call this method.
+   */
+  async storeToolSecret(
+    adminUserId: string,
+    toolName: string,
+    provider: string,
+    apiKey: string,
+    opts?: { displayLabel?: string; metadata?: Record<string, unknown> },
+  ): Promise<CredentialSummary> {
+    // Validate admin role
+    const user = await this.db
+      .selectFrom("user_account")
+      .select("role")
+      .where("id", "=", adminUserId)
+      .executeTakeFirstOrThrow()
+
+    if (user.role !== "admin") {
+      throw new Error("Only admins can store tool secrets")
+    }
+
+    const userKey = await this.ensureUserKey(adminUserId)
+
+    const values: NewProviderCredential = {
+      user_account_id: adminUserId,
+      provider,
+      credential_type: "api_key",
+      credential_class: "tool_specific",
+      tool_name: toolName,
+      api_key_enc: encryptCredential(apiKey, userKey),
+      display_label: opts?.displayLabel ?? `${toolName}/${provider}`,
+      metadata: opts?.metadata ?? {},
+      status: "active",
+    }
+
+    // Upsert on tool_name + provider
+    const existing = await this.db
+      .selectFrom("provider_credential")
+      .select("id")
+      .where("tool_name", "=", toolName)
+      .where("provider", "=", provider)
+      .where("credential_class", "=", "tool_specific")
+      .executeTakeFirst()
+
+    let cred: ProviderCredential
+    if (existing) {
+      cred = await this.db
+        .updateTable("provider_credential")
+        .set({
+          api_key_enc: values.api_key_enc,
+          display_label: values.display_label,
+          metadata: values.metadata,
+          status: "active",
+          error_count: 0,
+          last_error: null,
+          updated_at: new Date(),
+        })
+        .where("id", "=", existing.id)
+        .returningAll()
+        .executeTakeFirstOrThrow()
+
+      await this.auditLog(adminUserId, cred.id, "credential_updated", provider, {
+        flow: "tool_secret",
+        tool_name: toolName,
+      })
+    } else {
+      cred = await this.db
+        .insertInto("provider_credential")
+        .values(values)
+        .returningAll()
+        .executeTakeFirstOrThrow()
+
+      await this.auditLog(adminUserId, cred.id, "credential_created", provider, {
+        flow: "tool_secret",
+        tool_name: toolName,
+      })
+    }
+
+    return toSummary(cred, maskApiKey(apiKey))
+  }
+
+  /**
+   * Retrieve a decrypted tool secret by tool name.
+   * Decrypts using the owner's user key and audit-logs each access.
+   */
+  async getToolSecret(
+    toolName: string,
+  ): Promise<{ token: string; credentialId: string; provider: string } | null> {
+    const cred = await this.db
+      .selectFrom("provider_credential")
+      .selectAll()
+      .where("credential_class", "=", "tool_specific")
+      .where("tool_name", "=", toolName)
+      .where("status", "=", "active")
+      .executeTakeFirst()
+
+    if (!cred || !cred.api_key_enc) return null
+
+    // Decrypt using the owner's user key
+    const userKey = await this.ensureUserKey(cred.user_account_id)
+    const token = decryptCredential(cred.api_key_enc, userKey)
+
+    // Audit log each access
+    await this.auditLog(cred.user_account_id, cred.id, "credential_accessed", cred.provider, {
+      tool_name: toolName,
+    })
+
+    await this.markUsed(cred.id)
+
+    return { token, credentialId: cred.id, provider: cred.provider }
   }
 
   /**
