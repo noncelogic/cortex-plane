@@ -205,8 +205,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             "createAgentRegistry" in backend &&
             typeof backend.createAgentRegistry === "function"
           ) {
-            const agentRegistry = (
-              backend as { createAgentRegistry: (c: Record<string, unknown>) => unknown }
+            const agentRegistry = await (
+              backend as { createAgentRegistry: (c: Record<string, unknown>) => Promise<unknown> }
             ).createAgentRegistry(agent.config ?? {})
             handle = await (
               backend as { executeTask: (t: ExecutionTask, r: unknown) => Promise<ExecutionHandle> }

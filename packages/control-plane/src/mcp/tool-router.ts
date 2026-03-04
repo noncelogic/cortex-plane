@@ -200,7 +200,7 @@ export class McpToolRouter {
       return null
     }
 
-    const row = rows[0]
+    const row = rows[0]!
     const server = this.extractServer(row)
     const tool = this.extractTool(row)
     const def = createMcpToolDefinition(this.clientPool, server, tool)
@@ -252,7 +252,7 @@ export class McpToolRouter {
 
     // Single match — no conflict
     if (rows.length === 1) {
-      const row = rows[0]
+      const row = rows[0]!
       const def = createMcpToolDefinition(
         this.clientPool,
         this.extractServer(row),
@@ -289,7 +289,7 @@ export class McpToolRouter {
     })
 
     if (scopeFiltered.length === 1) {
-      const row = scopeFiltered[0]
+      const row = scopeFiltered[0]!
       return createMcpToolDefinition(
         this.clientPool,
         this.extractServer(row),
@@ -318,8 +318,8 @@ export class McpToolRouter {
     // Step 3: first registered (already ordered by created_at ASC)
     // Only use this if there's a clear winner — multiple candidates with
     // different created_at timestamps, take the earliest.
-    const first = candidates[0]
-    const second = candidates[1]
+    const first = candidates[0]!
+    const second = candidates[1]!
     const firstCreatedAt = first.server_created_at as Date
     const secondCreatedAt = second.server_created_at as Date
 

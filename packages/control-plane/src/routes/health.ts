@@ -5,6 +5,7 @@ import type { Runner } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { Database } from "../db/types.js"
+import type { McpHealthSupervisor } from "../mcp/health-supervisor.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 
 declare module "fastify" {
@@ -14,6 +15,7 @@ declare module "fastify" {
     backendRegistry?: BackendRegistry
     channelSupervisor?: ChannelSupervisor
     sseManager?: SSEConnectionManager
+    mcpHealthSupervisor?: McpHealthSupervisor
   }
 }
 
@@ -105,6 +107,24 @@ export function healthRoutes(app: FastifyInstance): void {
     })
 
     return reply.send({ status: "ok", backends })
+  })
+
+  /**
+   * MCP health — aggregate health for all registered MCP servers,
+   * including per-server circuit breaker state.
+   */
+  app.get("/health/mcp", async (_request, reply) => {
+    const supervisor = app.mcpHealthSupervisor
+    if (!supervisor) {
+      return reply.status(503).send({
+        status: "unavailable",
+        reason: "MCP health supervisor not configured",
+      })
+    }
+
+    const report = supervisor.getHealthReport()
+    const code = report.status === "unavailable" ? 503 : 200
+    return reply.status(code).send(report)
   })
 
   app.get("/health/stream", async (_request, reply) => {
