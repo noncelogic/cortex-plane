@@ -20,6 +20,7 @@ import type { ResolvedSkills, SkillIndex } from "@cortex/shared/skills"
 import type { Kysely } from "kysely"
 
 import type { Database } from "../db/types.js"
+import { verifyCheckpointIntegrity } from "./output-validator.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,11 +79,23 @@ export interface QdrantClient {
 // Checkpoint loading
 // ---------------------------------------------------------------------------
 
+export interface CheckpointLogger {
+  warn: (context: Record<string, unknown>, message: string) => void
+}
+
 /**
  * Load the last checkpoint for a job from PostgreSQL.
  * This is mandatory — if the checkpoint can't be loaded, hydration fails.
+ *
+ * When both checkpoint data and a stored CRC exist, the integrity is verified.
+ * A mismatch logs a `checkpoint_corruption_detected` warning but does not
+ * prevent the checkpoint from being returned — callers decide how to handle it.
  */
-export async function loadCheckpoint(jobId: string, db: Kysely<Database>): Promise<CheckpointData> {
+export async function loadCheckpoint(
+  jobId: string,
+  db: Kysely<Database>,
+  logger?: CheckpointLogger,
+): Promise<CheckpointData> {
   const job = await db
     .selectFrom("job")
     .select(["checkpoint", "checkpoint_crc", "status", "attempt", "payload"])
@@ -93,13 +106,21 @@ export async function loadCheckpoint(jobId: string, db: Kysely<Database>): Promi
     throw new Error(`Job not found: ${jobId}`)
   }
 
-  return {
+  const result: CheckpointData = {
     checkpoint: job.checkpoint,
     checkpointCrc: job.checkpoint_crc,
     jobStatus: job.status,
     attempt: job.attempt,
     payload: job.payload,
   }
+
+  if (result.checkpoint && result.checkpointCrc !== null) {
+    if (!verifyCheckpointIntegrity(result.checkpoint, result.checkpointCrc)) {
+      logger?.warn({ jobId, expectedCrc: result.checkpointCrc }, "checkpoint_corruption_detected")
+    }
+  }
+
+  return result
 }
 
 // ---------------------------------------------------------------------------

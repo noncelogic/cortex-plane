@@ -17,6 +17,7 @@ export {
 export {
   type AgentIdentity,
   type CheckpointData,
+  type CheckpointLogger,
   hydrateAgent,
   type HydrationResult,
   loadCheckpoint,
@@ -26,6 +27,15 @@ export {
   type QdrantClient,
   type QdrantContext,
 } from "./hydration.js"
+export {
+  computeCheckpointCrc,
+  DEFAULT_CHECKPOINT_MAX_BYTES,
+  DEFAULT_MEMORY_MAX_CHARS,
+  type OutputValidationResult,
+  validateCheckpointWrite,
+  validateMemoryWrite,
+  verifyCheckpointIntegrity,
+} from "./output-validator.js"
 export { DEFAULT_IDLE_TIMEOUT_MS, IdleDetector, type IdleDetectorOptions } from "./idle-detector.js"
 export {
   type AgentContext,
