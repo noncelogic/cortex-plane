@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-import { createDefaultToolRegistry, echoTool, ToolRegistry } from "../backends/tool-executor.js"
+import {
+  createAgentToolRegistry,
+  createDefaultToolRegistry,
+  echoTool,
+  ToolRegistry,
+} from "../backends/tool-executor.js"
+import type { McpToolRouter } from "../mcp/tool-router.js"
 
 // ---------------------------------------------------------------------------
 // echoTool
@@ -111,6 +117,80 @@ describe("ToolRegistry.resolve", () => {
 describe("createDefaultToolRegistry", () => {
   it("includes the echo tool", () => {
     const registry = createDefaultToolRegistry()
+    expect(registry.get("echo")).toBeDefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// createAgentToolRegistry — MCP integration
+// ---------------------------------------------------------------------------
+
+describe("createAgentToolRegistry", () => {
+  it("returns built-in tools without MCP deps", async () => {
+    const registry = await createAgentToolRegistry({})
+    expect(registry.get("echo")).toBeDefined()
+    expect(registry.get("web_search")).toBeDefined()
+  })
+
+  it("registers webhook tools from agent config", async () => {
+    const registry = await createAgentToolRegistry({
+      tools: [
+        {
+          name: "my_hook",
+          description: "A webhook tool",
+          inputSchema: { type: "object", properties: {} },
+          webhook: { url: "https://example.com/hook" },
+        },
+      ],
+    })
+    expect(registry.get("my_hook")).toBeDefined()
+  })
+
+  it("merges MCP tools when mcpRouter is provided", async () => {
+    const mcpTool = {
+      name: "mcp:test-srv:search",
+      description: "MCP search tool",
+      inputSchema: { type: "object", properties: {} },
+      execute: vi.fn().mockResolvedValue("mcp result"),
+    }
+
+    const mockRouter = {
+      resolveAll: vi.fn().mockResolvedValue([mcpTool]),
+    } as unknown as McpToolRouter
+
+    const registry = await createAgentToolRegistry(
+      {},
+      {
+        agentId: "agent-1",
+        mcpRouter: mockRouter,
+        allowedTools: ["mcp:test-srv:*"],
+        deniedTools: [],
+      },
+    )
+
+    expect(registry.get("mcp:test-srv:search")).toBeDefined()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(mockRouter.resolveAll).toHaveBeenCalledWith("agent-1", ["mcp:test-srv:*"], [])
+  })
+
+  it("skips MCP resolution when agentId is missing", async () => {
+    const mockRouter = {
+      resolveAll: vi.fn().mockResolvedValue([]),
+    } as unknown as McpToolRouter
+
+    await createAgentToolRegistry({}, { mcpRouter: mockRouter, allowedTools: [], deniedTools: [] })
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(mockRouter.resolveAll).not.toHaveBeenCalled()
+  })
+
+  it("skips MCP resolution when mcpRouter is missing", async () => {
+    const registry = await createAgentToolRegistry(
+      {},
+      { agentId: "agent-1", allowedTools: [], deniedTools: [] },
+    )
+
+    // Should only have built-in tools
     expect(registry.get("echo")).toBeDefined()
   })
 })

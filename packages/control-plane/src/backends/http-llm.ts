@@ -27,12 +27,20 @@ import type {
 } from "@cortex/shared/backends"
 import OpenAI from "openai"
 
+import type { McpToolRouter } from "../mcp/tool-router.js"
 import {
   createAgentToolRegistry,
   createDefaultToolRegistry,
   type ToolDefinition,
   type ToolRegistry,
 } from "./tool-executor.js"
+
+export interface McpDeps {
+  mcpRouter: McpToolRouter
+  agentId: string
+  allowedTools?: string[]
+  deniedTools?: string[]
+}
 
 type LlmProvider = "anthropic" | "openai"
 
@@ -186,10 +194,24 @@ export class HttpLlmBackend implements ExecutionBackend {
   /**
    * Create a per-agent ToolRegistry from the agent's config JSONB.
    * Includes all built-in tools plus any custom webhook tools defined
-   * in agentConfig.tools.
+   * in agentConfig.tools. When mcpDeps are provided, MCP tools are
+   * resolved and merged into the registry.
    */
-  async createAgentRegistry(agentConfig: Record<string, unknown>): Promise<ToolRegistry> {
-    return createAgentToolRegistry(agentConfig)
+  async createAgentRegistry(
+    agentConfig: Record<string, unknown>,
+    mcpDeps?: McpDeps,
+  ): Promise<ToolRegistry> {
+    return createAgentToolRegistry(
+      agentConfig,
+      mcpDeps
+        ? {
+            agentId: mcpDeps.agentId,
+            mcpRouter: mcpDeps.mcpRouter,
+            allowedTools: mcpDeps.allowedTools,
+            deniedTools: mcpDeps.deniedTools,
+          }
+        : undefined,
+    )
   }
 
   getCapabilities(): BackendCapabilities {

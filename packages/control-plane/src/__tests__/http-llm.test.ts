@@ -1,7 +1,8 @@
 import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
 import { describe, expect, it, vi } from "vitest"
 
-import { HttpLlmBackend } from "../backends/http-llm.js"
+import { HttpLlmBackend, type McpDeps } from "../backends/http-llm.js"
+import type { McpToolRouter } from "../mcp/tool-router.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -693,5 +694,267 @@ describe("HttpLlmBackend — registerTool()", () => {
       output: "Hello, Alice!",
       isError: false,
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// createAgentRegistry — MCP integration
+// ---------------------------------------------------------------------------
+
+describe("HttpLlmBackend — createAgentRegistry()", () => {
+  it("returns a ToolRegistry with built-in tools when no MCP deps", async () => {
+    const backend = new HttpLlmBackend()
+    const registry = await backend.createAgentRegistry({})
+
+    expect(registry.get("echo")).toBeDefined()
+    expect(registry.get("web_search")).toBeDefined()
+  })
+
+  it("merges MCP tools when mcpDeps are provided", async () => {
+    const mcpTool = {
+      name: "mcp:fs:read_file",
+      description: "Read a file from disk",
+      inputSchema: { type: "object", properties: { path: { type: "string" } } },
+      execute: vi.fn().mockResolvedValue("file contents"),
+    }
+
+    const mockRouter = {
+      resolveAll: vi.fn().mockResolvedValue([mcpTool]),
+    } as unknown as McpToolRouter
+
+    const mcpDeps: McpDeps = {
+      mcpRouter: mockRouter,
+      agentId: "agent-mcp-1",
+      allowedTools: ["mcp:fs:*"],
+      deniedTools: [],
+    }
+
+    const backend = new HttpLlmBackend()
+    const registry = await backend.createAgentRegistry({}, mcpDeps)
+
+    expect(registry.get("echo")).toBeDefined()
+    expect(registry.get("mcp:fs:read_file")).toBeDefined()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(mockRouter.resolveAll).toHaveBeenCalledWith("agent-mcp-1", ["mcp:fs:*"], [])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// End-to-end: MCP tool invocation through agentic loop
+// ---------------------------------------------------------------------------
+
+describe("HttpLlmBackend — MCP tool e2e (Anthropic)", () => {
+  it("executes an MCP tool through the agentic loop and streams results", async () => {
+    // Create an MCP tool definition
+    const mcpExecute = vi.fn().mockResolvedValue("search result: 42 items found")
+    const mcpTool = {
+      name: "mcp:search-srv:web_search",
+      description: "Search the web via MCP",
+      inputSchema: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+      },
+      execute: mcpExecute,
+    }
+
+    const mockRouter = {
+      resolveAll: vi.fn().mockResolvedValue([mcpTool]),
+    } as unknown as McpToolRouter
+
+    const mcpDeps: McpDeps = {
+      mcpRouter: mockRouter,
+      agentId: "agent-e2e",
+      allowedTools: ["mcp:search-srv:*"],
+      deniedTools: [],
+    }
+
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "test-key" })
+
+    // Build a per-agent registry that includes the MCP tool
+    const agentRegistry = await backend.createAgentRegistry({}, mcpDeps)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const client = (backend as any).anthropicClient
+    let callCount = 0
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    vi.spyOn(client.messages, "stream").mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // LLM calls the MCP tool
+        return createMockAnthropicStream({
+          textContent: "Let me search for that. ",
+          toolUseBlocks: [
+            {
+              id: "toolu_mcp_1",
+              name: "mcp:search-srv:web_search",
+              input: { query: "cortex-plane docs" },
+            },
+          ],
+          stopReason: "tool_use",
+          inputTokens: 100,
+          outputTokens: 50,
+        })
+      }
+      // LLM returns final text after tool result
+      return createMockAnthropicStream({
+        textContent: "I found 42 items.",
+        stopReason: "end_turn",
+        inputTokens: 200,
+        outputTokens: 30,
+      })
+    })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        maxTurns: 5,
+        allowedTools: ["mcp:search-srv:web_search"],
+      },
+    })
+
+    // Execute with the MCP-enriched registry
+    const handle = await backend.executeTask(task, agentRegistry)
+    const events = await collectEvents(handle)
+
+    // Verify tool_use event for the MCP tool
+    const toolUseEvents = events.filter((e) => e.type === "tool_use")
+    expect(toolUseEvents).toHaveLength(1)
+    expect(toolUseEvents[0]).toMatchObject({
+      type: "tool_use",
+      toolName: "mcp:search-srv:web_search",
+      toolInput: { query: "cortex-plane docs" },
+    })
+
+    // Verify tool_result event streams through SSE path
+    const toolResultEvents = events.filter((e) => e.type === "tool_result")
+    expect(toolResultEvents).toHaveLength(1)
+    expect(toolResultEvents[0]).toMatchObject({
+      type: "tool_result",
+      toolName: "mcp:search-srv:web_search",
+      output: "search result: 42 items found",
+      isError: false,
+    })
+
+    // Verify the MCP execute function was called with correct args
+    expect(mcpExecute).toHaveBeenCalledWith({ query: "cortex-plane docs" })
+
+    // Verify usage accumulation
+    const usageEvents = events.filter((e) => e.type === "usage")
+    expect(usageEvents).toHaveLength(1)
+    expect(usageEvents[0]).toMatchObject({
+      type: "usage",
+      tokenUsage: {
+        inputTokens: 300,
+        outputTokens: 80,
+      },
+    })
+
+    // Verify final result
+    const result = await handle.result()
+    expect(result.status).toBe("completed")
+    expect(result.stdout).toContain("Let me search for that.")
+    expect(result.stdout).toContain("I found 42 items.")
+
+    // LLM was called exactly twice (tool call + final)
+    expect(callCount).toBe(2)
+  })
+
+  it("handles MCP tool execution errors gracefully", async () => {
+    const mcpTool = {
+      name: "mcp:broken:failing_tool",
+      description: "A broken MCP tool",
+      inputSchema: { type: "object", properties: {} },
+      execute: vi.fn().mockRejectedValue(new Error("MCP server unreachable")),
+    }
+
+    const mockRouter = {
+      resolveAll: vi.fn().mockResolvedValue([mcpTool]),
+    } as unknown as McpToolRouter
+
+    const mcpDeps: McpDeps = {
+      mcpRouter: mockRouter,
+      agentId: "agent-err",
+      allowedTools: ["mcp:broken:*"],
+      deniedTools: [],
+    }
+
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "test-key" })
+
+    const agentRegistry = await backend.createAgentRegistry({}, mcpDeps)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const client = (backend as any).anthropicClient
+    let callCount = 0
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    vi.spyOn(client.messages, "stream").mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return createMockAnthropicStream({
+          textContent: "",
+          toolUseBlocks: [{ id: "toolu_fail", name: "mcp:broken:failing_tool", input: {} }],
+          stopReason: "tool_use",
+        })
+      }
+      return createMockAnthropicStream({
+        textContent: "The tool failed, but I can continue.",
+        stopReason: "end_turn",
+      })
+    })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        maxTurns: 5,
+        allowedTools: ["mcp:broken:failing_tool"],
+      },
+    })
+
+    const handle = await backend.executeTask(task, agentRegistry)
+    const events = await collectEvents(handle)
+
+    // The tool result should indicate an error
+    const toolResultEvents = events.filter((e) => e.type === "tool_result")
+    expect(toolResultEvents).toHaveLength(1)
+    expect(toolResultEvents[0]).toMatchObject({
+      toolName: "mcp:broken:failing_tool",
+      output: "MCP server unreachable",
+      isError: true,
+    })
+
+    // The loop should still complete successfully
+    const result = await handle.result()
+    expect(result.status).toBe("completed")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Backward compatibility: agents without MCP
+// ---------------------------------------------------------------------------
+
+describe("HttpLlmBackend — backward compatibility (no MCP)", () => {
+  it("createAgentRegistry without mcpDeps preserves existing behavior", async () => {
+    const backend = new HttpLlmBackend()
+    const registry = await backend.createAgentRegistry({
+      tools: [
+        {
+          name: "webhook_tool",
+          description: "A webhook",
+          inputSchema: { type: "object", properties: {} },
+          webhook: { url: "https://example.com/hook" },
+        },
+      ],
+    })
+
+    // Should have built-in tools
+    expect(registry.get("echo")).toBeDefined()
+    // Should have webhook tool
+    expect(registry.get("webhook_tool")).toBeDefined()
+    // Should NOT have any MCP tools
+    expect(registry.get("mcp:any:tool")).toBeUndefined()
   })
 })
