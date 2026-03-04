@@ -326,6 +326,82 @@ export class AgentLifecycleManager {
   }
 
   // -------------------------------------------------------------------------
+  // quarantine: EXECUTING → QUARANTINED
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quarantine an agent after repeated failures or budget violations.
+   * Transitions the lifecycle to QUARANTINED, sets the DB status to
+   * QUARANTINED, and cancels the running job (if any).
+   */
+  async quarantine(agentId: string, reason: string): Promise<void> {
+    const ctx = this.agents.get(agentId)
+    if (ctx && ctx.stateMachine.state === "EXECUTING") {
+      ctx.stateMachine.transition("QUARANTINED", reason)
+    }
+
+    // Persist QUARANTINED status in the agent table
+    await this.db
+      .updateTable("agent")
+      .set({ status: "QUARANTINED" })
+      .where("id", "=", agentId)
+      .execute()
+
+    // Cancel the running job if one exists
+    if (ctx) {
+      await this.db
+        .updateTable("job")
+        .set({
+          status: "FAILED",
+          error: { category: "QUARANTINED", message: reason },
+          completed_at: new Date(),
+        })
+        .where("id", "=", ctx.jobId)
+        .where("status", "=", "RUNNING")
+        .execute()
+    }
+
+    // Emit lifecycle event
+    if (this.onLifecycleEvent) {
+      this.onLifecycleEvent({
+        from: "EXECUTING",
+        to: "QUARANTINED",
+        timestamp: new Date(),
+        agentId,
+        reason,
+      })
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // release: QUARANTINED → DRAINING (triggers re-boot cycle)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Release a quarantined agent. Transitions QUARANTINED → DRAINING so
+   * the normal drain → terminate → re-boot cycle can proceed.
+   * Restores the DB agent status to ACTIVE.
+   */
+  async release(agentId: string, resetCircuitBreaker?: boolean): Promise<void> {
+    const ctx = this.agents.get(agentId)
+    if (ctx && ctx.stateMachine.state === "QUARANTINED") {
+      ctx.stateMachine.transition("DRAINING", "Released from quarantine")
+    }
+
+    // Restore DB status
+    await this.db
+      .updateTable("agent")
+      .set({ status: "ACTIVE" })
+      .where("id", "=", agentId)
+      .where("status", "=", "QUARANTINED")
+      .execute()
+
+    if (resetCircuitBreaker) {
+      this.crashDetector.resetCrashes(agentId)
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Steering: mid-execution message injection
   // -------------------------------------------------------------------------
 

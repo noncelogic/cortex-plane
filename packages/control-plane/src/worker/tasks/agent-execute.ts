@@ -25,6 +25,8 @@ import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { Database, Job } from "../../db/types.js"
+import { AgentCircuitBreaker } from "../../lifecycle/agent-circuit-breaker.js"
+import type { AgentLifecycleManager } from "../../lifecycle/manager.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
@@ -47,6 +49,8 @@ export interface AgentExecuteDeps {
   skillIndex?: import("@cortex/shared/skills").SkillIndex
   /** Optional MCP tool router for resolving MCP tools into agent registries. */
   mcpToolRouter?: McpToolRouter
+  /** Optional lifecycle manager for quarantine transitions. */
+  lifecycleManager?: AgentLifecycleManager
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -68,6 +72,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     memoryExtractThreshold = 50,
     skillIndex,
     mcpToolRouter,
+    lifecycleManager,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -109,6 +114,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
       // Start heartbeat writer (updates heartbeat_at every 30s)
       const heartbeat = startHeartbeat(jobId, db)
 
+      let agentCB: AgentCircuitBreaker | undefined
+      let loadedAgentId: string | undefined
+
       try {
         // ── Step 1: Load agent definition ──
         const agent = await db
@@ -126,6 +134,25 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         }
 
         rootSpan.setAttribute(CortexAttributes.AGENT_NAME, agent.name)
+
+        // ── Step 1b: Instantiate agent circuit breaker ──
+        loadedAgentId = agent.id
+        const cbConfig =
+          typeof agent.resource_limits.circuitBreaker === "object" &&
+          agent.resource_limits.circuitBreaker !== null
+            ? (agent.resource_limits.circuitBreaker as Partial<
+                import("../../lifecycle/agent-circuit-breaker.js").AgentCircuitBreakerConfig
+              >)
+            : undefined
+        agentCB = new AgentCircuitBreaker(cbConfig)
+
+        // ── Step 1c: Pre-dispatch quarantine check ──
+        if (agentCB.shouldQuarantine()) {
+          rootSpan.addEvent("agent_quarantined_pre_dispatch")
+          throw new Error(
+            `Agent ${agent.name} is quarantined: ${agentCB.failureCount} consecutive failures`,
+          )
+        }
 
         // ── Step 2: Check approval gate ──
         const agentConfig = agent.model_config
@@ -270,6 +297,33 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 streamManager.broadcast(agent.id, "agent:output", ssePayload)
               }
 
+              // ── Circuit breaker: token budget enforcement ──
+              if (event.type === "usage") {
+                const withinBudget = agentCB.recordTokenUsage(event.tokenUsage)
+                if (!withinBudget) {
+                  rootSpan.addEvent("token_budget_exceeded")
+                  void handle.cancel("token_budget_exceeded")
+                }
+              }
+
+              // ── Circuit breaker: tool call rate limiting ──
+              if (event.type === "tool_use") {
+                const withinLimit = agentCB.recordToolCall()
+                if (!withinLimit) {
+                  rootSpan.addEvent("tool_call_rate_exceeded")
+                  void handle.cancel("tool_call_rate_exceeded")
+                }
+              }
+
+              // ── Circuit breaker: LLM call rate limiting ──
+              if (event.type === "text") {
+                const withinLimit = agentCB.recordLlmCall()
+                if (!withinLimit) {
+                  rootSpan.addEvent("llm_call_rate_exceeded")
+                  void handle.cancel("llm_call_rate_exceeded")
+                }
+              }
+
               if (job.session_id && event.type === "text" && event.content.trim().length > 0) {
                 await memoryScheduler
                   .recordMessage(
@@ -297,6 +351,18 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           // ── Step 11: Record outcome for circuit breaker ──
           const success = result.status === "completed"
           registry.recordOutcome(providerId, success, result.error?.classification)
+
+          // ── Step 11b: Agent circuit breaker outcome ──
+          if (success) {
+            agentCB.recordJobSuccess()
+          } else {
+            agentCB.recordJobFailure()
+            if (agentCB.shouldQuarantine() && lifecycleManager) {
+              const reason = `${agentCB.failureCount} consecutive job failures`
+              rootSpan.addEvent("agent_quarantined", { "cortex.quarantine.reason": reason })
+              await lifecycleManager.quarantine(agent.id, reason)
+            }
+          }
 
           rootSpan.setAttribute(CortexAttributes.EXECUTION_STATUS, result.status)
           rootSpan.setAttribute(CortexAttributes.EXECUTION_DURATION_MS, result.durationMs)
@@ -403,6 +469,16 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             .where("id", "=", jobId)
             .where("status", "=", "RUNNING")
             .execute()
+        }
+
+        // ── Agent circuit breaker: record failure and check quarantine ──
+        if (agentCB && loadedAgentId) {
+          agentCB.recordJobFailure()
+          if (agentCB.shouldQuarantine() && lifecycleManager) {
+            const reason = `${agentCB.failureCount} consecutive job failures`
+            rootSpan.addEvent("agent_quarantined", { "cortex.quarantine.reason": reason })
+            await lifecycleManager.quarantine(loadedAgentId, reason)
+          }
         }
 
         throw err // re-throw so withSpan marks the span as errored

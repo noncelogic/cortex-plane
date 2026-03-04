@@ -28,6 +28,11 @@ export {
 } from "./hydration.js"
 export { DEFAULT_IDLE_TIMEOUT_MS, IdleDetector, type IdleDetectorOptions } from "./idle-detector.js"
 export {
+  AgentCircuitBreaker,
+  type AgentCircuitBreakerConfig,
+  DEFAULT_AGENT_CB_CONFIG,
+} from "./agent-circuit-breaker.js"
+export {
   type AgentContext,
   AgentLifecycleManager,
   type LifecycleManagerDeps,
