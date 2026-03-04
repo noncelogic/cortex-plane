@@ -734,6 +734,7 @@ describe("HttpLlmBackend — createAgentRegistry()", () => {
 
     expect(registry.get("echo")).toBeDefined()
     expect(registry.get("mcp:fs:read_file")).toBeDefined()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(mockRouter.resolveAll).toHaveBeenCalledWith("agent-mcp-1", ["mcp:fs:*"], [])
   })
 })

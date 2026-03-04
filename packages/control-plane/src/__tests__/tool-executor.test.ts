@@ -169,6 +169,7 @@ describe("createAgentToolRegistry", () => {
     )
 
     expect(registry.get("mcp:test-srv:search")).toBeDefined()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(mockRouter.resolveAll).toHaveBeenCalledWith("agent-1", ["mcp:test-srv:*"], [])
   })
 
@@ -179,6 +180,7 @@ describe("createAgentToolRegistry", () => {
 
     await createAgentToolRegistry({}, { mcpRouter: mockRouter, allowedTools: [], deniedTools: [] })
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(mockRouter.resolveAll).not.toHaveBeenCalled()
   })
 

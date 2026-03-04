@@ -43,7 +43,7 @@ export class HttpMcpClientPool implements McpClientPool {
       throw new Error(`MCP server "${serverSlug}" not found or not active`)
     }
 
-    const connection = server.connection as Record<string, unknown>
+    const connection = server.connection
     const url = connection.url as string | undefined
 
     if (!url) {
