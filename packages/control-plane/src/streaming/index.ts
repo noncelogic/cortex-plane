@@ -19,6 +19,8 @@ export type {
   SSEEvent,
   SSEEventType,
   SteerAckPayload,
+  SteerAcknowledgedPayload,
+  SteerInjectedPayload,
   SteerRequest,
 } from "./types.js"
 export { DEFAULT_BUFFER_CONFIG } from "./types.js"

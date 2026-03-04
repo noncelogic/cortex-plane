@@ -56,11 +56,23 @@ export interface SteerMessage {
   id: string
   agentId: string
   message: string
-  priority: "normal" | "high"
+  priority: "normal" | "urgent"
   timestamp: Date
 }
 
 export type SteerListener = (msg: SteerMessage) => void
+
+/** Internal pending steer entry with acknowledgment callback. */
+interface PendingSteer {
+  msg: SteerMessage
+  resolve: (ack: { incorporatedAtTurn: number }) => void
+}
+
+/** Result returned from steerAndWait(). */
+export interface SteerAckResult {
+  acknowledged: boolean
+  incorporatedAtTurn?: number
+}
 
 // ---------------------------------------------------------------------------
 // Manager
@@ -77,6 +89,8 @@ export class AgentLifecycleManager {
   private readonly onLifecycleEvent?: (event: LifecycleTransitionEvent) => void
   /** agentId → listeners for steering messages */
   private readonly steerListeners = new Map<string, Set<SteerListener>>()
+  /** agentId → queue of pending steers awaiting consumption by execution loop */
+  private readonly pendingSteers = new Map<string, PendingSteer[]>()
 
   constructor(deps: LifecycleManagerDeps) {
     this.db = deps.db
@@ -371,6 +385,84 @@ export class AgentLifecycleManager {
     }
   }
 
+  /**
+   * Inject a steering message and wait for the execution loop to consume it.
+   * Returns after the steer is acknowledged or after `timeoutMs` elapses.
+   */
+  steerAndWait(msg: SteerMessage, timeoutMs = 30_000): Promise<SteerAckResult> {
+    const ctx = this.requireContext(msg.agentId)
+
+    if (ctx.stateMachine.state !== "EXECUTING") {
+      throw new Error(
+        `Cannot steer agent ${msg.agentId}: not in EXECUTING state (current: ${ctx.stateMachine.state})`,
+      )
+    }
+
+    this.idleDetector.recordActivity(msg.agentId)
+
+    // Notify legacy listeners
+    const listeners = this.steerListeners.get(msg.agentId)
+    if (listeners) {
+      for (const listener of listeners) {
+        listener(msg)
+      }
+    }
+
+    // Enqueue for execution loop consumption with a Promise-based ack
+    return new Promise<SteerAckResult>((resolve) => {
+      if (!this.pendingSteers.has(msg.agentId)) {
+        this.pendingSteers.set(msg.agentId, [])
+      }
+
+      const timer = setTimeout(() => {
+        // Timeout: remove from queue and resolve as unacknowledged
+        const queue = this.pendingSteers.get(msg.agentId)
+        if (queue) {
+          const idx = queue.findIndex((p) => p.msg.id === msg.id)
+          if (idx !== -1) {
+            queue.splice(idx, 1)
+          }
+        }
+        resolve({ acknowledged: false })
+      }, timeoutMs)
+
+      this.pendingSteers.get(msg.agentId)!.push({
+        msg,
+        resolve: (ack) => {
+          clearTimeout(timer)
+          resolve({ acknowledged: true, incorporatedAtTurn: ack.incorporatedAtTurn })
+        },
+      })
+    })
+  }
+
+  /**
+   * Drain all pending steer messages for an agent.
+   * Called by the execution loop before each LLM turn.
+   * Returns the drained messages; callers must call `acknowledgeSteer()` after consumption.
+   */
+  drainPendingSteers(agentId: string): SteerMessage[] {
+    const queue = this.pendingSteers.get(agentId)
+    if (!queue || queue.length === 0) return []
+    return queue.map((p) => p.msg)
+  }
+
+  /**
+   * Acknowledge that a steer message has been consumed by the execution loop.
+   * Resolves the Promise returned by `steerAndWait()`.
+   */
+  acknowledgeSteer(agentId: string, steerMessageId: string, turnNumber: number): void {
+    const queue = this.pendingSteers.get(agentId)
+    if (!queue) return
+    const idx = queue.findIndex((p) => p.msg.id === steerMessageId)
+    if (idx !== -1) {
+      const entry = queue.splice(idx, 1)[0]
+      if (entry) {
+        entry.resolve({ incorporatedAtTurn: turnNumber })
+      }
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Heartbeat handling
   // -------------------------------------------------------------------------
@@ -429,5 +521,6 @@ export class AgentLifecycleManager {
     this.idleDetector.removeAgent(agentId)
     this.heartbeatReceiver.removeAgent(agentId)
     this.steerListeners.delete(agentId)
+    this.pendingSteers.delete(agentId)
   }
 }

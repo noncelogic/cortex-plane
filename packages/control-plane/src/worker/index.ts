@@ -16,6 +16,7 @@ import type { Kysely } from "kysely"
 import type { Pool } from "pg"
 
 import type { Database } from "../db/types.js"
+import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
@@ -34,6 +35,8 @@ export interface WorkerOptions {
   concurrency?: number
   /** Optional MCP tool router for resolving MCP tools in agent registries. */
   mcpToolRouter?: McpToolRouter
+  /** Optional lifecycle manager for steer consumption during execution. */
+  lifecycleManager?: AgentLifecycleManager
 }
 
 /**
@@ -50,6 +53,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     memoryExtractThreshold,
     concurrency,
     mcpToolRouter,
+    lifecycleManager,
   } = options
 
   const workerConcurrency =
@@ -63,6 +67,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
       sessionBufferFactory,
       memoryExtractThreshold,
       mcpToolRouter,
+      lifecycleManager,
     }),
     memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),

@@ -29,8 +29,8 @@ interface StreamParams {
 }
 
 interface SteerBody {
-  message: string
-  priority?: "normal" | "high"
+  instruction: string
+  priority?: "normal" | "urgent"
 }
 
 // ---------------------------------------------------------------------------
@@ -134,10 +134,10 @@ export function streamRoutes(deps: StreamRouteDeps) {
           body: {
             type: "object",
             properties: {
-              message: { type: "string", minLength: 1, maxLength: 10_000 },
-              priority: { type: "string", enum: ["normal", "high"] },
+              instruction: { type: "string", minLength: 1, maxLength: 10_000 },
+              priority: { type: "string", enum: ["normal", "urgent"] },
             },
-            required: ["message"],
+            required: ["instruction"],
           },
         },
       },
@@ -146,16 +146,26 @@ export function streamRoutes(deps: StreamRouteDeps) {
         reply: FastifyReply,
       ) => {
         const { agentId } = request.params
-        const { message, priority } = request.body
+        const { instruction, priority } = request.body
         const authContext = (request as AuthenticatedRequest).authContext
 
-        const steerMessageId = randomUUID()
+        const steerEventId = randomUUID()
         const steerPriority = priority ?? "normal"
 
         request.log.info(
-          { agentId, steerMessageId, priority: steerPriority, sessionId: authContext.sessionId },
+          { agentId, steerEventId, priority: steerPriority, sessionId: authContext.sessionId },
           "Steering message received",
         )
+
+        // Emit steer_injected event with operator user ID
+        sseManager.broadcast(agentId, "steer:injected", {
+          agentId,
+          steerEventId,
+          instruction,
+          priority: steerPriority,
+          operatorUserId: authContext.userAccountId,
+          timestamp: new Date().toISOString(),
+        })
 
         // Route the steering message through the lifecycle manager (if available)
         if (lifecycleManager) {
@@ -175,12 +185,22 @@ export function streamRoutes(deps: StreamRouteDeps) {
           }
 
           try {
-            lifecycleManager.steer({
-              id: steerMessageId,
-              agentId,
-              message,
-              priority: steerPriority,
-              timestamp: new Date(),
+            // Await acknowledgment from the execution loop (30s timeout)
+            const ackResult = await lifecycleManager.steerAndWait(
+              {
+                id: steerEventId,
+                agentId,
+                message: instruction,
+                priority: steerPriority,
+                timestamp: new Date(),
+              },
+              30_000,
+            )
+
+            return reply.status(200).send({
+              steerEventId,
+              acknowledged: ackResult.acknowledged,
+              incorporatedAtTurn: ackResult.incorporatedAtTurn,
             })
           } catch (error) {
             return reply.status(409).send({
@@ -191,31 +211,10 @@ export function streamRoutes(deps: StreamRouteDeps) {
           }
         }
 
-        // Broadcast steer acknowledgment to SSE clients
-        sseManager.broadcast(agentId, "steer:ack", {
-          agentId,
-          steerMessageId,
-          timestamp: new Date().toISOString(),
-          status: "accepted",
-        })
-
-        // Broadcast the steering message as an agent output event
-        // so all connected clients see the injection
-        sseManager.broadcast(agentId, "agent:output", {
-          agentId,
-          timestamp: new Date().toISOString(),
-          output: {
-            type: "text",
-            timestamp: new Date().toISOString(),
-            content: `[STEER] ${message}`,
-          },
-        })
-
-        return reply.status(202).send({
-          steerMessageId,
-          status: "accepted",
-          agentId,
-          priority: steerPriority,
+        // No lifecycle manager — return immediately without acknowledgment
+        return reply.status(200).send({
+          steerEventId,
+          acknowledged: false,
         })
       },
     )

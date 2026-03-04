@@ -25,9 +25,10 @@ import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { Database, Job } from "../../db/types.js"
+import type { AgentLifecycleManager } from "../../lifecycle/manager.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
-import type { AgentOutputPayload } from "../../streaming/types.js"
+import type { AgentOutputPayload, SteerAcknowledgedPayload } from "../../streaming/types.js"
 import { classifyError } from "../error-classifier.js"
 import { startHeartbeat } from "../heartbeat.js"
 import { createMemoryScheduler } from "../memory-scheduler.js"
@@ -47,6 +48,8 @@ export interface AgentExecuteDeps {
   skillIndex?: import("@cortex/shared/skills").SkillIndex
   /** Optional MCP tool router for resolving MCP tools into agent registries. */
   mcpToolRouter?: McpToolRouter
+  /** Optional lifecycle manager for steer consumption during execution. */
+  lifecycleManager?: AgentLifecycleManager
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -68,6 +71,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     memoryExtractThreshold = 50,
     skillIndex,
     mcpToolRouter,
+    lifecycleManager,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -252,9 +256,53 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
           // ── Step 9: Stream events ──
           const cancelChecker = startCancelChecker(db, jobId, handle)
+          let turnNumber = 0
 
           try {
             for await (const event of handle.events()) {
+              // Track LLM turns (each text event = one LLM response turn)
+              if (event.type === "text") {
+                turnNumber++
+              }
+
+              // Before processing each event, drain pending steer messages
+              if (lifecycleManager) {
+                const pendingSteers = lifecycleManager.drainPendingSteers(agent.id)
+                for (const steerMsg of pendingSteers) {
+                  const currentTurn = turnNumber
+
+                  // Format the instruction based on priority
+                  const prefix =
+                    steerMsg.priority === "urgent" ? "[URGENT OPERATOR INSTRUCTION]" : "[STEER]"
+                  const steerContent = `${prefix} ${steerMsg.message}`
+
+                  // Broadcast the steer as an agent output event
+                  if (streamManager) {
+                    streamManager.broadcast(agent.id, "agent:output", {
+                      agentId: agent.id,
+                      timestamp: new Date().toISOString(),
+                      output: {
+                        type: "text",
+                        timestamp: new Date().toISOString(),
+                        content: steerContent,
+                      },
+                    })
+
+                    // Emit steer:acknowledged event
+                    const ackPayload: SteerAcknowledgedPayload = {
+                      agentId: agent.id,
+                      steerEventId: steerMsg.id,
+                      incorporatedAtTurn: currentTurn,
+                      timestamp: new Date().toISOString(),
+                    }
+                    streamManager.broadcast(agent.id, "steer:acknowledged", ackPayload)
+                  }
+
+                  // Resolve the steerAndWait() Promise
+                  lifecycleManager.acknowledgeSteer(agent.id, steerMsg.id, currentTurn)
+                }
+              }
+
               // Write to JSONL session buffer
               if (bufferWriter) {
                 writeEventToBuffer(bufferWriter, event, jobId, job.session_id ?? "", agent.id)

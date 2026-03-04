@@ -18,6 +18,8 @@ export type SSEEventType =
   | "agent:error"
   | "agent:complete"
   | "steer:ack"
+  | "steer:injected"
+  | "steer:acknowledged"
   | "heartbeat"
   | "approval:created"
   | "approval:decided"
@@ -78,9 +80,9 @@ export interface AgentCompletePayload {
 
 export interface SteerRequest {
   /** Natural language instruction to inject. */
-  message: string
-  /** Optional priority hint. Higher = more urgent. */
-  priority?: "normal" | "high"
+  instruction: string
+  /** Optional priority hint. */
+  priority?: "normal" | "urgent"
 }
 
 export interface SteerAckPayload {
@@ -89,6 +91,22 @@ export interface SteerAckPayload {
   timestamp: string
   status: "accepted" | "rejected"
   reason?: string
+}
+
+export interface SteerInjectedPayload {
+  agentId: string
+  steerEventId: string
+  instruction: string
+  priority: "normal" | "urgent"
+  operatorUserId: string
+  timestamp: string
+}
+
+export interface SteerAcknowledgedPayload {
+  agentId: string
+  steerEventId: string
+  incorporatedAtTurn: number
+  timestamp: string
 }
 
 // ---------------------------------------------------------------------------
