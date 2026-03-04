@@ -484,6 +484,57 @@ export type NewMcpServer = Insertable<McpServerTable>
 export type McpServerUpdate = Updateable<McpServerTable>
 
 // ---------------------------------------------------------------------------
+// Enum: agent_event_type
+// ---------------------------------------------------------------------------
+export type AgentEventType =
+  | "llm_call_start"
+  | "llm_call_end"
+  | "tool_call_start"
+  | "tool_call_end"
+  | "tool_denied"
+  | "tool_rate_limited"
+  | "message_received"
+  | "message_sent"
+  | "state_transition"
+  | "circuit_breaker_trip"
+  | "cost_alert"
+  | "steer_injected"
+  | "steer_acknowledged"
+  | "kill_requested"
+  | "checkpoint_created"
+  | "error"
+  | "session_start"
+  | "session_end"
+
+// ---------------------------------------------------------------------------
+// Table: agent_event
+// ---------------------------------------------------------------------------
+export interface AgentEventTable {
+  id: Generated<string>
+  agent_id: string
+  session_id: string | null
+  job_id: string | null
+  parent_event_id: string | null
+  event_type: AgentEventType
+  payload: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  tokens_in: number | null
+  tokens_out: number | null
+  cost_usd: string | null
+  duration_ms: number | null
+  model: string | null
+  tool_ref: string | null
+  actor: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AgentEvent = Selectable<AgentEventTable>
+export type NewAgentEvent = Insertable<AgentEventTable>
+
+// ---------------------------------------------------------------------------
 // Table: mcp_server_tool
 // ---------------------------------------------------------------------------
 export interface McpServerToolTable {
@@ -534,4 +585,5 @@ export interface Database {
   agent_credential_binding: AgentCredentialBindingTable
   mcp_server: McpServerTable
   mcp_server_tool: McpServerToolTable
+  agent_event: AgentEventTable
 }

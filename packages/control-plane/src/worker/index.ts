@@ -23,6 +23,7 @@ import { createApprovalExpireTask } from "./tasks/approval-expire.js"
 import { createCorrectionStrengthenTask } from "./tasks/correction-strengthen.js"
 import { createMemoryExtractTask } from "./tasks/memory-extract.js"
 import { createProactiveDetectTask } from "./tasks/proactive-detect.js"
+import { createPruneAgentEventsTask } from "./tasks/prune-agent-events.js"
 
 export interface WorkerOptions {
   pgPool: Pool
@@ -68,6 +69,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     approval_expire: createApprovalExpireTask(db),
     correction_strengthen: createCorrectionStrengthenTask(),
     proactive_detect: createProactiveDetectTask(),
+    prune_agent_events: createPruneAgentEventsTask(db),
   }
 
   const runner = await run({
@@ -78,6 +80,8 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     crontab: [
       // Expire stale approval requests every 60 seconds
       "* * * * * approval_expire ?max=1",
+      // Prune old agent events daily at 03:00 UTC
+      "0 3 * * * prune_agent_events ?max=1",
     ].join("\n"),
   })
 
