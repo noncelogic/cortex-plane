@@ -35,6 +35,17 @@ export {
   type SteerMessage,
 } from "./manager.js"
 export {
+  checkpointWritesTotal,
+  circuitBreakerTripsTotal,
+  contextBudgetExceededTotal,
+  healthProbeDurationSeconds,
+  outputValidationRejectedTotal,
+  quarantineDurationSeconds,
+  resetAllMetrics,
+  stateTransitionsTotal,
+  tokenUsageTotal,
+} from "./metrics.js"
+export {
   type AgentLifecycleState,
   AgentLifecycleStateMachine,
   assertValidTransition,

@@ -25,6 +25,7 @@ import type { AgentDeploymentConfig } from "../k8s/types.js"
 import { type AgentHeartbeat, CrashLoopDetector, HeartbeatReceiver } from "./health.js"
 import { hydrateAgent, type HydrationResult, type QdrantClient } from "./hydration.js"
 import { IdleDetector } from "./idle-detector.js"
+import { stateTransitionsTotal } from "./metrics.js"
 import {
   type AgentLifecycleState,
   AgentLifecycleStateMachine,
@@ -61,6 +62,23 @@ export interface SteerMessage {
 }
 
 export type SteerListener = (msg: SteerMessage) => void
+
+// ---------------------------------------------------------------------------
+// Structured lifecycle log
+// ---------------------------------------------------------------------------
+
+function emitLifecycleLog(event: LifecycleTransitionEvent, jobId?: string): void {
+  const entry: Record<string, unknown> = {
+    event: "lifecycle.transition",
+    agentId: event.agentId,
+    from: event.from,
+    to: event.to,
+    timestamp: event.timestamp.toISOString(),
+  }
+  if (jobId) entry.jobId = jobId
+  if (event.reason) entry.reason = event.reason
+  process.stdout.write(JSON.stringify(entry) + "\n")
+}
 
 // ---------------------------------------------------------------------------
 // Manager
@@ -114,6 +132,13 @@ export class AgentLifecycleManager {
     }
 
     const sm = new AgentLifecycleStateMachine(agentId)
+
+    // Observability listener: metrics counter + structured log
+    sm.onTransition((event) => {
+      stateTransitionsTotal.inc({ agent_id: event.agentId, from: event.from, to: event.to })
+      emitLifecycleLog(event, jobId)
+    })
+
     if (this.onLifecycleEvent) {
       sm.onTransition(this.onLifecycleEvent)
     }
