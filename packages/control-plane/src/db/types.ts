@@ -512,6 +512,72 @@ export type NewMcpServerTool = Insertable<McpServerToolTable>
 export type McpServerToolUpdate = Updateable<McpServerToolTable>
 
 // ---------------------------------------------------------------------------
+// Enum: tool_approval_policy
+// ---------------------------------------------------------------------------
+export type ToolApprovalPolicy = "auto" | "always_approve" | "conditional"
+
+// ---------------------------------------------------------------------------
+// Table: agent_tool_binding
+// ---------------------------------------------------------------------------
+export interface AgentToolBindingTable {
+  id: Generated<string>
+  agent_id: string
+  tool_ref: string
+  approval_policy: ColumnType<
+    ToolApprovalPolicy,
+    ToolApprovalPolicy | undefined,
+    ToolApprovalPolicy
+  >
+  approval_condition: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  rate_limit: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  cost_budget: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  data_scope: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  enabled: ColumnType<boolean, boolean | undefined, boolean>
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type AgentToolBinding = Selectable<AgentToolBindingTable>
+export type NewAgentToolBinding = Insertable<AgentToolBindingTable>
+export type AgentToolBindingUpdate = Updateable<AgentToolBindingTable>
+
+// ---------------------------------------------------------------------------
+// Table: capability_audit_log
+// ---------------------------------------------------------------------------
+export interface CapabilityAuditLogTable {
+  id: Generated<string>
+  agent_id: string
+  tool_ref: string
+  event_type: string
+  actor_user_id: string | null
+  details: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type CapabilityAuditLog = Selectable<CapabilityAuditLogTable>
+export type NewCapabilityAuditLog = Insertable<CapabilityAuditLogTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -534,4 +600,6 @@ export interface Database {
   agent_credential_binding: AgentCredentialBindingTable
   mcp_server: McpServerTable
   mcp_server_tool: McpServerToolTable
+  agent_tool_binding: AgentToolBindingTable
+  capability_audit_log: CapabilityAuditLogTable
 }

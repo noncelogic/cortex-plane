@@ -27,6 +27,7 @@ import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentCredentialRoutes } from "./routes/agent-credentials.js"
+import { agentToolBindingRoutes } from "./routes/agent-tool-bindings.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { authRoutes } from "./routes/auth.js"
@@ -205,6 +206,15 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Register agent credential binding routes
   await app.register(
     agentCredentialRoutes({
+      db,
+      authConfig,
+      sessionService,
+    }),
+  )
+
+  // Register agent tool binding routes
+  await app.register(
+    agentToolBindingRoutes({
       db,
       authConfig,
       sessionService,
