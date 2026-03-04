@@ -188,7 +188,7 @@ export class HttpLlmBackend implements ExecutionBackend {
    * Includes all built-in tools plus any custom webhook tools defined
    * in agentConfig.tools.
    */
-  createAgentRegistry(agentConfig: Record<string, unknown>): ToolRegistry {
+  async createAgentRegistry(agentConfig: Record<string, unknown>): Promise<ToolRegistry> {
     return createAgentToolRegistry(agentConfig)
   }
 

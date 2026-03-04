@@ -370,7 +370,7 @@ function deriveOverallStatus(reports: McpServerHealthReport[]): "ok" | "degraded
  * This serves as both liveness (can we connect?) and readiness (does it respond?).
  */
 async function defaultProbeFn(server: McpServer): Promise<void> {
-  const connection = server.connection as Record<string, unknown>
+  const connection = server.connection
   const url = connection.url as string | undefined
 
   if (!url) {

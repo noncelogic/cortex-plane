@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
-  McpHealthSupervisor,
   circuitStateToMcpStatus,
+  McpHealthSupervisor,
   type McpHealthSupervisorDeps,
   type ProbeFn,
 } from "../mcp/health-supervisor.js"
