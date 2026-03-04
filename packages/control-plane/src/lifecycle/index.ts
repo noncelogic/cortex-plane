@@ -26,6 +26,15 @@ export {
   type QdrantClient,
   type QdrantContext,
 } from "./hydration.js"
+export {
+  truncateComponent,
+  validateContextBudget,
+  type BudgetResult,
+  type ComponentBudget,
+  type ContextBudgetConfig,
+  type ContextComponents,
+} from "./context-budget.js"
+export { DEFAULT_CONTEXT_BUDGET } from "./defaults.js"
 export { DEFAULT_IDLE_TIMEOUT_MS, IdleDetector, type IdleDetectorOptions } from "./idle-detector.js"
 export {
   type AgentContext,

@@ -25,6 +25,12 @@ import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { Database, Job } from "../../db/types.js"
+import {
+  truncateComponent,
+  validateContextBudget,
+  type ContextBudgetConfig,
+} from "../../lifecycle/context-budget.js"
+import { DEFAULT_CONTEXT_BUDGET } from "../../lifecycle/defaults.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
@@ -172,6 +178,48 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
         // ── Step 4: Build ExecutionTask (needed for routing) ──
         const task = buildExecutionTask(job, agent, agentConfig, resolvedSkills)
+
+        // ── Step 4a: Context budget enforcement ──
+        const budgetConfig = parseBudgetConfig(agent.resource_limits)
+        const budgetResult = validateContextBudget(
+          {
+            systemPrompt: task.context.systemPrompt,
+            identity: agent.description ?? "",
+            memories: task.context.memories.join("\n"),
+            toolDefinitions: task.context.skillInstructions ?? "",
+          },
+          budgetConfig,
+        )
+
+        if (!budgetResult.valid) {
+          // Total context exceeds budget — refuse to dispatch
+          await db
+            .updateTable("job")
+            .set({
+              status: "FAILED",
+              error: {
+                category: "CONTEXT_BUDGET_EXCEEDED",
+                message: budgetResult.warnings.join("; "),
+              },
+              completed_at: new Date(),
+            })
+            .where("id", "=", jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
+          rootSpan.addEvent("context_budget_exceeded")
+          return
+        }
+
+        // Truncate individual components that exceed their limits
+        for (const [name, comp] of Object.entries(budgetResult.components)) {
+          if (!comp.truncated) continue
+          if (name === "systemPrompt") {
+            task.context.systemPrompt = truncateComponent(
+              task.context.systemPrompt,
+              comp.max,
+            ).result
+          }
+        }
 
         // Inject trace context into task environment for downstream propagation
         const traceHeaders = injectTraceContext()
@@ -636,6 +684,33 @@ function mapOutputEventType(event: OutputEvent): string {
       return "SESSION_END"
     default:
       return "LLM_RESPONSE"
+  }
+}
+
+// ── Helper: parse ContextBudgetConfig from resource_limits ──
+
+function parseBudgetConfig(resourceLimits: Record<string, unknown>): ContextBudgetConfig {
+  const raw =
+    typeof resourceLimits.contextBudget === "object" && resourceLimits.contextBudget !== null
+      ? (resourceLimits.contextBudget as Record<string, unknown>)
+      : {}
+
+  const num = (key: string, fallback: number): number =>
+    typeof raw[key] === "number" ? (raw[key] as number) : fallback
+
+  return {
+    maxSystemPromptChars: num("maxSystemPromptChars", DEFAULT_CONTEXT_BUDGET.maxSystemPromptChars),
+    maxIdentityChars: num("maxIdentityChars", DEFAULT_CONTEXT_BUDGET.maxIdentityChars),
+    maxMemoryChars: num("maxMemoryChars", DEFAULT_CONTEXT_BUDGET.maxMemoryChars),
+    maxToolDefinitionsChars: num(
+      "maxToolDefinitionsChars",
+      DEFAULT_CONTEXT_BUDGET.maxToolDefinitionsChars,
+    ),
+    maxTotalContextChars: num("maxTotalContextChars", DEFAULT_CONTEXT_BUDGET.maxTotalContextChars),
+    reservedForConversation: num(
+      "reservedForConversation",
+      DEFAULT_CONTEXT_BUDGET.reservedForConversation,
+    ),
   }
 }
 
