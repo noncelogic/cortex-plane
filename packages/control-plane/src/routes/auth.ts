@@ -14,7 +14,7 @@ import type { Kysely } from "kysely"
 
 import { discoverAntigravityProject } from "../auth/antigravity-project.js"
 import type { CredentialService } from "../auth/credential-service.js"
-import { getCodePasteProvider } from "../auth/oauth-providers.js"
+import { getCodePasteProvider, getUserServiceProvider } from "../auth/oauth-providers.js"
 import {
   buildAuthorizeUrl,
   decodeOAuthState,
@@ -289,13 +289,18 @@ export function authRoutes(deps: AuthRouteDeps) {
         }
 
         const nonce = crypto.randomUUID()
-        const codeVerifier = generateCodeVerifier()
-        const codeChallenge = generateCodeChallenge(codeVerifier)
+        const userServiceDef = getUserServiceProvider(provider)
+        const usePkce = userServiceDef ? userServiceDef.usePkce : true
+        let codeChallenge: string | undefined
 
-        // Store verifier keyed by nonce (retrieved in callback)
-        pendingPkceVerifiers.set(nonce, codeVerifier)
-        // Expire after 10 minutes
-        setTimeout(() => pendingPkceVerifiers.delete(nonce), 10 * 60 * 1000)
+        if (usePkce) {
+          const codeVerifier = generateCodeVerifier()
+          codeChallenge = generateCodeChallenge(codeVerifier)
+          // Store verifier keyed by nonce (retrieved in callback)
+          pendingPkceVerifiers.set(nonce, codeVerifier)
+          // Expire after 10 minutes
+          setTimeout(() => pendingPkceVerifiers.delete(nonce), 10 * 60 * 1000)
+        }
 
         const state: OAuthState = { nonce, provider, flow: "connect" }
         const encodedState = encodeOAuthState(state, authConfig.credentialMasterKey)
@@ -308,6 +313,7 @@ export function authRoutes(deps: AuthRouteDeps) {
           callbackUrl,
           state: encodedState,
           codeChallenge,
+          scopes: userServiceDef?.defaultScopes,
         })
 
         reply.redirect(authUrl)
@@ -371,7 +377,12 @@ export function authRoutes(deps: AuthRouteDeps) {
             codeVerifier,
           })
 
-          await credentialService.storeOAuthCredential(principal.userId, provider, tokens)
+          // Detect credential class and scopes from user service provider registry
+          const userServiceDef = getUserServiceProvider(provider)
+          await credentialService.storeOAuthCredential(principal.userId, provider, tokens, {
+            credentialClass: userServiceDef?.credentialClass,
+            scopes: userServiceDef?.defaultScopes,
+          })
 
           reply.redirect(`${authConfig.dashboardUrl}/settings?connected=${provider}`)
         } catch (err) {
@@ -564,6 +575,12 @@ function getConnectProviderConfig(
       return authConfig.googleAntigravity
     case "openai-codex":
       return authConfig.openaiCodex
+    case "google-workspace":
+      return authConfig.googleWorkspace
+    case "github-user":
+      return authConfig.githubUser
+    case "slack-user":
+      return authConfig.slackUser
     default:
       return undefined
   }

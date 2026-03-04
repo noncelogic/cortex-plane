@@ -34,6 +34,10 @@ export interface AuthOAuthConfig {
   googleAntigravity?: OAuthProviderConfig
   openaiCodex?: OAuthProviderConfig
   anthropic?: OAuthProviderConfig
+  // User service OAuth providers
+  googleWorkspace?: OAuthProviderConfig
+  githubUser?: OAuthProviderConfig
+  slackUser?: OAuthProviderConfig
 }
 
 export interface ChannelConfig {
@@ -104,6 +108,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       googleAntigravity: parseOAuthProvider(env, "GOOGLE_ANTIGRAVITY"),
       openaiCodex: parseOAuthProvider(env, "OPENAI_CODEX"),
       anthropic: parseOAuthProvider(env, "ANTHROPIC"),
+      // User service OAuth providers
+      googleWorkspace: parseOAuthProvider(env, "GOOGLE_WORKSPACE"),
+      githubUser: parseOAuthProvider(env, "GITHUB_USER"),
+      slackUser: parseOAuthProvider(env, "SLACK"),
     }
   }
 

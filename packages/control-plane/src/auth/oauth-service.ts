@@ -92,6 +92,16 @@ const OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 const ANTHROPIC_AUTH_URL = "https://claude.ai/oauth/authorize"
 const ANTHROPIC_TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
 
+// User service providers
+const GOOGLE_WORKSPACE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+const GOOGLE_WORKSPACE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+const GITHUB_USER_AUTH_URL = "https://github.com/login/oauth/authorize"
+const GITHUB_USER_TOKEN_URL = "https://github.com/login/oauth/access_token"
+
+const SLACK_AUTH_URL = "https://slack.com/oauth/v2/authorize"
+const SLACK_TOKEN_URL = "https://slack.com/api/oauth.v2.access"
+
 export interface OAuthUrls {
   authUrl: string
   tokenUrl: string
@@ -126,6 +136,21 @@ function getProviderUrls(provider: string, config?: OAuthProviderConfig): OAuthU
       return {
         authUrl: config?.authUrl ?? ANTHROPIC_AUTH_URL,
         tokenUrl: config?.tokenUrl ?? ANTHROPIC_TOKEN_URL,
+      }
+    case "google-workspace":
+      return {
+        authUrl: config?.authUrl ?? GOOGLE_WORKSPACE_AUTH_URL,
+        tokenUrl: config?.tokenUrl ?? GOOGLE_WORKSPACE_TOKEN_URL,
+      }
+    case "github-user":
+      return {
+        authUrl: config?.authUrl ?? GITHUB_USER_AUTH_URL,
+        tokenUrl: config?.tokenUrl ?? GITHUB_USER_TOKEN_URL,
+      }
+    case "slack-user":
+      return {
+        authUrl: config?.authUrl ?? SLACK_AUTH_URL,
+        tokenUrl: config?.tokenUrl ?? SLACK_TOKEN_URL,
       }
     default:
       throw new Error(`Unknown OAuth provider: ${provider}`)
@@ -198,6 +223,26 @@ export function buildAuthorizeUrl(params: AuthorizeUrlParams): string {
         url.searchParams.set("code_challenge", codeChallenge)
         url.searchParams.set("code_challenge_method", "S256")
       }
+      break
+    case "google-workspace":
+      url.searchParams.set(
+        "scope",
+        scopes?.join(" ") ??
+          "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+      )
+      url.searchParams.set("access_type", "offline")
+      url.searchParams.set("prompt", "consent")
+      if (codeChallenge) {
+        url.searchParams.set("code_challenge", codeChallenge)
+        url.searchParams.set("code_challenge_method", "S256")
+      }
+      break
+    case "github-user":
+      url.searchParams.set("scope", scopes?.join(" ") ?? "repo read:user user:email")
+      break
+    case "slack-user":
+      // Slack v2 OAuth uses user_scope for user tokens
+      url.searchParams.set("user_scope", scopes?.join(",") ?? "channels:read,chat:write,users:read")
       break
   }
 
@@ -276,7 +321,7 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams): Promis
 
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" }
   // GitHub returns JSON only with Accept header
-  if (provider === "github") {
+  if (provider === "github" || provider === "github-user") {
     headers["Accept"] = "application/json"
   }
 

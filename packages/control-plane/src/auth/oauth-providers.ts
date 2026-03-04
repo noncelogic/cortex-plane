@@ -94,3 +94,79 @@ export function getCodePasteProvider(providerId: string): CodePasteProviderConfi
 export function listCodePasteProviders(): CodePasteProviderConfig[] {
   return Object.values(CODE_PASTE_PROVIDERS)
 }
+
+// ---------------------------------------------------------------------------
+// User service provider registry (redirect-based OAuth flow)
+// ---------------------------------------------------------------------------
+
+import type { CredentialClass } from "../db/types.js"
+
+export interface UserServiceProviderDef {
+  id: string
+  name: string
+  description: string
+  credentialClass: CredentialClass
+  /** Default scopes requested during the OAuth authorize step. */
+  defaultScopes: string[]
+  /** Extra query params for the authorization URL. */
+  extraAuthParams?: Record<string, string>
+  /** Use PKCE S256 challenge. */
+  usePkce: boolean
+}
+
+export const USER_SERVICE_PROVIDERS: Record<string, UserServiceProviderDef> = {
+  "google-workspace": {
+    id: "google-workspace",
+    name: "Google Workspace",
+    description: "Google Calendar, Gmail, Drive (acting as the user)",
+    credentialClass: "user_service",
+    defaultScopes: [
+      "https://www.googleapis.com/auth/calendar.readonly",
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
+    ],
+    extraAuthParams: {
+      access_type: "offline",
+      prompt: "consent",
+    },
+    usePkce: true,
+  },
+
+  "github-user": {
+    id: "github-user",
+    name: "GitHub (user)",
+    description: "GitHub repos, issues, PRs (acting as the user)",
+    credentialClass: "user_service",
+    defaultScopes: ["repo", "read:user", "user:email"],
+    usePkce: false, // GitHub OAuth does not support PKCE
+  },
+
+  "slack-user": {
+    id: "slack-user",
+    name: "Slack (user)",
+    description: "Slack channels, messages (acting as the user)",
+    credentialClass: "user_service",
+    defaultScopes: ["channels:read", "chat:write", "users:read"],
+    usePkce: false, // Slack v2 OAuth does not support PKCE
+    extraAuthParams: {
+      user_scope: "channels:read,chat:write,users:read",
+    },
+  },
+}
+
+export function getUserServiceProvider(providerId: string): UserServiceProviderDef | undefined {
+  return USER_SERVICE_PROVIDERS[providerId]
+}
+
+export function listUserServiceProviders(): UserServiceProviderDef[] {
+  return Object.values(USER_SERVICE_PROVIDERS)
+}
+
+/**
+ * Check whether a provider ID belongs to a user service provider.
+ */
+export function isUserServiceProvider(providerId: string): boolean {
+  return providerId in USER_SERVICE_PROVIDERS
+}

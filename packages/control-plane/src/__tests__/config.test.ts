@@ -188,4 +188,56 @@ describe("loadConfig", () => {
       expect(config.channels.discord).toBeDefined()
     })
   })
+
+  describe("user service OAuth config", () => {
+    it("parses Google Workspace OAuth config", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CREDENTIAL_MASTER_KEY: "test-master-key",
+        OAUTH_GOOGLE_WORKSPACE_CLIENT_ID: "gw-client-id",
+        OAUTH_GOOGLE_WORKSPACE_CLIENT_SECRET: "gw-client-secret",
+      })
+      expect(config.auth).toBeDefined()
+      expect(config.auth!.googleWorkspace).toBeDefined()
+      expect(config.auth!.googleWorkspace!.clientId).toBe("gw-client-id")
+      expect(config.auth!.googleWorkspace!.clientSecret).toBe("gw-client-secret")
+    })
+
+    it("parses GitHub User OAuth config", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CREDENTIAL_MASTER_KEY: "test-master-key",
+        OAUTH_GITHUB_USER_CLIENT_ID: "gh-user-client-id",
+        OAUTH_GITHUB_USER_CLIENT_SECRET: "gh-user-client-secret",
+      })
+      expect(config.auth).toBeDefined()
+      expect(config.auth!.githubUser).toBeDefined()
+      expect(config.auth!.githubUser!.clientId).toBe("gh-user-client-id")
+      expect(config.auth!.githubUser!.clientSecret).toBe("gh-user-client-secret")
+    })
+
+    it("parses Slack User OAuth config", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CREDENTIAL_MASTER_KEY: "test-master-key",
+        OAUTH_SLACK_CLIENT_ID: "slack-client-id",
+        OAUTH_SLACK_CLIENT_SECRET: "slack-client-secret",
+      })
+      expect(config.auth).toBeDefined()
+      expect(config.auth!.slackUser).toBeDefined()
+      expect(config.auth!.slackUser!.clientId).toBe("slack-client-id")
+      expect(config.auth!.slackUser!.clientSecret).toBe("slack-client-secret")
+    })
+
+    it("leaves user service providers undefined when env vars are missing", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CREDENTIAL_MASTER_KEY: "test-master-key",
+      })
+      expect(config.auth).toBeDefined()
+      expect(config.auth!.googleWorkspace).toBeUndefined()
+      expect(config.auth!.githubUser).toBeUndefined()
+      expect(config.auth!.slackUser).toBeUndefined()
+    })
+  })
 })
