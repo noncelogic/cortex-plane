@@ -39,6 +39,11 @@ export type CredentialClass =
   | "custom"
 
 // ---------------------------------------------------------------------------
+// Enum: tool_approval_policy
+// ---------------------------------------------------------------------------
+export type ToolApprovalPolicy = "auto" | "always_approve" | "conditional"
+
+// ---------------------------------------------------------------------------
 // Enum: mcp_server_status
 // ---------------------------------------------------------------------------
 export type McpServerStatus = "PENDING" | "ACTIVE" | "DEGRADED" | "ERROR" | "DISABLED"
@@ -512,6 +517,69 @@ export type NewMcpServerTool = Insertable<McpServerToolTable>
 export type McpServerToolUpdate = Updateable<McpServerToolTable>
 
 // ---------------------------------------------------------------------------
+// Table: agent_tool_binding
+// ---------------------------------------------------------------------------
+export interface AgentToolBindingTable {
+  id: Generated<string>
+  agent_id: string
+  tool_ref: string
+  approval_policy: ColumnType<
+    ToolApprovalPolicy,
+    ToolApprovalPolicy | undefined,
+    ToolApprovalPolicy
+  >
+  approval_condition: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  rate_limit: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  cost_budget: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  data_scope: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  enabled: ColumnType<boolean, boolean | undefined, boolean>
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type AgentToolBinding = Selectable<AgentToolBindingTable>
+export type NewAgentToolBinding = Insertable<AgentToolBindingTable>
+export type AgentToolBindingUpdate = Updateable<AgentToolBindingTable>
+
+// ---------------------------------------------------------------------------
+// Table: agent_checkpoint
+// ---------------------------------------------------------------------------
+export interface AgentCheckpointTable {
+  id: Generated<string>
+  agent_id: string
+  job_id: string | null
+  label: string | null
+  state: ColumnType<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
+  state_crc: number
+  context_snapshot: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+  created_by: ColumnType<string, string | undefined, string>
+}
+
+export type AgentCheckpoint = Selectable<AgentCheckpointTable>
+export type NewAgentCheckpoint = Insertable<AgentCheckpointTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -534,4 +602,6 @@ export interface Database {
   agent_credential_binding: AgentCredentialBindingTable
   mcp_server: McpServerTable
   mcp_server_tool: McpServerToolTable
+  agent_tool_binding: AgentToolBindingTable
+  agent_checkpoint: AgentCheckpointTable
 }
