@@ -39,6 +39,11 @@ export type CredentialClass =
   | "custom"
 
 // ---------------------------------------------------------------------------
+// Enum: tool_approval_policy
+// ---------------------------------------------------------------------------
+export type ToolApprovalPolicy = "auto" | "always_approve" | "conditional"
+
+// ---------------------------------------------------------------------------
 // Enum: mcp_server_status
 // ---------------------------------------------------------------------------
 export type McpServerStatus = "PENDING" | "ACTIVE" | "DEGRADED" | "ERROR" | "DISABLED"
@@ -81,6 +86,11 @@ export interface AgentTable {
     Record<string, unknown>,
     Record<string, unknown> | undefined,
     Record<string, unknown>
+  >
+  effective_capabilities: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
   >
   status: ColumnType<AgentStatus, AgentStatus | undefined, AgentStatus>
   created_at: ColumnType<Date, Date | undefined, never>
@@ -512,6 +522,93 @@ export type NewMcpServerTool = Insertable<McpServerToolTable>
 export type McpServerToolUpdate = Updateable<McpServerToolTable>
 
 // ---------------------------------------------------------------------------
+// Table: agent_tool_binding
+// ---------------------------------------------------------------------------
+export interface AgentToolBindingTable {
+  id: Generated<string>
+  agent_id: string
+  tool_ref: string
+  approval_policy: ColumnType<
+    ToolApprovalPolicy,
+    ToolApprovalPolicy | undefined,
+    ToolApprovalPolicy
+  >
+  approval_condition: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  rate_limit: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  cost_budget: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  data_scope: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  enabled: ColumnType<boolean, boolean | undefined, boolean>
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type AgentToolBinding = Selectable<AgentToolBindingTable>
+export type NewAgentToolBinding = Insertable<AgentToolBindingTable>
+export type AgentToolBindingUpdate = Updateable<AgentToolBindingTable>
+
+// ---------------------------------------------------------------------------
+// Table: capability_audit_log
+// ---------------------------------------------------------------------------
+export interface CapabilityAuditLogTable {
+  id: Generated<string>
+  agent_id: string
+  tool_ref: string
+  event_type: string
+  actor_user_id: string | null
+  job_id: string | null
+  details: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type CapabilityAuditLog = Selectable<CapabilityAuditLogTable>
+export type NewCapabilityAuditLog = Insertable<CapabilityAuditLogTable>
+
+// ---------------------------------------------------------------------------
+// Table: tool_category
+// ---------------------------------------------------------------------------
+export interface ToolCategoryTable {
+  id: Generated<string>
+  name: string
+  icon: string | null
+  description: string | null
+}
+
+export type ToolCategory = Selectable<ToolCategoryTable>
+export type NewToolCategory = Insertable<ToolCategoryTable>
+export type ToolCategoryUpdate = Updateable<ToolCategoryTable>
+
+// ---------------------------------------------------------------------------
+// Table: tool_category_membership
+// ---------------------------------------------------------------------------
+export interface ToolCategoryMembershipTable {
+  tool_ref: string
+  category_id: string
+}
+
+export type ToolCategoryMembership = Selectable<ToolCategoryMembershipTable>
+export type NewToolCategoryMembership = Insertable<ToolCategoryMembershipTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -534,4 +631,8 @@ export interface Database {
   agent_credential_binding: AgentCredentialBindingTable
   mcp_server: McpServerTable
   mcp_server_tool: McpServerToolTable
+  agent_tool_binding: AgentToolBindingTable
+  capability_audit_log: CapabilityAuditLogTable
+  tool_category: ToolCategoryTable
+  tool_category_membership: ToolCategoryMembershipTable
 }
