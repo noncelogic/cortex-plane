@@ -16,6 +16,9 @@ describe("VALID_TRANSITIONS", () => {
       "HYDRATING",
       "READY",
       "EXECUTING",
+      "DEGRADED",
+      "QUARANTINED",
+      "SAFE_MODE",
       "DRAINING",
       "TERMINATED",
     ]
@@ -41,8 +44,30 @@ describe("VALID_TRANSITIONS", () => {
     expect(VALID_TRANSITIONS.READY).toEqual(["EXECUTING", "DRAINING"])
   })
 
-  it("EXECUTING can go to DRAINING or TERMINATED", () => {
-    expect(VALID_TRANSITIONS.EXECUTING).toEqual(["DRAINING", "TERMINATED"])
+  it("EXECUTING can go to DEGRADED, QUARANTINED, DRAINING, or TERMINATED", () => {
+    expect(VALID_TRANSITIONS.EXECUTING).toEqual([
+      "DEGRADED",
+      "QUARANTINED",
+      "DRAINING",
+      "TERMINATED",
+    ])
+  })
+
+  it("DEGRADED can go to EXECUTING, QUARANTINED, DRAINING, or TERMINATED", () => {
+    expect(VALID_TRANSITIONS.DEGRADED).toEqual([
+      "EXECUTING",
+      "QUARANTINED",
+      "DRAINING",
+      "TERMINATED",
+    ])
+  })
+
+  it("QUARANTINED can go to DRAINING or TERMINATED", () => {
+    expect(VALID_TRANSITIONS.QUARANTINED).toEqual(["DRAINING", "TERMINATED"])
+  })
+
+  it("SAFE_MODE can go to READY or TERMINATED", () => {
+    expect(VALID_TRANSITIONS.SAFE_MODE).toEqual(["READY", "TERMINATED"])
   })
 
   it("DRAINING can only go to TERMINATED", () => {
@@ -60,6 +85,19 @@ describe("isValidTransition", () => {
     expect(isValidTransition("EXECUTING", "DRAINING")).toBe(true)
     expect(isValidTransition("EXECUTING", "TERMINATED")).toBe(true)
     expect(isValidTransition("DRAINING", "TERMINATED")).toBe(true)
+  })
+
+  it("returns true for new state transitions", () => {
+    expect(isValidTransition("EXECUTING", "DEGRADED")).toBe(true)
+    expect(isValidTransition("EXECUTING", "QUARANTINED")).toBe(true)
+    expect(isValidTransition("DEGRADED", "EXECUTING")).toBe(true)
+    expect(isValidTransition("DEGRADED", "QUARANTINED")).toBe(true)
+    expect(isValidTransition("DEGRADED", "DRAINING")).toBe(true)
+    expect(isValidTransition("DEGRADED", "TERMINATED")).toBe(true)
+    expect(isValidTransition("QUARANTINED", "DRAINING")).toBe(true)
+    expect(isValidTransition("QUARANTINED", "TERMINATED")).toBe(true)
+    expect(isValidTransition("SAFE_MODE", "READY")).toBe(true)
+    expect(isValidTransition("SAFE_MODE", "TERMINATED")).toBe(true)
   })
 
   it("returns false for invalid transitions", () => {
@@ -82,6 +120,9 @@ describe("isValidTransition", () => {
     expect(isValidTransition("BOOTING", "BOOTING")).toBe(false)
     expect(isValidTransition("EXECUTING", "EXECUTING")).toBe(false)
     expect(isValidTransition("TERMINATED", "TERMINATED")).toBe(false)
+
+    // QUARANTINED cannot go back to EXECUTING (must go through DRAINING → re-boot)
+    expect(isValidTransition("QUARANTINED", "EXECUTING")).toBe(false)
   })
 })
 
@@ -210,6 +251,15 @@ describe("AgentLifecycleStateMachine", () => {
       expect(sm.isReady).toBe(true)
     })
 
+    it("returns true in DEGRADED", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      sm.transition("DEGRADED")
+      expect(sm.isReady).toBe(true)
+    })
+
     it("returns false in DRAINING", () => {
       const sm = new AgentLifecycleStateMachine("agent-1")
       sm.transition("HYDRATING")
@@ -277,5 +327,103 @@ describe("AgentLifecycleStateMachine", () => {
     sm.transition("DRAINING", "SIGTERM")
     sm.transition("TERMINATED", "Drain complete")
     expect(sm.state).toBe("TERMINATED")
+  })
+
+  describe("isDegraded", () => {
+    it("returns true only in DEGRADED", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      expect(sm.isDegraded).toBe(false)
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      expect(sm.isDegraded).toBe(false)
+      sm.transition("DEGRADED")
+      expect(sm.isDegraded).toBe(true)
+    })
+  })
+
+  describe("isQuarantined", () => {
+    it("returns true only in QUARANTINED", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      expect(sm.isQuarantined).toBe(false)
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      expect(sm.isQuarantined).toBe(false)
+      sm.transition("QUARANTINED")
+      expect(sm.isQuarantined).toBe(true)
+    })
+  })
+
+  describe("isSafeMode", () => {
+    it("returns true only in SAFE_MODE", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      expect(sm.isSafeMode).toBe(false)
+    })
+  })
+
+  // Acceptance criteria from issue #310
+  describe("new state transitions (issue #310)", () => {
+    it("EXECUTING → DEGRADED transition succeeds", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      sm.transition("DEGRADED", "Partial tool failure")
+      expect(sm.state).toBe("DEGRADED")
+    })
+
+    it("EXECUTING → QUARANTINED transition succeeds", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      sm.transition("QUARANTINED", "Security violation detected")
+      expect(sm.state).toBe("QUARANTINED")
+    })
+
+    it("QUARANTINED → DRAINING transition succeeds", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      sm.transition("QUARANTINED")
+      sm.transition("DRAINING", "Draining quarantined agent")
+      expect(sm.state).toBe("DRAINING")
+    })
+
+    it("QUARANTINED → EXECUTING is rejected", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      sm.transition("QUARANTINED")
+      expect(() => sm.transition("EXECUTING")).toThrow(InvalidTransitionError)
+      expect(sm.state).toBe("QUARANTINED")
+    })
+
+    it("SAFE_MODE → READY transition succeeds", () => {
+      expect(isValidTransition("SAFE_MODE", "READY")).toBe(true)
+    })
+
+    it("DEGRADED → EXECUTING recovery succeeds", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      sm.transition("DEGRADED", "Tool failure")
+      sm.transition("EXECUTING", "Recovered")
+      expect(sm.state).toBe("EXECUTING")
+    })
+
+    it("DEGRADED → QUARANTINED escalation succeeds", () => {
+      const sm = new AgentLifecycleStateMachine("agent-1")
+      sm.transition("HYDRATING")
+      sm.transition("READY")
+      sm.transition("EXECUTING")
+      sm.transition("DEGRADED")
+      sm.transition("QUARANTINED", "Escalated from degraded")
+      expect(sm.state).toBe("QUARANTINED")
+    })
   })
 })

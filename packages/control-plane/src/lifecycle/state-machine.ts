@@ -1,7 +1,7 @@
 /**
  * Agent lifecycle state machine.
  *
- * Defines the six lifecycle states of an agent pod and enforces
+ * Defines the lifecycle states of an agent pod and enforces
  * valid transitions between them. Modeled after the job state machine
  * (spike #24) but for the ephemeral pod process, not the durable job.
  *
@@ -10,6 +10,9 @@
  * - HYDRATING: loading checkpoint, Qdrant context, JSONL buffer
  * - READY: hydration complete, probes pass, SSE connected
  * - EXECUTING: actively processing job steps
+ * - DEGRADED: still serving but impaired (e.g. partial tool failures)
+ * - QUARANTINED: isolated from new work, awaiting drain
+ * - SAFE_MODE: restricted functionality, limited to safe operations
  * - DRAINING: SIGTERM received, flushing state, closing connections
  * - TERMINATED: process exited
  */
@@ -19,6 +22,9 @@ export type AgentLifecycleState =
   | "HYDRATING"
   | "READY"
   | "EXECUTING"
+  | "DEGRADED"
+  | "QUARANTINED"
+  | "SAFE_MODE"
   | "DRAINING"
   | "TERMINATED"
 
@@ -30,7 +36,10 @@ export const VALID_TRANSITIONS: Record<AgentLifecycleState, AgentLifecycleState[
   BOOTING: ["HYDRATING", "TERMINATED"],
   HYDRATING: ["READY", "TERMINATED"],
   READY: ["EXECUTING", "DRAINING"],
-  EXECUTING: ["DRAINING", "TERMINATED"],
+  EXECUTING: ["DEGRADED", "QUARANTINED", "DRAINING", "TERMINATED"],
+  DEGRADED: ["EXECUTING", "QUARANTINED", "DRAINING", "TERMINATED"],
+  QUARANTINED: ["DRAINING", "TERMINATED"],
+  SAFE_MODE: ["READY", "TERMINATED"],
   DRAINING: ["TERMINATED"],
   TERMINATED: [],
 }
@@ -116,7 +125,7 @@ export class AgentLifecycleStateMachine {
 
   /** Check if the agent is in a state where readiness probes should return 200. */
   get isReady(): boolean {
-    return this._state === "READY" || this._state === "EXECUTING"
+    return this._state === "READY" || this._state === "EXECUTING" || this._state === "DEGRADED"
   }
 
   /** Check if the agent is in a state where liveness probes should return 200. */
@@ -127,5 +136,20 @@ export class AgentLifecycleStateMachine {
   /** Check if the agent is in a terminal state. */
   get isTerminal(): boolean {
     return this._state === "TERMINATED"
+  }
+
+  /** Check if the agent is in a degraded state (still serving, but impaired). */
+  get isDegraded(): boolean {
+    return this._state === "DEGRADED"
+  }
+
+  /** Check if the agent is quarantined (isolated from new work). */
+  get isQuarantined(): boolean {
+    return this._state === "QUARANTINED"
+  }
+
+  /** Check if the agent is in safe mode (restricted functionality). */
+  get isSafeMode(): boolean {
+    return this._state === "SAFE_MODE"
   }
 }
