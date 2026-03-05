@@ -582,6 +582,27 @@ export type AgentCheckpoint = Selectable<AgentCheckpointTable>
 export type NewAgentCheckpoint = Insertable<AgentCheckpointTable>
 
 // ---------------------------------------------------------------------------
+// Table: capability_audit_log
+// ---------------------------------------------------------------------------
+export interface CapabilityAuditLogTable {
+  id: Generated<string>
+  agent_id: string
+  tool_ref: string
+  event_type: string
+  actor_user_id: string | null
+  job_id: string | null
+  details: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type CapabilityAuditLog = Selectable<CapabilityAuditLogTable>
+export type NewCapabilityAuditLog = Insertable<CapabilityAuditLogTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -606,4 +627,5 @@ export interface Database {
   mcp_server_tool: McpServerToolTable
   agent_tool_binding: AgentToolBindingTable
   agent_checkpoint: AgentCheckpointTable
+  capability_audit_log: CapabilityAuditLogTable
 }

@@ -24,8 +24,16 @@ import { CortexAttributes, injectTraceContext, withSpan } from "@cortex/shared/t
 import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
+import type { CapabilityAssembler } from "../../capabilities/index.js"
 import type { Database, Job } from "../../db/types.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
+import {
+  AgentEventEmitter,
+  type EventHandle,
+  type ToolCallEndPayload,
+} from "../../observability/event-emitter.js"
+import { CostTracker } from "../../observability/cost-tracker.js"
+import { executionRegistry } from "../../observability/execution-registry.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
 import { classifyError } from "../error-classifier.js"
@@ -47,6 +55,10 @@ export interface AgentExecuteDeps {
   skillIndex?: import("@cortex/shared/skills").SkillIndex
   /** Optional MCP tool router for resolving MCP tools into agent registries. */
   mcpToolRouter?: McpToolRouter
+  /** Optional event emitter for operator visibility. */
+  eventEmitter?: AgentEventEmitter
+  /** Optional capability assembler for V2 capability model. */
+  capabilityAssembler?: CapabilityAssembler
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -68,7 +80,10 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     memoryExtractThreshold = 50,
     skillIndex,
     mcpToolRouter,
+    eventEmitter = new AgentEventEmitter(),
+    capabilityAssembler,
   } = deps
+  const useCapabilityV2 = process.env.CAPABILITY_MODEL_V2 === "true" && capabilityAssembler != null
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
   return async (rawPayload: unknown, _helpers: JobHelpers): Promise<void> => {
@@ -159,7 +174,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         // ── Step 3: Resolve skills (if skill index is available) ──
         let resolvedSkills: ResolvedSkills | null = null
 
-        if (skillIndex) {
+        if (skillIndex && !useCapabilityV2) {
           try {
             await skillIndex.refresh()
             const { loadResolvedSkillsFromIndex } =
@@ -173,6 +188,12 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         // ── Step 4: Build ExecutionTask (needed for routing) ──
         const task = buildExecutionTask(job, agent, agentConfig, resolvedSkills)
 
+        // V2: tools are pre-filtered by binding — clear allowedTools/deniedTools
+        if (useCapabilityV2) {
+          task.constraints.allowedTools = []
+          task.constraints.deniedTools = []
+        }
+
         // Inject trace context into task environment for downstream propagation
         const traceHeaders = injectTraceContext()
         if (traceHeaders.traceparent) {
@@ -180,6 +201,23 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             ...task.context.environment,
             TRACEPARENT: traceHeaders.traceparent,
           }
+        }
+
+        // ── Step 4b (V2): Resolve effective tools and build guarded registry ──
+        let guardedRegistry: import("../../backends/tool-executor.js").ToolRegistry | undefined
+        if (useCapabilityV2) {
+          const effectiveTools = await capabilityAssembler.resolveEffectiveTools(agent.id)
+          // Determine userId from job payload (fall back to agent owner)
+          const userId =
+            typeof job.payload.userId === "string" ? job.payload.userId : agent.id
+          guardedRegistry = capabilityAssembler.buildGuardedRegistry(effectiveTools, {
+            agentId: agent.id,
+            jobId,
+            userId,
+          })
+          rootSpan.addEvent("capability_v2_resolved", {
+            toolCount: effectiveTools.length,
+          })
         }
 
         // ── Step 5: Resolve backend via router (failover-aware) or direct lookup ──
@@ -196,6 +234,12 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         let handle: ExecutionHandle | undefined
         let bufferWriter: BufferWriter | undefined
 
+        // ── Step 6b: Instantiate CostTracker with budget from agent resource_limits ──
+        const resourceLimits = agent.resource_limits
+        const maxCostUsd =
+          typeof resourceLimits.maxCostUsd === "number" ? resourceLimits.maxCostUsd : null
+        const costTracker = new CostTracker({ maxCostUsd })
+
         try {
           // ── Step 7: Initialize JSONL session buffer ──
           if (sessionBufferFactory) {
@@ -203,14 +247,24 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           }
 
           // ── Step 8: Execute task ──
-          // If the backend supports per-agent tool registries (HttpLlmBackend),
-          // build one that includes custom webhook tools from agent config
-          // and MCP tools when a router is available.
-          if (
+          // Emit LLM call start event before dispatching to backend
+          const llmHandle = eventEmitter.emitStart({
+            eventType: "llm_call_start",
+            model: task.constraints.model,
+            jobId,
+            agentId: agent.id,
+          })
+
+          if (useCapabilityV2 && guardedRegistry) {
+            // V2 path: pass pre-built guarded registry directly to the backend
+            handle = await (
+              backend as { executeTask: (t: ExecutionTask, r: unknown) => Promise<ExecutionHandle> }
+            ).executeTask(task, guardedRegistry)
+          } else if (
             "createAgentRegistry" in backend &&
             typeof backend.createAgentRegistry === "function"
           ) {
-            // Build optional MCP deps from the tool router + task constraints
+            // Legacy path: build registry from MCP router + webhook tools
             const mcpDeps = mcpToolRouter
               ? {
                   mcpRouter: mcpToolRouter,
@@ -232,6 +286,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             handle = await backend.executeTask(task)
           }
 
+          // Register with execution registry for kill-switch support
+          executionRegistry.register(jobId, handle)
+
           // Store the user prompt as a session message for memory extraction batching.
           if (job.session_id && task.instruction.prompt.trim().length > 0) {
             await memoryScheduler
@@ -252,6 +309,11 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
           // ── Step 9: Stream events ──
           const cancelChecker = startCancelChecker(db, jobId, handle)
+          // Track pending tool calls to emit tool_call_end with duration
+          const pendingToolCalls = new Map<
+            string,
+            { startedAt: number; handle: EventHandle<ToolCallEndPayload> }
+          >()
 
           try {
             for await (const event of handle.events()) {
@@ -268,6 +330,47 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   output: event,
                 }
                 streamManager.broadcast(agent.id, "agent:output", ssePayload)
+              }
+
+              // ── Event interception for observability ──
+
+              // Tool call start — emit event and stash handle for pairing with tool_result
+              if (event.type === "tool_use") {
+                costTracker.recordToolCall()
+                const toolHandle = eventEmitter.emitToolStart({
+                  eventType: "tool_call_start",
+                  toolName: event.toolName,
+                  jobId,
+                  agentId: agent.id,
+                })
+                pendingToolCalls.set(event.toolName, {
+                  startedAt: Date.now(),
+                  handle: toolHandle,
+                })
+              }
+
+              // Tool call end — close the matching start handle
+              if (event.type === "tool_result") {
+                const pending = pendingToolCalls.get(event.toolName)
+                if (pending) {
+                  const durationMs = Date.now() - pending.startedAt
+                  pending.handle.end({ success: !event.isError, durationMs })
+                  pendingToolCalls.delete(event.toolName)
+                }
+              }
+
+              // Usage event → cost tracking + budget enforcement
+              if (event.type === "usage") {
+                const budgetExceeded = costTracker.recordLlmCost(event.tokenUsage)
+                llmHandle.end({
+                  tokensIn: event.tokenUsage.inputTokens,
+                  tokensOut: event.tokenUsage.outputTokens,
+                  costUsd: event.tokenUsage.costUsd,
+                })
+                if (budgetExceeded) {
+                  await handle.cancel("cost_budget_exceeded")
+                  break
+                }
               }
 
               if (job.session_id && event.type === "text" && event.content.trim().length > 0) {
@@ -302,15 +405,31 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           rootSpan.setAttribute(CortexAttributes.EXECUTION_DURATION_MS, result.durationMs)
 
           // ── Step 12: Map status and persist result ──
-          const jobStatus = mapExecutionStatus(result.status)
+          // If budget was exceeded, mark as FAILED with cost_budget_exceeded
+          const costSnapshot = costTracker.snapshot()
+          const jobStatus = costTracker.isBudgetExceeded()
+            ? "FAILED"
+            : mapExecutionStatus(result.status)
+
+          const updateSet: Record<string, unknown> = {
+            status: jobStatus,
+            completed_at: new Date(),
+            result: executionResultToJson(result),
+            llm_call_count: costSnapshot.llmCallCount,
+            tool_call_count: costSnapshot.toolCallCount,
+            cost_usd: costSnapshot.totalCostUsd,
+          }
+
+          if (costTracker.isBudgetExceeded()) {
+            updateSet.error = {
+              category: "BUDGET",
+              message: `Cost budget exceeded: $${costSnapshot.totalCostUsd.toFixed(4)} > $${maxCostUsd}`,
+            }
+          }
 
           await db
             .updateTable("job")
-            .set({
-              status: jobStatus,
-              completed_at: new Date(),
-              result: executionResultToJson(result),
-            })
+            .set(updateSet)
             .where("id", "=", jobId)
             .where("status", "=", "RUNNING")
             .execute()
@@ -324,6 +443,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             })
           }
         } finally {
+          executionRegistry.unregister(jobId)
           permit.release()
           if (bufferWriter) {
             bufferWriter.close()
