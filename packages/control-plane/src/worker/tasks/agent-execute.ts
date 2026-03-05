@@ -25,6 +25,8 @@ import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { CapabilityAssembler } from "../../capabilities/index.js"
+import { validateDelegation } from "../../capabilities/delegation.js"
+import type { DelegationRequest } from "../../capabilities/delegation.js"
 import type { Database, Job } from "../../db/types.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import {
@@ -206,10 +208,45 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         // ── Step 4b (V2): Resolve effective tools and build guarded registry ──
         let guardedRegistry: import("../../backends/tool-executor.js").ToolRegistry | undefined
         if (useCapabilityV2) {
-          const effectiveTools = await capabilityAssembler.resolveEffectiveTools(agent.id)
           // Determine userId from job payload (fall back to agent owner)
           const userId =
             typeof job.payload.userId === "string" ? job.payload.userId : agent.id
+
+          let effectiveTools: import("../../capabilities/types.js").EffectiveTool[]
+
+          // Subagent delegation: validate delegation grant against parent's tools
+          const subagentPayload = job.payload.subagent as
+            | { parentAgentId: string; delegatedTools: string[]; dataScopes?: Record<string, Record<string, unknown>> }
+            | undefined
+
+          if (subagentPayload?.parentAgentId) {
+            const delegationRequest: DelegationRequest = {
+              agentId: agent.id,
+              delegatedTools: subagentPayload.delegatedTools ?? [],
+              dataScopes: subagentPayload.dataScopes,
+            }
+
+            const delegation = await validateDelegation(
+              subagentPayload.parentAgentId,
+              delegationRequest,
+              { db, assembler: capabilityAssembler },
+            )
+
+            effectiveTools = delegation.effectiveTools
+
+            // Log denied tools (non-fatal)
+            if (delegation.denied.length > 0) {
+              rootSpan.addEvent("delegation_denied_tools", {
+                denied: delegation.denied.join(","),
+              })
+            }
+            for (const warning of delegation.warnings) {
+              rootSpan.addEvent("delegation_warning", { message: warning })
+            }
+          } else {
+            effectiveTools = await capabilityAssembler.resolveEffectiveTools(agent.id)
+          }
+
           guardedRegistry = capabilityAssembler.buildGuardedRegistry(effectiveTools, {
             agentId: agent.id,
             jobId,
