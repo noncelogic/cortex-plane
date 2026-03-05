@@ -15,6 +15,18 @@ export {
   READY_STATES,
 } from "./health.js"
 export {
+  type HealthProbeDeps,
+  type HealthProbeResult,
+  HealthProbeScheduler,
+  type HealthProbeSchedulerDeps,
+  type OverallHealthStatus,
+  probeAgentHealth,
+  PROBE_INTERVAL_EXECUTING_MS,
+  PROBE_INTERVAL_READY_MS,
+  SKIP_PROBE_STATES,
+  type SubsystemStatus,
+} from "./health-probe.js"
+export {
   type AgentIdentity,
   type CheckpointData,
   hydrateAgent,

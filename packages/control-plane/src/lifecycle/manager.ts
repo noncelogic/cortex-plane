@@ -23,6 +23,7 @@ import type { Database } from "../db/types.js"
 import type { AgentDeployer } from "../k8s/agent-deployer.js"
 import type { AgentDeploymentConfig } from "../k8s/types.js"
 import { type AgentHeartbeat, CrashLoopDetector, HeartbeatReceiver } from "./health.js"
+import { HealthProbeScheduler, type HealthProbeDeps } from "./health-probe.js"
 import { hydrateAgent, type HydrationResult, type QdrantClient } from "./hydration.js"
 import { IdleDetector } from "./idle-detector.js"
 import {
@@ -41,6 +42,8 @@ export interface LifecycleManagerDeps {
   qdrantClient?: QdrantClient
   idleTimeoutMs?: number
   onLifecycleEvent?: (event: LifecycleTransitionEvent) => void
+  /** Additional deps for the health probe scheduler (MCP supervisor, etc.). */
+  healthProbeDeps?: Partial<HealthProbeDeps>
 }
 
 export interface AgentContext {
@@ -74,6 +77,7 @@ export class AgentLifecycleManager {
   readonly heartbeatReceiver: HeartbeatReceiver
   readonly crashDetector: CrashLoopDetector
   readonly idleDetector: IdleDetector
+  readonly healthProbeScheduler: HealthProbeScheduler
   private readonly onLifecycleEvent?: (event: LifecycleTransitionEvent) => void
   /** agentId → listeners for steering messages */
   private readonly steerListeners = new Map<string, Set<SteerListener>>()
@@ -92,6 +96,14 @@ export class AgentLifecycleManager {
       onIdle: (agentId: string) => {
         void this.scaleToZero(agentId)
       },
+    })
+
+    this.healthProbeScheduler = new HealthProbeScheduler({
+      db: deps.db,
+      heartbeatReceiver: this.heartbeatReceiver,
+      qdrantClient: deps.qdrantClient,
+      ...deps.healthProbeDeps,
+      getAgentState: (agentId: string) => this.getAgentState(agentId),
     })
   }
 
@@ -143,8 +155,9 @@ export class AgentLifecycleManager {
       // HYDRATING → READY
       sm.transition("READY", "Hydration complete")
 
-      // Start idle tracking
+      // Start idle tracking + health probing
       this.idleDetector.recordActivity(agentId)
+      this.healthProbeScheduler.startProbing(agentId)
 
       return ctx
     } catch (error) {
@@ -166,6 +179,8 @@ export class AgentLifecycleManager {
     const ctx = this.requireContext(agentId)
     ctx.stateMachine.transition("EXECUTING", `Starting job ${jobId}`)
     this.idleDetector.recordActivity(agentId)
+    // Restart probing at the EXECUTING interval (60s instead of 300s)
+    this.healthProbeScheduler.startProbing(agentId)
   }
 
   // -------------------------------------------------------------------------
@@ -410,6 +425,7 @@ export class AgentLifecycleManager {
   shutdown(): void {
     this.heartbeatReceiver.stopMonitoring()
     this.idleDetector.shutdown()
+    this.healthProbeScheduler.shutdown()
   }
 
   // -------------------------------------------------------------------------
@@ -428,6 +444,7 @@ export class AgentLifecycleManager {
     this.agents.delete(agentId)
     this.idleDetector.removeAgent(agentId)
     this.heartbeatReceiver.removeAgent(agentId)
+    this.healthProbeScheduler.stopProbing(agentId)
     this.steerListeners.delete(agentId)
   }
 }

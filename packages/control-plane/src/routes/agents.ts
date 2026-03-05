@@ -8,6 +8,7 @@
  * DELETE /agents/:id           — Soft delete (set status=ARCHIVED)
  * GET    /agents/:id/jobs      — List jobs for agent (paginated, ?status filter)
  * POST   /agents/:id/jobs      — Create and enqueue a new job
+ * GET    /agents/:agentId/health — Agent health probe (requires operator or admin)
  */
 
 import { randomUUID } from "node:crypto"
@@ -18,6 +19,8 @@ import type { Kysely } from "kysely"
 
 import type { SessionService } from "../auth/session-service.js"
 import type { Database } from "../db/types.js"
+import { probeAgentHealth, type HealthProbeDeps } from "../lifecycle/health-probe.js"
+import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import {
   type AuthMiddlewareOptions,
   createRequireAuth,
@@ -80,6 +83,10 @@ interface CreateJobBody {
   payload?: Record<string, unknown>
 }
 
+interface HealthParams {
+  agentId: string
+}
+
 interface PauseAgentParams {
   agentId: string
 }
@@ -103,10 +110,12 @@ export interface AgentRouteDeps {
   authConfig: AuthConfig
   enqueueJob: (jobId: string) => Promise<void>
   sessionService?: SessionService
+  lifecycleManager?: AgentLifecycleManager
+  healthProbeDeps?: HealthProbeDeps
 }
 
 export function agentRoutes(deps: AgentRouteDeps) {
-  const { db, authConfig, enqueueJob, sessionService } = deps
+  const { db, authConfig, enqueueJob, sessionService, lifecycleManager, healthProbeDeps } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -625,6 +634,63 @@ export function agentRoutes(deps: AgentRouteDeps) {
           ...job,
           status: "SCHEDULED",
         })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // GET /agents/:agentId/health — Agent health probe
+    // Requires: auth + operator role
+    // -----------------------------------------------------------------
+    app.get<{ Params: HealthParams }>(
+      "/agents/:agentId/health",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              agentId: { type: "string" },
+            },
+            required: ["agentId"],
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: HealthParams }>, reply: FastifyReply) => {
+        const { agentId } = request.params
+
+        // Verify agent exists
+        const agent = await db
+          .selectFrom("agent")
+          .select("id")
+          .where("id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!agent) {
+          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        // Determine lifecycle state from manager or default to UNKNOWN context
+        const lifecycleState = lifecycleManager?.getAgentState(agentId) ?? "READY"
+
+        // Use cached probe result from scheduler if available, otherwise run on-demand
+        const cachedResult = lifecycleManager?.healthProbeScheduler?.getLastResult(agentId)
+
+        if (cachedResult) {
+          return reply.status(200).send(cachedResult)
+        }
+
+        // Construct probe deps — prefer injected deps, fallback to db + heartbeat from manager
+        const probeDeps: HealthProbeDeps = healthProbeDeps ?? {
+          db,
+          heartbeatReceiver:
+            lifecycleManager?.heartbeatReceiver ??
+            ({
+              getHealth: () => undefined,
+            } as never),
+        }
+
+        const result = await probeAgentHealth(agentId, lifecycleState, probeDeps)
+        return reply.status(200).send(result)
       },
     )
   }
