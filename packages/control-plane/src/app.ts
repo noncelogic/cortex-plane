@@ -25,6 +25,7 @@ import { McpHealthSupervisor } from "./mcp/health-supervisor.js"
 import { McpToolRouter } from "./mcp/tool-router.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
+import { agentCheckpointRoutes } from "./routes/agent-checkpoints.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentCredentialRoutes } from "./routes/agent-credentials.js"
 import { agentRoutes } from "./routes/agents.js"
@@ -205,6 +206,15 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Register agent credential binding routes
   await app.register(
     agentCredentialRoutes({
+      db,
+      authConfig,
+      sessionService,
+    }),
+  )
+
+  // Register agent checkpoint CRUD + rollback routes
+  await app.register(
+    agentCheckpointRoutes({
       db,
       authConfig,
       sessionService,

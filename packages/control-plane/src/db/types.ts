@@ -512,6 +512,27 @@ export type NewMcpServerTool = Insertable<McpServerToolTable>
 export type McpServerToolUpdate = Updateable<McpServerToolTable>
 
 // ---------------------------------------------------------------------------
+// Table: agent_checkpoint
+// ---------------------------------------------------------------------------
+export interface AgentCheckpointTable {
+  id: Generated<string>
+  agent_id: string
+  label: string | null
+  state: ColumnType<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
+  context_snapshot: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  state_crc: number
+  created_by: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AgentCheckpoint = Selectable<AgentCheckpointTable>
+export type NewAgentCheckpoint = Insertable<AgentCheckpointTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -534,4 +555,5 @@ export interface Database {
   agent_credential_binding: AgentCredentialBindingTable
   mcp_server: McpServerTable
   mcp_server_tool: McpServerToolTable
+  agent_checkpoint: AgentCheckpointTable
 }
