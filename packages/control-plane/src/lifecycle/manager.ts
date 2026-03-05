@@ -15,6 +15,9 @@
  * - recover(agentId, jobId): CRASHED recovery → re-deploy → BOOTING
  * - terminate(agentId): any → DRAINING → TERMINATED (graceful shutdown)
  * - scaleToZero(agentId): triggered by idle detector
+ * - quarantine(agentId, reason): READY|EXECUTING → QUARANTINED (freeze agent)
+ * - release(agentId, opts): QUARANTINED → DRAINING → TERMINATED → re-boot
+ * - bootSafeMode(agentId, jobId): BOOTING → HYDRATING → SAFE_MODE (debug mode)
  */
 
 import type { Kysely } from "kysely"
@@ -289,12 +292,12 @@ export class AgentLifecycleManager {
     const state = ctx.stateMachine.state
     if (state === "TERMINATED") return
 
-    // If in READY or EXECUTING, go through DRAINING first
-    if (state === "READY" || state === "EXECUTING") {
+    // If in READY, EXECUTING, or QUARANTINED, go through DRAINING first
+    if (state === "READY" || state === "EXECUTING" || state === "QUARANTINED") {
       ctx.stateMachine.transition("DRAINING", reason ?? "Termination requested")
     }
 
-    // States that can transition directly to TERMINATED: BOOTING, HYDRATING, DRAINING
+    // States that can transition directly to TERMINATED: BOOTING, HYDRATING, DRAINING, SAFE_MODE
     if (ctx.stateMachine.state !== "TERMINATED") {
       ctx.stateMachine.transition("TERMINATED", reason ?? "Terminated")
     }
@@ -322,6 +325,137 @@ export class AgentLifecycleManager {
     // Only scale-to-zero agents that are READY (idle, not executing)
     if (ctx.stateMachine.state === "READY") {
       await this.drain(agentId, "Idle timeout — scale to zero")
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // quarantine: READY|EXECUTING → QUARANTINED
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quarantine an agent: cancel running job, prevent new jobs.
+   * Transitions READY or EXECUTING → QUARANTINED.
+   */
+  async quarantine(agentId: string, reason: string): Promise<void> {
+    const ctx = this.requireContext(agentId)
+    const currentState = ctx.stateMachine.state
+
+    if (currentState === "QUARANTINED") {
+      throw new Error(`Agent ${agentId} is already quarantined`)
+    }
+
+    if (currentState !== "READY" && currentState !== "EXECUTING") {
+      throw new Error(
+        `Cannot quarantine agent ${agentId}: must be in READY or EXECUTING state (current: ${currentState})`,
+      )
+    }
+
+    // Cancel running job if executing
+    if (currentState === "EXECUTING") {
+      await this.db
+        .updateTable("job")
+        .set({ status: "FAILED" })
+        .where("id", "=", ctx.jobId)
+        .execute()
+    }
+
+    ctx.stateMachine.transition("QUARANTINED", reason)
+    this.idleDetector.removeAgent(agentId)
+  }
+
+  // -------------------------------------------------------------------------
+  // release: QUARANTINED → DRAINING → TERMINATED → re-boot
+  // -------------------------------------------------------------------------
+
+  /**
+   * Release an agent from quarantine. Drains, terminates, and re-boots.
+   * If resetCircuitBreaker is true, clears circuit breaker counters.
+   */
+  async release(agentId: string, opts?: { resetCircuitBreaker?: boolean }): Promise<AgentContext> {
+    const ctx = this.requireContext(agentId)
+
+    if (ctx.stateMachine.state !== "QUARANTINED") {
+      throw new Error(
+        `Cannot release agent ${agentId}: not in QUARANTINED state (current: ${ctx.stateMachine.state})`,
+      )
+    }
+
+    if (opts?.resetCircuitBreaker) {
+      this.crashDetector.resetCrashes(agentId)
+    }
+
+    // QUARANTINED → DRAINING → TERMINATED
+    ctx.stateMachine.transition("DRAINING", "Release: draining quarantined agent")
+
+    try {
+      await this.deployer.deleteAgent(agentId)
+    } catch {
+      // Pod may already be gone
+    }
+
+    ctx.stateMachine.transition("TERMINATED", "Release: drain complete")
+    const jobId = ctx.jobId
+    this.cleanup(agentId)
+
+    // Re-boot: BOOTING → HYDRATING → READY
+    return this.boot(agentId, jobId)
+  }
+
+  // -------------------------------------------------------------------------
+  // bootSafeMode: BOOTING → HYDRATING → SAFE_MODE
+  // -------------------------------------------------------------------------
+
+  /**
+   * Boot an agent in safe mode for debugging.
+   * No tools, no memory context, identity-only system prompt,
+   * 10k token budget, single-turn only.
+   */
+  async bootSafeMode(agentId: string, jobId?: string): Promise<AgentContext> {
+    const effectiveJobId = jobId ?? `safe-mode-${agentId}`
+
+    const sm = new AgentLifecycleStateMachine(agentId)
+    if (this.onLifecycleEvent) {
+      sm.onTransition(this.onLifecycleEvent)
+    }
+
+    const ctx: AgentContext = {
+      agentId,
+      jobId: effectiveJobId,
+      stateMachine: sm,
+      hydration: null,
+      deploymentConfig: null,
+    }
+    this.agents.set(agentId, ctx)
+
+    // BOOTING → HYDRATING
+    sm.transition("HYDRATING", "Safe-mode boot: loading identity only")
+
+    try {
+      // Load only identity — skip checkpoint, Qdrant, and skills
+      const { loadIdentity } = await import("./hydration.js")
+      const identity = await loadIdentity(agentId, this.db)
+
+      ctx.hydration = {
+        checkpoint: {
+          checkpoint: null,
+          checkpointCrc: null,
+          jobStatus: "RUNNING",
+          attempt: 1,
+          payload: {},
+        },
+        identity,
+        qdrantContext: null,
+        resolvedSkills: null,
+      }
+
+      // HYDRATING → SAFE_MODE
+      sm.transition("SAFE_MODE", "Safe-mode boot complete")
+
+      return ctx
+    } catch (error) {
+      sm.transition("TERMINATED", `Safe-mode boot failed: ${String(error)}`)
+      this.agents.delete(agentId)
+      throw error
     }
   }
 

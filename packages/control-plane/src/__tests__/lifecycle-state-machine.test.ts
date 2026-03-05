@@ -17,6 +17,8 @@ describe("VALID_TRANSITIONS", () => {
       "READY",
       "EXECUTING",
       "DRAINING",
+      "QUARANTINED",
+      "SAFE_MODE",
       "TERMINATED",
     ]
     for (const state of states) {
@@ -33,20 +35,28 @@ describe("VALID_TRANSITIONS", () => {
     expect(VALID_TRANSITIONS.BOOTING).toEqual(["HYDRATING", "TERMINATED"])
   })
 
-  it("HYDRATING can go to READY or TERMINATED", () => {
-    expect(VALID_TRANSITIONS.HYDRATING).toEqual(["READY", "TERMINATED"])
+  it("HYDRATING can go to READY, SAFE_MODE, or TERMINATED", () => {
+    expect(VALID_TRANSITIONS.HYDRATING).toEqual(["READY", "SAFE_MODE", "TERMINATED"])
   })
 
-  it("READY can go to EXECUTING or DRAINING", () => {
-    expect(VALID_TRANSITIONS.READY).toEqual(["EXECUTING", "DRAINING"])
+  it("READY can go to EXECUTING, DRAINING, or QUARANTINED", () => {
+    expect(VALID_TRANSITIONS.READY).toEqual(["EXECUTING", "DRAINING", "QUARANTINED"])
   })
 
-  it("EXECUTING can go to DRAINING or TERMINATED", () => {
-    expect(VALID_TRANSITIONS.EXECUTING).toEqual(["DRAINING", "TERMINATED"])
+  it("EXECUTING can go to DRAINING, TERMINATED, or QUARANTINED", () => {
+    expect(VALID_TRANSITIONS.EXECUTING).toEqual(["DRAINING", "TERMINATED", "QUARANTINED"])
   })
 
   it("DRAINING can only go to TERMINATED", () => {
     expect(VALID_TRANSITIONS.DRAINING).toEqual(["TERMINATED"])
+  })
+
+  it("QUARANTINED can go to DRAINING", () => {
+    expect(VALID_TRANSITIONS.QUARANTINED).toEqual(["DRAINING"])
+  })
+
+  it("SAFE_MODE can go to TERMINATED", () => {
+    expect(VALID_TRANSITIONS.SAFE_MODE).toEqual(["TERMINATED"])
   })
 })
 

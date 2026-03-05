@@ -27,6 +27,7 @@ import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentCredentialRoutes } from "./routes/agent-credentials.js"
+import { agentLifecycleRoutes } from "./routes/agent-lifecycle.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { authRoutes } from "./routes/auth.js"
@@ -259,6 +260,17 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       authRoutes({ db, authConfig: config.auth, sessionService, credentialService }),
     )
     await app.register(credentialRoutes({ credentialService, sessionService }))
+  }
+
+  // Register agent lifecycle routes (quarantine, release, safe-mode boot)
+  if (options.lifecycleManager) {
+    await app.register(
+      agentLifecycleRoutes({
+        lifecycleManager: options.lifecycleManager,
+        authConfig,
+        sessionService,
+      }),
+    )
   }
 
   // Always register streaming + observation routes

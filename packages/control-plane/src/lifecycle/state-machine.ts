@@ -1,7 +1,7 @@
 /**
  * Agent lifecycle state machine.
  *
- * Defines the six lifecycle states of an agent pod and enforces
+ * Defines the lifecycle states of an agent pod and enforces
  * valid transitions between them. Modeled after the job state machine
  * (spike #24) but for the ephemeral pod process, not the durable job.
  *
@@ -11,6 +11,8 @@
  * - READY: hydration complete, probes pass, SSE connected
  * - EXECUTING: actively processing job steps
  * - DRAINING: SIGTERM received, flushing state, closing connections
+ * - QUARANTINED: frozen by operator, no new jobs accepted
+ * - SAFE_MODE: booted with restrictions for debugging
  * - TERMINATED: process exited
  */
 
@@ -20,6 +22,8 @@ export type AgentLifecycleState =
   | "READY"
   | "EXECUTING"
   | "DRAINING"
+  | "QUARANTINED"
+  | "SAFE_MODE"
   | "TERMINATED"
 
 /**
@@ -28,10 +32,12 @@ export type AgentLifecycleState =
  */
 export const VALID_TRANSITIONS: Record<AgentLifecycleState, AgentLifecycleState[]> = {
   BOOTING: ["HYDRATING", "TERMINATED"],
-  HYDRATING: ["READY", "TERMINATED"],
-  READY: ["EXECUTING", "DRAINING"],
-  EXECUTING: ["DRAINING", "TERMINATED"],
+  HYDRATING: ["READY", "SAFE_MODE", "TERMINATED"],
+  READY: ["EXECUTING", "DRAINING", "QUARANTINED"],
+  EXECUTING: ["DRAINING", "TERMINATED", "QUARANTINED"],
   DRAINING: ["TERMINATED"],
+  QUARANTINED: ["DRAINING"],
+  SAFE_MODE: ["TERMINATED"],
   TERMINATED: [],
 }
 
