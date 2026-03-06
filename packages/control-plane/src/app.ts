@@ -22,6 +22,7 @@ import { FeedbackService } from "./feedback/service.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
 import { McpClientPool } from "./mcp/client-pool.js"
 import { McpHealthSupervisor } from "./mcp/health-supervisor.js"
+import { McpServerDeployer } from "./mcp/k8s-deployer.js"
 import { McpToolRouter } from "./mcp/tool-router.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
@@ -211,6 +212,12 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     }),
   )
 
+  // MCP server deployer — creates k8s Deployments for in-cluster MCP servers
+  let mcpDeployer: McpServerDeployer | undefined
+  if (process.env.MCP_K8S_DEPLOYER_ENABLED === "true") {
+    mcpDeployer = new McpServerDeployer()
+  }
+
   // Register MCP server CRUD routes
   await app.register(
     mcpServerRoutes({
@@ -218,6 +225,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       authConfig,
       sessionService,
       connectionEncryptionKey: process.env.CREDENTIAL_MASTER_KEY,
+      mcpDeployer,
     }),
   )
 

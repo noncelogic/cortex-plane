@@ -1,5 +1,7 @@
 export { McpClientPool } from "./client-pool.js"
 export { McpHealthSupervisor } from "./health-supervisor.js"
+export type { McpDeploymentResult, McpServerDeploymentConfig } from "./k8s-deployer.js"
+export { McpServerDeployer } from "./k8s-deployer.js"
 export type { SidecarTarget } from "./sidecar-transport.js"
 export { SidecarTransport } from "./sidecar-transport.js"
 export type { McpClientPool as McpClientPoolInterface } from "./tool-bridge.js"

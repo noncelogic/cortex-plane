@@ -21,6 +21,7 @@ import {
 } from "../auth/credential-encryption.js"
 import type { SessionService } from "../auth/session-service.js"
 import type { Database, McpServerStatus, McpTransport } from "../db/types.js"
+import type { McpServerDeployer } from "../mcp/k8s-deployer.js"
 import {
   type AuthMiddlewareOptions,
   createRequireAuth,
@@ -103,10 +104,12 @@ export interface McpServerRouteDeps {
   sessionService?: SessionService
   /** Passphrase used to derive the encryption key for connection headers. */
   connectionEncryptionKey?: string
+  /** K8s deployer for in-cluster MCP server deployments. */
+  mcpDeployer?: McpServerDeployer
 }
 
 export function mcpServerRoutes(deps: McpServerRouteDeps) {
-  const { db, authConfig, sessionService, connectionEncryptionKey } = deps
+  const { db, authConfig, sessionService, connectionEncryptionKey, mcpDeployer } = deps
 
   const encryptionKey = connectionEncryptionKey
     ? deriveMasterKey(connectionEncryptionKey)
@@ -149,9 +152,24 @@ export function mcpServerRoutes(deps: McpServerRouteDeps) {
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/(^-|-$)/g, "")
 
+        const connection = { ...body.connection }
+        const image = connection.image as string | undefined
+
+        // If image is provided, this is an in-cluster deployment
+        const isInCluster =
+          body.transport === "streamable-http" && typeof image === "string" && image.length > 0
+
+        if (isInCluster && !mcpDeployer) {
+          return reply.status(501).send({
+            error: "not_implemented",
+            message:
+              "In-cluster MCP server deployment is not available (no k8s deployer configured)",
+          })
+        }
+
         const connectionToStore = encryptionKey
-          ? encryptConnectionHeaders(body.connection, encryptionKey)
-          : body.connection
+          ? encryptConnectionHeaders(connection, encryptionKey)
+          : connection
 
         try {
           const server = await db
@@ -167,6 +185,74 @@ export function mcpServerRoutes(deps: McpServerRouteDeps) {
             })
             .returningAll()
             .executeTakeFirstOrThrow()
+
+          // In-cluster deployment: create k8s resources and wait for readiness
+          if (isInCluster && mcpDeployer) {
+            try {
+              const deployResult = await mcpDeployer.deploy({
+                slug,
+                image,
+                port: (connection.port as number | undefined) ?? undefined,
+                resources: connection.resources as { cpu?: string; memory?: string } | undefined,
+                env: connection.env as Record<string, string> | undefined,
+              })
+
+              await mcpDeployer.waitForReady(slug)
+
+              // Update connection with the in-cluster URL
+              const updatedConnection = {
+                ...connection,
+                url: deployResult.url,
+              }
+              const updatedConnectionToStore = encryptionKey
+                ? encryptConnectionHeaders(updatedConnection, encryptionKey)
+                : updatedConnection
+
+              await db
+                .updateTable("mcp_server")
+                .set({
+                  connection: updatedConnectionToStore,
+                  status: "ACTIVE" as McpServerStatus,
+                  updated_at: new Date(),
+                })
+                .where("id", "=", server.id)
+                .execute()
+
+              const result = {
+                ...server,
+                connection: updatedConnection,
+                status: "ACTIVE" as McpServerStatus,
+              }
+              return reply.status(201).send(result)
+            } catch (deployErr: unknown) {
+              // Deployment failed — mark server as ERROR with diagnostic
+              const errorMessage =
+                deployErr instanceof Error ? deployErr.message : "Unknown deployment error"
+
+              await db
+                .updateTable("mcp_server")
+                .set({
+                  status: "ERROR" as McpServerStatus,
+                  error_message: errorMessage,
+                  updated_at: new Date(),
+                })
+                .where("id", "=", server.id)
+                .execute()
+
+              const result = encryptionKey
+                ? {
+                    ...server,
+                    connection: decryptConnectionHeaders(server.connection, encryptionKey),
+                  }
+                : server
+
+              return reply.status(201).send({
+                ...result,
+                status: "ERROR" as McpServerStatus,
+                error_message: errorMessage,
+              })
+            }
+          }
 
           const result = encryptionKey
             ? { ...server, connection: decryptConnectionHeaders(server.connection, encryptionKey) }
@@ -407,6 +493,16 @@ export function mcpServerRoutes(deps: McpServerRouteDeps) {
 
         if (!deleted) {
           return reply.status(404).send({ error: "not_found", message: "MCP server not found" })
+        }
+
+        // Clean up k8s resources if this was an in-cluster deployment
+        if (mcpDeployer && typeof deleted.connection === "object" && deleted.connection !== null) {
+          const conn = deleted.connection
+          if (typeof conn.image === "string") {
+            await mcpDeployer.teardown(deleted.slug).catch(() => {
+              // Best-effort cleanup — log but don't fail the delete
+            })
+          }
         }
 
         return reply.status(200).send(deleted)
