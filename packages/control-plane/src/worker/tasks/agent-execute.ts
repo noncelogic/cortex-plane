@@ -222,7 +222,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           }
 
           // Build a credential resolver for tool credential injection
-          credentialResolver = buildCredentialResolver(credentialService, db, agent.id)
+          credentialResolver = buildCredentialResolver(credentialService, db, agent.id, job.id)
         }
 
         // Inject trace context into task environment for downstream propagation
@@ -750,11 +750,14 @@ function buildCredentialResolver(
   credentialService: CredentialService,
   db: Kysely<Database>,
   agentId: string,
+  jobId: string,
 ): CredentialResolver {
   return async (ref) => {
     try {
+      const auditContext = { agentId, jobId, toolName: ref.provider }
+
       if (ref.credentialClass === "tool_specific") {
-        const secret = await credentialService.getToolSecret(ref.provider)
+        const secret = await credentialService.getToolSecret(ref.provider, auditContext)
         if (!secret) return null
 
         const key = ref.headerName ?? "Authorization"
@@ -782,6 +785,7 @@ function buildCredentialResolver(
         const result = await credentialService.getAccessToken(
           binding.user_account_id,
           binding.provider,
+          auditContext,
         )
         if (!result) return null
 

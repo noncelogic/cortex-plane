@@ -129,12 +129,29 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
     )
 
     /**
-     * GET /credentials/audit — credential audit log
+     * GET /credentials/audit — credential audit log with optional filters
      */
-    app.get<{ Querystring: { limit?: string } }>(
+    app.get<{
+      Querystring: {
+        limit?: string
+        credentialId?: string
+        agentId?: string
+        eventType?: string
+      }
+    }>(
       "/credentials/audit",
       { preHandler: [requireAuth] },
-      async (request: FastifyRequest<{ Querystring: { limit?: string } }>, reply: FastifyReply) => {
+      async (
+        request: FastifyRequest<{
+          Querystring: {
+            limit?: string
+            credentialId?: string
+            agentId?: string
+            eventType?: string
+          }
+        }>,
+        reply: FastifyReply,
+      ) => {
         const principal = (request as AuthenticatedRequest).principal
         if (!principal) {
           reply.status(401).send({ error: "unauthorized" })
@@ -142,7 +159,12 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
         }
 
         const limit = request.query.limit ? parseInt(request.query.limit, 10) : 50
-        const entries = await credentialService.getAuditLog(principal.userId, Math.min(limit, 200))
+        const entries = await credentialService.getAuditLog(principal.userId, {
+          limit: Math.min(limit, 200),
+          credentialId: request.query.credentialId,
+          agentId: request.query.agentId,
+          eventType: request.query.eventType,
+        })
         return { entries }
       },
     )
