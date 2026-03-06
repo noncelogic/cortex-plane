@@ -24,6 +24,8 @@ import { CortexAttributes, injectTraceContext, withSpan } from "@cortex/shared/t
 import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
+import type { CredentialService } from "../../auth/credential-service.js"
+import type { CredentialResolver } from "../../backends/tools/webhook.js"
 import type { Database, Job } from "../../db/types.js"
 import type { McpClientPool } from "../../mcp/client-pool.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
@@ -50,6 +52,8 @@ export interface AgentExecuteDeps {
   mcpToolRouter?: McpToolRouter
   /** Optional MCP client pool for registering sidecar targets. */
   mcpClientPool?: McpClientPool
+  /** Optional credential service for resolving per-job credentials. */
+  credentialService?: CredentialService
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -72,6 +76,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     skillIndex,
     mcpToolRouter,
     mcpClientPool,
+    credentialService,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -177,6 +182,49 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         // ── Step 4: Build ExecutionTask (needed for routing) ──
         const task = buildExecutionTask(job, agent, agentConfig, resolvedSkills)
 
+        // ── Step 4b: Resolve LLM credential from agent_credential_binding ──
+        let credentialResolver: CredentialResolver | undefined
+        if (credentialService) {
+          try {
+            const binding = await db
+              .selectFrom("agent_credential_binding")
+              .innerJoin(
+                "provider_credential",
+                "provider_credential.id",
+                "agent_credential_binding.provider_credential_id",
+              )
+              .select([
+                "provider_credential.user_account_id",
+                "provider_credential.provider",
+                "provider_credential.credential_class",
+              ])
+              .where("agent_credential_binding.agent_id", "=", agent.id)
+              .where("provider_credential.credential_class", "=", "llm_provider")
+              .where("provider_credential.status", "=", "active")
+              .executeTakeFirst()
+
+            if (binding) {
+              const result = await credentialService.getAccessToken(
+                binding.user_account_id,
+                binding.provider,
+              )
+              if (result) {
+                task.constraints.llmCredential = {
+                  provider: binding.provider,
+                  token: result.token,
+                  credentialId: result.credentialId,
+                }
+              }
+            }
+            // If no binding exists, fall back to env var LLM_API_KEY (backward compat)
+          } catch {
+            // Credential resolution is non-fatal — fall back to env var
+          }
+
+          // Build a credential resolver for tool credential injection
+          credentialResolver = buildCredentialResolver(credentialService, db, agent.id)
+        }
+
         // Inject trace context into task environment for downstream propagation
         const traceHeaders = injectTraceContext()
         if (traceHeaders.traceparent) {
@@ -248,8 +296,16 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   agentId: agent.id,
                   allowedTools: task.constraints.allowedTools,
                   deniedTools: task.constraints.deniedTools,
+                  credentialResolver,
                 }
-              : undefined
+              : credentialResolver
+                ? {
+                    agentId: agent.id,
+                    allowedTools: task.constraints.allowedTools,
+                    deniedTools: task.constraints.deniedTools,
+                    credentialResolver,
+                  }
+                : undefined
 
             const agentRegistry = await (
               backend as {
@@ -686,4 +742,58 @@ function writeEventToBuffer(
     type: mapOutputEventType(event) as "LLM_RESPONSE",
     data: event as unknown as Record<string, unknown>,
   })
+}
+
+// ── Helper: build credential resolver for tool execution ──
+
+function buildCredentialResolver(
+  credentialService: CredentialService,
+  db: Kysely<Database>,
+  agentId: string,
+): CredentialResolver {
+  return async (ref) => {
+    try {
+      if (ref.credentialClass === "tool_specific") {
+        const secret = await credentialService.getToolSecret(ref.provider)
+        if (!secret) return null
+
+        const key = ref.headerName ?? "Authorization"
+        const value = ref.format === "bearer" ? `Bearer ${secret.token}` : secret.token
+        return { key, value }
+      }
+
+      if (ref.credentialClass === "user_service") {
+        const binding = await db
+          .selectFrom("agent_credential_binding")
+          .innerJoin(
+            "provider_credential",
+            "provider_credential.id",
+            "agent_credential_binding.provider_credential_id",
+          )
+          .select(["provider_credential.user_account_id", "provider_credential.provider"])
+          .where("agent_credential_binding.agent_id", "=", agentId)
+          .where("provider_credential.provider", "=", ref.provider)
+          .where("provider_credential.credential_class", "=", "user_service")
+          .where("provider_credential.status", "=", "active")
+          .executeTakeFirst()
+
+        if (!binding) return null
+
+        const result = await credentialService.getAccessToken(
+          binding.user_account_id,
+          binding.provider,
+        )
+        if (!result) return null
+
+        const key = ref.headerName ?? "Authorization"
+        const value = ref.format === "bearer" ? `Bearer ${result.token}` : result.token
+        return { key, value }
+      }
+
+      return null
+    } catch {
+      // Credential resolution failures fail the tool call, not the job
+      return null
+    }
+  }
 }

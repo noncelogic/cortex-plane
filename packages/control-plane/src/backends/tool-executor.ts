@@ -10,7 +10,7 @@ import { createHttpRequestTool } from "./tools/http-request.js"
 import { createMemoryQueryTool } from "./tools/memory-query.js"
 import { createMemoryStoreTool } from "./tools/memory-store.js"
 import { createWebSearchTool } from "./tools/web-search.js"
-import { createWebhookTool, parseWebhookTools } from "./tools/webhook.js"
+import { createWebhookTool, type CredentialResolver, parseWebhookTools } from "./tools/webhook.js"
 
 export interface ToolDefinition {
   /** Unique tool name (sent to the LLM). */
@@ -116,13 +116,15 @@ export async function createAgentToolRegistry(
     mcpRouter?: McpToolRouter
     allowedTools?: string[]
     deniedTools?: string[]
+    /** Credential resolver for webhook tools with credential refs. */
+    credentialResolver?: CredentialResolver
   },
 ): Promise<ToolRegistry> {
   const registry = createDefaultToolRegistry()
 
   const webhookSpecs = parseWebhookTools(agentConfig)
   for (const spec of webhookSpecs) {
-    registry.register(createWebhookTool(spec))
+    registry.register(createWebhookTool(spec, opts?.credentialResolver))
   }
 
   // Merge MCP tools when a router is available

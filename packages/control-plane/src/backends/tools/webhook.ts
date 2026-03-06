@@ -18,6 +18,8 @@
  *   }
  */
 
+import type { ToolCredentialRef } from "@cortex/shared/backends"
+
 import type { ToolDefinition } from "../tool-executor.js"
 
 export interface WebhookToolSpec {
@@ -30,7 +32,17 @@ export interface WebhookToolSpec {
     headers?: Record<string, string>
     timeout_ms?: number
   }
+  /** Credential references to resolve and inject at call time. */
+  credentials?: ToolCredentialRef[]
 }
+
+/**
+ * Resolves a ToolCredentialRef into a key-value pair for injection.
+ * Returns null if resolution fails (caller should fail the tool call, not the job).
+ */
+export type CredentialResolver = (
+  ref: ToolCredentialRef,
+) => Promise<{ key: string; value: string } | null>
 
 const MAX_TIMEOUT_MS = 60_000
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -41,7 +53,10 @@ const MAX_RESPONSE_BYTES = 1_048_576 // 1 MB
  * The tool sends the LLM-provided input as a JSON POST body to the
  * configured URL and returns the response body as the tool output.
  */
-export function createWebhookTool(spec: WebhookToolSpec): ToolDefinition {
+export function createWebhookTool(
+  spec: WebhookToolSpec,
+  credentialResolver?: CredentialResolver,
+): ToolDefinition {
   const method = spec.webhook.method?.toUpperCase() ?? "POST"
   const timeoutMs = Math.min(spec.webhook.timeout_ms ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
 
@@ -53,6 +68,23 @@ export function createWebhookTool(spec: WebhookToolSpec): ToolDefinition {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         ...spec.webhook.headers,
+      }
+
+      // Resolve and inject credentials
+      if (spec.credentials && credentialResolver) {
+        for (const ref of spec.credentials) {
+          const resolved = await credentialResolver(ref)
+          if (!resolved) {
+            return JSON.stringify({
+              error: `Failed to resolve credential for provider "${ref.provider}"`,
+              tool: spec.name,
+            })
+          }
+          if (ref.injectAs === "header") {
+            headers[resolved.key] = resolved.value
+          }
+          // env injection is handled at a higher level
+        }
       }
 
       const response = await fetch(spec.webhook.url, {
@@ -114,6 +146,9 @@ export function parseWebhookTools(agentConfig: Record<string, unknown>): Webhook
               : undefined,
           timeout_ms: typeof webhook.timeout_ms === "number" ? webhook.timeout_ms : undefined,
         },
+        credentials: Array.isArray(e.credentials)
+          ? (e.credentials as ToolCredentialRef[])
+          : undefined,
       })
     }
   }
