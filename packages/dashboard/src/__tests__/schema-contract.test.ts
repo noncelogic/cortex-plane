@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod"
 
+import agentCredentialBindingsFixture from "../../fixtures/api-responses/agent-credential-bindings.json"
 import agentDetailFixture from "../../fixtures/api-responses/agent-detail.json"
 import agentsListFixture from "../../fixtures/api-responses/agents-list.json"
 import approvalsListFixture from "../../fixtures/api-responses/approvals-list.json"
@@ -21,6 +22,10 @@ import jobsListFixture from "../../fixtures/api-responses/jobs-list.json"
 import memorySearchFixture from "../../fixtures/api-responses/memory-search.json"
 import oauthInitFixture from "../../fixtures/api-responses/oauth-init.json"
 import providersListFixture from "../../fixtures/api-responses/providers-list.json"
+import {
+  AgentCredentialBindingListResponseSchema,
+  AgentCredentialBindingSchema,
+} from "../lib/schemas/agent-credentials"
 import {
   AgentDetailSchema,
   AgentListResponseSchema,
@@ -249,6 +254,33 @@ describe("API-Dashboard contract tests", () => {
       const result = ContentListResponseSchema.parse(contentListFixture)
       expect(result.content).toHaveLength(0)
       expect(result.pagination.hasMore).toBe(false)
+    })
+  })
+
+  describe("GET /agents/:id/credentials — AgentCredentialBindingListResponseSchema", () => {
+    it("parses the fixture successfully", () => {
+      const result = AgentCredentialBindingListResponseSchema.parse(agentCredentialBindingsFixture)
+      expect(result.bindings).toHaveLength(2)
+      expect(result.bindings[0]?.credentialClass).toBe("llm_provider")
+      expect(result.bindings[1]?.provider).toBe("github")
+    })
+
+    it("does not silently drop binding fields", () => {
+      for (const binding of agentCredentialBindingsFixture.bindings) {
+        assertContractMatch(AgentCredentialBindingSchema, binding, `Binding ${binding.id}`)
+      }
+    })
+
+    it("AgentCredentialBindingSchema.strict() accepts fixture exactly", () => {
+      const strict = AgentCredentialBindingSchema.strict()
+      for (const binding of agentCredentialBindingsFixture.bindings) {
+        expect(() => strict.parse(binding)).not.toThrow()
+      }
+    })
+
+    it("parses binding with null displayLabel", () => {
+      const result = AgentCredentialBindingSchema.parse(agentCredentialBindingsFixture.bindings[1])
+      expect(result.displayLabel).toBeNull()
     })
   })
 
