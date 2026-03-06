@@ -479,6 +479,109 @@ export class CredentialService {
   }
 
   /**
+   * Rotate a tool secret's API key by credential ID.
+   * Only admins may call this method.
+   */
+  async rotateToolSecret(
+    adminUserId: string,
+    credentialId: string,
+    newApiKey: string,
+  ): Promise<CredentialSummary | null> {
+    // Validate admin role
+    const user = await this.db
+      .selectFrom("user_account")
+      .select("role")
+      .where("id", "=", adminUserId)
+      .executeTakeFirstOrThrow()
+
+    if (user.role !== "admin") {
+      throw new Error("Only admins can rotate tool secrets")
+    }
+
+    // Find the credential and verify it's a tool secret
+    const cred = await this.db
+      .selectFrom("provider_credential")
+      .selectAll()
+      .where("id", "=", credentialId)
+      .where("credential_class", "=", "tool_specific")
+      .executeTakeFirst()
+
+    if (!cred) {
+      return null
+    }
+
+    const userKey = await this.ensureUserKey(cred.user_account_id)
+
+    const updated = await this.db
+      .updateTable("provider_credential")
+      .set({
+        api_key_enc: encryptCredential(newApiKey, userKey),
+        status: "active",
+        error_count: 0,
+        last_error: null,
+        updated_at: new Date(),
+      })
+      .where("id", "=", credentialId)
+      .returningAll()
+      .executeTakeFirstOrThrow()
+
+    await this.auditLog(adminUserId, credentialId, "api_key_rotated", cred.provider, {
+      flow: "tool_secret",
+      tool_name: cred.tool_name,
+    })
+
+    return toSummary(updated, maskApiKey(newApiKey))
+  }
+
+  /**
+   * List all tool secrets (admin only, no decrypted keys).
+   */
+  async listToolSecrets(adminUserId: string): Promise<CredentialSummary[]> {
+    // Validate admin role
+    const user = await this.db
+      .selectFrom("user_account")
+      .select("role")
+      .where("id", "=", adminUserId)
+      .executeTakeFirstOrThrow()
+
+    if (user.role !== "admin") {
+      throw new Error("Only admins can list tool secrets")
+    }
+
+    const creds = await this.db
+      .selectFrom("provider_credential")
+      .selectAll()
+      .where("credential_class", "=", "tool_specific")
+      .orderBy("provider", "asc")
+      .orderBy("created_at", "asc")
+      .execute()
+
+    // Decrypt masked keys per owner
+    const keyCache = new Map<string, Buffer>()
+    const results: CredentialSummary[] = []
+
+    for (const cred of creds) {
+      let maskedKey: string | null = null
+      if (cred.api_key_enc) {
+        try {
+          let userKey = keyCache.get(cred.user_account_id)
+          if (!userKey) {
+            userKey = await this.ensureUserKey(cred.user_account_id)
+            keyCache.set(cred.user_account_id, userKey)
+          }
+          const plain = decryptCredential(cred.api_key_enc, userKey)
+          maskedKey = maskApiKey(plain)
+        } catch {
+          maskedKey = "****"
+        }
+      }
+      results.push(toSummary(cred, maskedKey))
+    }
+
+    return results
+  }
+
+  /**
    * Delete a credential.
    */
   async deleteCredential(userId: string, credentialId: string): Promise<void> {
