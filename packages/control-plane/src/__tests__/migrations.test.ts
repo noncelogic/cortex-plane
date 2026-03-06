@@ -260,6 +260,191 @@ describe("PostgreSQL migrations", () => {
     }
   })
 
+  it("migration 019: migrates agent_scope and allowedTools into agent_tool_binding", async () => {
+    const client = await pool.connect()
+    try {
+      // ── Seed data ───────────────────────────────────────────────────
+      const agentResult = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role, skill_config)
+         VALUES ('scope-agent', 'scope-agent', 'test', '{"allowedTools": ["web_search", "memory_query"]}')
+         RETURNING id`,
+      )
+      const agentId = agentResult.rows[0]!.id
+
+      const agent2Result = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role, skill_config)
+         VALUES ('scope-agent-2', 'scope-agent-2', 'test', '{"allowed_tools": ["code_exec"]}')
+         RETURNING id`,
+      )
+      const agent2Id = agent2Result.rows[0]!.id
+
+      // Agent with no allowedTools — should produce no skill_config bindings
+      const agent3Result = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('no-tools-agent', 'no-tools-agent', 'test')
+         RETURNING id`,
+      )
+      const agent3Id = agent3Result.rows[0]!.id
+
+      const serverResult = await client.query<{ id: string }>(
+        `INSERT INTO mcp_server (name, slug, transport, connection, agent_scope)
+         VALUES ('Test Server', 'test-srv', 'stdio', '{"command":"echo"}', $1)
+         RETURNING id`,
+        [JSON.stringify([agentId, agent3Id])],
+      )
+      const serverId = serverResult.rows[0]!.id
+
+      // Server with empty scope — should not produce bindings
+      await client.query(
+        `INSERT INTO mcp_server (name, slug, transport, connection, agent_scope)
+         VALUES ('Empty Server', 'empty-srv', 'stdio', '{"command":"true"}', '[]')`,
+      )
+
+      await client.query(
+        `INSERT INTO mcp_server_tool (mcp_server_id, name, qualified_name, input_schema)
+         VALUES ($1, 'read_file', 'mcp:test-srv:read_file', '{"type":"object"}'),
+                ($1, 'write_file', 'mcp:test-srv:write_file', '{"type":"object"}')`,
+        [serverId],
+      )
+
+      // ── Run migration 019 UP ──────────────────────────────────────
+      const upSql = await readFile(join(MIGRATIONS_DIR, "019_migrate_agent_scope.up.sql"), "utf-8")
+      await client.query(upSql)
+
+      // ── Verify agent_tool_binding rows from agent_scope ───────────
+      const mcpBindings = await client.query<{ agent_id: string; tool_ref: string }>(
+        `SELECT agent_id::text, tool_ref FROM agent_tool_binding
+         WHERE tool_ref LIKE 'mcp:%'
+         ORDER BY agent_id, tool_ref`,
+      )
+      // agentId gets 2 tools, agent3Id gets 2 tools = 4 rows
+      expect(mcpBindings.rows).toHaveLength(4)
+      expect(mcpBindings.rows).toEqual(
+        expect.arrayContaining([
+          { agent_id: agentId, tool_ref: "mcp:test-srv:read_file" },
+          { agent_id: agentId, tool_ref: "mcp:test-srv:write_file" },
+          { agent_id: agent3Id, tool_ref: "mcp:test-srv:read_file" },
+          { agent_id: agent3Id, tool_ref: "mcp:test-srv:write_file" },
+        ]),
+      )
+
+      // ── Verify agent_tool_binding rows from skill_config ──────────
+      const skillBindings = await client.query<{ agent_id: string; tool_ref: string }>(
+        `SELECT agent_id::text, tool_ref FROM agent_tool_binding
+         WHERE tool_ref NOT LIKE 'mcp:%'
+         ORDER BY agent_id, tool_ref`,
+      )
+      expect(skillBindings.rows).toEqual(
+        expect.arrayContaining([
+          { agent_id: agentId, tool_ref: "memory_query" },
+          { agent_id: agentId, tool_ref: "web_search" },
+          { agent_id: agent2Id, tool_ref: "code_exec" },
+        ]),
+      )
+      expect(skillBindings.rows).toHaveLength(3)
+
+      // ── Verify agent_scope is cleared ─────────────────────────────
+      const scopeResult = await client.query<{ agent_scope: unknown[] }>(
+        `SELECT agent_scope FROM mcp_server WHERE slug = 'test-srv'`,
+      )
+      expect(scopeResult.rows[0]!.agent_scope).toEqual([])
+
+      // ── Verify all bindings have approval_policy = 'auto' ─────────
+      const policyResult = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM agent_tool_binding WHERE approval_policy != 'auto'`,
+      )
+      expect(policyResult.rows[0]!.cnt).toBe("0")
+
+      // ── Verify idempotency: re-running UP does not fail or duplicate
+      await client.query(upSql)
+      const afterRerun = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM agent_tool_binding`,
+      )
+      expect(afterRerun.rows[0]!.cnt).toBe("7") // same 4 MCP + 3 skill
+
+      // ── Clean up seed data ────────────────────────────────────────
+      await client.query("DELETE FROM agent_tool_binding")
+      await client.query("DELETE FROM mcp_server_tool WHERE mcp_server_id = $1", [serverId])
+      await client.query("DELETE FROM mcp_server WHERE slug IN ('test-srv', 'empty-srv')")
+      await client.query("DELETE FROM agent WHERE id IN ($1, $2, $3)", [
+        agentId,
+        agent2Id,
+        agent3Id,
+      ])
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 019 down: restores agent_scope from bindings", async () => {
+    const client = await pool.connect()
+    try {
+      // ── Seed data ───────────────────────────────────────────────────
+      const agentResult = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role, skill_config)
+         VALUES ('down-agent', 'down-agent', 'test', '{"allowedTools": ["web_search"]}')
+         RETURNING id`,
+      )
+      const agentId = agentResult.rows[0]!.id
+
+      const serverResult = await client.query<{ id: string }>(
+        `INSERT INTO mcp_server (name, slug, transport, connection, agent_scope)
+         VALUES ('Down Server', 'down-srv', 'stdio', '{"command":"echo"}', $1)
+         RETURNING id`,
+        [JSON.stringify([agentId])],
+      )
+      const serverId = serverResult.rows[0]!.id
+
+      await client.query(
+        `INSERT INTO mcp_server_tool (mcp_server_id, name, qualified_name, input_schema)
+         VALUES ($1, 'ping', 'mcp:down-srv:ping', '{"type":"object"}')`,
+        [serverId],
+      )
+
+      // Run UP migration
+      const upSql = await readFile(join(MIGRATIONS_DIR, "019_migrate_agent_scope.up.sql"), "utf-8")
+      await client.query(upSql)
+
+      // Verify scope cleared and bindings exist
+      const scopeBefore = await client.query<{ agent_scope: unknown[] }>(
+        `SELECT agent_scope FROM mcp_server WHERE slug = 'down-srv'`,
+      )
+      expect(scopeBefore.rows[0]!.agent_scope).toEqual([])
+
+      const bindingsBefore = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM agent_tool_binding WHERE agent_id = $1`,
+        [agentId],
+      )
+      expect(bindingsBefore.rows[0]!.cnt).toBe("2") // 1 MCP + 1 skill
+
+      // ── Run DOWN migration ────────────────────────────────────────
+      const downSql = await readFile(
+        join(MIGRATIONS_DIR, "019_migrate_agent_scope.down.sql"),
+        "utf-8",
+      )
+      await client.query(downSql)
+
+      // Verify agent_scope restored
+      const scopeAfter = await client.query<{ agent_scope: string[] }>(
+        `SELECT agent_scope FROM mcp_server WHERE slug = 'down-srv'`,
+      )
+      expect(scopeAfter.rows[0]!.agent_scope).toContain(agentId)
+
+      // Verify migrated bindings removed
+      const bindingsAfter = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM agent_tool_binding WHERE agent_id = $1`,
+        [agentId],
+      )
+      expect(bindingsAfter.rows[0]!.cnt).toBe("0")
+
+      // ── Clean up ──────────────────────────────────────────────────
+      await client.query("DELETE FROM mcp_server_tool WHERE mcp_server_id = $1", [serverId])
+      await client.query("DELETE FROM mcp_server WHERE slug = 'down-srv'")
+      await client.query("DELETE FROM agent WHERE id = $1", [agentId])
+    } finally {
+      client.release()
+    }
+  })
+
   it("rolls back all down migrations cleanly", async () => {
     const client = await pool.connect()
     try {
