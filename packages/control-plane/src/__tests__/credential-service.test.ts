@@ -394,6 +394,58 @@ describe("CredentialService.listCredentials", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Tests: storeOAuthCredential credentialClass param
+// ---------------------------------------------------------------------------
+
+describe("CredentialService.storeOAuthCredential", () => {
+  it("defaults to llm_provider credential class when not specified", async () => {
+    const insertedCred = makeCredRow({
+      credential_class: "llm_provider",
+      credential_type: "oauth",
+      provider: "google-antigravity",
+      api_key_enc: null,
+      access_token_enc: encryptCredential("oauth-access-token", USER_KEY),
+    })
+
+    const { db } = buildMockDb({ existingCred: null, insertedCred })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    const result = await service.storeOAuthCredential(ADMIN_USER_ID, "google-antigravity", {
+      access_token: "oauth-access-token",
+      token_type: "Bearer",
+    })
+
+    expect(result.credentialClass).toBe("llm_provider")
+    expect(result.toolName).toBeNull()
+    expect(result.credentialType).toBe("oauth")
+  })
+
+  it("accepts explicit credentialClass for user service providers", async () => {
+    const insertedCred = makeCredRow({
+      credential_class: "user_service",
+      credential_type: "oauth",
+      provider: "google-workspace",
+      api_key_enc: null,
+      access_token_enc: encryptCredential("oauth-access-token", USER_KEY),
+    })
+
+    const { db } = buildMockDb({ existingCred: null, insertedCred })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    const result = await service.storeOAuthCredential(
+      ADMIN_USER_ID,
+      "google-workspace",
+      { access_token: "oauth-access-token", token_type: "Bearer" },
+      { credentialClass: "user_service" },
+    )
+
+    expect(result.credentialClass).toBe("user_service")
+    expect(result.toolName).toBeNull()
+    expect(result.credentialType).toBe("oauth")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests: backward compatibility
 // ---------------------------------------------------------------------------
 
