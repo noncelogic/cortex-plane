@@ -29,3 +29,10 @@ export interface McpToolInfo {
   inputSchema: Record<string, unknown>
   annotations?: Record<string, unknown>
 }
+
+export interface SidecarConnectionOptions {
+  podName: string
+  containerName: string
+  namespace: string
+  command: string[]
+}

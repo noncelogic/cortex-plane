@@ -25,6 +25,7 @@ import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { Database, Job } from "../../db/types.js"
+import type { McpClientPool } from "../../mcp/client-pool.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
@@ -47,6 +48,8 @@ export interface AgentExecuteDeps {
   skillIndex?: import("@cortex/shared/skills").SkillIndex
   /** Optional MCP tool router for resolving MCP tools into agent registries. */
   mcpToolRouter?: McpToolRouter
+  /** Optional MCP client pool for registering sidecar targets. */
+  mcpClientPool?: McpClientPool
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -68,6 +71,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     memoryExtractThreshold = 50,
     skillIndex,
     mcpToolRouter,
+    mcpClientPool,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -200,6 +204,33 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           // ── Step 7: Initialize JSONL session buffer ──
           if (sessionBufferFactory) {
             bufferWriter = sessionBufferFactory(jobId, agent.id)
+          }
+
+          // ── Step 7b: Register sidecar targets for stdio MCP servers ──
+          if (mcpClientPool && mcpToolRouter) {
+            const stdioServers = await db
+              .selectFrom("mcp_server")
+              .selectAll()
+              .where("transport", "=", "stdio")
+              .where("status", "!=", "DISABLED")
+              .execute()
+
+            const ns =
+              typeof agentConfig.namespace === "string" ? agentConfig.namespace : "cortex-plane"
+            for (const srv of stdioServers) {
+              const scope = srv.agent_scope
+              if (scope.length > 0 && !scope.includes(agent.id)) continue
+
+              const conn = srv.connection as { command?: string; args?: string[] }
+              if (!conn.command) continue
+
+              mcpClientPool.registerSidecar(srv.id, {
+                podName: `agent-${agent.name}`,
+                containerName: `mcp-sidecar-${srv.slug}`,
+                namespace: ns,
+                command: [conn.command, ...(conn.args ?? [])],
+              })
+            }
           }
 
           // ── Step 8: Execute task ──

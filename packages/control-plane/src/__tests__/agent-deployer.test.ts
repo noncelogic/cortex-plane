@@ -193,6 +193,170 @@ describe("buildPod", () => {
     const pod = buildPod({ ...baseConfig, namespace: "custom-ns" })
     expect(pod.metadata?.namespace).toBe("custom-ns")
   })
+
+  // ── MCP sidecar injection ──
+
+  it("does not include MCP sidecars by default", () => {
+    const pod = buildPod(baseConfig)
+    const sidecars = pod.spec?.containers.filter((c) => c.name.startsWith("mcp-sidecar-"))
+    expect(sidecars).toHaveLength(0)
+  })
+
+  it("injects MCP sidecar containers when mcpSidecars is provided", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "brave",
+          image: "noncelogic/mcp-brave:latest",
+          command: ["node", "/opt/server.js"],
+        },
+      ],
+    })
+    expect(pod.spec?.containers).toHaveLength(2)
+    const sidecar = pod.spec?.containers.find((c) => c.name === "mcp-sidecar-brave")
+    expect(sidecar).toBeDefined()
+    expect(sidecar?.image).toBe("noncelogic/mcp-brave:latest")
+    expect(sidecar?.command).toEqual(["node", "/opt/server.js"])
+  })
+
+  it("MCP sidecar has default resource limits", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "brave",
+          image: "noncelogic/mcp-brave:latest",
+          command: ["node", "/opt/server.js"],
+        },
+      ],
+    })
+    const sidecar = pod.spec?.containers.find((c) => c.name === "mcp-sidecar-brave")
+    expect(sidecar?.resources?.requests?.cpu).toBe("50m")
+    expect(sidecar?.resources?.requests?.memory).toBe("64Mi")
+    expect(sidecar?.resources?.limits?.cpu).toBe("200m")
+    expect(sidecar?.resources?.limits?.memory).toBe("256Mi")
+  })
+
+  it("MCP sidecar uses custom resources when provided", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "heavy",
+          image: "noncelogic/mcp-heavy:latest",
+          command: ["python", "main.py"],
+          resources: {
+            requests: { cpu: "100m", memory: "128Mi" },
+            limits: { cpu: "500m", memory: "512Mi" },
+          },
+        },
+      ],
+    })
+    const sidecar = pod.spec?.containers.find((c) => c.name === "mcp-sidecar-heavy")
+    expect(sidecar?.resources?.requests?.cpu).toBe("100m")
+    expect(sidecar?.resources?.limits?.memory).toBe("512Mi")
+  })
+
+  it("MCP sidecar has hardened security context", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "brave",
+          image: "noncelogic/mcp-brave:latest",
+          command: ["node", "/opt/server.js"],
+        },
+      ],
+    })
+    const sidecar = pod.spec?.containers.find((c) => c.name === "mcp-sidecar-brave")
+    expect(sidecar?.securityContext?.runAsNonRoot).toBe(true)
+    expect(sidecar?.securityContext?.runAsUser).toBe(1000)
+    expect(sidecar?.securityContext?.readOnlyRootFilesystem).toBe(true)
+    expect(sidecar?.securityContext?.allowPrivilegeEscalation).toBe(false)
+    expect(sidecar?.securityContext?.capabilities?.drop).toEqual(["ALL"])
+  })
+
+  it("MCP sidecar shares workspace volume with agent", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "brave",
+          image: "noncelogic/mcp-brave:latest",
+          command: ["node", "/opt/server.js"],
+        },
+      ],
+    })
+    const sidecar = pod.spec?.containers.find((c) => c.name === "mcp-sidecar-brave")
+    const wsMount = sidecar?.volumeMounts?.find((v) => v.name === "workspace")
+    expect(wsMount?.mountPath).toBe("/workspace")
+    expect(wsMount?.subPath).toBe("devops-01")
+  })
+
+  it("MCP sidecar has own tmp volume with size limit", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "brave",
+          image: "noncelogic/mcp-brave:latest",
+          command: ["node", "/opt/server.js"],
+        },
+      ],
+    })
+    const sidecar = pod.spec?.containers.find((c) => c.name === "mcp-sidecar-brave")
+    const tmpMount = sidecar?.volumeMounts?.find((v) => v.name === "tmp-mcp-brave")
+    expect(tmpMount?.mountPath).toBe("/tmp")
+    const tmpVol = pod.spec?.volumes?.find((v) => v.name === "tmp-mcp-brave")
+    expect(tmpVol?.emptyDir?.sizeLimit).toBe("128Mi")
+  })
+
+  it("injects env vars into MCP sidecar", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "brave",
+          image: "noncelogic/mcp-brave:latest",
+          command: ["node", "/opt/server.js"],
+          env: { BRAVE_API_KEY: "key-123" },
+        },
+      ],
+    })
+    const sidecar = pod.spec?.containers.find((c) => c.name === "mcp-sidecar-brave")
+    const envVar = sidecar?.env?.find((e) => e.name === "BRAVE_API_KEY")
+    expect(envVar?.value).toBe("key-123")
+  })
+
+  it("injects multiple MCP sidecars with separate volumes", () => {
+    const pod = buildPod({
+      ...baseConfig,
+      mcpSidecars: [
+        {
+          slug: "brave",
+          image: "noncelogic/mcp-brave:latest",
+          command: ["node", "/opt/brave.js"],
+        },
+        {
+          slug: "github",
+          image: "noncelogic/mcp-github:latest",
+          command: ["node", "/opt/github.js"],
+        },
+      ],
+    })
+    const sidecars = pod.spec?.containers.filter((c) => c.name.startsWith("mcp-sidecar-"))
+    expect(sidecars).toHaveLength(2)
+    expect(pod.spec?.volumes?.find((v) => v.name === "tmp-mcp-brave")).toBeDefined()
+    expect(pod.spec?.volumes?.find((v) => v.name === "tmp-mcp-github")).toBeDefined()
+  })
+
+  it("agent pods without MCP sidecars are unchanged", () => {
+    const podWithout = buildPod(baseConfig)
+    const podWithEmpty = buildPod({ ...baseConfig, mcpSidecars: [] })
+    expect(podWithout.spec?.containers).toHaveLength(1)
+    expect(podWithEmpty.spec?.containers).toHaveLength(1)
+  })
 })
 
 // ---------------------------------------------------------------------------

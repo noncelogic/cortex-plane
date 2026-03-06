@@ -8,6 +8,14 @@ export interface AgentResourceSpec {
   limits: AgentResources
 }
 
+export interface McpSidecarSpec {
+  slug: string
+  image: string
+  command: string[]
+  env?: Record<string, string>
+  resources?: AgentResourceSpec
+}
+
 export interface AgentDeploymentConfig {
   name: string
   image: string
@@ -15,6 +23,7 @@ export interface AgentDeploymentConfig {
   env: Record<string, string>
   skills: string[]
   playwrightEnabled?: boolean
+  mcpSidecars?: McpSidecarSpec[]
   namespace?: string
 }
 
