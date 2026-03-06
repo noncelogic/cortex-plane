@@ -4,11 +4,11 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
+import { useOAuthPopup } from "@/hooks/use-oauth-popup"
 import {
   type Credential,
   deleteCredential as apiDeleteCredential,
   exchangeOAuthConnect,
-  initOAuthConnect,
   listCredentials,
   listProviders,
   type ProviderInfo,
@@ -39,14 +39,9 @@ function SettingsInner() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Code-paste flow state
-  const [codePasteFlow, setCodePasteFlow] = useState<{
-    provider: string
-    authUrl: string
-    codeVerifier: string
-    state: string
-    pastedUrl: string
-  } | null>(null)
+  // Code-paste fallback state (shown when popup cannot read the redirect URL)
+  const [popupProvider, setPopupProvider] = useState<string | null>(null)
+  const [codePastePastedUrl, setCodePastePastedUrl] = useState("")
   const [codePasteError, setCodePasteError] = useState<string | null>(null)
   const [codePasteSubmitting, setCodePasteSubmitting] = useState(false)
 
@@ -71,41 +66,40 @@ function SettingsInner() {
     }
   }, [])
 
+  // Popup OAuth flow (progressive enhancement over code-paste)
+  const popup = useOAuthPopup(() => void fetchData())
+
   useEffect(() => {
     if (authStatus === "authenticated") void fetchData()
   }, [authStatus, fetchData])
 
-  // Initiate code-paste flow
-  const startCodePasteFlow = useCallback(async (provider: string) => {
-    setCodePasteError(null)
-    try {
-      const data = await initOAuthConnect(provider)
-      setCodePasteFlow({
-        provider,
-        authUrl: data.authUrl,
-        codeVerifier: data.codeVerifier,
-        state: data.state,
-        pastedUrl: "",
-      })
-    } catch (err) {
-      setCodePasteError(err instanceof Error ? err.message : "Failed to initialize OAuth flow")
-    }
-  }, [])
+  // Start popup OAuth flow (falls back to code-paste if popup is blocked or URL unreadable)
+  const startPopupFlow = useCallback(
+    async (provider: string) => {
+      setCodePasteError(null)
+      setCodePastePastedUrl("")
+      setPopupProvider(provider)
+      await popup.startFlow(provider)
+    },
+    [popup],
+  )
 
-  // Submit code-paste exchange
+  // Submit code-paste exchange (fallback path)
   const submitCodePaste = useCallback(async () => {
-    if (!codePasteFlow || !codePasteFlow.pastedUrl.trim()) return
+    if (!popup.fallbackContext || !popupProvider || !codePastePastedUrl.trim()) return
     setCodePasteSubmitting(true)
     setCodePasteError(null)
 
     try {
-      await exchangeOAuthConnect(codePasteFlow.provider, {
-        pastedUrl: codePasteFlow.pastedUrl,
-        codeVerifier: codePasteFlow.codeVerifier,
-        state: codePasteFlow.state,
+      await exchangeOAuthConnect(popupProvider, {
+        pastedUrl: codePastePastedUrl,
+        codeVerifier: popup.fallbackContext.codeVerifier,
+        state: popup.fallbackContext.state,
       })
 
-      setCodePasteFlow(null)
+      popup.cancel()
+      setPopupProvider(null)
+      setCodePastePastedUrl("")
       void fetchData()
     } catch (err) {
       setCodePasteError(
@@ -114,7 +108,7 @@ function SettingsInner() {
     } finally {
       setCodePasteSubmitting(false)
     }
-  }, [codePasteFlow, fetchData])
+  }, [popup, popupProvider, codePastePastedUrl, fetchData])
 
   // Connect OAuth provider (redirect-based, for providers with registered callbacks)
   const connectOAuth = useCallback((provider: string) => {
@@ -209,9 +203,9 @@ function SettingsInner() {
           Connection error: {paramError}
         </div>
       )}
-      {codePasteError && !codePasteFlow && (
+      {(codePasteError ?? popup.error) && popup.status === "idle" && (
         <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          {codePasteError}
+          {codePasteError ?? popup.error}
         </div>
       )}
 
@@ -272,7 +266,7 @@ function SettingsInner() {
                   ) : isOAuth && isCodePaste ? (
                     <button
                       type="button"
-                      onClick={() => void startCodePasteFlow(p.id)}
+                      onClick={() => void startPopupFlow(p.id)}
                       className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                     >
                       Connect
@@ -307,78 +301,100 @@ function SettingsInner() {
         </div>
       </section>
 
-      {/* Code-paste flow dialog */}
-      {codePasteFlow && (
+      {/* OAuth popup / code-paste fallback dialog */}
+      {popupProvider && popup.status !== "idle" && popup.status !== "success" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-lg rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-text-main">
-              Connect {providers.find((p) => p.id === codePasteFlow.provider)?.name}
+              Connect {providers.find((p) => p.id === popupProvider)?.name}
             </h3>
 
             <div className="mt-3 space-y-4">
-              <div>
-                <p className="text-sm text-text-muted">
-                  1. Click the link below to open the authorization page in a new tab.
-                </p>
-                <a
-                  href={codePasteFlow.authUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"
-                >
-                  Open authorization page
-                </a>
-              </div>
-
-              <div>
-                <p className="text-sm text-text-muted">
-                  2. After authorizing, copy the URL from your browser address bar and paste it
-                  below.
-                </p>
-              </div>
-
-              {codePasteError && (
-                <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                  {codePasteError}
+              {popup.status === "waiting" && (
+                <div className="flex items-center gap-3">
+                  <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <p className="text-sm text-text-muted">
+                    Waiting for authorization in the popup window...
+                  </p>
                 </div>
               )}
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-text-muted">
-                  Paste redirect URL here
-                </label>
-                <input
-                  type="text"
-                  value={codePasteFlow.pastedUrl}
-                  onChange={(e) =>
-                    setCodePasteFlow((f) => (f ? { ...f, pastedUrl: e.target.value } : f))
-                  }
-                  className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="http://localhost:..."
-                  autoFocus
-                />
-              </div>
+              {popup.status === "fallback" && popup.fallbackContext && (
+                <>
+                  <div>
+                    <p className="text-sm text-text-muted">
+                      The popup could not capture the redirect automatically. Please complete
+                      authorization and paste the redirect URL below.
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-text-muted">
+                      1. Open the authorization page (if not already open).
+                    </p>
+                    <a
+                      href={popup.fallbackContext.authUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"
+                    >
+                      Open authorization page
+                    </a>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-text-muted">
+                      2. After authorizing, copy the URL from your browser address bar and paste it
+                      below.
+                    </p>
+                  </div>
+
+                  {(codePasteError ?? popup.error) && (
+                    <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                      {codePasteError ?? popup.error}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">
+                      Paste redirect URL here
+                    </label>
+                    <input
+                      type="text"
+                      value={codePastePastedUrl}
+                      onChange={(e) => setCodePastePastedUrl(e.target.value)}
+                      className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="http://localhost:..."
+                      autoFocus
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
-                  setCodePasteFlow(null)
+                  popup.cancel()
+                  setPopupProvider(null)
                   setCodePasteError(null)
+                  setCodePastePastedUrl("")
                 }}
                 className="rounded-lg px-4 py-2 text-sm text-text-muted hover:bg-secondary transition-colors"
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => void submitCodePaste()}
-                disabled={codePasteSubmitting || !codePasteFlow.pastedUrl.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                {codePasteSubmitting ? "Connecting..." : "Connect"}
-              </button>
+              {popup.status === "fallback" && (
+                <button
+                  type="button"
+                  onClick={() => void submitCodePaste()}
+                  disabled={codePasteSubmitting || !codePastePastedUrl.trim()}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {codePasteSubmitting ? "Connecting..." : "Connect"}
+                </button>
+              )}
             </div>
           </div>
         </div>
