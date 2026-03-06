@@ -1,0 +1,96 @@
+# GitHub MCP Server — Streamable HTTP deployment
+#
+# Deploys the official GitHub MCP server as an in-cluster service.
+# The control-plane connects via Streamable HTTP transport.
+#
+# Prerequisites:
+#   - A GitHub Personal Access Token stored in the "github-mcp-token" secret
+#     kubectl create secret generic github-mcp-token \
+#       --from-literal=GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx \
+#       -n cortex-plane
+#
+# Register in cortex-plane:
+#   POST /api/mcp-servers
+#   {
+#     "name": "GitHub",
+#     "slug": "github",
+#     "transport": "streamable-http",
+#     "connection": { "url": "http://mcp-github.cortex-plane.svc:3000/mcp" }
+#   }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-github
+  namespace: cortex-plane
+  labels:
+    app.kubernetes.io/name: mcp-github
+    app.kubernetes.io/component: mcp-server
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-github
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-github
+        app.kubernetes.io/component: mcp-server
+    spec:
+      containers:
+        - name: github-mcp
+          image: ghcr.io/modelcontextprotocol/servers/github:latest
+          ports:
+            - name: mcp
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: GITHUB_PERSONAL_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-mcp-token
+                  key: GITHUB_PERSONAL_ACCESS_TOKEN
+            - name: MCP_TRANSPORT
+              value: "streamable-http"
+            - name: MCP_PORT
+              value: "3000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /mcp
+              port: mcp
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /mcp
+              port: mcp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-github
+  namespace: cortex-plane
+  labels:
+    app.kubernetes.io/name: mcp-github
+    app.kubernetes.io/component: mcp-server
+spec:
+  selector:
+    app.kubernetes.io/name: mcp-github
+  ports:
+    - name: mcp
+      port: 3000
+      targetPort: mcp
+      protocol: TCP
+  type: ClusterIP

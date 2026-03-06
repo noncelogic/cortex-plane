@@ -1,0 +1,92 @@
+# Filesystem MCP Server — stdio sidecar example
+#
+# The filesystem MCP server runs as a sidecar container inside an agent pod.
+# The control-plane communicates via stdio transport using k8s exec into the
+# sidecar container.
+#
+# This manifest shows a standalone pod for testing purposes.
+# In production, the sidecar is injected automatically by the control-plane
+# sidecar injector (see #289).
+#
+# Register in cortex-plane:
+#   POST /api/mcp-servers
+#   {
+#     "name": "Filesystem",
+#     "slug": "filesystem",
+#     "transport": "stdio",
+#     "connection": { "command": "npx", "args": ["@modelcontextprotocol/server-filesystem", "/workspace"] }
+#   }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-with-filesystem-mcp
+  namespace: cortex-plane
+  labels:
+    app.kubernetes.io/name: agent-with-filesystem-mcp
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: cortex-plane
+spec:
+  serviceAccountName: agent-sa
+  initContainers:
+    - name: hydrate
+      image: ghcr.io/noncelogic/cortex-plane/agent-hydrator:latest
+      env:
+        - name: AGENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['cortex-plane.io/agent-id']
+        - name: CONTROL_PLANE_URL
+          value: "http://control-plane.cortex-plane.svc:8080"
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+  containers:
+    # Primary agent container
+    - name: core-agent
+      image: ghcr.io/noncelogic/cortex-plane/agent-core:latest
+      env:
+        - name: AGENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['cortex-plane.io/agent-id']
+        - name: CONTROL_PLANE_URL
+          value: "http://control-plane.cortex-plane.svc:8080"
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+      resources:
+        requests:
+          cpu: 250m
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 512Mi
+
+    # Filesystem MCP sidecar — stdio transport
+    - name: mcp-sidecar-filesystem
+      image: ghcr.io/modelcontextprotocol/servers/filesystem:latest
+      command: ["npx"]
+      args: ["@modelcontextprotocol/server-filesystem", "/workspace"]
+      stdin: true
+      stdinOnce: false
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+      securityContext:
+        readOnlyRootFilesystem: false
+        allowPrivilegeEscalation: false
+
+  volumes:
+    - name: workspace
+      emptyDir:
+        sizeLimit: 1Gi
+
+  restartPolicy: Never
