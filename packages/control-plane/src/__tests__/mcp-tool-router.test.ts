@@ -11,8 +11,10 @@ const AGENT_ID = "agent-111"
 
 /** Minimal mock of a McpClientPool. Returns the pool and its mock fn. */
 function mockPool(): McpClientPool & { _callTool: ReturnType<typeof vi.fn> } {
-  const callTool = vi.fn().mockResolvedValue("mcp-result")
-  return { callTool, _callTool: callTool }
+  const callTool = vi.fn().mockResolvedValue({ output: "mcp-result", isError: false })
+  const isConnected = vi.fn().mockReturnValue(true)
+  const connect = vi.fn().mockResolvedValue({})
+  return { callTool, isConnected, connect, _callTool: callTool }
 }
 
 /** Build a fake joined row as returned by the Kysely queries in McpToolRouter. */
@@ -178,7 +180,11 @@ describe("McpToolRouter.resolve — qualified names", () => {
     const def = await router.resolve("mcp:search-srv:search", AGENT_ID)
     const output = await def!.execute({ query: "test" })
 
-    expect(deps.pool._callTool).toHaveBeenCalledWith("search-srv", "search", { query: "test" })
+    expect(deps.pool._callTool).toHaveBeenCalledWith(
+      "aaaaaaaa-0000-0000-0000-000000000001",
+      "search",
+      { query: "test" },
+    )
     expect(output).toBe("mcp-result")
   })
 })

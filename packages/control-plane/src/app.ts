@@ -20,7 +20,7 @@ import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import { FeedbackService } from "./feedback/service.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
-import { HttpMcpClientPool } from "./mcp/client-pool.js"
+import { McpClientPool } from "./mcp/client-pool.js"
 import { McpHealthSupervisor } from "./mcp/health-supervisor.js"
 import { McpToolRouter } from "./mcp/tool-router.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
@@ -88,7 +88,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   const channelSupervisor = options.channelSupervisor
 
   // MCP client pool + tool router — resolves MCP tools for agent registries
-  const mcpClientPool = new HttpMcpClientPool({ db })
+  const mcpClientPool = new McpClientPool()
   const mcpToolRouter = new McpToolRouter({ db, clientPool: mcpClientPool })
 
   // Start Graphile Worker alongside Fastify — shared pg.Pool

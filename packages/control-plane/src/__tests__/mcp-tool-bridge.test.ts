@@ -52,7 +52,9 @@ function makeTool(overrides: Partial<McpServerTool> = {}): McpServerTool {
 
 function mockPool(): McpClientPool {
   return {
-    callTool: vi.fn().mockResolvedValue("tool-result"),
+    callTool: vi.fn().mockResolvedValue({ output: "tool-result", isError: false }),
+    isConnected: vi.fn().mockReturnValue(true),
+    connect: vi.fn().mockResolvedValue({}),
   }
 }
 
@@ -162,21 +164,27 @@ describe("createMcpToolDefinition", () => {
   })
 
   it("delegates execution to client pool with correct args", async () => {
-    const callTool = vi.fn().mockResolvedValue("tool-result")
-    const pool: McpClientPool = { callTool }
-    const server = makeServer({ slug: "srv-1" })
+    const callTool = vi.fn().mockResolvedValue({ output: "tool-result", isError: false })
+    const pool: McpClientPool = {
+      callTool,
+      isConnected: vi.fn().mockReturnValue(true),
+      connect: vi.fn().mockResolvedValue({}),
+    }
+    const server = makeServer({ id: "srv-id-001", slug: "srv-1" })
     const tool = makeTool({ name: "search" })
 
     const def = createMcpToolDefinition(pool, server, tool)
     const result = await def.execute({ query: "hello" })
 
-    expect(callTool).toHaveBeenCalledWith("srv-1", "search", { query: "hello" })
+    expect(callTool).toHaveBeenCalledWith("srv-id-001", "search", { query: "hello" })
     expect(result).toBe("tool-result")
   })
 
   it("propagates errors from pool.callTool", async () => {
     const pool: McpClientPool = {
       callTool: vi.fn().mockRejectedValue(new Error("connection refused")),
+      isConnected: vi.fn().mockReturnValue(true),
+      connect: vi.fn().mockResolvedValue({}),
     }
     const def = createMcpToolDefinition(pool, makeServer(), makeTool())
 
