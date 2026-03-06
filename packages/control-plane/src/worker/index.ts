@@ -85,7 +85,9 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
       // Expire stale approval requests every 60 seconds
       "* * * * * approval_expire ?max=1",
       // Proactive OAuth token refresh every 15 minutes
-      ...(authConfig ? ["*/15 * * * * credential_refresh ?max=1"] : []),
+      ...(authConfig
+        ? ["*/15 * * * * credential_refresh ?jobKey=credential_refresh_periodic&jobKeyMode=preserve_run_at&max=1"]
+        : []),
     ].join("\n"),
   })
 

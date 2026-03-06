@@ -684,10 +684,10 @@ export class CredentialService {
       const providerConfig = this.getProviderConfig(cred.provider)
       if (!providerConfig || !cred.refresh_token_enc) continue
 
-      const userKey = await this.ensureUserKey(cred.user_account_id)
-      const refreshToken = decryptCredential(cred.refresh_token_enc, userKey)
-
       try {
+        const userKey = await this.ensureUserKey(cred.user_account_id)
+        const refreshToken = decryptCredential(cred.refresh_token_enc, userKey)
+
         const tokens = await refreshAccessToken({
           provider: cred.provider,
           config: providerConfig,
@@ -714,6 +714,7 @@ export class CredentialService {
             updated_at: new Date(),
           })
           .where("id", "=", cred.id)
+          .where("status", "=", "active")
           .execute()
 
         await this.auditLog(cred.user_account_id, cred.id, "token_refreshed", cred.provider)
@@ -731,6 +732,7 @@ export class CredentialService {
             updated_at: new Date(),
           })
           .where("id", "=", cred.id)
+          .where("status", "=", "active")
           .execute()
 
         await this.auditLog(cred.user_account_id, cred.id, "refresh_failed", cred.provider, {
