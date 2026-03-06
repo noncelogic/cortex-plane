@@ -82,6 +82,51 @@ export interface TaskContext {
   skillInstructions?: string
 }
 
+/**
+ * Reference to a resolved LLM credential for per-job override.
+ * Attached by the execution pipeline after resolving agent_credential_binding.
+ */
+export interface LlmCredentialRef {
+  /** LLM provider identifier (e.g. "anthropic", "openai", "google-ai-studio"). */
+  provider: string
+  /** Decrypted access token or API key — held in memory only for the API call. */
+  token: string
+  /** Credential ID for audit trail. */
+  credentialId: string
+}
+
+/**
+ * Reference to a tool credential to inject into webhook/tool calls.
+ * Configured in WebhookToolSpec.credentials[].
+ */
+export interface ToolCredentialRef {
+  /** Credential class determines resolution strategy. */
+  credentialClass: "user_service" | "tool_specific"
+  /** Provider identifier (e.g. "brave", "google-workspace", "github-user"). */
+  provider: string
+  /** How the resolved credential is injected. */
+  injectAs: "header" | "env"
+  /** HTTP header name when injectAs = "header" (e.g. "Authorization"). */
+  headerName?: string
+  /** Env variable name when injectAs = "env". */
+  envName?: string
+  /** Token format: "bearer" wraps as "Bearer <token>", "raw" passes as-is. */
+  format?: "bearer" | "raw"
+}
+
+/**
+ * Execution context for credential resolution during tool calls.
+ * Threaded through the tool executor so tools can resolve credentials.
+ */
+export interface ToolExecutionContext {
+  /** User who owns the job (for user_service credential resolution). */
+  userId: string
+  /** Job ID for audit logging. */
+  jobId: string
+  /** Agent ID for audit logging. */
+  agentId: string
+}
+
 export interface TaskConstraints {
   /** Maximum execution time (ms). */
   timeoutMs: number
@@ -106,6 +151,9 @@ export interface TaskConstraints {
 
   /** Whether the backend may execute shell commands. */
   shellAccess: boolean
+
+  /** Per-job LLM credential override (resolved from agent_credential_binding). */
+  llmCredential?: LlmCredentialRef
 }
 
 // ──────────────────────────────────────────────────

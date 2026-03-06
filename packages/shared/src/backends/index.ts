@@ -30,6 +30,7 @@ export type {
   ExecutionStatus,
   ExecutionTask,
   FileChange,
+  LlmCredentialRef,
   OutputCompleteEvent,
   OutputErrorEvent,
   OutputEvent,
@@ -43,4 +44,6 @@ export type {
   TaskContext,
   TaskInstruction,
   TokenUsage,
+  ToolCredentialRef,
+  ToolExecutionContext,
 } from "./types.js"

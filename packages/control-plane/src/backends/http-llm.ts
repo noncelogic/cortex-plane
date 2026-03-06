@@ -34,12 +34,14 @@ import {
   type ToolDefinition,
   type ToolRegistry,
 } from "./tool-executor.js"
+import type { CredentialResolver } from "./tools/webhook.js"
 
 export interface McpDeps {
-  mcpRouter: McpToolRouter
+  mcpRouter?: McpToolRouter
   agentId: string
   allowedTools?: string[]
   deniedTools?: string[]
+  credentialResolver?: CredentialResolver
 }
 
 type LlmProvider = "anthropic" | "openai"
@@ -178,6 +180,26 @@ export class HttpLlmBackend implements ExecutionBackend {
     const startTime = Date.now()
     const registry = taskToolRegistry ?? this.toolRegistry
 
+    // Per-job credential override: create a one-shot client with the job's token
+    const cred = task.constraints.llmCredential
+    if (cred) {
+      const credProvider = mapCredentialProvider(cred.provider)
+      if (credProvider === "anthropic") {
+        const client = new Anthropic({
+          apiKey: cred.token,
+          ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+        })
+        return Promise.resolve(new AnthropicHandle(task, client, model, startTime, registry))
+      }
+      // OpenAI or other providers
+      const client = new OpenAI({
+        apiKey: cred.token,
+        ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+      })
+      return Promise.resolve(new OpenAIHandle(task, client, model, startTime, registry))
+    }
+
+    // Fall back to the backend's global client (env var LLM_API_KEY)
     if (this.provider === "anthropic" && this.anthropicClient) {
       return Promise.resolve(
         new AnthropicHandle(task, this.anthropicClient, model, startTime, registry),
@@ -209,6 +231,7 @@ export class HttpLlmBackend implements ExecutionBackend {
             mcpRouter: mcpDeps.mcpRouter,
             allowedTools: mcpDeps.allowedTools,
             deniedTools: mcpDeps.deniedTools,
+            credentialResolver: mcpDeps.credentialResolver,
           }
         : undefined,
     )
@@ -259,6 +282,16 @@ function toAnthropicTools(defs: ToolDefinition[]): Anthropic.Tool[] {
     description: t.description,
     input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
   }))
+}
+
+/**
+ * Map a credential provider ID to the LLM provider type.
+ * Credentials from "anthropic" or "google-antigravity" use the Anthropic SDK,
+ * while "openai", "openai-codex", "google-ai-studio" use the OpenAI SDK.
+ */
+function mapCredentialProvider(provider: string): LlmProvider {
+  if (provider === "anthropic" || provider === "google-antigravity") return "anthropic"
+  return "openai"
 }
 
 function toOpenAITools(defs: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
