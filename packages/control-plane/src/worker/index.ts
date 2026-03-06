@@ -15,12 +15,14 @@ import { run, type Runner, type TaskList } from "graphile-worker"
 import type { Kysely } from "kysely"
 import type { Pool } from "pg"
 
+import type { AuthOAuthConfig } from "../config.js"
 import type { Database } from "../db/types.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
 import { createApprovalExpireTask } from "./tasks/approval-expire.js"
 import { createCorrectionStrengthenTask } from "./tasks/correction-strengthen.js"
+import { createCredentialRefreshTask } from "./tasks/credential-refresh.js"
 import { createMemoryExtractTask } from "./tasks/memory-extract.js"
 import { createProactiveDetectTask } from "./tasks/proactive-detect.js"
 
@@ -34,6 +36,8 @@ export interface WorkerOptions {
   concurrency?: number
   /** Optional MCP tool router for resolving MCP tools in agent registries. */
   mcpToolRouter?: McpToolRouter
+  /** OAuth config for proactive credential refresh (optional — task is no-op if absent). */
+  authConfig?: AuthOAuthConfig
 }
 
 /**
@@ -50,6 +54,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     memoryExtractThreshold,
     concurrency,
     mcpToolRouter,
+    authConfig,
   } = options
 
   const workerConcurrency =
@@ -68,6 +73,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     approval_expire: createApprovalExpireTask(db),
     correction_strengthen: createCorrectionStrengthenTask(),
     proactive_detect: createProactiveDetectTask(),
+    ...(authConfig ? { credential_refresh: createCredentialRefreshTask(db, authConfig) } : {}),
   }
 
   const runner = await run({
@@ -78,6 +84,12 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     crontab: [
       // Expire stale approval requests every 60 seconds
       "* * * * * approval_expire ?max=1",
+      // Proactive OAuth token refresh every 15 minutes
+      ...(authConfig
+        ? [
+            "*/15 * * * * credential_refresh ?jobKey=credential_refresh_periodic&jobKeyMode=preserve_run_at&max=1",
+          ]
+        : []),
     ].join("\n"),
   })
 

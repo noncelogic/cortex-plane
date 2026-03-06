@@ -101,6 +101,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     memoryExtractThreshold: config.memoryExtractThreshold,
     concurrency: config.workerConcurrency,
     mcpToolRouter,
+    authConfig: config.auth,
   })
 
   // Worker utils for job enqueueing from routes

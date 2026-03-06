@@ -655,6 +655,126 @@ export class CredentialService {
       .execute()
   }
 
+  /**
+   * Proactively refresh OAuth tokens expiring within 30 minutes.
+   *
+   * Unlike the just-in-time refresh in `getAccessToken`, this method:
+   *   - Queries all active OAuth credentials with a refresh token
+   *   - Only marks status = 'error' after 3 consecutive failures
+   *   - Uses 'refresh_failed' audit event (vs 'token_expired' for JIT)
+   *
+   * Safe to call concurrently (Graphile Worker job-key deduplication).
+   */
+  async refreshExpiring(): Promise<{ refreshed: number; failed: number }> {
+    const threshold = new Date(Date.now() + 30 * 60 * 1000)
+
+    const creds = await this.db
+      .selectFrom("provider_credential")
+      .selectAll()
+      .where("credential_type", "=", "oauth")
+      .where("status", "=", "active")
+      .where("refresh_token_enc", "is not", null)
+      .where("token_expires_at", "<", threshold)
+      .execute()
+
+    let refreshed = 0
+    let failed = 0
+
+    for (const cred of creds) {
+      const providerConfig = this.getProviderConfig(cred.provider)
+      if (!providerConfig || !cred.refresh_token_enc) continue
+
+      try {
+        const userKey = await this.ensureUserKey(cred.user_account_id)
+        const refreshToken = decryptCredential(cred.refresh_token_enc, userKey)
+
+        const tokens = await refreshAccessToken({
+          provider: cred.provider,
+          config: providerConfig,
+          refreshToken,
+        })
+
+        const newAccessEnc = encryptCredential(tokens.access_token, userKey)
+        const newRefreshEnc = tokens.refresh_token
+          ? encryptCredential(tokens.refresh_token, userKey)
+          : cred.refresh_token_enc
+
+        await this.db
+          .updateTable("provider_credential")
+          .set({
+            access_token_enc: newAccessEnc,
+            refresh_token_enc: newRefreshEnc,
+            token_expires_at: tokens.expires_in
+              ? new Date(Date.now() + tokens.expires_in * 1000)
+              : cred.token_expires_at,
+            last_refresh_at: new Date(),
+            status: "active" as const,
+            error_count: 0,
+            last_error: null,
+            updated_at: new Date(),
+          })
+          .where("id", "=", cred.id)
+          .where("status", "=", "active")
+          .execute()
+
+        await this.auditLog(cred.user_account_id, cred.id, "token_refreshed", cred.provider)
+        refreshed++
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Unknown refresh error"
+        const newErrorCount = cred.error_count + 1
+
+        await this.db
+          .updateTable("provider_credential")
+          .set({
+            error_count: newErrorCount,
+            last_error: errorMsg,
+            status: (newErrorCount >= 3 ? "error" : "active") as CredentialStatus,
+            updated_at: new Date(),
+          })
+          .where("id", "=", cred.id)
+          .where("status", "=", "active")
+          .execute()
+
+        await this.auditLog(cred.user_account_id, cred.id, "refresh_failed", cred.provider, {
+          error: errorMsg,
+          error_count: newErrorCount,
+        })
+        failed++
+      }
+    }
+
+    return { refreshed, failed }
+  }
+
+  /**
+   * Emit audit events for tool secrets not rotated in 90+ days.
+   * Informational only — no automated rotation.
+   */
+  async emitRotationReminders(): Promise<number> {
+    const staleThreshold = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+
+    const staleSecrets = await this.db
+      .selectFrom("provider_credential")
+      .selectAll()
+      .where("credential_class", "=", "tool_specific")
+      .where("status", "=", "active")
+      .where("updated_at", "<", staleThreshold)
+      .execute()
+
+    for (const cred of staleSecrets) {
+      const daysSinceUpdate = Math.floor(
+        (Date.now() - cred.updated_at.getTime()) / (24 * 60 * 60 * 1000),
+      )
+
+      await this.auditLog(cred.user_account_id, cred.id, "rotation_due", cred.provider, {
+        tool_name: cred.tool_name,
+        days_since_update: daysSinceUpdate,
+      })
+    }
+
+    return staleSecrets.length
+  }
+
   private async auditLog(
     userId: string,
     credentialId: string | null,
