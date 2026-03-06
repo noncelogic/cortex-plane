@@ -5,6 +5,7 @@ import { use, useCallback, useMemo, useState } from "react"
 import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
 import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
+import { CredentialBindingPanel } from "@/components/agents/credential-binding"
 import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifecycle-timeline"
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
 import { SteerInput } from "@/components/agents/steer-input"
@@ -25,7 +26,7 @@ import {
 // Mobile tabs
 // ---------------------------------------------------------------------------
 
-const MOBILE_TABS = ["Output", "Details", "Jobs", "Browser", "Memory"] as const
+const MOBILE_TABS = ["Output", "Details", "Jobs", "Credentials", "Browser", "Memory"] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 
 // ---------------------------------------------------------------------------
@@ -255,6 +256,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         <div className="flex w-80 min-w-0 shrink-0 flex-col gap-6">
           <SteerInput agentId={agentId} />
           <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
+          <CredentialBindingPanel agentId={agentId} />
           <LifecycleDetails transitions={transitions} currentState={currentState} />
         </div>
 
@@ -291,10 +293,16 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           <div className="flex flex-col gap-4">
             <SteerInput agentId={agentId} />
             <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
+            <CredentialBindingPanel agentId={agentId} />
             <LifecycleDetails transitions={transitions} currentState={currentState} />
           </div>
         )}
         {mobileTab === "Jobs" && <AgentJobsTab agentId={agentId} />}
+        {mobileTab === "Credentials" && (
+          <div className="flex flex-col gap-4">
+            <CredentialBindingPanel agentId={agentId} />
+          </div>
+        )}
         {mobileTab === "Browser" && (
           <div className="flex flex-1 items-center justify-center rounded-xl border border-surface-border bg-surface-dark p-8">
             <div className="text-center">
