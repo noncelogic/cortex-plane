@@ -49,6 +49,10 @@ export function useOAuthPopup(onSuccess?: () => void): UseOAuthPopupReturn {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Keep latest callback in a ref to avoid stale closures in the poll interval
+  const onSuccessRef = useRef(onSuccess)
+  onSuccessRef.current = onSuccess
+
   const cleanup = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -154,7 +158,7 @@ export function useOAuthPopup(onSuccess?: () => void): UseOAuthPopupReturn {
                 })
                 setStatus("success")
                 setFallbackContext(null)
-                onSuccess?.()
+                onSuccessRef.current?.()
               } catch (err) {
                 setError(
                   err instanceof Error ? err.message : "Failed to exchange authorization code",
@@ -177,7 +181,7 @@ export function useOAuthPopup(onSuccess?: () => void): UseOAuthPopupReturn {
         setStatus((prev) => (prev === "waiting" ? "fallback" : prev))
       }, POPUP_TIMEOUT_MS + POLL_INTERVAL_MS)
     },
-    [cancel, cleanup, onSuccess],
+    [cancel, cleanup],
   )
 
   return { status, error, fallbackContext, startFlow, cancel }
