@@ -13,12 +13,19 @@
  *   disconnectAll()   — close all connections (graceful shutdown)
  */
 
+import * as k8s from "@kubernetes/client-node"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 
 import type { McpServer } from "../db/types.js"
-import type { McpClientConnection, McpClientPoolOptions, McpToolInfo } from "./types.js"
+import { SidecarTransport } from "./sidecar-transport.js"
+import type {
+  McpClientConnection,
+  McpClientPoolOptions,
+  McpToolInfo,
+  SidecarConnectionOptions,
+} from "./types.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -51,9 +58,39 @@ export class McpClientPool {
   private readonly opts: Required<McpClientPoolOptions>
   private readonly connections = new Map<string, PoolEntry>()
   private readonly pendingConnections = new Map<string, Promise<McpClientConnection>>()
+  private readonly sidecarTargets = new Map<string, SidecarConnectionOptions>()
+  private kubeConfig: k8s.KubeConfig | null = null
 
   constructor(options: McpClientPoolOptions = {}) {
     this.opts = { ...DEFAULT_OPTIONS, ...options }
+  }
+
+  // -------------------------------------------------------------------------
+  // Sidecar target management
+  // -------------------------------------------------------------------------
+
+  /**
+   * Register a sidecar target for a stdio MCP server.
+   * When `connect()` is called for this server, the pool will use k8s
+   * exec into the sidecar container instead of spawning a local process.
+   */
+  registerSidecar(serverId: string, opts: SidecarConnectionOptions): void {
+    this.sidecarTargets.set(serverId, opts)
+  }
+
+  /**
+   * Remove all registered sidecar targets.
+   */
+  clearSidecars(): void {
+    this.sidecarTargets.clear()
+  }
+
+  private getKubeConfig(): k8s.KubeConfig {
+    if (!this.kubeConfig) {
+      this.kubeConfig = new k8s.KubeConfig()
+      this.kubeConfig.loadFromDefault()
+    }
+    return this.kubeConfig
   }
 
   // -------------------------------------------------------------------------
@@ -234,7 +271,9 @@ export class McpClientPool {
   // Private helpers
   // -------------------------------------------------------------------------
 
-  private buildTransport(server: McpServer): StreamableHTTPClientTransport | StdioClientTransport {
+  private buildTransport(
+    server: McpServer,
+  ): StreamableHTTPClientTransport | StdioClientTransport | SidecarTransport {
     if (server.transport === "streamable-http") {
       const conn = server.connection as { url?: string }
       if (!conn.url) {
@@ -251,6 +290,17 @@ export class McpClientPool {
     }
 
     if (server.transport === "stdio") {
+      // Check if this server has a registered sidecar target
+      const sidecarOpts = this.sidecarTargets.get(server.id)
+      if (sidecarOpts) {
+        return new SidecarTransport(this.getKubeConfig(), {
+          podName: sidecarOpts.podName,
+          containerName: sidecarOpts.containerName,
+          namespace: sidecarOpts.namespace,
+          command: sidecarOpts.command,
+        })
+      }
+
       const conn = server.connection as { command?: string; args?: string[] }
       if (!conn.command) {
         throw new Error(`MCP server "${server.slug}" has no stdio command`)

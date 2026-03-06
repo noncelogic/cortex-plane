@@ -526,6 +526,65 @@ describe("McpClientPool — status queries", () => {
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Sidecar target management
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("McpClientPool — sidecar targets", () => {
+  it("registerSidecar causes stdio server to use SidecarTransport", async () => {
+    const pool = new McpClientPool()
+    const server = makeStdioServer()
+
+    pool.registerSidecar(server.id, {
+      podName: "agent-devops-01",
+      containerName: "mcp-sidecar-test-stdio",
+      namespace: "cortex-plane",
+      command: ["npx", "some-mcp-server"],
+    })
+
+    // When connecting, the pool should use SidecarTransport instead of
+    // StdioClientTransport. Since k8s is not available in tests, this
+    // will throw when trying to load kube config — but we can verify
+    // that StdioClientTransport was NOT used.
+    try {
+      await pool.connect(server)
+    } catch {
+      // Expected: KubeConfig.loadFromDefault fails in test environment
+    }
+
+    // StdioClientTransport should NOT have been called because the pool
+    // should have attempted SidecarTransport for this server.
+    expect(mockStdioTransportConstructor).not.toHaveBeenCalled()
+  })
+
+  it("stdio server without sidecar registration still uses StdioClientTransport", async () => {
+    const pool = new McpClientPool()
+    const server = makeStdioServer()
+
+    await pool.connect(server)
+
+    expect(mockStdioTransportConstructor).toHaveBeenCalledOnce()
+  })
+
+  it("clearSidecars removes all registered targets", async () => {
+    const pool = new McpClientPool()
+    const server = makeStdioServer()
+
+    pool.registerSidecar(server.id, {
+      podName: "agent-devops-01",
+      containerName: "mcp-sidecar-test-stdio",
+      namespace: "cortex-plane",
+      command: ["npx", "some-mcp-server"],
+    })
+
+    pool.clearSidecars()
+
+    // After clearing, connection should use StdioClientTransport
+    await pool.connect(server)
+    expect(mockStdioTransportConstructor).toHaveBeenCalledOnce()
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Integration placeholder — real MCP server
 // ═══════════════════════════════════════════════════════════════════════════
 

@@ -1,6 +1,11 @@
 import * as k8s from "@kubernetes/client-node"
 
-import type { AgentDeploymentConfig, AgentPodStatus, ContainerStatus } from "./types.js"
+import type {
+  AgentDeploymentConfig,
+  AgentPodStatus,
+  ContainerStatus,
+  McpSidecarSpec,
+} from "./types.js"
 
 const DEFAULT_NAMESPACE = "cortex-plane"
 
@@ -15,6 +20,41 @@ function agentLabels(name: string): Record<string, string> {
   return {
     ...LABELS,
     "cortex.plane/agent-name": name,
+  }
+}
+
+const DEFAULT_SIDECAR_RESOURCES = {
+  requests: { cpu: "50m", memory: "64Mi" },
+  limits: { cpu: "200m", memory: "256Mi" },
+} as const
+
+function buildSidecarContainer(sidecar: McpSidecarSpec, agentName: string): k8s.V1Container {
+  const res = sidecar.resources ?? DEFAULT_SIDECAR_RESOURCES
+
+  const envVars: k8s.V1EnvVar[] = sidecar.env
+    ? Object.entries(sidecar.env).map(([name, value]) => ({ name, value }))
+    : []
+
+  return {
+    name: `mcp-sidecar-${sidecar.slug}`,
+    image: sidecar.image,
+    command: sidecar.command,
+    env: envVars,
+    resources: {
+      requests: { cpu: res.requests.cpu, memory: res.requests.memory },
+      limits: { cpu: res.limits.cpu, memory: res.limits.memory },
+    },
+    securityContext: {
+      runAsNonRoot: true,
+      runAsUser: 1000,
+      readOnlyRootFilesystem: true,
+      allowPrivilegeEscalation: false,
+      capabilities: { drop: ["ALL"] },
+    },
+    volumeMounts: [
+      { name: "workspace", mountPath: "/workspace", subPath: agentName },
+      { name: `tmp-mcp-${sidecar.slug}`, mountPath: "/tmp" },
+    ],
   }
 }
 
@@ -117,6 +157,16 @@ function buildPod(config: AgentDeploymentConfig): k8s.V1Pod {
       { name: "dshm", emptyDir: { medium: "Memory", sizeLimit: "256Mi" } },
       { name: "tmp-playwright", emptyDir: { sizeLimit: "500Mi" } },
     )
+  }
+
+  if (config.mcpSidecars && config.mcpSidecars.length > 0) {
+    for (const sidecar of config.mcpSidecars) {
+      containers.push(buildSidecarContainer(sidecar, config.name))
+      volumes.push({
+        name: `tmp-mcp-${sidecar.slug}`,
+        emptyDir: { sizeLimit: "128Mi" },
+      })
+    }
   }
 
   return {
