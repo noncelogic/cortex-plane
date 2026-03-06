@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  # Dev: lower resources for MCP server container
+  - target:
+      kind: Deployment
+      name: mcp-server-SLUG
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mcp-server-SLUG
+      spec:
+        template:
+          spec:
+            containers:
+              - name: mcp-server
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 100m
+                    memory: 128Mi
