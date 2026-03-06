@@ -43,6 +43,11 @@ import {
   ProviderListResponseSchema,
 } from "./schemas/credentials"
 import { JobDetailSchema, JobListResponseSchema } from "./schemas/jobs"
+import {
+  McpServerDetailSchema,
+  McpServerListResponseSchema,
+  McpServerSchema,
+} from "./schemas/mcp-servers"
 import { MemorySearchResponseSchema } from "./schemas/memory"
 
 // ---------------------------------------------------------------------------
@@ -805,4 +810,67 @@ export async function unbindAgentCredential(
     method: "DELETE",
     schema: z.unknown(),
   })
+}
+
+// ---------------------------------------------------------------------------
+// MCP server endpoint functions
+// ---------------------------------------------------------------------------
+
+export type {
+  McpServer,
+  McpServerDetail,
+  McpServerStatus,
+  McpServerTool,
+  McpTransport,
+} from "./schemas/mcp-servers"
+
+export interface CreateMcpServerRequest {
+  name: string
+  slug?: string
+  transport: "streamable-http" | "stdio"
+  connection: Record<string, unknown>
+  agent_scope?: string[]
+  description?: string
+  health_probe_interval_ms?: number
+}
+
+export async function listMcpServers(params?: {
+  status?: string
+  limit?: number
+  offset?: number
+}): Promise<{
+  servers: import("./schemas/mcp-servers").McpServer[]
+  pagination: import("./schemas/common").Pagination
+}> {
+  const search = new URLSearchParams()
+  if (params?.status) search.set("status", params.status)
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/mcp-servers${qs ? `?${qs}` : ""}`, { schema: McpServerListResponseSchema })
+}
+
+export async function getMcpServer(
+  id: string,
+): Promise<import("./schemas/mcp-servers").McpServerDetail> {
+  return apiFetch(`/mcp-servers/${id}`, { schema: McpServerDetailSchema })
+}
+
+export async function createMcpServer(body: CreateMcpServerRequest): Promise<unknown> {
+  return apiFetch("/mcp-servers", { method: "POST", body, schema: McpServerSchema })
+}
+
+export async function updateMcpServer(
+  id: string,
+  body: Partial<CreateMcpServerRequest> & { status?: string },
+): Promise<unknown> {
+  return apiFetch(`/mcp-servers/${id}`, { method: "PUT", body, schema: McpServerSchema })
+}
+
+export async function deleteMcpServer(id: string): Promise<unknown> {
+  return apiFetch(`/mcp-servers/${id}`, { method: "DELETE", schema: z.unknown() })
+}
+
+export async function refreshMcpServer(id: string): Promise<unknown> {
+  return apiFetch(`/mcp-servers/${id}/refresh`, { method: "POST", schema: McpServerSchema })
 }
