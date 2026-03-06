@@ -486,7 +486,7 @@ export class CredentialService {
     adminUserId: string,
     credentialId: string,
     newApiKey: string,
-  ): Promise<CredentialSummary> {
+  ): Promise<CredentialSummary | null> {
     // Validate admin role
     const user = await this.db
       .selectFrom("user_account")
@@ -507,7 +507,7 @@ export class CredentialService {
       .executeTakeFirst()
 
     if (!cred) {
-      return null as unknown as CredentialSummary // caller checks for null
+      return null
     }
 
     const userKey = await this.ensureUserKey(cred.user_account_id)

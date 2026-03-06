@@ -282,6 +282,18 @@ describe("PUT /credentials/:id/rotate", () => {
     expect(body.message).toContain("not found")
   })
 
+  it("returns 401 without auth", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/credentials/${CRED_ID}/rotate`,
+      payload: { apiKey: "BSA_new_key_1234" },
+    })
+
+    expect(res.statusCode).toBe(401)
+  })
+
   it("returns 403 for non-admin users", async () => {
     const { app } = await buildTestApp({ role: "viewer" })
 
