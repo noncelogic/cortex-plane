@@ -180,6 +180,17 @@ describe("createMcpToolDefinition", () => {
     expect(result).toBe("tool-result")
   })
 
+  it("throws when pool.callTool returns isError: true", async () => {
+    const pool: McpClientPool = {
+      callTool: vi.fn().mockResolvedValue({ output: "something broke", isError: true }),
+      isConnected: vi.fn().mockReturnValue(true),
+      connect: vi.fn().mockResolvedValue({}),
+    }
+    const def = createMcpToolDefinition(pool, makeServer(), makeTool())
+
+    await expect(def.execute({})).rejects.toThrow("MCP tool error: something broke")
+  })
+
   it("propagates errors from pool.callTool", async () => {
     const pool: McpClientPool = {
       callTool: vi.fn().mockRejectedValue(new Error("connection refused")),

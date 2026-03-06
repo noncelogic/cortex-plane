@@ -65,7 +65,10 @@ export function createMcpToolDefinition(
       if (!pool.isConnected(server.id)) {
         await pool.connect(server)
       }
-      const { output } = await pool.callTool(server.id, tool.name, input)
+      const { output, isError } = await pool.callTool(server.id, tool.name, input)
+      if (isError) {
+        throw new Error(`MCP tool error: ${output}`)
+      }
       return output
     },
   }

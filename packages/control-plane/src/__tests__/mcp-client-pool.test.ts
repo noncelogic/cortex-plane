@@ -199,6 +199,16 @@ describe("McpClientPool.connect — Streamable HTTP", () => {
       /max connections/,
     )
   })
+
+  it("concurrent connects to same server reuse single connection", async () => {
+    const pool = new McpClientPool()
+    const server = makeHttpServer()
+
+    const [conn1, conn2] = await Promise.all([pool.connect(server), pool.connect(server)])
+
+    expect(conn1).toBe(conn2)
+    expect(mockConnect).toHaveBeenCalledOnce()
+  })
 })
 
 describe("McpClientPool.connect — stdio", () => {
@@ -369,6 +379,38 @@ describe("McpClientPool.callTool", () => {
     await expect(pool.callTool("nonexistent-id", "tool", {})).rejects.toThrow(
       /no active connection/,
     )
+  })
+
+  it("reconnects and retries on transport error using original server config", async () => {
+    const transportErr = new Error("connection reset")
+    mockCallTool
+      .mockRejectedValueOnce(transportErr)
+      .mockResolvedValueOnce({ content: [{ type: "text", text: "retry-output" }], isError: false })
+
+    const pool = new McpClientPool()
+    const server = makeHttpServer()
+    await pool.connect(server)
+
+    const result = await pool.callTool(server.id, "tool", {})
+
+    expect(result).toEqual({ output: "retry-output", isError: false })
+    // Transport rebuilt — connect called twice (initial + reconnect)
+    expect(mockConnect).toHaveBeenCalledTimes(2)
+    // URL-based transport rebuilt from stored server config
+    expect(mockHttpTransportConstructor).toHaveBeenCalledTimes(2)
+  })
+
+  it("throws retry error when reconnect and retry both fail", async () => {
+    const transportErr = new Error("connection reset")
+    const retryErr = new Error("retry also failed")
+    mockCallTool.mockRejectedValueOnce(transportErr).mockRejectedValueOnce(retryErr)
+
+    const pool = new McpClientPool()
+    const server = makeHttpServer()
+    await pool.connect(server)
+
+    await expect(pool.callTool(server.id, "tool", {})).rejects.toThrow("retry also failed")
+    expect(pool.isConnected(server.id)).toBe(false)
   })
 })
 

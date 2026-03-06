@@ -40,6 +40,7 @@ const CLIENT_INFO = { name: "cortex-plane", version: "0.1.0" } as const
 interface PoolEntry {
   client: Client
   connection: McpClientConnection
+  server: McpServer
 }
 
 // ---------------------------------------------------------------------------
@@ -49,6 +50,7 @@ interface PoolEntry {
 export class McpClientPool {
   private readonly opts: Required<McpClientPoolOptions>
   private readonly connections = new Map<string, PoolEntry>()
+  private readonly pendingConnections = new Map<string, Promise<McpClientConnection>>()
 
   constructor(options: McpClientPoolOptions = {}) {
     this.opts = { ...DEFAULT_OPTIONS, ...options }
@@ -68,36 +70,47 @@ export class McpClientPool {
     const existing = this.connections.get(server.id)
     if (existing) return existing.connection
 
-    if (this.connections.size >= this.opts.maxConnections) {
+    const pending = this.pendingConnections.get(server.id)
+    if (pending) return pending
+
+    if (this.connections.size + this.pendingConnections.size >= this.opts.maxConnections) {
       throw new Error(
         `McpClientPool: max connections (${this.opts.maxConnections}) reached — ` +
           `disconnect an existing server before adding "${server.slug}"`,
       )
     }
 
-    const client = new Client(CLIENT_INFO, { capabilities: {} })
-    const transport = this.buildTransport(server)
+    const connectPromise = (async () => {
+      const client = new Client(CLIENT_INFO, { capabilities: {} })
+      const transport = this.buildTransport(server)
+      await client.connect(transport)
 
-    await client.connect(transport)
+      const serverVersion = client.getServerVersion()
+      const rawCaps = client.getServerCapabilities()
 
-    const serverVersion = client.getServerVersion()
-    const rawCaps = client.getServerCapabilities()
+      const connection: McpClientConnection = {
+        serverId: server.id,
+        transport: server.transport,
+        protocolVersion: this.opts.protocolVersion,
+        serverInfo: {
+          name: serverVersion?.name ?? server.name,
+          version: serverVersion?.version ?? "unknown",
+        },
+        capabilities: (rawCaps as Record<string, unknown>) ?? {},
+        sessionId: null,
+        connectedAt: new Date(),
+      }
 
-    const connection: McpClientConnection = {
-      serverId: server.id,
-      transport: server.transport,
-      protocolVersion: this.opts.protocolVersion,
-      serverInfo: {
-        name: serverVersion?.name ?? server.name,
-        version: serverVersion?.version ?? "unknown",
-      },
-      capabilities: (rawCaps as Record<string, unknown>) ?? {},
-      sessionId: null,
-      connectedAt: new Date(),
+      this.connections.set(server.id, { client, connection, server })
+      return connection
+    })()
+
+    this.pendingConnections.set(server.id, connectPromise)
+    try {
+      return await connectPromise
+    } finally {
+      this.pendingConnections.delete(server.id)
     }
-
-    this.connections.set(server.id, { client, connection })
-    return connection
   }
 
   /**
@@ -154,11 +167,10 @@ export class McpClientPool {
         return { output: `Timeout after ${timeoutMs}ms`, isError: true }
       }
       // Attempt one reconnect for transport errors
-      const server = entry.connection
       const wasTransportError = isTransportError(err)
       if (wasTransportError) {
         try {
-          await this.reconnect(serverId, server)
+          await this.reconnect(serverId, entry.server)
           const retry = await this.connections
             .get(serverId)!
             .client.callTool({ name: toolName, arguments: input }, undefined, {
@@ -166,9 +178,10 @@ export class McpClientPool {
             })
           const isError = retry.isError === true
           return { output: extractTextContent(retry.content), isError }
-        } catch {
+        } catch (retryErr: unknown) {
           // Reconnect failed — remove stale entry
           this.connections.delete(serverId)
+          throw retryErr
         }
       }
       throw err
@@ -261,36 +274,29 @@ export class McpClientPool {
     return entry
   }
 
-  private async reconnect(serverId: string, connection: McpClientConnection): Promise<void> {
+  private async reconnect(serverId: string, server: McpServer): Promise<void> {
     this.connections.delete(serverId)
     const client = new Client(CLIENT_INFO, { capabilities: {} })
-
-    // Re-build a minimal McpServer shape from the stored connection metadata
-    // (only transport and slug are needed by buildTransport)
-    const fakeServer = {
-      id: serverId,
-      slug: connection.serverInfo.name,
-      transport: connection.transport,
-      name: connection.serverInfo.name,
-      connection: {}, // buildTransport will fail for non-HTTP without real connection data
-    } as McpServer
-
-    const transport = this.buildTransport(fakeServer)
+    const transport = this.buildTransport(server)
     await client.connect(transport)
 
     const serverVersion = client.getServerVersion()
     const rawCaps = client.getServerCapabilities()
 
     const newConn: McpClientConnection = {
-      ...connection,
-      capabilities: (rawCaps as Record<string, unknown>) ?? connection.capabilities,
+      serverId: server.id,
+      transport: server.transport,
+      protocolVersion: this.opts.protocolVersion,
       serverInfo: {
-        name: serverVersion?.name ?? connection.serverInfo.name,
-        version: serverVersion?.version ?? connection.serverInfo.version,
+        name: serverVersion?.name ?? server.name,
+        version: serverVersion?.version ?? "unknown",
       },
+      capabilities: (rawCaps as Record<string, unknown>) ?? {},
+      sessionId: null,
+      connectedAt: new Date(),
     }
 
-    this.connections.set(serverId, { client, connection: newConn })
+    this.connections.set(serverId, { client, connection: newConn, server })
   }
 }
 
