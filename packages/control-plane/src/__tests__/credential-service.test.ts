@@ -327,7 +327,61 @@ describe("CredentialService.getToolSecret", () => {
         event_type: "credential_accessed",
         provider: "brave",
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        details: expect.objectContaining({ tool_name: "brave-search" }),
+        details: expect.objectContaining({ flow: "injection", tool_name: "brave-search" }),
+      }),
+    )
+  })
+
+  it("includes agent/job/tool context in audit log when provided", async () => {
+    const toolCred = makeCredRow({
+      credential_class: "tool_specific",
+      tool_name: "brave-search",
+      provider: "brave",
+    })
+
+    const { db, auditValues } = buildMockDb({ toolSecretCred: toolCred })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    await service.getToolSecret("brave-search", {
+      agentId: "agent-111",
+      jobId: "job-222",
+      toolName: "brave-search",
+    })
+
+    expect(auditValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: "credential_accessed",
+        provider: "brave",
+        details: {
+          flow: "injection",
+          tool_name: "brave-search",
+          agent_id: "agent-111",
+          job_id: "job-222",
+        },
+      }),
+    )
+  })
+
+  it("omits absent context fields from audit details", async () => {
+    const toolCred = makeCredRow({
+      credential_class: "tool_specific",
+      tool_name: "brave-search",
+      provider: "brave",
+    })
+
+    const { db, auditValues } = buildMockDb({ toolSecretCred: toolCred })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    await service.getToolSecret("brave-search", { agentId: "agent-111" })
+
+    expect(auditValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: "credential_accessed",
+        details: {
+          flow: "injection",
+          tool_name: "brave-search",
+          agent_id: "agent-111",
+        },
       }),
     )
   })
@@ -516,5 +570,99 @@ describe("SUPPORTED_PROVIDERS", () => {
     const openai = SUPPORTED_PROVIDERS.find((p) => p.id === "openai")
     expect(openai).toBeDefined()
     expect(openai!.credentialClass).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: getAuditLog filter parameters
+// ---------------------------------------------------------------------------
+
+describe("CredentialService.getAuditLog", () => {
+  function buildAuditMockDb() {
+    const whereCalls: Array<[unknown, string, unknown]> = []
+
+    const execute = vi.fn().mockResolvedValue([])
+    const limitFn = vi.fn().mockReturnValue({ execute })
+    const orderBy = vi.fn().mockReturnValue({ limit: limitFn })
+    const whereFn: ReturnType<typeof vi.fn> = vi.fn().mockImplementation((...args: unknown[]) => {
+      whereCalls.push(args as [unknown, string, unknown])
+      return chain
+    })
+    const chain = { where: whereFn, orderBy, limit: limitFn, execute }
+    const selectAll = vi.fn().mockReturnValue(chain)
+
+    const db = {
+      selectFrom: vi.fn().mockReturnValue({ selectAll }),
+    } as unknown as Kysely<Database>
+
+    return { db, whereCalls }
+  }
+
+  it("queries without filters when none provided", async () => {
+    const { db, whereCalls } = buildAuditMockDb()
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    await service.getAuditLog(ADMIN_USER_ID)
+
+    // Only the user_account_id where clause
+    expect(whereCalls).toHaveLength(1)
+    expect(whereCalls[0]).toEqual(["user_account_id", "=", ADMIN_USER_ID])
+  })
+
+  it("applies credentialId filter", async () => {
+    const { db, whereCalls } = buildAuditMockDb()
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    await service.getAuditLog(ADMIN_USER_ID, { credentialId: CRED_ID })
+
+    expect(whereCalls).toHaveLength(2)
+    expect(whereCalls[1]).toEqual(["provider_credential_id", "=", CRED_ID])
+  })
+
+  it("applies eventType filter", async () => {
+    const { db, whereCalls } = buildAuditMockDb()
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    await service.getAuditLog(ADMIN_USER_ID, { eventType: "credential_accessed" })
+
+    expect(whereCalls).toHaveLength(2)
+    expect(whereCalls[1]).toEqual(["event_type", "=", "credential_accessed"])
+  })
+
+  it("applies agentId filter via JSONB extraction", async () => {
+    const { db, whereCalls } = buildAuditMockDb()
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    await service.getAuditLog(ADMIN_USER_ID, { agentId: "agent-111" })
+
+    expect(whereCalls).toHaveLength(2)
+    // The first arg is a Kysely sql template — just check the value matches
+    expect(whereCalls[1][1]).toBe("=")
+    expect(whereCalls[1][2]).toBe("agent-111")
+  })
+
+  it("combines multiple filters", async () => {
+    const { db, whereCalls } = buildAuditMockDb()
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    await service.getAuditLog(ADMIN_USER_ID, {
+      credentialId: CRED_ID,
+      eventType: "credential_accessed",
+      agentId: "agent-111",
+    })
+
+    // user_account_id + credentialId + eventType + agentId = 4 where clauses
+    expect(whereCalls).toHaveLength(4)
+  })
+
+  it("respects custom limit", async () => {
+    const { db } = buildAuditMockDb()
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    await service.getAuditLog(ADMIN_USER_ID, { limit: 10 })
+
+    // Verify the query was built (no errors)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.selectFrom).toHaveBeenCalledWith("credential_audit_log")
   })
 })

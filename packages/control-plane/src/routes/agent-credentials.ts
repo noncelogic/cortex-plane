@@ -158,7 +158,7 @@ export function agentCredentialRoutes(deps: AgentCredentialRouteDeps) {
             provider_credential_id: credentialId,
             event_type: "credential_bound",
             provider: credential.provider,
-            details: { agent_id: agentId, binding_id: binding.id },
+            details: { agent_id: agentId, binding_id: binding.id, granted_by: principal.userId },
           })
           .execute()
 

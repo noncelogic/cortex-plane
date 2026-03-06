@@ -12,7 +12,7 @@
  *   - Credential status tracking + audit logging
  */
 
-import type { Kysely } from "kysely"
+import { type Kysely, sql } from "kysely"
 
 import type { AuthOAuthConfig, OAuthProviderConfig } from "../config.js"
 import type {
@@ -34,6 +34,13 @@ import {
 } from "./credential-encryption.js"
 import { CODE_PASTE_PROVIDERS } from "./oauth-providers.js"
 import { refreshAccessToken, type TokenResponse } from "./oauth-service.js"
+
+/** Execution context passed by callers for audit enrichment. */
+export interface AuditContext {
+  agentId?: string
+  jobId?: string
+  toolName?: string
+}
 
 /** Provider metadata for the "Connected Providers" UI. */
 export interface ProviderInfo {
@@ -441,6 +448,7 @@ export class CredentialService {
    */
   async getToolSecret(
     toolName: string,
+    context?: AuditContext,
   ): Promise<{ token: string; credentialId: string; provider: string } | null> {
     const cred = await this.db
       .selectFrom("provider_credential")
@@ -456,9 +464,13 @@ export class CredentialService {
     const userKey = await this.ensureUserKey(cred.user_account_id)
     const token = decryptCredential(cred.api_key_enc, userKey)
 
-    // Audit log each access
+    // Audit log each access with execution context
     await this.auditLog(cred.user_account_id, cred.id, "credential_accessed", cred.provider, {
+      flow: "injection",
       tool_name: toolName,
+      ...(context?.agentId && { agent_id: context.agentId }),
+      ...(context?.jobId && { job_id: context.jobId }),
+      ...(context?.toolName && { tool_name: context.toolName }),
     })
 
     await this.markUsed(cred.id)
@@ -492,6 +504,7 @@ export class CredentialService {
   async getAccessToken(
     userId: string,
     provider: string,
+    context?: AuditContext,
   ): Promise<{ token: string; credentialId: string } | null> {
     const cred = await this.db
       .selectFrom("provider_credential")
@@ -509,6 +522,7 @@ export class CredentialService {
     // For API keys, just decrypt and return
     if (cred.credential_type === "api_key" && cred.api_key_enc) {
       const token = decryptCredential(cred.api_key_enc, userKey)
+      await this.auditAccess(cred, context)
       await this.markUsed(cred.id)
       return { token, credentialId: cred.id }
     }
@@ -522,12 +536,14 @@ export class CredentialService {
       if (isExpired && cred.refresh_token_enc) {
         const refreshed = await this.refreshToken(cred, userKey)
         if (refreshed) {
+          await this.auditAccess(cred, context)
           return { token: refreshed, credentialId: cred.id }
         }
         // Refresh failed — fall through to return current token
       }
 
       const token = decryptCredential(cred.access_token_enc, userKey)
+      await this.auditAccess(cred, context)
       await this.markUsed(cred.id)
       return { token, credentialId: cred.id }
     }
@@ -641,18 +657,37 @@ export class CredentialService {
 
   /**
    * Get audit log entries for a user's credentials.
+   * Supports optional filters for compliance queries.
    */
   async getAuditLog(
     userId: string,
-    limit = 50,
+    opts: {
+      limit?: number
+      credentialId?: string
+      agentId?: string
+      eventType?: string
+    } = {},
   ): Promise<import("../db/types.js").CredentialAuditLog[]> {
-    return this.db
+    const limit = opts.limit ?? 50
+
+    let query = this.db
       .selectFrom("credential_audit_log")
       .selectAll()
       .where("user_account_id", "=", userId)
-      .orderBy("created_at", "desc")
-      .limit(limit)
-      .execute()
+
+    if (opts.credentialId) {
+      query = query.where("provider_credential_id", "=", opts.credentialId)
+    }
+
+    if (opts.eventType) {
+      query = query.where("event_type", "=", opts.eventType)
+    }
+
+    if (opts.agentId) {
+      query = query.where(sql`details->>'agent_id'`, "=", opts.agentId)
+    }
+
+    return query.orderBy("created_at", "desc").limit(limit).execute()
   }
 
   /**
@@ -773,6 +808,16 @@ export class CredentialService {
     }
 
     return staleSecrets.length
+  }
+
+  private async auditAccess(cred: ProviderCredential, context?: AuditContext): Promise<void> {
+    if (!context?.agentId) return
+    await this.auditLog(cred.user_account_id, cred.id, "credential_accessed", cred.provider, {
+      flow: "injection",
+      ...(context.agentId && { agent_id: context.agentId }),
+      ...(context.jobId && { job_id: context.jobId }),
+      ...(context.toolName && { tool_name: context.toolName }),
+    })
   }
 
   private async auditLog(
