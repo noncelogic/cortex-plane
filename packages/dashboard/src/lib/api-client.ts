@@ -19,6 +19,7 @@ import {
   SteerResponseSchema,
   SyncMemoryResponseSchema,
 } from "./schemas/actions"
+import { AgentCredentialBindingListResponseSchema } from "./schemas/agent-credentials"
 import { AgentDetailSchema, AgentListResponseSchema } from "./schemas/agents"
 import {
   ApprovalAuditResponseSchema,
@@ -769,6 +770,38 @@ export async function bindAgentChannel(
 
 export async function unbindAgentChannel(agentId: string, bindingId: string): Promise<unknown> {
   return apiFetch(`/agents/${agentId}/channels/${bindingId}`, {
+    method: "DELETE",
+    schema: z.unknown(),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Agent credential binding endpoint functions
+// ---------------------------------------------------------------------------
+
+export type { AgentCredentialBinding } from "./schemas/agent-credentials"
+
+export async function listAgentCredentials(agentId: string): Promise<{
+  bindings: import("./schemas/agent-credentials").AgentCredentialBinding[]
+}> {
+  return apiFetch(`/agents/${agentId}/credentials`, {
+    schema: AgentCredentialBindingListResponseSchema,
+  })
+}
+
+export async function bindAgentCredential(agentId: string, credentialId: string): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/credentials`, {
+    method: "POST",
+    body: { credentialId },
+    schema: z.unknown(),
+  })
+}
+
+export async function unbindAgentCredential(
+  agentId: string,
+  credentialId: string,
+): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/credentials/${credentialId}`, {
     method: "DELETE",
     schema: z.unknown(),
   })
