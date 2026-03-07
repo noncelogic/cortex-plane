@@ -75,20 +75,22 @@ const ACCESS_REQUEST_FIXTURE = {
   channel_mapping_id: "cm-001",
   status: "pending" as const,
   message_preview: "Hello, can I use this agent?",
+  reviewed_by: null,
+  reviewed_at: null,
   deny_reason: null,
   created_at: "2026-03-05T10:00:00.000Z",
-  resolved_at: null,
 }
 
 const PAIRING_CODE_FIXTURE = {
   id: "pc-001",
   agent_id: "a-001",
   code: "ABCD-1234",
-  generated_by: "u-admin",
+  created_by: "u-admin",
   created_at: "2026-03-06T08:00:00.000Z",
   expires_at: "2026-03-07T08:00:00.000Z",
   redeemed_at: null,
   redeemed_by: null,
+  revoked_at: null,
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +142,8 @@ describe("Agent-user schema tests", () => {
         ...ACCESS_REQUEST_FIXTURE,
         status: "denied" as const,
         deny_reason: "Not authorized",
-        resolved_at: "2026-03-05T11:00:00.000Z",
+        reviewed_by: "u-admin",
+        reviewed_at: "2026-03-05T11:00:00.000Z",
       }
       const result = AccessRequestSchema.parse(denied)
       expect(result.deny_reason).toBe("Not authorized")

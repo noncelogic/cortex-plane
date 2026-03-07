@@ -83,9 +83,10 @@ export const AccessRequestSchema = z.object({
   channel_mapping_id: z.string().nullable(),
   status: z.enum(["pending", "approved", "denied"]),
   message_preview: z.string().nullable(),
+  reviewed_by: z.string().nullable(),
+  reviewed_at: z.string().nullable(),
   deny_reason: z.string().nullable(),
   created_at: z.string(),
-  resolved_at: z.string().nullable(),
 })
 
 export type AccessRequest = z.infer<typeof AccessRequestSchema>
@@ -96,13 +97,14 @@ export type AccessRequest = z.infer<typeof AccessRequestSchema>
 
 export const PairingCodeSchema = z.object({
   id: z.string(),
-  agent_id: z.string(),
+  agent_id: z.string().nullable(),
   code: z.string(),
-  generated_by: z.string().nullable(),
+  created_by: z.string(),
   created_at: z.string(),
   expires_at: z.string(),
   redeemed_at: z.string().nullable(),
   redeemed_by: z.string().nullable(),
+  revoked_at: z.string().nullable(),
 })
 
 export type PairingCode = z.infer<typeof PairingCodeSchema>
