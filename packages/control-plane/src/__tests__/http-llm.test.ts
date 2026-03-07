@@ -48,16 +48,16 @@ describe("HttpLlmBackend — lifecycle", () => {
     expect(backend.backendId).toBe("http-llm")
   })
 
-  it("throws when started without API key", async () => {
+  it("starts in credential-required mode when no API key is provided", async () => {
     const backend = new HttpLlmBackend()
-    // Clear all env vars that could provide a key
     const origLlm = process.env.LLM_API_KEY
     const origAnthropic = process.env.ANTHROPIC_API_KEY
     process.env.LLM_API_KEY = ""
     process.env.ANTHROPIC_API_KEY = ""
 
     try {
-      await expect(backend.start({ provider: "anthropic", apiKey: "" })).rejects.toThrow("required")
+      // Should NOT throw — starts in credential-required mode
+      await backend.start({ provider: "anthropic", apiKey: "" })
     } finally {
       if (origLlm !== undefined) process.env.LLM_API_KEY = origLlm
       else delete process.env.LLM_API_KEY
@@ -956,5 +956,331 @@ describe("HttpLlmBackend — backward compatibility (no MCP)", () => {
     expect(registry.get("webhook_tool")).toBeDefined()
     // Should NOT have any MCP tools
     expect(registry.get("mcp:any:tool")).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Credential-required mode (no global API key)
+// ---------------------------------------------------------------------------
+
+describe("HttpLlmBackend — credential-required mode", () => {
+  it("healthCheck returns healthy with credentialRequired flag", async () => {
+    const backend = new HttpLlmBackend()
+    const origLlm = process.env.LLM_API_KEY
+    const origAnthropic = process.env.ANTHROPIC_API_KEY
+    process.env.LLM_API_KEY = ""
+    process.env.ANTHROPIC_API_KEY = ""
+
+    try {
+      await backend.start({ provider: "anthropic", apiKey: "" })
+      const report = await backend.healthCheck()
+      expect(report.status).toBe("healthy")
+      expect(report.details).toHaveProperty("credentialRequired", true)
+    } finally {
+      if (origLlm !== undefined) process.env.LLM_API_KEY = origLlm
+      else delete process.env.LLM_API_KEY
+      if (origAnthropic !== undefined) process.env.ANTHROPIC_API_KEY = origAnthropic
+      else delete process.env.ANTHROPIC_API_KEY
+    }
+  })
+
+  it("rejects executeTask when no per-job credential and no global key", async () => {
+    const backend = new HttpLlmBackend()
+    const origLlm = process.env.LLM_API_KEY
+    const origAnthropic = process.env.ANTHROPIC_API_KEY
+    process.env.LLM_API_KEY = ""
+    process.env.ANTHROPIC_API_KEY = ""
+
+    try {
+      await backend.start({ provider: "anthropic", apiKey: "" })
+      await expect(backend.executeTask(makeTask())).rejects.toThrow("No LLM credential available")
+    } finally {
+      if (origLlm !== undefined) process.env.LLM_API_KEY = origLlm
+      else delete process.env.LLM_API_KEY
+      if (origAnthropic !== undefined) process.env.ANTHROPIC_API_KEY = origAnthropic
+      else delete process.env.ANTHROPIC_API_KEY
+    }
+  })
+
+  it("accepts executeTask with per-job credential even without global key", async () => {
+    const backend = new HttpLlmBackend()
+    const origLlm = process.env.LLM_API_KEY
+    const origAnthropic = process.env.ANTHROPIC_API_KEY
+    process.env.LLM_API_KEY = ""
+    process.env.ANTHROPIC_API_KEY = ""
+
+    try {
+      await backend.start({ provider: "anthropic", apiKey: "" })
+
+      const task = makeTask({
+        constraints: {
+          ...makeTask().constraints,
+          llmCredential: {
+            provider: "anthropic",
+            token: "oauth-token-xyz",
+            credentialId: "cred-no-global",
+          },
+        },
+      })
+
+      const handle = await backend.executeTask(task)
+      expect(handle.taskId).toBe("task-llm-001")
+      await handle.cancel("test")
+
+      const result = await handle.result()
+      expect(result.status).toBe("cancelled")
+    } finally {
+      if (origLlm !== undefined) process.env.LLM_API_KEY = origLlm
+      else delete process.env.LLM_API_KEY
+      if (origAnthropic !== undefined) process.env.ANTHROPIC_API_KEY = origAnthropic
+      else delete process.env.ANTHROPIC_API_KEY
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 401 retry with token refresh
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: intercept the handle's internal client field so that when
+ * the retry logic creates a new SDK client, the mock is applied to
+ * the new instance as well.
+ */
+function interceptAnthropicClient(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handle: any,
+  mockImpl: () => ReturnType<typeof createMockAnthropicStream> | never,
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+  let currentClient = handle.client
+  const applyMock = (client: unknown) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    vi.spyOn((client as any).messages, "stream").mockImplementation(mockImpl)
+  }
+  applyMock(currentClient)
+  Object.defineProperty(handle, "client", {
+    get: () => currentClient as unknown,
+    set: (newClient: unknown) => {
+      currentClient = newClient
+      applyMock(newClient)
+    },
+    configurable: true,
+  })
+}
+
+/**
+ * Helper: same as interceptAnthropicClient but for OpenAI handles.
+ */
+function interceptOpenAIClient(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handle: any,
+  mockImpl: () =>
+    | ReturnType<typeof createMockOpenAIStream>
+    | Promise<ReturnType<typeof createMockOpenAIStream>>
+    | never,
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+  let currentClient = handle.client
+  const applyMock = (client: unknown) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    vi.spyOn((client as any).chat.completions, "create").mockImplementation(mockImpl)
+  }
+  applyMock(currentClient)
+  Object.defineProperty(handle, "client", {
+    get: () => currentClient as unknown,
+    set: (newClient: unknown) => {
+      currentClient = newClient
+      applyMock(newClient)
+    },
+    configurable: true,
+  })
+}
+
+describe("HttpLlmBackend — 401 token refresh retry", () => {
+  it("retries on 401 and succeeds with refreshed Anthropic token", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const refresher = vi.fn().mockResolvedValue("refreshed-token-456")
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "expired-token",
+          credentialId: "cred-refresh-1",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task, undefined, refresher)
+
+    let callCount = 0
+    interceptAnthropicClient(handle, () => {
+      callCount++
+      if (callCount === 1) {
+        const err = new Error("Invalid API key") as Error & { status: number }
+        err.status = 401
+        throw err
+      }
+      return createMockAnthropicStream({
+        textContent: "Success after refresh!",
+        stopReason: "end_turn",
+      })
+    })
+
+    await collectEvents(handle)
+    const result = await handle.result()
+
+    expect(refresher).toHaveBeenCalledWith("cred-refresh-1")
+    expect(result.status).toBe("completed")
+    expect(result.stdout).toBe("Success after refresh!")
+    expect(callCount).toBe(2)
+  })
+
+  it("fails when refresher returns null (cannot refresh)", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const refresher = vi.fn().mockResolvedValue(null)
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "expired-token",
+          credentialId: "cred-norefresh",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task, undefined, refresher)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    vi.spyOn((handle as any).client.messages, "stream").mockImplementation(() => {
+      const err = new Error("Invalid API key") as Error & { status: number }
+      err.status = 401
+      throw err
+    })
+
+    await collectEvents(handle)
+    const result = await handle.result()
+
+    expect(refresher).toHaveBeenCalledWith("cred-norefresh")
+    expect(result.status).toBe("failed")
+    expect(result.summary).toContain("Invalid API key")
+  })
+
+  it("does not retry on non-401 errors", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const refresher = vi.fn()
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "valid-token",
+          credentialId: "cred-500",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task, undefined, refresher)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    vi.spyOn((handle as any).client.messages, "stream").mockImplementation(() => {
+      const err = new Error("Internal server error") as Error & { status: number }
+      err.status = 500
+      throw err
+    })
+
+    await collectEvents(handle)
+    const result = await handle.result()
+
+    expect(refresher).not.toHaveBeenCalled()
+    expect(result.status).toBe("failed")
+  })
+
+  it("retries only once per turn (no infinite loop)", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const refresher = vi.fn().mockResolvedValue("still-bad-token")
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "expired-token",
+          credentialId: "cred-loop",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task, undefined, refresher)
+    let callCount = 0
+
+    interceptAnthropicClient(handle, () => {
+      callCount++
+      const err = new Error("Invalid API key") as Error & { status: number }
+      err.status = 401
+      throw err
+    })
+
+    await collectEvents(handle)
+    const result = await handle.result()
+
+    expect(callCount).toBe(2)
+    expect(refresher).toHaveBeenCalledTimes(1)
+    expect(result.status).toBe("failed")
+  })
+
+  it("retries on 401 for OpenAI provider", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const refresher = vi.fn().mockResolvedValue("refreshed-openai-token")
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "openai",
+          token: "expired-openai-token",
+          credentialId: "cred-openai-refresh",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task, undefined, refresher)
+    let callCount = 0
+
+    interceptOpenAIClient(handle, () => {
+      callCount++
+      if (callCount === 1) {
+        const err = new Error("Incorrect API key") as Error & { status: number }
+        err.status = 401
+        throw err
+      }
+      return createMockOpenAIStream({
+        textContent: "OpenAI refreshed!",
+        finishReason: "stop",
+      })
+    })
+
+    await collectEvents(handle)
+    const result = await handle.result()
+
+    expect(refresher).toHaveBeenCalledWith("cred-openai-refresh")
+    expect(result.status).toBe("completed")
+    expect(result.stdout).toBe("OpenAI refreshed!")
+    expect(callCount).toBe(2)
   })
 })

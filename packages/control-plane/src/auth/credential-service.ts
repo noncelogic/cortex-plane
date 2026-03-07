@@ -602,12 +602,17 @@ export class CredentialService {
 
   /**
    * Get a decrypted access token for a provider (for backend use).
-   * Handles automatic token refresh if expired.
+   * Handles automatic token refresh if expired or when forceRefresh is set.
+   *
+   * @param opts.forceRefresh - When true, always attempt token refresh for
+   *   OAuth credentials (used for 401 retry after the LLM provider rejects
+   *   a token that was valid at resolution time).
    */
   async getAccessToken(
     userId: string,
     provider: string,
     context?: AuditContext,
+    opts?: { forceRefresh?: boolean },
   ): Promise<{ token: string; credentialId: string } | null> {
     const cred = await this.db
       .selectFrom("provider_credential")
@@ -632,11 +637,12 @@ export class CredentialService {
 
     // For OAuth, check expiry and refresh if needed
     if (cred.credential_type === "oauth" && cred.access_token_enc) {
-      const isExpired =
-        cred.token_expires_at &&
-        new Date(cred.token_expires_at) < new Date(Date.now() + 5 * 60 * 1000) // 5min buffer
+      const shouldRefresh =
+        opts?.forceRefresh ||
+        (cred.token_expires_at &&
+          new Date(cred.token_expires_at) < new Date(Date.now() + 5 * 60 * 1000)) // 5min buffer
 
-      if (isExpired && cred.refresh_token_enc) {
+      if (shouldRefresh && cred.refresh_token_enc) {
         const refreshed = await this.refreshToken(cred, userKey)
         if (refreshed) {
           await this.auditAccess(cred, context)

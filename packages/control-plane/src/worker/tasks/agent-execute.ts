@@ -26,6 +26,7 @@ import type { Kysely } from "kysely"
 
 import type { CredentialService } from "../../auth/credential-service.js"
 import type { UserRateLimiter } from "../../auth/user-rate-limiter.js"
+import type { TokenRefresher } from "../../backends/http-llm.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
 import type { Database, Job } from "../../db/types.js"
 import type { AgentCircuitBreakerConfig } from "../../lifecycle/agent-circuit-breaker.js"
@@ -348,6 +349,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
         // ── Step 4b: Resolve LLM credential from agent_credential_binding ──
         let credentialResolver: CredentialResolver | undefined
+        let tokenRefresher: TokenRefresher | undefined
         if (credentialService) {
           try {
             const binding = await db
@@ -378,6 +380,13 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   token: result.token,
                   credentialId: result.credentialId,
                 }
+
+                // Build a token refresher for transparent 401 retry.
+                // On auth failure from the LLM provider, the backend will
+                // call this to obtain a fresh token and retry once.
+                const cs = credentialService
+                const auditCtx = { agentId: agent.id, jobId: job.id }
+                tokenRefresher = buildTokenRefresher(cs, db, auditCtx)
               }
             }
             // If no binding exists, fall back to env var LLM_API_KEY (backward compat)
@@ -477,8 +486,14 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               }
             ).createAgentRegistry(agent.config ?? {}, mcpDeps)
             handle = await (
-              backend as { executeTask: (t: ExecutionTask, r: unknown) => Promise<ExecutionHandle> }
-            ).executeTask(task, agentRegistry)
+              backend as {
+                executeTask: (
+                  t: ExecutionTask,
+                  r: unknown,
+                  tr?: TokenRefresher,
+                ) => Promise<ExecutionHandle>
+              }
+            ).executeTask(task, agentRegistry, tokenRefresher)
           } else {
             handle = await backend.executeTask(task)
           }
@@ -1207,6 +1222,38 @@ function writeEventToBuffer(
     type: mapOutputEventType(event) as "LLM_RESPONSE",
     data: event as unknown as Record<string, unknown>,
   })
+}
+
+// ── Helper: build token refresher for 401 retry ──
+
+function buildTokenRefresher(
+  credentialService: CredentialService,
+  db: Kysely<Database>,
+  auditCtx: { agentId: string; jobId: string },
+): TokenRefresher {
+  return async (credentialId: string) => {
+    try {
+      const cred = await db
+        .selectFrom("provider_credential")
+        .select(["user_account_id", "provider"])
+        .where("id", "=", credentialId)
+        .where("status", "=", "active")
+        .executeTakeFirst()
+
+      if (!cred) return null
+
+      const result = await credentialService.getAccessToken(
+        cred.user_account_id,
+        cred.provider,
+        auditCtx,
+        { forceRefresh: true },
+      )
+
+      return result ? result.token : null
+    } catch {
+      return null
+    }
+  }
 }
 
 // ── Helper: build credential resolver for tool execution ──
