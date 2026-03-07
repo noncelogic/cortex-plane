@@ -212,6 +212,9 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     agentControlRoutes({
       db,
       authConfig,
+      enqueueJob: async (jobId: string) => {
+        await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
+      },
       sessionService,
       mcpToolRouter,
       executionRegistry,

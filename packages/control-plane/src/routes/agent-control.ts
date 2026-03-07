@@ -3,15 +3,20 @@
  *
  * POST /agents/:agentId/dry-run — simulate an agent turn without tool execution
  * POST /agents/:agentId/kill    — immediate execution cancellation (kill switch)
+ * POST /agents/:agentId/replay  — re-run from checkpoint with modifications
  */
 
+import { randomUUID } from "node:crypto"
+
 import Anthropic from "@anthropic-ai/sdk"
+import type { JobStatus } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
 import type { SessionService } from "../auth/session-service.js"
 import { createAgentToolRegistry } from "../backends/tool-executor.js"
 import type { Database } from "../db/types.js"
+import { verifyCheckpointIntegrity } from "../lifecycle/output-validator.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 import {
   type AuthMiddlewareOptions,
@@ -52,6 +57,19 @@ interface KillBody {
   reason: string
 }
 
+interface ReplayParams {
+  agentId: string
+}
+
+interface ReplayBody {
+  checkpointId: string
+  modifications?: {
+    model?: string
+    systemPromptAppend?: string
+    resourceLimits?: Record<string, unknown>
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
@@ -59,6 +77,7 @@ interface KillBody {
 export interface AgentControlRouteDeps {
   db: Kysely<Database>
   authConfig: AuthConfig
+  enqueueJob?: (jobId: string) => Promise<void>
   sessionService?: SessionService
   mcpToolRouter?: McpToolRouter
   executionRegistry?: ExecutionRegistry
@@ -70,6 +89,7 @@ export function agentControlRoutes(deps: AgentControlRouteDeps) {
   const {
     db,
     authConfig,
+    enqueueJob,
     sessionService,
     mcpToolRouter,
     executionRegistry,
@@ -80,6 +100,7 @@ export function agentControlRoutes(deps: AgentControlRouteDeps) {
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
   const requireOperator: PreHandler = createRequireRole("operator")
+  const requireAdmin: PreHandler = createRequireRole("admin")
 
   return function register(app: FastifyInstance): void {
     // -----------------------------------------------------------------
@@ -360,6 +381,140 @@ export function agentControlRoutes(deps: AgentControlRouteDeps) {
           cancelledJobId,
           state: "QUARANTINED",
           killedAt,
+        })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // POST /agents/:agentId/replay — re-run from checkpoint
+    // Requires: auth + admin role
+    // -----------------------------------------------------------------
+    app.post<{ Params: ReplayParams; Body: ReplayBody }>(
+      "/agents/:agentId/replay",
+      {
+        preHandler: [requireAuth, requireAdmin],
+        schema: {
+          params: {
+            type: "object",
+            properties: { agentId: { type: "string" } },
+            required: ["agentId"],
+          },
+          body: {
+            type: "object",
+            properties: {
+              checkpointId: { type: "string", minLength: 1 },
+              modifications: {
+                type: "object",
+                properties: {
+                  model: { type: "string" },
+                  systemPromptAppend: { type: "string" },
+                  resourceLimits: { type: "object" },
+                },
+              },
+            },
+            required: ["checkpointId"],
+          },
+        },
+      },
+      async (
+        request: FastifyRequest<{ Params: ReplayParams; Body: ReplayBody }>,
+        reply: FastifyReply,
+      ) => {
+        const { agentId } = request.params
+        const { checkpointId, modifications } = request.body
+
+        // Load agent
+        const agent = await db
+          .selectFrom("agent")
+          .select(["id", "status"])
+          .where("id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!agent) {
+          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        // Load checkpoint (must belong to this agent)
+        const checkpoint = await db
+          .selectFrom("agent_checkpoint")
+          .selectAll()
+          .where("id", "=", checkpointId)
+          .where("agent_id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!checkpoint) {
+          return reply.status(404).send({
+            error: "not_found",
+            message: "Checkpoint not found",
+          })
+        }
+
+        // Verify CRC32 integrity
+        if (!verifyCheckpointIntegrity(checkpoint.state, checkpoint.state_crc)) {
+          return reply.status(409).send({
+            error: "conflict",
+            message: "Checkpoint integrity check failed — CRC mismatch",
+          })
+        }
+
+        // Create replay job
+        const jobId = randomUUID()
+
+        const payload: Record<string, unknown> = {
+          type: "REPLAY",
+          replay_source_checkpoint_id: checkpointId,
+          ...(modifications ? { replay_modifications: modifications } : {}),
+        }
+
+        const job = await db
+          .insertInto("job")
+          .values({
+            id: jobId,
+            agent_id: agentId,
+            session_id: null,
+            payload,
+            checkpoint: checkpoint.state,
+            checkpoint_crc: checkpoint.state_crc,
+            priority: 0,
+            timeout_seconds: 300,
+            max_attempts: 1,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow()
+
+        // Transition to SCHEDULED
+        await db
+          .updateTable("job")
+          .set({ status: "SCHEDULED" as JobStatus })
+          .where("id", "=", jobId)
+          .execute()
+
+        // Enqueue via Graphile Worker
+        if (enqueueJob) {
+          try {
+            await enqueueJob(jobId)
+          } catch {
+            // Job is in the DB as SCHEDULED — the worker cron will pick it up
+          }
+        }
+
+        // Emit replay_initiated event
+        if (eventEmitter) {
+          await eventEmitter.emit({
+            agentId,
+            jobId,
+            eventType: "replay_initiated",
+            payload: {
+              replay_source_checkpoint_id: checkpointId,
+              modifications: modifications ?? null,
+            },
+          })
+        }
+
+        return reply.status(202).send({
+          replayJobId: job.id,
+          fromCheckpoint: checkpointId,
+          modifications: modifications ?? null,
         })
       },
     )
