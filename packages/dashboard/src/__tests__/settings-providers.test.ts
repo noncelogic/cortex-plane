@@ -82,3 +82,65 @@ describe("credentialLabel", () => {
     expect(credentialLabel(cred, STUB_PROVIDERS)).toBe("unknown-llm")
   })
 })
+
+// ---------------------------------------------------------------------------
+// LLM provider filtering — mirrors the filter in settings/page.tsx
+// ---------------------------------------------------------------------------
+
+describe("settings page LLM provider filter", () => {
+  const ALL_PROVIDERS: ProviderInfo[] = [
+    { id: "openai", name: "OpenAI", authType: "api_key", description: "GPT models" },
+    { id: "anthropic", name: "Anthropic", authType: "oauth", description: "Claude models" },
+    {
+      id: "google-workspace",
+      name: "Google Workspace",
+      authType: "oauth",
+      description: "Google services",
+      credentialClass: "user_service",
+    },
+    {
+      id: "brave",
+      name: "Brave Search",
+      authType: "api_key",
+      description: "Web search",
+      credentialClass: "tool_specific",
+    },
+    {
+      id: "google-ai-studio",
+      name: "Google AI Studio",
+      authType: "api_key",
+      description: "Gemini",
+      credentialClass: "llm_provider",
+    },
+  ]
+
+  function filterLlmProviders(providers: ProviderInfo[]): ProviderInfo[] {
+    return providers.filter((p) => !p.credentialClass || p.credentialClass === "llm_provider")
+  }
+
+  it("includes providers without credentialClass (legacy LLM providers)", () => {
+    const result = filterLlmProviders(ALL_PROVIDERS)
+    expect(result.map((p) => p.id)).toContain("openai")
+    expect(result.map((p) => p.id)).toContain("anthropic")
+  })
+
+  it("includes providers with credentialClass === 'llm_provider'", () => {
+    const result = filterLlmProviders(ALL_PROVIDERS)
+    expect(result.map((p) => p.id)).toContain("google-ai-studio")
+  })
+
+  it("excludes user_service providers", () => {
+    const result = filterLlmProviders(ALL_PROVIDERS)
+    expect(result.map((p) => p.id)).not.toContain("google-workspace")
+  })
+
+  it("excludes tool_specific providers", () => {
+    const result = filterLlmProviders(ALL_PROVIDERS)
+    expect(result.map((p) => p.id)).not.toContain("brave")
+  })
+
+  it("returns correct count", () => {
+    const result = filterLlmProviders(ALL_PROVIDERS)
+    expect(result).toHaveLength(3)
+  })
+})

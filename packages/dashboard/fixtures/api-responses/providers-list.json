@@ -11,6 +11,20 @@
       "name": "OpenAI",
       "authType": "api_key",
       "description": "GPT models via direct API key"
+    },
+    {
+      "id": "google-workspace",
+      "name": "Google Workspace",
+      "authType": "oauth",
+      "description": "Google Calendar, Gmail, Drive (acting as the user)",
+      "credentialClass": "user_service"
+    },
+    {
+      "id": "brave",
+      "name": "Brave Search",
+      "authType": "api_key",
+      "description": "Brave Search API for web search tools",
+      "credentialClass": "tool_specific"
     }
   ]
 }

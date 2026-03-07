@@ -16,6 +16,7 @@ import agentDetailFixture from "../../fixtures/api-responses/agent-detail.json"
 import agentsListFixture from "../../fixtures/api-responses/agents-list.json"
 import approvalsListFixture from "../../fixtures/api-responses/approvals-list.json"
 import browserObserveFixture from "../../fixtures/api-responses/browser-observe.json"
+import channelsListFixture from "../../fixtures/api-responses/channels-list.json"
 import contentListFixture from "../../fixtures/api-responses/content-list.json"
 import credentialsListFixture from "../../fixtures/api-responses/credentials-list.json"
 import jobsListFixture from "../../fixtures/api-responses/jobs-list.json"
@@ -33,6 +34,7 @@ import {
 } from "../lib/schemas/agents"
 import { ApprovalListResponseSchema, ApprovalRequestSchema } from "../lib/schemas/approvals"
 import { BrowserSessionSchema } from "../lib/schemas/browser"
+import { ChannelConfigListResponseSchema, ChannelConfigSchema } from "../lib/schemas/channel-config"
 import { ContentListResponseSchema } from "../lib/schemas/content"
 import {
   CredentialListResponseSchema,
@@ -200,7 +202,7 @@ describe("API-Dashboard contract tests", () => {
   describe("GET /credentials/providers — ProviderListResponseSchema", () => {
     it("parses the fixture successfully", () => {
       const result = ProviderListResponseSchema.parse(providersListFixture)
-      expect(result.providers).toHaveLength(2)
+      expect(result.providers).toHaveLength(4)
     })
 
     it("does not silently drop provider fields", () => {
@@ -284,6 +286,21 @@ describe("API-Dashboard contract tests", () => {
     })
   })
 
+  describe("GET /channels — ChannelConfigListResponseSchema", () => {
+    it("parses the fixture successfully", () => {
+      const result = ChannelConfigListResponseSchema.parse(channelsListFixture)
+      expect(result.channels).toHaveLength(2)
+      expect(result.channels[0]?.type).toBe("telegram")
+      expect(result.channels[1]?.enabled).toBe(false)
+    })
+
+    it("does not silently drop channel config fields", () => {
+      for (const channel of channelsListFixture.channels) {
+        assertContractMatch(ChannelConfigSchema, channel, `Channel ${channel.id}`)
+      }
+    })
+  })
+
   // ---------------------------------------------------------------------------
   // Strict schema variants — detect extra/missing fields
   // ---------------------------------------------------------------------------
@@ -319,6 +336,13 @@ describe("API-Dashboard contract tests", () => {
       const strict = makeStrict(MemoryRecordSchema)
       for (const record of memorySearchFixture.results) {
         expect(() => strict.parse(record)).not.toThrow()
+      }
+    })
+
+    it("ChannelConfigSchema.strict() accepts fixture exactly", () => {
+      const strict = makeStrict(ChannelConfigSchema)
+      for (const channel of channelsListFixture.channels) {
+        expect(() => strict.parse(channel)).not.toThrow()
       }
     })
   })

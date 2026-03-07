@@ -5,12 +5,15 @@ export const ProviderInfoSchema = z.object({
   name: z.string(),
   authType: z.enum(["oauth", "api_key"]),
   description: z.string(),
+  credentialClass: z.string().optional(),
 })
 
 export const CredentialSchema = z.object({
   id: z.string(),
   provider: z.string(),
   credentialType: z.string(),
+  credentialClass: z.string().optional(),
+  toolName: z.string().nullable().optional(),
   displayLabel: z.string().nullable(),
   maskedKey: z.string().nullable(),
   status: z.string(),
