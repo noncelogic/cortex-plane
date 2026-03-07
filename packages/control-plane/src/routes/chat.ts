@@ -125,10 +125,15 @@ export function chatRoutes(deps: ChatRouteDeps) {
 
         // Resolve user from auth principal
         const principal = (request as AuthenticatedRequest).principal
-        const userAccountId = principal?.userId ?? "api-user"
+        const rawUserId = principal?.userId ?? "api-user"
+        // Map non-UUID principal IDs to a deterministic UUID for DB FK integrity.
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        const userAccountId = UUID_RE.test(rawUserId)
+          ? rawUserId
+          : `00000000-0000-4000-8000-${rawUserId.padStart(12, "0").slice(0, 12)}`
 
         // Ensure principal user exists for session FK integrity (dev/api-key modes).
-        await ensureUserAccount(db, userAccountId, principal?.displayName)
+        await ensureUserAccount(db, userAccountId, principal?.displayName ?? rawUserId)
 
         // Per-agent authorization guard
         if (channelAuthGuard) {
