@@ -49,9 +49,27 @@ export const JobLogEntrySchema = z.object({
   message: z.string(),
 })
 
+export const FailureReasonSchema = z.object({
+  message: z.string(),
+  category: z.string().optional(),
+})
+
+export const TokenUsageSchema = z.object({
+  tokensIn: z.number(),
+  tokensOut: z.number(),
+  costUsd: z.number().optional(),
+  llmCallCount: z.number(),
+  toolCallCount: z.number(),
+})
+
 export const JobDetailSchema = JobSummarySchema.extend({
   agentName: z.string().optional(),
   durationMs: z.number().optional(),
+  startedAt: z.string().optional(),
+  attempt: z.number().optional(),
+  maxAttempts: z.number().optional(),
+  failureReason: FailureReasonSchema.optional(),
+  tokenUsage: TokenUsageSchema.optional(),
   steps: z.array(JobStepSchema),
   metrics: JobMetricsSchema.optional(),
   logs: z.array(JobLogEntrySchema),
@@ -67,4 +85,6 @@ export type JobSummary = z.infer<typeof JobSummarySchema>
 export type JobStep = z.infer<typeof JobStepSchema>
 export type JobMetrics = z.infer<typeof JobMetricsSchema>
 export type JobLogEntry = z.infer<typeof JobLogEntrySchema>
+export type FailureReason = z.infer<typeof FailureReasonSchema>
+export type TokenUsage = z.infer<typeof TokenUsageSchema>
 export type JobDetail = z.infer<typeof JobDetailSchema>

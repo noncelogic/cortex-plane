@@ -110,6 +110,113 @@ function toJobSummary(job: {
   }
 }
 
+interface EventRow {
+  event_type: string
+  payload: Record<string, unknown>
+  created_at: Date | string
+  duration_ms: number | null
+  tool_ref: string | null
+  model: string | null
+  tokens_in: number | null
+  tokens_out: number | null
+}
+
+const STEP_EVENT_TYPES: Record<string, (e: EventRow) => string> = {
+  state_transition: (e) => {
+    const to = typeof e.payload.to === "string" ? e.payload.to : "unknown"
+    return `State → ${to}`
+  },
+  tool_call_end: (e) => `Tool: ${e.tool_ref ?? "unknown"}`,
+  llm_call_end: (e) => `LLM call${e.model ? ` (${e.model})` : ""}`,
+  error: (e) => (typeof e.payload.message === "string" ? e.payload.message : "Error occurred"),
+}
+
+function stepStatusForEvent(e: EventRow): "COMPLETED" | "FAILED" {
+  if (e.event_type === "error") return "FAILED"
+  if (e.payload && typeof e.payload === "object" && "error" in e.payload && e.payload.error)
+    return "FAILED"
+  return "COMPLETED"
+}
+
+function synthesizeSteps(events: EventRow[]) {
+  const steps: {
+    name: string
+    status: "COMPLETED" | "FAILED" | "RUNNING" | "PENDING"
+    startedAt: string | undefined
+    completedAt: string | undefined
+    durationMs: number | undefined
+    worker: string | undefined
+    error: string | undefined
+  }[] = []
+
+  for (const evt of events) {
+    const nameFn = STEP_EVENT_TYPES[evt.event_type]
+    if (!nameFn) continue
+
+    const status = stepStatusForEvent(evt)
+    const ts = toIso(evt.created_at)
+    const errorMsg =
+      status === "FAILED" && typeof evt.payload.message === "string"
+        ? evt.payload.message
+        : undefined
+
+    steps.push({
+      name: nameFn(evt),
+      status,
+      startedAt: ts,
+      completedAt: ts,
+      durationMs: evt.duration_ms ?? undefined,
+      worker: undefined,
+      error: errorMsg,
+    })
+  }
+
+  return steps
+}
+
+const LOG_LEVEL_MAP: Record<string, "INFO" | "WARN" | "ERR" | "DEBUG"> = {
+  error: "ERR",
+  tool_denied: "WARN",
+  tool_rate_limited: "WARN",
+  cost_alert: "WARN",
+  circuit_breaker_trip: "WARN",
+  kill_requested: "WARN",
+  state_transition: "INFO",
+  tool_call_end: "INFO",
+  llm_call_end: "INFO",
+  message_received: "DEBUG",
+  message_sent: "DEBUG",
+  session_start: "INFO",
+  session_end: "INFO",
+  checkpoint_created: "DEBUG",
+}
+
+function eventLogMessage(evt: EventRow): string {
+  if (typeof evt.payload.message === "string") return evt.payload.message
+  if (evt.event_type === "tool_call_end") return `Tool call: ${evt.tool_ref ?? "unknown"}`
+  if (evt.event_type === "llm_call_end") {
+    const parts = ["LLM call"]
+    if (evt.model) parts.push(`model=${evt.model}`)
+    if (evt.tokens_in) parts.push(`in=${evt.tokens_in}`)
+    if (evt.tokens_out) parts.push(`out=${evt.tokens_out}`)
+    return parts.join(" ")
+  }
+  if (evt.event_type === "state_transition") {
+    const from = typeof evt.payload.from === "string" ? evt.payload.from : "?"
+    const to = typeof evt.payload.to === "string" ? evt.payload.to : "?"
+    return `${from} → ${to}`
+  }
+  return evt.event_type.replace(/_/g, " ")
+}
+
+function synthesizeLogs(events: EventRow[]) {
+  return events.map((evt) => ({
+    timestamp: toIso(evt.created_at) ?? new Date().toISOString(),
+    level: LOG_LEVEL_MAP[evt.event_type] ?? ("INFO" as const),
+    message: eventLogMessage(evt),
+  }))
+}
+
 export function dashboardRoutes(deps: DashboardRouteDeps) {
   const { db, enqueueJob, observationService } = deps
 
@@ -299,7 +406,7 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
             ? job.result.logs
             : []
 
-        const steps = stepsRaw
+        let steps = stepsRaw
           .filter(
             (step): step is Record<string, unknown> => typeof step === "object" && step !== null,
           )
@@ -319,7 +426,7 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
             error: typeof step.error === "string" ? step.error : undefined,
           }))
 
-        const logs = logsRaw
+        let logs = logsRaw
           .filter(
             (entry): entry is Record<string, unknown> =>
               typeof entry === "object" && entry !== null,
@@ -339,6 +446,33 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
             message: typeof entry.message === "string" ? entry.message : "",
           }))
 
+        // When result lacks steps/logs, synthesize from agent_event records
+        if (steps.length === 0 || logs.length === 0) {
+          const events = await db
+            .selectFrom("agent_event")
+            .select([
+              "event_type",
+              "payload",
+              "created_at",
+              "duration_ms",
+              "tool_ref",
+              "model",
+              "tokens_in",
+              "tokens_out",
+            ])
+            .where("job_id", "=", jobId)
+            .orderBy("created_at", "asc")
+            .limit(200)
+            .execute()
+
+          if (steps.length === 0 && events.length > 0) {
+            steps = synthesizeSteps(events)
+          }
+          if (logs.length === 0 && events.length > 0) {
+            logs = synthesizeLogs(events)
+          }
+        }
+
         const startedAtMs = job.started_at ? new Date(job.started_at).getTime() : undefined
         const completedAtMs = job.completed_at ? new Date(job.completed_at).getTime() : undefined
         const durationMs =
@@ -346,10 +480,44 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
             ? Math.max(0, completedAtMs - startedAtMs)
             : undefined
 
+        // Build structured failure reason from job.error
+        const rawErr = job.error
+        const failureReason =
+          rawErr && typeof rawErr === "object"
+            ? {
+                message: typeof rawErr.message === "string" ? rawErr.message : "Unknown error",
+                category: typeof rawErr.category === "string" ? rawErr.category : undefined,
+              }
+            : undefined
+
+        // Token usage & execution stats from job row
+        const hasUsage =
+          job.tokens_in > 0 ||
+          job.tokens_out > 0 ||
+          job.llm_call_count > 0 ||
+          job.tool_call_count > 0
+        const tokenUsage = hasUsage
+          ? {
+              tokensIn: job.tokens_in,
+              tokensOut: job.tokens_out,
+              costUsd:
+                job.cost_usd !== null && job.cost_usd !== undefined
+                  ? Number(job.cost_usd)
+                  : undefined,
+              llmCallCount: job.llm_call_count,
+              toolCallCount: job.tool_call_count,
+            }
+          : undefined
+
         return reply.send({
           ...toJobSummary(job),
           agentName: agent?.name ?? undefined,
           durationMs,
+          startedAt: toIso(job.started_at),
+          attempt: job.attempt,
+          maxAttempts: job.max_attempts,
+          failureReason,
+          tokenUsage,
           steps,
           logs,
         })
