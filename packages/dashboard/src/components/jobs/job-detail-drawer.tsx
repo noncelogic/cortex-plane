@@ -198,12 +198,8 @@ function ExecutionStats({ usage }: { usage: TokenUsage }): React.JSX.Element {
 function EmptyStepsNotice(): React.JSX.Element {
   return (
     <div className="flex flex-col items-center rounded-lg border border-surface-border bg-secondary py-6">
-      <span className="material-symbols-outlined text-2xl text-text-muted">
-        info
-      </span>
-      <span className="mt-2 text-sm font-semibold text-text-muted">
-        No telemetry collected
-      </span>
+      <span className="material-symbols-outlined text-2xl text-text-muted">info</span>
+      <span className="mt-2 text-sm font-semibold text-text-muted">No telemetry collected</span>
       <span className="mt-1 text-xs text-text-muted">
         No execution steps or events were recorded for this job.
       </span>
@@ -313,11 +309,7 @@ export function JobDetailDrawer({
                   <span className="material-symbols-outlined text-sm">timeline</span>
                   Execution Steps
                 </h3>
-                {job.steps.length > 0 ? (
-                  <StepTimeline steps={job.steps} />
-                ) : (
-                  <EmptyStepsNotice />
-                )}
+                {job.steps.length > 0 ? <StepTimeline steps={job.steps} /> : <EmptyStepsNotice />}
               </section>
 
               {/* Execution Stats */}
