@@ -176,11 +176,6 @@ export class DiscordAdapter implements ChannelAdapter {
     if (!this.messageHandler) return
     if (message.author.bot) return
 
-    const guildId = message.guildId
-    if (guildId && this.config.allowedGuilds.size > 0 && !this.config.allowedGuilds.has(guildId)) {
-      return
-    }
-
     const inbound: InboundMessage = {
       channelType: this.channelType,
       channelUserId: message.author.id,
@@ -202,12 +197,6 @@ export class DiscordAdapter implements ChannelAdapter {
 
   private async handleInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.isButton()) return
-
-    const guildId = interaction.guildId
-    if (guildId && this.config.allowedGuilds.size > 0 && !this.config.allowedGuilds.has(guildId)) {
-      await interaction.reply({ content: "You are not authorized.", ephemeral: true })
-      return
-    }
 
     if (!this.callbackHandler) {
       await interaction.deferUpdate()

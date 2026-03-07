@@ -17,14 +17,19 @@ import type { JobStatus } from "@cortex/shared"
 import type { MessageRouter, RoutedMessage } from "@cortex/shared/channels"
 import type { Kysely } from "kysely"
 
+import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { Database } from "../db/types.js"
 import type { AgentChannelService } from "./agent-channel-service.js"
+
+/** Pattern matching pairing codes (6-char uppercase alphanumeric). */
+const PAIRING_CODE_PATTERN = /^[A-Z0-9]{6}$/
 
 export interface MessageDispatchDeps {
   db: Kysely<Database>
   agentChannelService: AgentChannelService
   router: MessageRouter
   enqueueJob: (jobId: string) => Promise<void>
+  channelAuthGuard?: ChannelAuthGuard
   logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }
 }
 
@@ -52,7 +57,7 @@ const TERMINAL_STATUSES: ReadonlySet<string> = new Set<JobStatus>([
 export function createMessageDispatch(
   deps: MessageDispatchDeps,
 ): (msg: RoutedMessage) => Promise<void> {
-  const { db, agentChannelService, router, enqueueJob, logger = console } = deps
+  const { db, agentChannelService, router, enqueueJob, channelAuthGuard, logger = console } = deps
 
   return async function dispatch(routed: RoutedMessage): Promise<void> {
     const { channelType, chatId } = routed.message
@@ -68,6 +73,41 @@ export function createMessageDispatch(
       )
       await router.send(channelType, chatId, { text: NO_AGENT_MESSAGE })
       return
+    }
+
+    // ── Channel authorization guard ────────────────────────────────────
+    let authDecision: AuthDecision | undefined
+
+    if (channelAuthGuard) {
+      // Intercept pairing codes before running the full auth flow
+      if (routed.message.text && PAIRING_CODE_PATTERN.test(routed.message.text)) {
+        const pairingResult = await channelAuthGuard.handlePairingCode(
+          routed.message.text,
+          routed.channelMappingId,
+          routed.userAccountId,
+        )
+        await router.send(channelType, chatId, { text: pairingResult.message })
+        return
+      }
+
+      authDecision = await channelAuthGuard.authorize({
+        agentId,
+        channelType,
+        channelUserId: routed.message.channelUserId,
+        chatId,
+        messageText: routed.message.text,
+      })
+
+      if (!authDecision.allowed) {
+        if (authDecision.replyToUser) {
+          await router.send(channelType, chatId, { text: authDecision.replyToUser })
+        }
+        logger.info(
+          { agentId, channelType, chatId, reason: authDecision.reason },
+          "Message blocked by ChannelAuthGuard",
+        )
+        return
+      }
     }
 
     // Build channel_id as "channelType:chatId" for session scoping
@@ -100,6 +140,10 @@ export function createMessageDispatch(
           prompt: routed.message.text,
           goalType: "research",
           conversationHistory,
+          ...(authDecision && {
+            authorizedUserId: authDecision.userId,
+            grantId: authDecision.grantId,
+          }),
         },
         priority: 0,
         max_attempts: 3,
