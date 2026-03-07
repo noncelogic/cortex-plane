@@ -25,6 +25,8 @@ import { McpHealthSupervisor } from "./mcp/health-supervisor.js"
 import { McpServerDeployer } from "./mcp/k8s-deployer.js"
 import { McpToolRouter } from "./mcp/tool-router.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
+import { AgentEventEmitter } from "./observability/event-emitter.js"
+import { ExecutionRegistry } from "./observability/execution-registry.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentCheckpointRoutes } from "./routes/agent-checkpoints.js"
@@ -96,6 +98,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   const mcpClientPool = new McpClientPool()
   const mcpToolRouter = new McpToolRouter({ db, clientPool: mcpClientPool })
 
+  // Observability: event emitter + execution registry
+  const eventEmitter = new AgentEventEmitter(db, sseManager)
+  const executionRegistry = new ExecutionRegistry()
+
   // Start Graphile Worker alongside Fastify — shared pg.Pool
   const runner = await createWorker({
     pgPool: pool,
@@ -106,6 +112,8 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     concurrency: config.workerConcurrency,
     mcpToolRouter,
     authConfig: config.auth,
+    eventEmitter,
+    executionRegistry,
   })
 
   // Worker utils for job enqueueing from routes
