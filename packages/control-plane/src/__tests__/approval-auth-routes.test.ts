@@ -6,6 +6,7 @@ import { hashApiKey } from "../middleware/api-keys.js"
 import type { AuthConfig } from "../middleware/types.js"
 import { approvalRoutes } from "../routes/approval.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
+import { ensureUuid } from "../util/name-uuid.js"
 
 // ---------------------------------------------------------------------------
 // Test keys & auth config
@@ -231,7 +232,7 @@ describe("Approval routes with auth", () => {
 
       // The service should have been called with the principal's userId
       const decideCall = (mockService.decide as ReturnType<typeof vi.fn>).mock.calls[0]
-      expect(decideCall![2]).toBe("user-approver") // decidedBy from auth
+      expect(decideCall![2]).toBe(ensureUuid("user-approver")) // decidedBy from auth
     })
 
     it("does not accept decidedBy from body — field removed from schema", async () => {
@@ -244,7 +245,7 @@ describe("Approval routes with auth", () => {
 
       const decideCall = (mockService.decide as ReturnType<typeof vi.fn>).mock.calls[0]
       // decidedBy must come from auth principal, not body
-      expect(decideCall![2]).toBe("user-approver")
+      expect(decideCall![2]).toBe(ensureUuid("user-approver"))
     })
 
     it("passes actor metadata to service", async () => {
@@ -266,7 +267,7 @@ describe("Approval routes with auth", () => {
         userAgent: string
       }
       expect(actorMetadata).toBeDefined()
-      expect(actorMetadata.userId).toBe("user-approver")
+      expect(actorMetadata.userId).toBe(ensureUuid("user-approver"))
       expect(actorMetadata.displayName).toBe("Approver Key")
       expect(actorMetadata.authMethod).toBe("api_key")
       expect(actorMetadata.userAgent).toBe("TestClient/1.0")
@@ -315,7 +316,7 @@ describe("Approval routes with auth", () => {
       })
 
       const call = (mockService.decideByToken as ReturnType<typeof vi.fn>).mock.calls[0]
-      expect(call![2]).toBe("user-approver")
+      expect(call![2]).toBe(ensureUuid("user-approver"))
     })
 
     it("passes actor metadata for token-based decide", async () => {
@@ -329,7 +330,7 @@ describe("Approval routes with auth", () => {
       const call = (mockService.decideByToken as ReturnType<typeof vi.fn>).mock.calls[0]
       const actorMetadata = call![5] as { userId: string }
       expect(actorMetadata).toBeDefined()
-      expect(actorMetadata.userId).toBe("user-approver")
+      expect(actorMetadata.userId).toBe(ensureUuid("user-approver"))
     })
   })
 
@@ -557,6 +558,6 @@ describe("Approval routes in dev mode (no auth)", () => {
     })
 
     const decideCall = (mockService.decide as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(decideCall![2]).toBe("dev-user")
+    expect(decideCall![2]).toBe(ensureUuid("dev-user"))
   })
 })

@@ -15,6 +15,7 @@ import type { FastifyReply, FastifyRequest } from "fastify"
 
 import type { SessionService } from "../auth/session-service.js"
 import { CSRF_HEADER, SESSION_COOKIE_NAME } from "../auth/session-service.js"
+import { ensureUuid } from "../util/name-uuid.js"
 import { findApiKey } from "./api-keys.js"
 import type { AuthConfig, AuthenticatedRequest, Principal } from "./types.js"
 
@@ -28,7 +29,7 @@ const ROLE_MAP: Record<string, string[]> = {
 }
 
 const DEV_PRINCIPAL: Principal = {
-  userId: "dev-user",
+  userId: ensureUuid("dev-user"),
   roles: ["operator", "approver", "admin"],
   displayName: "Dev User (no auth configured)",
   authMethod: "api_key",
@@ -97,7 +98,7 @@ export function createRequireAuth(configOrOptions: AuthConfig | AuthMiddlewareOp
       const record = findApiKey(plaintextKey, config.apiKeys)
       if (record) {
         const principal: Principal = {
-          userId: record.userId,
+          userId: ensureUuid(record.userId),
           roles: record.roles,
           displayName: record.label,
           authMethod: "api_key",

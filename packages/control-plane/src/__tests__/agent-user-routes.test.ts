@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import { AccessRequestConflictError } from "../auth/access-request-service.js"
 import type { AuthConfig } from "../middleware/types.js"
 import { agentUserRoutes } from "../routes/agent-user-routes.js"
+import { ensureUuid } from "../util/name-uuid.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -438,7 +439,7 @@ describe("POST /agents/:agentId/pairing-codes", () => {
     const body = res.json()
     expect(body.code).toBe("ABC123")
     expect(body.expiresAt).toBeDefined()
-    expect(pairing.generate).toHaveBeenCalledWith(AGENT_ID, "dev-user")
+    expect(pairing.generate).toHaveBeenCalledWith(AGENT_ID, ensureUuid("dev-user"))
   })
 })
 
@@ -506,7 +507,7 @@ describe("PATCH /agents/:agentId/access-requests/:requestId", () => {
     const body = res.json()
     expect(body.request.status).toBe("approved")
     expect(body.request.grant_id).toBe(GRANT_ID)
-    expect(arService.approve).toHaveBeenCalledWith(REQUEST_ID, "dev-user")
+    expect(arService.approve).toHaveBeenCalledWith(REQUEST_ID, ensureUuid("dev-user"))
   })
 
   it("denies a request", async () => {
@@ -521,7 +522,11 @@ describe("PATCH /agents/:agentId/access-requests/:requestId", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.request.status).toBe("denied")
-    expect(arService.deny).toHaveBeenCalledWith(REQUEST_ID, "dev-user", "Not authorized")
+    expect(arService.deny).toHaveBeenCalledWith(
+      REQUEST_ID,
+      ensureUuid("dev-user"),
+      "Not authorized",
+    )
   })
 
   it("returns 409 on conflict", async () => {
