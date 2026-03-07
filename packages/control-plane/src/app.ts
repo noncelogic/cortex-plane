@@ -19,6 +19,7 @@ import { ScreenshotModeService } from "./browser/screenshot-mode.js"
 import { TraceCaptureService } from "./browser/trace-capture.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
 import { ChannelConfigService } from "./channels/channel-config-service.js"
+import type { ChannelReloader } from "./channels/channel-reloader.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import { FeedbackService } from "./feedback/service.js"
@@ -75,6 +76,7 @@ export interface AppOptions {
   lifecycleManager?: AgentLifecycleManager
   registry?: BackendRegistry
   channelSupervisor?: ChannelSupervisor
+  channelReloader?: ChannelReloader
   voiceAdapters?: ReadonlyArray<ChannelAdapter>
 }
 
@@ -246,6 +248,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
         service: channelConfigService,
         authConfig,
         sessionService,
+        reloader: options.channelReloader,
       }),
     )
   }

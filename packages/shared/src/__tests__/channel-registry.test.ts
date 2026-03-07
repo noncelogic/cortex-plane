@@ -101,4 +101,50 @@ describe("ChannelAdapterRegistry", () => {
     const results = await registry.healthCheckAll()
     expect(results.get("telegram")).toBe(false)
   })
+
+  describe("replace", () => {
+    it("replaces an existing adapter and stops the old one", async () => {
+      const registry = new ChannelAdapterRegistry()
+      const old = createMockAdapter("telegram")
+      const replacement = createMockAdapter("telegram")
+
+      registry.register(old)
+      const returned = await registry.replace(replacement)
+
+      expect(returned).toBe(old)
+      expect(old.stop).toHaveBeenCalledOnce()
+      expect(registry.get("telegram")).toBe(replacement)
+    })
+
+    it("registers a new adapter when none exists for that type", async () => {
+      const registry = new ChannelAdapterRegistry()
+      const adapter = createMockAdapter("telegram")
+
+      const returned = await registry.replace(adapter)
+
+      expect(returned).toBeUndefined()
+      expect(registry.get("telegram")).toBe(adapter)
+    })
+  })
+
+  describe("remove", () => {
+    it("removes and stops an existing adapter", async () => {
+      const registry = new ChannelAdapterRegistry()
+      const adapter = createMockAdapter("telegram")
+      registry.register(adapter)
+
+      const removed = await registry.remove("telegram")
+
+      expect(removed).toBe(adapter)
+      expect(adapter.stop).toHaveBeenCalledOnce()
+      expect(registry.get("telegram")).toBeUndefined()
+      expect(registry.getAll()).toHaveLength(0)
+    })
+
+    it("returns undefined when removing a non-existent adapter", async () => {
+      const registry = new ChannelAdapterRegistry()
+      const removed = await registry.remove("whatsapp")
+      expect(removed).toBeUndefined()
+    })
+  })
 })

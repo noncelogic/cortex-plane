@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ChannelAdapterRegistry } from "../channels/registry.js"
+import type { ChannelHealthStatus } from "../channels/supervisor.js"
 import { ChannelSupervisor } from "../channels/supervisor.js"
 import type { ChannelAdapter } from "../channels/types.js"
 
@@ -151,5 +152,100 @@ describe("ChannelSupervisor", () => {
     expect(telegram.startSpy).toHaveBeenCalled()
 
     supervisor.stop()
+  })
+
+  describe("addAdapter", () => {
+    it("creates a health status for a dynamically added adapter", () => {
+      const registry = new ChannelAdapterRegistry()
+      const supervisor = new ChannelSupervisor(registry, {}, { probeIntervalMs: 10_000 })
+
+      supervisor.start()
+
+      // No adapters initially
+      expect(supervisor.getAllStatuses()).toHaveLength(0)
+
+      // Add a new adapter to the registry and notify the supervisor
+      const telegram = createAdapter("telegram")
+      registry.register(telegram)
+      supervisor.addAdapter("telegram", { connectionMode: "long-poll" })
+
+      // Status should now exist
+      const statuses = supervisor.getAllStatuses()
+      expect(statuses).toHaveLength(1)
+      expect(statuses[0]!.channelType).toBe("telegram")
+
+      supervisor.stop()
+    })
+
+    it("emits to listeners when a new adapter is added", () => {
+      const registry = new ChannelAdapterRegistry()
+      const supervisor = new ChannelSupervisor(registry, {}, { probeIntervalMs: 10_000 })
+
+      const telegram = createAdapter("telegram")
+      registry.register(telegram)
+
+      const listener = vi.fn()
+      supervisor.subscribe(listener)
+
+      supervisor.addAdapter("telegram")
+
+      // Listener should have been called with the new status
+      const lastCall = listener.mock.calls[listener.mock.calls.length - 1] as
+        | [ChannelHealthStatus[]]
+        | undefined
+      expect(lastCall).toBeDefined()
+      expect(lastCall![0]).toHaveLength(1)
+      expect(lastCall![0][0]!.channelType).toBe("telegram")
+    })
+  })
+
+  describe("removeAdapter", () => {
+    it("clears health status for a removed adapter", async () => {
+      const registry = new ChannelAdapterRegistry()
+      const telegram = createAdapter("telegram")
+      registry.register(telegram)
+
+      const supervisor = new ChannelSupervisor(
+        registry,
+        { telegram: { connectionMode: "long-poll" } },
+        { probeIntervalMs: 10_000 },
+      )
+
+      supervisor.start()
+      expect(supervisor.getStatus("telegram")).toBeDefined()
+
+      await registry.remove("telegram")
+      supervisor.removeAdapter("telegram")
+
+      expect(supervisor.getStatus("telegram")).toBeUndefined()
+
+      supervisor.stop()
+    })
+
+    it("emits to listeners when an adapter is removed", async () => {
+      const registry = new ChannelAdapterRegistry()
+      const telegram = createAdapter("telegram")
+      registry.register(telegram)
+
+      const supervisor = new ChannelSupervisor(
+        registry,
+        { telegram: { connectionMode: "long-poll" } },
+        { probeIntervalMs: 10_000 },
+      )
+
+      supervisor.start()
+
+      const listener = vi.fn()
+      supervisor.subscribe(listener)
+
+      await registry.remove("telegram")
+      supervisor.removeAdapter("telegram")
+
+      // Last listener call should have empty statuses
+      const lastCall = listener.mock.calls[listener.mock.calls.length - 1]!
+      expect(lastCall[0]).toHaveLength(0)
+
+      supervisor.stop()
+    })
   })
 })

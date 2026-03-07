@@ -7,6 +7,7 @@ import { GatewayIntentBits } from "discord.js"
 import { buildApp } from "./app.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
 import { ChannelConfigService } from "./channels/channel-config-service.js"
+import { ChannelReloader } from "./channels/channel-reloader.js"
 import { createMessageDispatch } from "./channels/message-dispatch.js"
 import { KyselyRouterDb } from "./channels/router-db.js"
 import { loadConfig } from "./config.js"
@@ -32,8 +33,6 @@ await runMigrations(pool)
 // ---------------------------------------------------------------------------
 // Channel adapters — instantiate from config, create registry + supervisor
 // ---------------------------------------------------------------------------
-let channelSupervisor: ChannelSupervisor | undefined
-
 const registry = new ChannelAdapterRegistry()
 
 // Prefer DB-backed channel configs when encryption/auth key is available;
@@ -88,27 +87,32 @@ if (config.auth?.credentialMasterKey) {
   }
 }
 
-if (registry.getAll().length === 0 && config.channels.telegram) {
-  const adapter = new TelegramAdapter({
-    botToken: config.channels.telegram.botToken,
-    allowedUsers: config.channels.telegram.allowedUsers,
-  })
-  registry.register(adapter)
+// Per-channel-type env-var fallback: only used when no DB config exists for
+// that specific type.  This allows DB-driven telegram + env-driven discord
+// (or vice versa) to coexist.  Fixes #430.
+if (!registry.get("telegram") && config.channels.telegram) {
+  registry.register(
+    new TelegramAdapter({
+      botToken: config.channels.telegram.botToken,
+      allowedUsers: config.channels.telegram.allowedUsers,
+    }),
+  )
 }
 
-if (registry.getAll().length === 0 && config.channels.discord) {
-  const adapter = new DiscordAdapter({
-    botToken: config.channels.discord.token,
-    applicationId: process.env.CHANNEL_DISCORD_APPLICATION_ID ?? "",
-    allowedGuilds: new Set(config.channels.discord.guildIds),
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.GuildMessageReactions,
-      GatewayIntentBits.MessageContent,
-    ],
-  })
-  registry.register(adapter)
+if (!registry.get("discord") && config.channels.discord) {
+  registry.register(
+    new DiscordAdapter({
+      botToken: config.channels.discord.token,
+      applicationId: process.env.CHANNEL_DISCORD_APPLICATION_ID ?? "",
+      allowedGuilds: new Set(config.channels.discord.guildIds),
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.MessageContent,
+      ],
+    }),
+  )
 }
 
 // Deferred enqueueJob — resolved after buildApp() creates workerUtils
@@ -119,30 +123,46 @@ const enqueueJobDeferred = async (jobId: string): Promise<void> => {
   return _enqueueJob(jobId)
 }
 
-if (registry.getAll().length > 0) {
-  // Build adapter map for the MessageRouter
-  const adapterMap = new Map(registry.getAll().map((a) => [a.channelType, a]))
+// Always create routing + supervision infrastructure so adapters can be
+// added at runtime via the channel config API (fixes #430).
+const adapterMap = new Map(registry.getAll().map((a) => [a.channelType, a]))
+const routerDb = new KyselyRouterDb(db)
+const messageRouter = new MessageRouter(routerDb, adapterMap)
 
-  const routerDb = new KyselyRouterDb(db)
-  const messageRouter = new MessageRouter(routerDb, adapterMap)
+const agentChannelService = new AgentChannelService(db)
+const dispatch = createMessageDispatch({
+  db,
+  agentChannelService,
+  router: messageRouter,
+  enqueueJob: enqueueJobDeferred,
+})
+messageRouter.onMessage(dispatch)
+messageRouter.bind()
 
-  const agentChannelService = new AgentChannelService(db)
-  const dispatch = createMessageDispatch({
-    db,
-    agentChannelService,
+const channelSupervisor = new ChannelSupervisor(registry, {
+  telegram: { connectionMode: "long-poll" },
+  discord: { connectionMode: "websocket" },
+})
+
+// Channel reloader — hot-reloads adapters when channel configs change via API
+let channelReloader: ChannelReloader | undefined
+if (config.auth?.credentialMasterKey) {
+  const reloaderConfigService = new ChannelConfigService(db, config.auth.credentialMasterKey)
+  channelReloader = new ChannelReloader({
+    registry,
+    supervisor: channelSupervisor,
     router: messageRouter,
-    enqueueJob: enqueueJobDeferred,
-  })
-  messageRouter.onMessage(dispatch)
-  messageRouter.bind()
-
-  channelSupervisor = new ChannelSupervisor(registry, {
-    telegram: { connectionMode: "long-poll" },
-    discord: { connectionMode: "websocket" },
+    channelConfigService: reloaderConfigService,
   })
 }
 
-const { app, enqueueJob } = await buildApp({ db, pool, config, channelSupervisor })
+const { app, enqueueJob } = await buildApp({
+  db,
+  pool,
+  config,
+  channelSupervisor,
+  channelReloader,
+})
 _enqueueJob = enqueueJob
 
 // Shutdown tracing on app close

@@ -12,6 +12,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
 import type { SessionService } from "../auth/session-service.js"
 import type { ChannelConfigService } from "../channels/channel-config-service.js"
+import type { ChannelReloader } from "../channels/channel-reloader.js"
 import type { ChannelType } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
@@ -55,10 +56,11 @@ export interface ChannelRouteDeps {
   service: ChannelConfigService
   authConfig: AuthConfig
   sessionService?: SessionService
+  reloader?: ChannelReloader
 }
 
 export function channelRoutes(deps: ChannelRouteDeps) {
-  const { service, authConfig, sessionService } = deps
+  const { service, authConfig, sessionService, reloader } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -115,6 +117,7 @@ export function channelRoutes(deps: ChannelRouteDeps) {
         }
 
         const channel = await service.create(type as ChannelType, name, config, null)
+        await reloader?.syncChannelType(type)
         return reply.status(201).send({ channel })
       },
     )
@@ -174,6 +177,7 @@ export function channelRoutes(deps: ChannelRouteDeps) {
         if (!channel) {
           return reply.status(404).send({ error: "not_found", message: "Channel config not found" })
         }
+        await reloader?.syncChannelType(channel.type)
         return reply.status(200).send({ channel })
       },
     )
@@ -227,6 +231,7 @@ export function channelRoutes(deps: ChannelRouteDeps) {
         if (!deleted) {
           return reply.status(404).send({ error: "not_found", message: "Channel config not found" })
         }
+        await reloader?.syncChannelType(channel.type)
         return reply.status(200).send({ status: "deleted" })
       },
     )
