@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 /**
  * Chat Routes
  *
@@ -128,9 +129,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
         const rawUserId = principal?.userId ?? "api-user"
         // Map non-UUID principal IDs to a deterministic UUID for DB FK integrity.
         const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-        const userAccountId = UUID_RE.test(rawUserId)
-          ? rawUserId
-          : `00000000-0000-4000-8000-${rawUserId.padStart(12, "0").slice(0, 12)}`
+        const userAccountId = UUID_RE.test(rawUserId) ? rawUserId : toNameUuid(rawUserId)
 
         // Ensure principal user exists for session FK integrity (dev/api-key modes).
         await ensureUserAccount(db, userAccountId, principal?.displayName ?? rawUserId)
@@ -263,6 +262,24 @@ export function chatRoutes(deps: ChatRouteDeps) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Derive a deterministic UUID v4-shaped identifier from an arbitrary string.
+ * Uses SHA-256, sets version nibble to 4 and variant bits to 10xx.
+ */
+function toNameUuid(name: string): string {
+  const hex = createHash("sha256").update(name).digest("hex")
+  // Format as UUID, set version=4 and variant=10xx
+  const raw = hex.slice(0, 32)
+  const parts = [
+    raw.slice(0, 8),
+    raw.slice(8, 12),
+    "4" + raw.slice(13, 16), // version nibble
+    ((parseInt(raw[16]!, 16) & 0x3) | 0x8).toString(16) + raw.slice(17, 20), // variant
+    raw.slice(20, 32),
+  ]
+  return parts.join("-")
+}
 
 async function ensureUserAccount(
   db: Kysely<Database>,
