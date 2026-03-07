@@ -78,6 +78,7 @@ function mockDb(
     agents?: Record<string, unknown>[]
     jobs?: Record<string, unknown>[]
     agentEvents?: Record<string, unknown>[]
+    grantRows?: Record<string, unknown>[]
     insertedAgent?: Record<string, unknown>
     updatedAgent?: Record<string, unknown> | null
     insertedJob?: Record<string, unknown>
@@ -87,6 +88,7 @@ function mockDb(
     agents = [makeAgent()],
     jobs = [],
     agentEvents = [],
+    grantRows = [],
     insertedAgent = makeAgent(),
     updatedAgent = makeAgent(),
     insertedJob = makeJob(),
@@ -112,20 +114,22 @@ function mockDb(
     const selectAll = vi
       .fn()
       .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
-    // Count queries use select(fn.countAll().as("total")) — return { total: rows.length }
+    // Count queries use select(fn.countAll().as("total"|"cnt")) — return { total, cnt }
     // Regular selects (e.g. select("id")) still need where/executeTakeFirst
-    const countResult = { total: rows.length }
+    const countResult = { total: rows.length, cnt: rows.length }
     const selectTerminal = {
       executeTakeFirst,
       executeTakeFirstOrThrow: vi.fn().mockResolvedValue(countResult),
       execute,
     }
+    const groupBy = vi.fn().mockReturnValue(selectTerminal)
     const selectWhereFn: ReturnType<typeof vi.fn> = vi.fn()
     selectWhereFn.mockReturnValue({
       where: selectWhereFn,
+      groupBy,
       ...selectTerminal,
     })
-    const select = vi.fn().mockReturnValue({ where: selectWhereFn, ...selectTerminal })
+    const select = vi.fn().mockReturnValue({ where: selectWhereFn, groupBy, ...selectTerminal })
     return { selectAll, select }
   }
 
@@ -156,6 +160,7 @@ function mockDb(
       if (table === "agent") return selectChain(agents)
       if (table === "job") return selectChain(jobs)
       if (table === "agent_event") return selectChain(agentEvents)
+      if (table === "agent_user_grant") return selectChain(grantRows)
       return selectChain([])
     }),
     insertInto: vi.fn().mockImplementation((table: string) => {
@@ -387,6 +392,86 @@ describe("GET /agents/:id", () => {
     const cs = body.costSummary as { byModel: Record<string, number> }
     expect(cs.byModel["claude-3-opus"]).toBeCloseTo(0.012)
     expect(cs.byModel["claude-3-sonnet"]).toBeCloseTo(0.005)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: authWarnings + grantCount (#448)
+// ---------------------------------------------------------------------------
+
+describe("authWarnings and grantCount (#448)", () => {
+  it("GET /agents includes authWarnings for allowlist agent with zero grants", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent({ auth_model: "allowlist" })],
+      grantRows: [],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.grantCount).toBe(0)
+    expect(agent.authWarnings).toEqual([
+      "Allowlist agent has zero grants — all messages will be denied.",
+    ])
+  })
+
+  it("GET /agents returns empty authWarnings for open agent", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent({ auth_model: "open" })],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.authWarnings).toEqual([])
+  })
+
+  it("GET /agents/:id includes authWarnings for allowlist agent with zero grants", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent({ auth_model: "allowlist" })],
+      grantRows: [],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.grantCount).toBe(0)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.authWarnings).toEqual([
+      "Allowlist agent has zero grants — all messages will be denied.",
+    ])
+  })
+
+  it("GET /agents/:id returns empty authWarnings when allowlist agent has grants", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent({ auth_model: "allowlist" })],
+      grantRows: [{ agent_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", cnt: 2 }],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.authWarnings).toEqual([])
   })
 })
 
