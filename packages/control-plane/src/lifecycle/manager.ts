@@ -25,7 +25,7 @@ import type { AgentDeploymentConfig } from "../k8s/types.js"
 import { type AgentHeartbeat, CrashLoopDetector, HeartbeatReceiver } from "./health.js"
 import { hydrateAgent, type HydrationResult, type QdrantClient } from "./hydration.js"
 import { IdleDetector } from "./idle-detector.js"
-import { recordStateTransition } from "./metrics.js"
+import { recordCircuitBreakerTrip, recordStateTransition } from "./metrics.js"
 import {
   type AgentLifecycleState,
   AgentLifecycleStateMachine,
@@ -335,6 +335,70 @@ export class AgentLifecycleManager {
     // Only scale-to-zero agents that are READY (idle, not executing)
     if (ctx.stateMachine.state === "READY") {
       await this.drain(agentId, "Idle timeout — scale to zero")
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // quarantine: EXECUTING | DEGRADED → QUARANTINED
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quarantine an agent — freezes execution, fails the running job,
+   * updates the DB agent status to QUARANTINED, and emits a metric.
+   *
+   * Valid source states: EXECUTING, DEGRADED.
+   */
+  async quarantine(agentId: string, reason: string): Promise<void> {
+    const ctx = this.requireContext(agentId)
+    ctx.stateMachine.transition("QUARANTINED", reason)
+
+    recordCircuitBreakerTrip(agentId, reason)
+
+    // Fail the running job with QUARANTINED category
+    await this.db
+      .updateTable("job")
+      .set({
+        status: "FAILED",
+        error: { category: "QUARANTINED", message: reason },
+        completed_at: new Date(),
+      })
+      .where("id", "=", ctx.jobId)
+      .where("status", "=", "RUNNING")
+      .execute()
+
+    // Update the DB agent status so subsequent job dispatches are rejected
+    await this.db
+      .updateTable("agent")
+      .set({ status: "QUARANTINED" })
+      .where("id", "=", agentId)
+      .execute()
+  }
+
+  // -------------------------------------------------------------------------
+  // release: QUARANTINED → DRAINING (triggers re-boot cycle)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Release an agent from quarantine. Transitions QUARANTINED → DRAINING
+   * so the normal drain → re-boot cycle can proceed. Restores the DB
+   * agent status to ACTIVE and optionally resets the crash detector.
+   */
+  async release(agentId: string, resetCrashDetector?: boolean): Promise<void> {
+    const ctx = this.requireContext(agentId)
+
+    if (ctx.stateMachine.state !== "QUARANTINED") {
+      throw new Error(
+        `Cannot release agent ${agentId}: not in QUARANTINED state (current: ${ctx.stateMachine.state})`,
+      )
+    }
+
+    ctx.stateMachine.transition("DRAINING", "Released from quarantine")
+
+    // Restore DB agent status
+    await this.db.updateTable("agent").set({ status: "ACTIVE" }).where("id", "=", agentId).execute()
+
+    if (resetCrashDetector) {
+      this.crashDetector.resetCrashes(agentId)
     }
   }
 

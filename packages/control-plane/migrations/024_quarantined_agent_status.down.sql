@@ -1,0 +1,4 @@
+-- 024 down: Remove QUARANTINED from agent_status enum
+-- PostgreSQL does not support ALTER TYPE ... DROP VALUE directly.
+-- Downgrade requires a full enum replacement (omitted for safety).
+-- If rollback is needed, replace the enum manually.

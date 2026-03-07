@@ -9,7 +9,7 @@ export type JobStatus =
   | "RETRYING"
   | "DEAD_LETTER"
 
-export type AgentStatus = "ACTIVE" | "DISABLED" | "ARCHIVED"
+export type AgentStatus = "ACTIVE" | "DISABLED" | "ARCHIVED" | "QUARANTINED"
 
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"
 export type RiskLevel = "P0" | "P1" | "P2" | "P3"
