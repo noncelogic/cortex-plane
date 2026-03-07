@@ -71,6 +71,7 @@ export class ClaudeCodeBackend implements ExecutionBackend {
 
     const proc = this.activeProcess
     await Promise.race([
+      // @ts-expect-error ChildProcess inherits .on from EventEmitter
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return
       new Promise<void>((resolve) => proc.on("exit", () => resolve())),
       new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
@@ -156,6 +157,7 @@ export class ClaudeCodeBackend implements ExecutionBackend {
       }
     }, task.constraints.timeoutMs)
 
+    // @ts-expect-error ChildProcess inherits .on from EventEmitter
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     subprocess.on("exit", () => {
       clearTimeout(timeoutTimer)
@@ -322,6 +324,7 @@ class ClaudeCodeHandle implements ExecutionHandle {
       this.subprocess.kill("SIGTERM")
 
       await Promise.race([
+        // @ts-expect-error ChildProcess inherits .on from EventEmitter
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return
         new Promise<void>((r) => this.subprocess.on("exit", () => r())),
         new Promise<void>((r) => setTimeout(r, 5_000)),
@@ -358,6 +361,7 @@ class ClaudeCodeHandle implements ExecutionHandle {
       return Promise.resolve(this.subprocess.exitCode)
     }
     return new Promise<number | null>((resolve) => {
+      // @ts-expect-error ChildProcess inherits .on from EventEmitter
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       this.subprocess.on("exit", (code: number | null) => resolve(code))
     })
