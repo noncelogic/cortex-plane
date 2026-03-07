@@ -4,6 +4,7 @@ import {
   type BudgetResult,
   type ContextBudgetConfig,
   DEFAULT_CONTEXT_BUDGET,
+  enforceContextBudget,
   type ExecutionContext,
   truncateComponent,
   validateContextBudget,
@@ -174,5 +175,127 @@ describe("validateContextBudget", () => {
     delete ctx.conversationHistory
     const result = validateContextBudget(ctx)
     expect(comp(result, "conversationHistory").chars).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// enforceContextBudget
+// ---------------------------------------------------------------------------
+
+describe("enforceContextBudget", () => {
+  it("returns context unchanged when within budget", () => {
+    const ctx = makeContext()
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx)
+    expect(budgetResult.valid).toBe(true)
+    expect(budgetResult.warnings).toHaveLength(0)
+    expect(enforcedContext.systemPrompt).toBe(ctx.systemPrompt)
+    expect(enforcedContext.identity).toBe(ctx.identity)
+    expect(enforcedContext.memory).toBe(ctx.memory)
+    expect(enforcedContext.toolDefinitions).toBe(ctx.toolDefinitions)
+  })
+
+  it("truncates oversized system prompt and still passes total check", () => {
+    const ctx = makeContext({ systemPrompt: "x".repeat(10_000) })
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx)
+    expect(budgetResult.valid).toBe(true)
+    expect(comp(budgetResult, "systemPrompt").truncated).toBe(true)
+    expect(enforcedContext.systemPrompt.length).toBe(DEFAULT_CONTEXT_BUDGET.maxSystemPromptChars)
+    expect(enforcedContext.systemPrompt).toContain("[TRUNCATED]")
+  })
+
+  it("truncates oversized identity with marker, job still valid", () => {
+    const ctx = makeContext({ identity: "x".repeat(6_000) })
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx)
+    expect(budgetResult.valid).toBe(true)
+    expect(comp(budgetResult, "identity").truncated).toBe(true)
+    expect(enforcedContext.identity.length).toBe(DEFAULT_CONTEXT_BUDGET.maxIdentityChars)
+    expect(enforcedContext.identity).toContain("[TRUNCATED]")
+  })
+
+  it("truncates oversized memory", () => {
+    const ctx = makeContext({ memory: "x".repeat(6_000) })
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx)
+    expect(budgetResult.valid).toBe(true)
+    expect(comp(budgetResult, "memory").truncated).toBe(true)
+    expect(enforcedContext.memory.length).toBe(DEFAULT_CONTEXT_BUDGET.maxMemoryChars)
+    expect(enforcedContext.memory).toContain("[TRUNCATED]")
+  })
+
+  it("truncates oversized tool definitions", () => {
+    const ctx = makeContext({ toolDefinitions: "x".repeat(20_000) })
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx)
+    expect(budgetResult.valid).toBe(true)
+    expect(comp(budgetResult, "toolDefinitions").truncated).toBe(true)
+    expect(enforcedContext.toolDefinitions.length).toBe(
+      DEFAULT_CONTEXT_BUDGET.maxToolDefinitionsChars,
+    )
+    expect(enforcedContext.toolDefinitions).toContain("[TRUNCATED]")
+  })
+
+  it("returns valid=false when total exceeds budget even after per-component truncation", () => {
+    const ctx = makeContext({
+      systemPrompt: "x".repeat(8_000),
+      identity: "x".repeat(4_000),
+      memory: "x".repeat(4_000),
+      toolDefinitions: "x".repeat(16_000),
+      conversationHistory: "x".repeat(100_000),
+    })
+    const { budgetResult } = enforceContextBudget(ctx)
+    expect(budgetResult.valid).toBe(false)
+    expect(budgetResult.warnings.some((w) => w.includes("Total context"))).toBe(true)
+  })
+
+  it("does not mutate the original context", () => {
+    const ctx = makeContext({ systemPrompt: "x".repeat(10_000) })
+    const original = ctx.systemPrompt
+    enforceContextBudget(ctx)
+    expect(ctx.systemPrompt).toBe(original)
+  })
+
+  it("never truncates conversation history", () => {
+    const history = "x".repeat(50_000)
+    const ctx = makeContext({ conversationHistory: history })
+    const { enforcedContext } = enforceContextBudget(ctx)
+    expect(enforcedContext.conversationHistory).toBe(history)
+  })
+
+  it("uses custom config for enforcement", () => {
+    const config: ContextBudgetConfig = {
+      maxSystemPromptChars: 50,
+      maxIdentityChars: 50,
+      maxMemoryChars: 50,
+      maxToolDefinitionsChars: 50,
+      maxTotalContextChars: 500,
+      reservedForConversation: 100,
+    }
+    const ctx = makeContext({ systemPrompt: "x".repeat(200) })
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx, config)
+    expect(comp(budgetResult, "systemPrompt").truncated).toBe(true)
+    expect(enforcedContext.systemPrompt.length).toBe(50)
+  })
+
+  it("truncates multiple components independently", () => {
+    const ctx = makeContext({
+      systemPrompt: "x".repeat(10_000),
+      identity: "x".repeat(6_000),
+      memory: "x".repeat(6_000),
+    })
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx)
+    expect(budgetResult.valid).toBe(true)
+    expect(comp(budgetResult, "systemPrompt").truncated).toBe(true)
+    expect(comp(budgetResult, "identity").truncated).toBe(true)
+    expect(comp(budgetResult, "memory").truncated).toBe(true)
+    expect(enforcedContext.systemPrompt.length).toBe(DEFAULT_CONTEXT_BUDGET.maxSystemPromptChars)
+    expect(enforcedContext.identity.length).toBe(DEFAULT_CONTEXT_BUDGET.maxIdentityChars)
+    expect(enforcedContext.memory.length).toBe(DEFAULT_CONTEXT_BUDGET.maxMemoryChars)
+  })
+
+  it("applies system defaults when no config provided", () => {
+    const ctx = makeContext({
+      systemPrompt: "x".repeat(DEFAULT_CONTEXT_BUDGET.maxSystemPromptChars + 100),
+    })
+    const { budgetResult, enforcedContext } = enforceContextBudget(ctx)
+    expect(comp(budgetResult, "systemPrompt").truncated).toBe(true)
+    expect(enforcedContext.systemPrompt.length).toBe(DEFAULT_CONTEXT_BUDGET.maxSystemPromptChars)
   })
 })

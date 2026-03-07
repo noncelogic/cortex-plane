@@ -137,3 +137,57 @@ export function validateContextBudget(
 
   return { valid, components, totalChars, warnings }
 }
+
+// ---------------------------------------------------------------------------
+// Enforcement (validate + truncate)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of context budget enforcement.
+ * Contains the validation result and the context with oversized components
+ * truncated to fit their individual budgets.
+ */
+export interface EnforcementResult {
+  budgetResult: BudgetResult
+  enforcedContext: ExecutionContext
+}
+
+/**
+ * Validate context against the budget and truncate oversized components.
+ *
+ * Each component that exceeds its individual limit is truncated via
+ * `truncateComponent()`. If the total (post-truncation) still exceeds
+ * `maxTotalContextChars`, `budgetResult.valid` will be `false` and the
+ * caller should refuse the job.
+ */
+export function enforceContextBudget(
+  context: ExecutionContext,
+  config: ContextBudgetConfig = DEFAULT_CONTEXT_BUDGET,
+): EnforcementResult {
+  const budgetResult = validateContextBudget(context, config)
+
+  // Start with a shallow copy so callers keep the original intact
+  const enforced: ExecutionContext = { ...context }
+
+  if (budgetResult.components["systemPrompt"]?.truncated) {
+    enforced.systemPrompt = truncateComponent(
+      context.systemPrompt,
+      config.maxSystemPromptChars,
+    ).result
+  }
+  if (budgetResult.components["identity"]?.truncated) {
+    enforced.identity = truncateComponent(context.identity, config.maxIdentityChars).result
+  }
+  if (budgetResult.components["memory"]?.truncated) {
+    enforced.memory = truncateComponent(context.memory, config.maxMemoryChars).result
+  }
+  if (budgetResult.components["toolDefinitions"]?.truncated) {
+    enforced.toolDefinitions = truncateComponent(
+      context.toolDefinitions,
+      config.maxToolDefinitionsChars,
+    ).result
+  }
+  // conversationHistory is never truncated by the platform
+
+  return { budgetResult, enforcedContext: enforced }
+}

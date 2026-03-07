@@ -11,6 +11,8 @@ export {
   type ComponentBudget,
   type ContextBudgetConfig,
   DEFAULT_CONTEXT_BUDGET,
+  enforceContextBudget,
+  type EnforcementResult,
   type ExecutionContext,
   truncateComponent,
   validateContextBudget,
