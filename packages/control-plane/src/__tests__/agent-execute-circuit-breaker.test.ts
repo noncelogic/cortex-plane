@@ -81,8 +81,8 @@ interface MockDbReturns {
   job?: Record<string, unknown> | null
   /** selectFrom("agent").selectAll().where().executeTakeFirst() — returns the agent record */
   agent?: Record<string, unknown> | null
-  /** selectFrom("job").select("status").where("agent_id",...).orderBy(...).limit(...).execute() — recent jobs */
-  recentJobs?: Array<{ status: string }>
+  /** selectFrom("job").select(["status","error"]).where("agent_id",...).orderBy(...).limit(...).execute() — recent jobs */
+  recentJobs?: Array<{ status: string; error?: Record<string, unknown> | null }>
 }
 
 function makeMockDb(returns: MockDbReturns = {}) {
@@ -398,7 +398,7 @@ describe("agent-execute circuit breaker wiring", () => {
 
     const failedResult = createMockResult({
       status: "failed",
-      error: { message: "Agent crashed", classification: "permanent", partialExecution: false },
+      error: { message: "Agent crashed", classification: "transient", partialExecution: false },
     })
     const handle = createMockHandle(failedResult, events)
     const registry = makeMockRegistry(handle)
@@ -552,6 +552,107 @@ describe("agent-execute circuit breaker wiring", () => {
     await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
     // Should NOT quarantine (3 < 5 threshold)
+    const agentQuarantine = db._setCalls.find(
+      (c) => c.table === "agent" && c.values.status === "QUARANTINED",
+    )
+    expect(agentQuarantine).toBeUndefined()
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(registry.routeTask).toHaveBeenCalled()
+  })
+
+  it("does not count permanent (config) errors toward quarantine (#450)", async () => {
+    // 2 prior runtime failures + this permanent (config) error should NOT quarantine
+    // because permanent errors represent config issues, not runtime failures.
+    const db = makeMockDb({
+      recentJobs: [{ status: "FAILED" }, { status: "FAILED" }],
+    })
+
+    const events: OutputEvent[] = [
+      { type: "text", timestamp: new Date().toISOString(), content: "Working..." },
+    ]
+
+    const failedResult = createMockResult({
+      status: "failed",
+      error: {
+        message: "Authentication failed — invalid API key",
+        classification: "permanent",
+        partialExecution: false,
+      },
+    })
+    const handle = createMockHandle(failedResult, events)
+    const registry = makeMockRegistry(handle)
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    // Agent should NOT be quarantined — permanent errors are config issues
+    const agentQuarantine = db._setCalls.find(
+      (c) => c.table === "agent" && c.values.status === "QUARANTINED",
+    )
+    expect(agentQuarantine).toBeUndefined()
+  })
+
+  it("skips config-error jobs during hydration (#450)", async () => {
+    // 3 prior FAILED jobs, but 1 has a PERMANENT error category (config error).
+    // Only 2 runtime failures should count → below threshold → no quarantine.
+    const db = makeMockDb({
+      recentJobs: [
+        { status: "FAILED", error: null },
+        { status: "FAILED", error: { category: "PERMANENT", message: "Auth failed" } },
+        { status: "FAILED", error: null },
+      ],
+    })
+
+    const events: OutputEvent[] = [
+      { type: "text", timestamp: new Date().toISOString(), content: "Done" },
+    ]
+    const handle = createMockHandle(createMockResult(), events)
+    const registry = makeMockRegistry(handle)
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    // Should NOT quarantine pre-dispatch: only 2 runtime failures (< 3 threshold)
+    const agentQuarantine = db._setCalls.find(
+      (c) => c.table === "agent" && c.values.status === "QUARANTINED",
+    )
+    expect(agentQuarantine).toBeUndefined()
+
+    // Backend SHOULD have been called
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(registry.routeTask).toHaveBeenCalled()
+  })
+
+  it("skips CONTEXT_BUDGET_EXCEEDED jobs during hydration (#450)", async () => {
+    // 3 prior FAILED jobs, but 1 has CONTEXT_BUDGET_EXCEEDED (config error).
+    const db = makeMockDb({
+      recentJobs: [
+        { status: "FAILED", error: null },
+        { status: "FAILED", error: { category: "CONTEXT_BUDGET_EXCEEDED", message: "too large" } },
+        { status: "FAILED", error: null },
+      ],
+    })
+
+    const events: OutputEvent[] = [
+      { type: "text", timestamp: new Date().toISOString(), content: "Done" },
+    ]
+    const handle = createMockHandle(createMockResult(), events)
+    const registry = makeMockRegistry(handle)
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    // Should NOT quarantine: only 2 runtime failures
     const agentQuarantine = db._setCalls.find(
       (c) => c.table === "agent" && c.values.status === "QUARANTINED",
     )

@@ -47,7 +47,7 @@ import type { AgentEventEmitter } from "../../observability/event-emitter.js"
 import type { ExecutionRegistry } from "../../observability/execution-registry.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
-import { classifyError } from "../error-classifier.js"
+import { classifyError, isConfigErrorCategory } from "../error-classifier.js"
 import { startHeartbeat } from "../heartbeat.js"
 import { createMemoryScheduler } from "../memory-scheduler.js"
 import { calculateRunAt } from "../retry.js"
@@ -179,9 +179,10 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         // Hydrate consecutive failure count from recent jobs.
         // If health_reset_at is set, ignore jobs completed before the reset
         // to avoid the quarantine death spiral (#443).
+        // Config/setup errors are excluded from the count (#450).
         let recentJobsQuery = db
           .selectFrom("job")
-          .select("status")
+          .select(["status", "error"])
           .where("agent_id", "=", agent.id)
           .where("completed_at", "is not", null)
 
@@ -192,8 +193,16 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         const recentJobs = await recentJobsQuery.orderBy("completed_at", "desc").limit(10).execute()
 
         for (const rj of recentJobs) {
-          if (rj.status === "FAILED") agentCB.recordJobFailure()
-          else break
+          if (rj.status === "FAILED") {
+            // Config/setup errors should not count toward quarantine (#450)
+            const errCat = rj.error?.category
+            if (typeof errCat === "string" && isConfigErrorCategory(errCat)) {
+              continue
+            }
+            agentCB.recordJobFailure()
+          } else {
+            break
+          }
         }
 
         // ── Step 1c: Pre-dispatch quarantine check ──
@@ -800,25 +809,31 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           if (success) {
             agentCB.recordJobSuccess()
           } else {
-            agentCB.recordJobFailure()
-            const postDecision = agentCB.shouldQuarantine()
-            if (postDecision.quarantine) {
-              rootSpan.addEvent("agent_quarantined_post_execution", {
-                "cortex.quarantine.reason": postDecision.reason,
-              })
-              recordCircuitBreakerTrip(agent.id, postDecision.reason)
+            // Config/setup errors (e.g. invalid credentials, permanent backend
+            // rejection) should not push the agent toward quarantine (#450).
+            const isConfig = result.error?.classification === "permanent"
 
-              if (lifecycleManager) {
-                await lifecycleManager.quarantine(agent.id, postDecision.reason).catch(() => {
-                  // best-effort
+            if (!isConfig) {
+              agentCB.recordJobFailure()
+              const postDecision = agentCB.shouldQuarantine()
+              if (postDecision.quarantine) {
+                rootSpan.addEvent("agent_quarantined_post_execution", {
+                  "cortex.quarantine.reason": postDecision.reason,
                 })
-              }
+                recordCircuitBreakerTrip(agent.id, postDecision.reason)
 
-              await db
-                .updateTable("agent")
-                .set({ status: "QUARANTINED" })
-                .where("id", "=", agent.id)
-                .execute()
+                if (lifecycleManager) {
+                  await lifecycleManager.quarantine(agent.id, postDecision.reason).catch(() => {
+                    // best-effort
+                  })
+                }
+
+                await db
+                  .updateTable("agent")
+                  .set({ status: "QUARANTINED" })
+                  .where("id", "=", agent.id)
+                  .execute()
+              }
             }
           }
 
@@ -991,7 +1006,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         }
 
         // ── Circuit breaker: record failure in error path ──
-        if (agentCB && loadedAgentId) {
+        // Config/setup errors should not count toward quarantine (#450).
+        if (agentCB && loadedAgentId && !isConfigErrorCategory(classification.category)) {
           agentCB.recordJobFailure()
           const errDecision = agentCB.shouldQuarantine()
           if (errDecision.quarantine) {
