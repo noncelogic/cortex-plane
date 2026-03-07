@@ -44,6 +44,7 @@ import { feedbackRoutes } from "./routes/feedback.js"
 import { healthRoutes } from "./routes/health.js"
 import { mcpServerRoutes } from "./routes/mcp-servers.js"
 import { observationRoutes } from "./routes/observation.js"
+import { operatorEventRoutes } from "./routes/operator-events.js"
 import { sessionRoutes } from "./routes/sessions.js"
 import { streamRoutes } from "./routes/stream.js"
 import { voiceRoutes } from "./routes/voice.js"
@@ -260,6 +261,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       authConfig,
       sessionService,
       lifecycleManager: options.lifecycleManager,
+    }),
+  )
+
+  // Register operator event routes (activity stream SSE + event query + cost)
+  await app.register(
+    operatorEventRoutes({
+      db,
+      authConfig,
+      sseManager,
+      sessionService,
     }),
   )
 
