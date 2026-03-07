@@ -35,6 +35,24 @@ export {
   type SteerMessage,
 } from "./manager.js"
 export {
+  checkpointWritesTotal,
+  circuitBreakerTripsTotal,
+  contextBudgetExceededTotal,
+  emitLifecycleLog,
+  healthProbeDurationSeconds,
+  type LifecycleLogEntry,
+  outputValidationRejectedTotal,
+  quarantineDurationSeconds,
+  recordCheckpointWrite,
+  recordCircuitBreakerTrip,
+  recordContextBudgetExceeded,
+  recordOutputValidationRejected,
+  recordStateTransition,
+  recordTokenUsage,
+  stateTransitionsTotal,
+  tokenUsageTotal,
+} from "./metrics.js"
+export {
   computeCheckpointCrc,
   DEFAULT_CHECKPOINT_MAX_BYTES,
   DEFAULT_MEMORY_MAX_CHARS,
