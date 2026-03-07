@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ChannelAdapterRegistry } from "../channels/registry.js"
+import type { ChannelHealthStatus } from "../channels/supervisor.js"
 import { ChannelSupervisor } from "../channels/supervisor.js"
 import type { ChannelAdapter } from "../channels/types.js"
 
@@ -154,7 +155,7 @@ describe("ChannelSupervisor", () => {
   })
 
   describe("addAdapter", () => {
-    it("creates a health status for a dynamically added adapter", async () => {
+    it("creates a health status for a dynamically added adapter", () => {
       const registry = new ChannelAdapterRegistry()
       const supervisor = new ChannelSupervisor(registry, {}, { probeIntervalMs: 10_000 })
 
@@ -189,9 +190,12 @@ describe("ChannelSupervisor", () => {
       supervisor.addAdapter("telegram")
 
       // Listener should have been called with the new status
-      const lastCall = listener.mock.calls[listener.mock.calls.length - 1]!
-      expect(lastCall[0]).toHaveLength(1)
-      expect(lastCall[0]![0]!.channelType).toBe("telegram")
+      const lastCall = listener.mock.calls[listener.mock.calls.length - 1] as
+        | [ChannelHealthStatus[]]
+        | undefined
+      expect(lastCall).toBeDefined()
+      expect(lastCall![0]).toHaveLength(1)
+      expect(lastCall![0][0]!.channelType).toBe("telegram")
     })
   })
 
