@@ -16,6 +16,12 @@ import {
   saveProviderApiKey,
 } from "@/lib/api-client"
 
+/** Find a human-readable label for a credential (provider name or display label). */
+function credentialLabel(cred: Credential, providers: ProviderInfo[]): string {
+  if (cred.displayLabel) return cred.displayLabel
+  return providers.find((p) => p.id === cred.provider)?.name ?? cred.provider
+}
+
 /** Code-paste providers that use the init/exchange flow. */
 const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
 
@@ -39,6 +45,13 @@ function SettingsInner() {
   } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Disconnect credential state
+  const [disconnectConfirm, setDisconnectConfirm] = useState<{
+    id: string
+    label: string
+  } | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
 
   // Code-paste fallback state (shown when popup cannot read the redirect URL)
   const [popupProvider, setPopupProvider] = useState<string | null>(null)
@@ -138,15 +151,21 @@ function SettingsInner() {
     }
   }, [apiKeyForm, fetchData])
 
-  // Delete credential
+  // Delete credential (called after user confirms)
   const handleDeleteCredential = useCallback(
     async (id: string) => {
+      setDisconnecting(true)
+      setError(null)
       try {
         await apiDeleteCredential(id)
-      } catch {
-        // Ignore — re-fetch will show current state
+        setDisconnectConfirm(null)
+        void fetchData()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to disconnect credential")
+        setDisconnectConfirm(null)
+      } finally {
+        setDisconnecting(false)
       }
-      void fetchData()
     },
     [fetchData],
   )
@@ -217,6 +236,12 @@ function SettingsInner() {
           Connect your LLM provider accounts. Credentials are encrypted with AES-256-GCM.
         </p>
 
+        {error && !apiKeyForm && (
+          <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        )}
+
         <div className="mt-4 space-y-3">
           {providers.map((p) => {
             const cred = getCredentialForProvider(p.id)
@@ -259,7 +284,12 @@ function SettingsInner() {
                   {cred ? (
                     <button
                       type="button"
-                      onClick={() => void handleDeleteCredential(cred.id)}
+                      onClick={() =>
+                        setDisconnectConfirm({
+                          id: cred.id,
+                          label: credentialLabel(cred, providers),
+                        })
+                      }
                       className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
                     >
                       Disconnect
@@ -304,6 +334,37 @@ function SettingsInner() {
 
       {/* Channels */}
       <ChannelConfigSection />
+
+      {/* Disconnect credential confirmation dialog */}
+      {disconnectConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-text-main">Disconnect Provider</h3>
+            <p className="mt-2 text-sm text-text-muted">
+              Are you sure you want to disconnect
+              <strong> &ldquo;{disconnectConfirm.label}&rdquo;</strong>?
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDisconnectConfirm(null)}
+                disabled={disconnecting}
+                className="rounded-lg px-4 py-2 text-sm text-text-muted hover:bg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteCredential(disconnectConfirm.id)}
+                disabled={disconnecting}
+                className="rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 disabled:opacity-50 transition-colors"
+              >
+                {disconnecting ? "Disconnecting..." : "Disconnect"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* OAuth popup / code-paste fallback dialog */}
       {popupProvider && popup.status !== "idle" && popup.status !== "success" && (
