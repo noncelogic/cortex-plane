@@ -148,4 +148,63 @@ describe("MessageRouter", () => {
       expect(dc.onMessage).toHaveBeenCalledOnce()
     })
   })
+
+  describe("addAdapter", () => {
+    it("adds a new adapter and binds its onMessage hook", async () => {
+      const existing: ResolvedUser = {
+        userAccountId: "user-abc",
+        channelMappingId: "mapping-def",
+      }
+      const db = createMockDb(existing)
+      const router = new MessageRouter(db, new Map())
+
+      const handler = vi.fn().mockResolvedValue(undefined)
+      router.onMessage(handler)
+
+      const dc = createMockAdapter("discord")
+      router.addAdapter(dc)
+
+      // onMessage should have been called to bind the handler
+      expect(dc.onMessage).toHaveBeenCalledOnce()
+
+      // Simulate inbound message from the new adapter — trigger the bound handler
+      const boundHandler = dc.onMessage.mock.calls[0]![0] as (
+        msg: InboundMessage,
+      ) => Promise<void>
+      const msg = makeInbound({ channelType: "discord", channelUserId: "dc-user-1" })
+      await boundHandler(msg)
+
+      expect(handler).toHaveBeenCalledWith({
+        userAccountId: "user-abc",
+        channelMappingId: "mapping-def",
+        message: msg,
+      })
+    })
+
+    it("allows send() to use the dynamically added adapter", async () => {
+      const db = createMockDb()
+      const router = new MessageRouter(db, new Map())
+
+      const dc = createMockAdapter("discord")
+      router.addAdapter(dc)
+
+      const result = await router.send("discord", "chat-1", { text: "Hello" })
+      expect(dc.sendMessage).toHaveBeenCalledWith("chat-1", { text: "Hello" })
+      expect(result).toBe("sent-msg-id")
+    })
+  })
+
+  describe("removeAdapter", () => {
+    it("removes an adapter so send() throws for that channel type", async () => {
+      const db = createMockDb()
+      const tg = createMockAdapter("telegram")
+      const router = new MessageRouter(db, new Map([["telegram", tg]]))
+
+      router.removeAdapter("telegram")
+
+      await expect(router.send("telegram", "chat-1", { text: "Hi" })).rejects.toThrow(
+        "No adapter registered",
+      )
+    })
+  })
 })

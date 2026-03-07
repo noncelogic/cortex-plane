@@ -20,6 +20,26 @@ export class ChannelAdapterRegistry {
     this.adapters.set(adapter.channelType, adapter)
   }
 
+  /** Replace an existing adapter or register a new one. Stops the old adapter before replacing. */
+  async replace(adapter: ChannelAdapter): Promise<ChannelAdapter | undefined> {
+    const existing = this.adapters.get(adapter.channelType)
+    if (existing) {
+      await existing.stop()
+    }
+    this.adapters.set(adapter.channelType, adapter)
+    return existing
+  }
+
+  /** Remove and stop an adapter by channel type. Returns the removed adapter, or undefined. */
+  async remove(channelType: string): Promise<ChannelAdapter | undefined> {
+    const adapter = this.adapters.get(channelType)
+    if (adapter) {
+      await adapter.stop()
+      this.adapters.delete(channelType)
+    }
+    return adapter
+  }
+
   /** Get a registered adapter by channel type. */
   get(channelType: string): ChannelAdapter | undefined {
     return this.adapters.get(channelType)

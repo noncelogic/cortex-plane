@@ -54,11 +54,14 @@ export type MessageHandler = (routed: RoutedMessage) => Promise<void>
 
 export class MessageRouter {
   private handler: MessageHandler | undefined
+  private readonly adapters: Map<string, ChannelAdapter>
 
   constructor(
     private readonly db: RouterDb,
-    private readonly adapters: ReadonlyMap<string, ChannelAdapter>,
-  ) {}
+    adapters: ReadonlyMap<string, ChannelAdapter>,
+  ) {
+    this.adapters = new Map(adapters)
+  }
 
   /** Set the handler that receives resolved, routed messages. */
   onMessage(handler: MessageHandler): void {
@@ -70,6 +73,17 @@ export class MessageRouter {
     for (const [, adapter] of this.adapters) {
       adapter.onMessage(async (msg) => this.route(msg))
     }
+  }
+
+  /** Register a new adapter at runtime and bind its onMessage hook. */
+  addAdapter(adapter: ChannelAdapter): void {
+    this.adapters.set(adapter.channelType, adapter)
+    adapter.onMessage(async (msg) => this.route(msg))
+  }
+
+  /** Remove an adapter from the router. */
+  removeAdapter(channelType: string): void {
+    this.adapters.delete(channelType)
   }
 
   /** Resolve a channel user and invoke the message handler. */

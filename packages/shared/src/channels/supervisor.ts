@@ -263,6 +263,29 @@ export class ChannelSupervisor {
     return Math.max(0, Math.round(baseDelay + jitterOffset))
   }
 
+  /** Notify the supervisor that a new adapter was added to the registry. Triggers an immediate probe. */
+  addAdapter(channelType: string, config?: ChannelSupervisorAdapterConfig): void {
+    if (config) {
+      ;(this.adapterConfig as Record<string, ChannelSupervisorAdapterConfig>)[channelType] = config
+    }
+    this.syncAdapters()
+    this.emit()
+
+    if (this.running) {
+      const adapter = this.registry.get(channelType)
+      if (adapter) {
+        void this.probeAdapter(adapter)
+      }
+    }
+  }
+
+  /** Notify the supervisor that an adapter was removed from the registry. Cleans up health state. */
+  removeAdapter(channelType: string): void {
+    this.cancelRecovery(channelType)
+    this.statuses.delete(channelType)
+    this.emit()
+  }
+
   private syncAdapters(): void {
     for (const adapter of this.registry.getAll()) {
       this.ensureStatus(adapter.channelType)
