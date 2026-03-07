@@ -99,6 +99,7 @@ export interface AgentTable {
   >
   auth_model: ColumnType<AgentAuthModel, AgentAuthModel | undefined, AgentAuthModel>
   status: ColumnType<AgentStatus, AgentStatus | undefined, AgentStatus>
+  health_reset_at: ColumnType<Date | null, Date | null | undefined, Date | null>
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, never>
 }

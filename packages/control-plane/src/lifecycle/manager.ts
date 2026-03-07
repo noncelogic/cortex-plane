@@ -411,8 +411,12 @@ export class AgentLifecycleManager {
 
     ctx.stateMachine.transition("DRAINING", "Released from quarantine")
 
-    // Restore DB agent status
-    await this.db.updateTable("agent").set({ status: "ACTIVE" }).where("id", "=", agentId).execute()
+    // Restore DB agent status and reset circuit breaker history (#443)
+    await this.db
+      .updateTable("agent")
+      .set({ status: "ACTIVE", health_reset_at: new Date() })
+      .where("id", "=", agentId)
+      .execute()
 
     if (resetCrashDetector) {
       this.crashDetector.resetCrashes(agentId)

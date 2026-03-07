@@ -176,15 +176,20 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         const cbConfig = resolveCircuitBreakerConfig(agent.resource_limits)
         agentCB = new AgentCircuitBreaker(agent.id, cbConfig)
 
-        // Hydrate consecutive failure count from recent jobs
-        const recentJobs = await db
+        // Hydrate consecutive failure count from recent jobs.
+        // If health_reset_at is set, ignore jobs completed before the reset
+        // to avoid the quarantine death spiral (#443).
+        let recentJobsQuery = db
           .selectFrom("job")
           .select("status")
           .where("agent_id", "=", agent.id)
           .where("completed_at", "is not", null)
-          .orderBy("completed_at", "desc")
-          .limit(10)
-          .execute()
+
+        if (agent.health_reset_at) {
+          recentJobsQuery = recentJobsQuery.where("completed_at", ">", agent.health_reset_at)
+        }
+
+        const recentJobs = await recentJobsQuery.orderBy("completed_at", "desc").limit(10).execute()
 
         for (const rj of recentJobs) {
           if (rj.status === "FAILED") agentCB.recordJobFailure()

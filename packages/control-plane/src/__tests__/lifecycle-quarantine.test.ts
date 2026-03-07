@@ -178,6 +178,26 @@ describe("AgentLifecycleManager quarantine/release", () => {
     expect(updateCalls.some((c: string[]) => c[0] === "agent")).toBe(true)
   })
 
+  it("release sets health_reset_at to break quarantine death spiral (#443)", async () => {
+    configureDbForBoot(db)
+    await manager.boot("agent-1", "job-1")
+    manager.run("agent-1", "job-1")
+    await manager.quarantine("agent-1", "failures")
+
+    // Reset mock to track release calls
+    ;(db.updateTable as ReturnType<typeof vi.fn>).mockClear()
+    db._mockChain.set.mockClear()
+
+    await manager.release("agent-1")
+
+    // Verify that set() was called with health_reset_at
+    const setCalls = db._mockChain.set.mock.calls as Array<[Record<string, unknown>]>
+    const agentSetCall = setCalls.find(
+      (c) => c[0].status === "ACTIVE" && c[0].health_reset_at instanceof Date,
+    )
+    expect(agentSetCall).toBeDefined()
+  })
+
   it("release with resetCrashDetector clears crash history", async () => {
     configureDbForBoot(db)
     await manager.boot("agent-1", "job-1")

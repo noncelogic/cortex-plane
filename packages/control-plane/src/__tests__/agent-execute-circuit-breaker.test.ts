@@ -560,4 +560,55 @@ describe("agent-execute circuit breaker wiring", () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(registry.routeTask).toHaveBeenCalled()
   })
+
+  it("does not quarantine when health_reset_at filters out prior failures (#443)", async () => {
+    // Agent has health_reset_at set — simulates release from quarantine.
+    // The hydration query filters jobs completed before health_reset_at,
+    // so recentJobs comes back empty even though there were prior failures.
+    const db = makeMockDb({
+      agent: {
+        id: "agent-1",
+        name: "TestAgent",
+        slug: "test-agent",
+        role: "developer",
+        description: null,
+        status: "ACTIVE",
+        model_config: {},
+        skill_config: {},
+        resource_limits: {},
+        config: null,
+        health_reset_at: new Date(),
+      },
+      // After filtering, no recent jobs remain (all old failures are excluded)
+      recentJobs: [],
+    })
+
+    const events: OutputEvent[] = [
+      { type: "text", timestamp: new Date().toISOString(), content: "Done!" },
+    ]
+
+    const handle = createMockHandle(createMockResult(), events)
+    const registry = makeMockRegistry(handle)
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    // Agent should NOT be quarantined
+    const agentQuarantine = db._setCalls.find(
+      (c) => c.table === "agent" && c.values.status === "QUARANTINED",
+    )
+    expect(agentQuarantine).toBeUndefined()
+
+    // Job should be COMPLETED
+    const jobComplete = db._setCalls.find(
+      (c) => c.table === "job" && c.values.status === "COMPLETED",
+    )
+    expect(jobComplete).toBeDefined()
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(registry.routeTask).toHaveBeenCalled()
+  })
 })

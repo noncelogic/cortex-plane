@@ -217,7 +217,7 @@ export function agentLifecycleRoutes(deps: AgentLifecycleRouteDeps) {
           // Agent not currently managed — DB-only release
           await db
             .updateTable("agent")
-            .set({ status: "ACTIVE" })
+            .set({ status: "ACTIVE", health_reset_at: new Date() })
             .where("id", "=", agentId)
             .execute()
         }
@@ -226,6 +226,42 @@ export function agentLifecycleRoutes(deps: AgentLifecycleRouteDeps) {
           agentId,
           state: "DRAINING",
           releasedAt: new Date().toISOString(),
+        })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // POST /agents/:agentId/reset-health — reset circuit breaker (#443)
+    // -----------------------------------------------------------------
+    app.post<{ Params: AgentParams }>(
+      "/agents/:agentId/reset-health",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: { agentId: { type: "string" } },
+            required: ["agentId"],
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) => {
+        const { agentId } = request.params
+
+        const result = await db
+          .updateTable("agent")
+          .set({ health_reset_at: new Date() })
+          .where("id", "=", agentId)
+          .returningAll()
+          .executeTakeFirst()
+
+        if (!result) {
+          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        return reply.status(200).send({
+          agentId,
+          healthResetAt: (result.health_reset_at as Date).toISOString(),
         })
       },
     )
