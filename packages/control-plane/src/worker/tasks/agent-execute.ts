@@ -27,6 +27,7 @@ import type { Kysely } from "kysely"
 import type { CredentialService } from "../../auth/credential-service.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
 import type { Database, Job } from "../../db/types.js"
+import type { AgentLifecycleManager, SteerMessage } from "../../lifecycle/manager.js"
 import type { McpClientPool } from "../../mcp/client-pool.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
@@ -54,6 +55,8 @@ export interface AgentExecuteDeps {
   mcpClientPool?: McpClientPool
   /** Optional credential service for resolving per-job credentials. */
   credentialService?: CredentialService
+  /** Optional lifecycle manager for steer consumption during execution. */
+  lifecycleManager?: AgentLifecycleManager
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -77,6 +80,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     mcpToolRouter,
     mcpClientPool,
     credentialService,
+    lifecycleManager,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -340,6 +344,38 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           // ── Step 9: Stream events ──
           const cancelChecker = startCancelChecker(db, jobId, handle)
 
+          // Track LLM turn count (each text event = 1 turn)
+          let turnCount = 0
+
+          // Register steer listener so mid-execution steers are consumed
+          const unsubSteer = lifecycleManager
+            ? lifecycleManager.onSteer(agent.id, (msg: SteerMessage) => {
+                turnCount++
+
+                // Apply urgent prefix
+                const displayInstruction =
+                  msg.priority === "urgent"
+                    ? `[URGENT OPERATOR INSTRUCTION] ${msg.instruction}`
+                    : msg.instruction
+
+                // Broadcast the steering message as agent output
+                if (streamManager) {
+                  streamManager.broadcast(agent.id, "agent:output", {
+                    agentId: agent.id,
+                    timestamp: new Date().toISOString(),
+                    output: {
+                      type: "text",
+                      timestamp: new Date().toISOString(),
+                      content: `[STEER] ${displayInstruction}`,
+                    },
+                  })
+                }
+
+                // Acknowledge consumption
+                lifecycleManager.acknowledgeSteer(msg.id, turnCount)
+              })
+            : undefined
+
           try {
             for await (const event of handle.events()) {
               // Write to JSONL session buffer
@@ -355,6 +391,11 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   output: event,
                 }
                 streamManager.broadcast(agent.id, "agent:output", ssePayload)
+              }
+
+              // Track LLM turns (text events from the model)
+              if (event.type === "text") {
+                turnCount++
               }
 
               if (job.session_id && event.type === "text" && event.content.trim().length > 0) {
@@ -376,6 +417,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             }
           } finally {
             cancelChecker.stop()
+            unsubSteer?.()
           }
 
           // ── Step 10: Await final result ──

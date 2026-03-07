@@ -56,9 +56,15 @@ export interface AgentContext {
 export interface SteerMessage {
   id: string
   agentId: string
-  message: string
-  priority: "normal" | "high"
+  instruction: string
+  priority: "normal" | "urgent"
   timestamp: Date
+}
+
+/** Acknowledgment returned after a steer is consumed by the execution loop. */
+export interface SteerAck {
+  acknowledged: boolean
+  turnNumber?: number
 }
 
 export type SteerListener = (msg: SteerMessage) => void
@@ -78,6 +84,11 @@ export class AgentLifecycleManager {
   private readonly onLifecycleEvent?: (event: LifecycleTransitionEvent) => void
   /** agentId → listeners for steering messages */
   private readonly steerListeners = new Map<string, Set<SteerListener>>()
+  /** steerMessageId → pending ack resolver (for steerAsync) */
+  private readonly pendingAcks = new Map<
+    string,
+    { resolve: (ack: SteerAck) => void; timer: ReturnType<typeof setTimeout> }
+  >()
 
   constructor(deps: LifecycleManagerDeps) {
     this.db = deps.db
@@ -370,6 +381,37 @@ export class AgentLifecycleManager {
       if (this.steerListeners.get(agentId)?.size === 0) {
         this.steerListeners.delete(agentId)
       }
+    }
+  }
+
+  /**
+   * Inject a steering message and wait for acknowledgment from the
+   * execution loop. Returns `{ acknowledged: false }` if not consumed
+   * within `timeoutMs`.
+   */
+  steerAsync(msg: SteerMessage, timeoutMs: number): Promise<SteerAck> {
+    return new Promise<SteerAck>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingAcks.delete(msg.id)
+        resolve({ acknowledged: false })
+      }, timeoutMs)
+
+      this.pendingAcks.set(msg.id, { resolve, timer })
+
+      // Fire listeners (which may call acknowledgeSteer synchronously)
+      this.steer(msg)
+    })
+  }
+
+  /**
+   * Called by the execution loop to acknowledge consumption of a steer.
+   */
+  acknowledgeSteer(steerMessageId: string, turnNumber: number): void {
+    const pending = this.pendingAcks.get(steerMessageId)
+    if (pending) {
+      clearTimeout(pending.timer)
+      this.pendingAcks.delete(steerMessageId)
+      pending.resolve({ acknowledged: true, turnNumber })
     }
   }
 

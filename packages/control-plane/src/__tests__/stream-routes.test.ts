@@ -47,12 +47,18 @@ function mockLifecycleManager(
   overrides: {
     getAgentState?: (agentId: string) => AgentLifecycleState | undefined
     steer?: (msg: unknown) => void
+    steerAsync?: (
+      msg: unknown,
+      timeoutMs: number,
+    ) => Promise<{ acknowledged: boolean; turnNumber?: number }>
   } = {},
 ): AgentLifecycleManager {
   return {
     getAgentState: overrides.getAgentState ?? (() => "EXECUTING"),
     getAgentContext: vi.fn(),
     steer: overrides.steer ?? vi.fn(),
+    steerAsync:
+      overrides.steerAsync ?? vi.fn().mockResolvedValue({ acknowledged: true, turnNumber: 1 }),
   } as unknown as AgentLifecycleManager
 }
 
@@ -131,7 +137,7 @@ describe("stream route authentication", () => {
     const res = await app.inject({
       method: "POST",
       url: "/agents/agent-1/steer",
-      payload: { message: "test" },
+      payload: { instruction: "test" },
     })
 
     expect(res.statusCode).toBe(401)
@@ -145,7 +151,7 @@ describe("stream route authentication", () => {
       method: "POST",
       url: "/agents/agent-1/steer",
       headers: { authorization: "Basic abc123" },
-      payload: { message: "test" },
+      payload: { instruction: "test" },
     })
 
     expect(res.statusCode).toBe(401)
@@ -158,7 +164,7 @@ describe("stream route authentication", () => {
       method: "POST",
       url: "/agents/agent-1/steer",
       headers: { authorization: "Bearer " },
-      payload: { message: "test" },
+      payload: { instruction: "test" },
     })
 
     expect(res.statusCode).toBe(401)
@@ -174,7 +180,7 @@ describe("stream route authentication", () => {
         authorization: "Bearer nonexistent-token",
         "content-type": "application/json",
       },
-      payload: { message: "test" },
+      payload: { instruction: "test" },
     })
 
     expect(res.statusCode).toBe(401)
@@ -192,7 +198,7 @@ describe("stream route authentication", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "test" },
+      payload: { instruction: "test" },
     })
 
     expect(res.statusCode).toBe(403)
@@ -259,7 +265,7 @@ describe("POST /agents/:agentId/steer", () => {
     const res = await app.inject({
       method: "POST",
       url: "/agents/agent-1/steer",
-      payload: { message: "focus on tests" },
+      payload: { instruction: "focus on tests" },
     })
 
     expect(res.statusCode).toBe(401)
@@ -278,7 +284,7 @@ describe("POST /agents/:agentId/steer", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "focus on tests" },
+      payload: { instruction: "focus on tests" },
     })
 
     expect(res.statusCode).toBe(404)
@@ -297,18 +303,18 @@ describe("POST /agents/:agentId/steer", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "focus on tests" },
+      payload: { instruction: "focus on tests" },
     })
 
     expect(res.statusCode).toBe(409)
     expect(res.json<{ error: string }>().error).toBe("conflict")
   })
 
-  it("returns 202 with steerMessageId on success", async () => {
-    const steerFn = vi.fn()
+  it("returns 200 with steerEventId and acknowledged on success", async () => {
+    const steerAsyncFn = vi.fn().mockResolvedValue({ acknowledged: true, turnNumber: 1 })
     const lifecycle = mockLifecycleManager({
       getAgentState: () => "EXECUTING",
-      steer: steerFn,
+      steerAsync: steerAsyncFn,
     })
     const { app } = await buildTestApp({ lifecycleManager: lifecycle })
 
@@ -319,27 +325,25 @@ describe("POST /agents/:agentId/steer", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "focus on tests" },
+      payload: { instruction: "focus on tests" },
     })
 
-    expect(res.statusCode).toBe(202)
+    expect(res.statusCode).toBe(200)
     const body = res.json<{
-      status: string
-      steerMessageId: string
-      agentId: string
-      priority: string
+      steerEventId: string
+      acknowledged: boolean
+      incorporatedAtTurn?: number
     }>()
-    expect(body.status).toBe("accepted")
-    expect(body.steerMessageId).toBeDefined()
-    expect(body.agentId).toBe("agent-1")
-    expect(body.priority).toBe("normal")
+    expect(body.steerEventId).toBeDefined()
+    expect(body.acknowledged).toBe(true)
+    expect(body.incorporatedAtTurn).toBe(1)
   })
 
-  it("passes steering message to lifecycle manager", async () => {
-    const steerFn = vi.fn()
+  it("passes steering message to lifecycle manager via steerAsync", async () => {
+    const steerAsyncFn = vi.fn().mockResolvedValue({ acknowledged: true, turnNumber: 2 })
     const lifecycle = mockLifecycleManager({
       getAgentState: () => "EXECUTING",
-      steer: steerFn,
+      steerAsync: steerAsyncFn,
     })
     const { app } = await buildTestApp({ lifecycleManager: lifecycle })
 
@@ -350,29 +354,27 @@ describe("POST /agents/:agentId/steer", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "focus on tests", priority: "high" },
+      payload: { instruction: "focus on tests", priority: "urgent" },
     })
 
-    expect(steerFn).toHaveBeenCalledTimes(1)
-    const msg = steerFn.mock.calls[0]![0] as {
+    expect(steerAsyncFn).toHaveBeenCalledTimes(1)
+    const msg = steerAsyncFn.mock.calls[0]![0] as {
       agentId: string
-      message: string
+      instruction: string
       priority: string
       id: string
     }
     expect(msg.agentId).toBe("agent-1")
-    expect(msg.message).toBe("focus on tests")
-    expect(msg.priority).toBe("high")
+    expect(msg.instruction).toBe("focus on tests")
+    expect(msg.priority).toBe("urgent")
     expect(msg.id).toBeDefined()
   })
 
-  it("returns 409 if lifecycle.steer throws", async () => {
-    const steerFn = vi.fn().mockImplementation(() => {
-      throw new Error("Agent not in EXECUTING state")
-    })
+  it("returns 409 if lifecycle.steerAsync throws", async () => {
+    const steerAsyncFn = vi.fn().mockRejectedValue(new Error("Agent not in EXECUTING state"))
     const lifecycle = mockLifecycleManager({
       getAgentState: () => "EXECUTING",
-      steer: steerFn,
+      steerAsync: steerAsyncFn,
     })
     const { app } = await buildTestApp({ lifecycleManager: lifecycle })
 
@@ -383,13 +385,13 @@ describe("POST /agents/:agentId/steer", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "focus on tests" },
+      payload: { instruction: "focus on tests" },
     })
 
     expect(res.statusCode).toBe(409)
   })
 
-  it("validates message is required", async () => {
+  it("validates instruction is required", async () => {
     const { app } = await buildTestApp({})
 
     const res = await app.inject({
@@ -405,11 +407,11 @@ describe("POST /agents/:agentId/steer", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("uses default priority when not specified", async () => {
-    const steerFn = vi.fn()
+  it("uses default priority normal and returns acknowledged", async () => {
+    const steerAsyncFn = vi.fn().mockResolvedValue({ acknowledged: true, turnNumber: 1 })
     const lifecycle = mockLifecycleManager({
       getAgentState: () => "EXECUTING",
-      steer: steerFn,
+      steerAsync: steerAsyncFn,
     })
     const { app } = await buildTestApp({ lifecycleManager: lifecycle })
 
@@ -420,18 +422,18 @@ describe("POST /agents/:agentId/steer", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "focus on tests" },
+      payload: { instruction: "focus on tests" },
     })
 
-    expect(res.json<{ priority: string }>().priority).toBe("normal")
-    expect((steerFn.mock.calls[0]![0] as { priority: string }).priority).toBe("normal")
+    expect(res.json<{ acknowledged: boolean }>().acknowledged).toBe(true)
+    expect((steerAsyncFn.mock.calls[0]![0] as { priority: string }).priority).toBe("normal")
   })
 
-  it("broadcasts steer:ack and agent:output events on success", async () => {
-    const steerFn = vi.fn()
+  it("broadcasts steer:injected and steer:acknowledged events on success", async () => {
+    const steerAsyncFn = vi.fn().mockResolvedValue({ acknowledged: true, turnNumber: 1 })
     const lifecycle = mockLifecycleManager({
       getAgentState: () => "EXECUTING",
-      steer: steerFn,
+      steerAsync: steerAsyncFn,
     })
     const { app, sseManager } = await buildTestApp({ lifecycleManager: lifecycle })
 
@@ -444,20 +446,48 @@ describe("POST /agents/:agentId/steer", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "focus on tests" },
+      payload: { instruction: "focus on tests" },
     })
 
-    // Should have broadcast steer:ack and agent:output
+    // Should have broadcast steer:injected and steer:acknowledged
     expect(broadcastSpy).toHaveBeenCalledTimes(2)
-    expect(broadcastSpy.mock.calls[0]![1]).toBe("steer:ack")
-    expect(broadcastSpy.mock.calls[1]![1]).toBe("agent:output")
+    expect(broadcastSpy.mock.calls[0]![1]).toBe("steer:injected")
+    expect(broadcastSpy.mock.calls[1]![1]).toBe("steer:acknowledged")
 
-    // Verify the output event contains the steering message
-    const outputPayload = broadcastSpy.mock.calls[1]![2] as Record<string, unknown>
-    const output = outputPayload.output as Record<string, unknown>
-    expect(output.content).toContain("[STEER] focus on tests")
+    // Verify the injected event contains operator info
+    const injectedPayload = broadcastSpy.mock.calls[0]![2] as Record<string, unknown>
+    expect(injectedPayload.operatorUserId).toBe("user-1")
+    expect(injectedPayload.instruction).toBe("focus on tests")
 
     broadcastSpy.mockRestore()
+  })
+
+  it("returns acknowledged:false when steer times out", async () => {
+    const steerAsyncFn = vi.fn().mockResolvedValue({ acknowledged: false })
+    const lifecycle = mockLifecycleManager({
+      getAgentState: () => "EXECUTING",
+      steerAsync: steerAsyncFn,
+    })
+    const { app } = await buildTestApp({ lifecycleManager: lifecycle })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/agent-1/steer",
+      headers: {
+        authorization: "Bearer session-123",
+        "content-type": "application/json",
+      },
+      payload: { instruction: "focus on tests" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json<{
+      steerEventId: string
+      acknowledged: boolean
+      incorporatedAtTurn?: number
+    }>()
+    expect(body.acknowledged).toBe(false)
+    expect(body.incorporatedAtTurn).toBeUndefined()
   })
 })
 
@@ -482,10 +512,10 @@ describe("stream route cookie authentication", () => {
         cookie: "cortex_session=dash-session-1",
         "content-type": "application/json",
       },
-      payload: { message: "cookie auth test" },
+      payload: { instruction: "cookie auth test" },
     })
 
-    expect(res.statusCode).toBe(202)
+    expect(res.statusCode).toBe(200)
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(sessionService.validateSession).toHaveBeenCalledWith("dash-session-1")
   })
@@ -501,10 +531,10 @@ describe("stream route cookie authentication", () => {
         authorization: "Bearer session-123",
         "content-type": "application/json",
       },
-      payload: { message: "bearer fallback" },
+      payload: { instruction: "bearer fallback" },
     })
 
-    expect(res.statusCode).toBe(202)
+    expect(res.statusCode).toBe(200)
   })
 
   it("returns 401 when cookie session is invalid and no Bearer provided", async () => {
@@ -518,7 +548,7 @@ describe("stream route cookie authentication", () => {
         cookie: "cortex_session=invalid-session",
         "content-type": "application/json",
       },
-      payload: { message: "test" },
+      payload: { instruction: "test" },
     })
 
     expect(res.statusCode).toBe(401)
