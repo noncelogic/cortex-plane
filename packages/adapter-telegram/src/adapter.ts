@@ -8,27 +8,28 @@ import type {
 import { Bot, InlineKeyboard } from "grammy"
 
 import type { TelegramConfig } from "./config.js"
+import { formatApprovalRequest } from "./formatter.js"
 
 export class TelegramAdapter implements ChannelAdapter {
   readonly channelType = "telegram" as const
   private bot: Bot
   private config: TelegramConfig
+  private started = false
   private messageHandler?: (msg: InboundMessage) => Promise<void>
   private callbackHandler?: (callback: CallbackQuery) => Promise<void>
 
   constructor(config: TelegramConfig) {
     this.config = config
     this.bot = new Bot(config.botToken)
-  }
 
-  async start(): Promise<void> {
-    this.bot.on("message", async (ctx) => {
+    // Register grammy filter handlers — dispatches to the app-level handler
+    // set via onMessage()/onCallback(). Registered in the constructor so
+    // they are available before start() resolves.
+    this.bot.on("message:text", async (ctx) => {
       if (!this.messageHandler) return
 
       const userId = ctx.from?.id
-      if (!userId || !this.config.allowedUsers.has(userId)) {
-        return
-      }
+      if (!userId) return
 
       const inbound: InboundMessage = {
         channelType: this.channelType,
@@ -50,7 +51,7 @@ export class TelegramAdapter implements ChannelAdapter {
       await this.messageHandler(inbound)
     })
 
-    this.bot.on("callback_query", async (ctx) => {
+    this.bot.on("callback_query:data", async (ctx) => {
       if (!this.callbackHandler || !ctx.callbackQuery.data) return
 
       const callback: CallbackQuery = {
@@ -65,11 +66,25 @@ export class TelegramAdapter implements ChannelAdapter {
       await this.callbackHandler(callback)
     })
 
-    await this.bot.start()
+    this.bot.catch((_err: unknown) => {
+      // Errors are silently absorbed to prevent unhandled rejections.
+      // Production deployments should layer structured logging on top.
+    })
+  }
+
+  start(): Promise<void> {
+    if (this.started) return Promise.resolve()
+    this.started = true
+
+    // Fire-and-forget — bot.start() runs long-polling indefinitely
+    void this.bot.start({ allowed_updates: ["message", "callback_query"] })
+    return Promise.resolve()
   }
 
   async stop(): Promise<void> {
+    if (!this.started) return
     await this.bot.stop()
+    this.started = false
   }
 
   async healthCheck(): Promise<boolean> {
@@ -84,13 +99,18 @@ export class TelegramAdapter implements ChannelAdapter {
   async sendMessage(chatId: string, message: OutboundMessage): Promise<string> {
     const keyboard = message.inlineButtons
       ? message.inlineButtons.reduce((kb, row) => {
-          const buttonRow = row.map((b) => InlineKeyboard.text(b.text, b.callbackData))
-          return kb.row(...buttonRow)
+          for (const b of row) {
+            kb.text(b.text, b.callbackData)
+          }
+          return kb.row()
         }, new InlineKeyboard())
       : undefined
 
-    const result = await this.bot.api.sendMessage(Number(chatId), message.text, {
-      reply_to_message_id: message.replyToMessageId ? Number(message.replyToMessageId) : undefined,
+    const result = await this.bot.api.sendMessage(chatId, message.text, {
+      parse_mode: "HTML",
+      reply_parameters: message.replyToMessageId
+        ? { message_id: Number(message.replyToMessageId) }
+        : undefined,
       reply_markup: keyboard,
     })
 
@@ -98,21 +118,17 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async sendApprovalRequest(chatId: string, request: ApprovalNotification): Promise<string> {
+    const detailsCallbackData = request.approveCallbackData.replace(":a:", ":d:")
     const keyboard = new InlineKeyboard()
-      .text("✅ Approve", request.approveCallbackData)
-      .text("❌ Reject", request.rejectCallbackData)
+      .text("Approve", request.approveCallbackData)
+      .text("Reject", request.rejectCallbackData)
+      .row()
+      .text("Details", detailsCallbackData)
 
-    const text = [
-      `🔐 *Approval Required*`,
-      ``,
-      `*Agent:* ${request.agentName}`,
-      `*Action:* ${request.actionType}`,
-      `*Detail:* ${request.actionDetail}`,
-      `*Expires:* ${request.expiresAt.toLocaleString()}`,
-    ].join("\n")
+    const text = formatApprovalRequest(request)
 
-    const result = await this.bot.api.sendMessage(Number(chatId), text, {
-      parse_mode: "Markdown",
+    const result = await this.bot.api.sendMessage(chatId, text, {
+      parse_mode: "HTML",
       reply_markup: keyboard,
     })
 

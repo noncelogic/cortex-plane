@@ -347,8 +347,8 @@ describe("DiscordAdapter", () => {
     })
   })
 
-  describe("onMessage — guild allowlist", () => {
-    it("invokes handler for allowed guilds", async () => {
+  describe("onMessage — message routing", () => {
+    it("invokes handler for any user message", async () => {
       const handler = vi.fn<(msg: InboundMessage) => Promise<void>>().mockResolvedValue(undefined)
       adapter.onMessage(handler)
       await adapter.start()
@@ -364,29 +364,13 @@ describe("DiscordAdapter", () => {
       expect(msg.chatId).toBe("channel-100")
     })
 
-    it("ignores messages from disallowed guilds", async () => {
+    it("passes through messages from any guild (authorization delegated to dispatch layer)", async () => {
       const handler = vi.fn().mockResolvedValue(undefined)
       adapter.onMessage(handler)
       await adapter.start()
 
       const messageHandler = getHandler("messageCreate")
-      await messageHandler(makeMessage("user-1", "hacker", { guildId: "guild-999" }))
-
-      expect(handler).not.toHaveBeenCalled()
-    })
-
-    it("allows all guilds when allowedGuilds is empty", async () => {
-      const openAdapter = new DiscordAdapter({
-        ...testConfig,
-        allowedGuilds: new Set(),
-      })
-
-      const handler = vi.fn().mockResolvedValue(undefined)
-      openAdapter.onMessage(handler)
-      await openAdapter.start()
-
-      const messageHandler = getHandler("messageCreate")
-      await messageHandler(makeMessage("user-1", "anyone", { guildId: "guild-9999" }))
+      await messageHandler(makeMessage("user-1", "newcomer", { guildId: "guild-999" }))
 
       expect(handler).toHaveBeenCalledOnce()
     })
@@ -427,7 +411,7 @@ describe("DiscordAdapter", () => {
   })
 
   describe("onCallback — button interaction handling", () => {
-    it("invokes callback handler for allowed guilds", async () => {
+    it("invokes callback handler for any user", async () => {
       const handler = vi.fn<(cb: CallbackQuery) => Promise<void>>().mockResolvedValue(undefined)
       adapter.onCallback(handler)
       await adapter.start()
@@ -442,24 +426,6 @@ describe("DiscordAdapter", () => {
       expect(cb.channelUserId).toBe("user-1")
       expect(cb.data).toBe("apr:a:abcdef1234567890abcdef1234567890")
       expect(interaction.deferUpdate).toHaveBeenCalled()
-    })
-
-    it("rejects interaction from disallowed guilds", async () => {
-      const handler = vi.fn().mockResolvedValue(undefined)
-      adapter.onCallback(handler)
-      await adapter.start()
-
-      const interactionHandler = getHandler("interactionCreate")
-      const interaction = makeButtonInteraction("user-1", "apr:a:0000", {
-        guildId: "guild-999",
-      })
-      await interactionHandler(interaction)
-
-      expect(handler).not.toHaveBeenCalled()
-      expect(interaction.reply).toHaveBeenCalledWith({
-        content: "You are not authorized.",
-        ephemeral: true,
-      })
     })
 
     it("defers update when no handler is registered", async () => {

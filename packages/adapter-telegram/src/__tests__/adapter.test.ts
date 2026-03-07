@@ -105,7 +105,7 @@ function makeCallbackCtx(userId: number, data: string, chatId = 100) {
     chat: { id: chatId },
     callbackQuery: {
       data,
-      message: { message_id: 55 },
+      message: { message_id: 55, chat: { id: chatId } },
     },
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
   }
@@ -258,8 +258,8 @@ describe("TelegramAdapter", () => {
     })
   })
 
-  describe("onMessage — user allowlist", () => {
-    it("invokes handler for allowed users", async () => {
+  describe("onMessage — message routing", () => {
+    it("invokes handler for any user with a valid ID", async () => {
       const handler = vi.fn<(msg: InboundMessage) => Promise<void>>().mockResolvedValue(undefined)
       adapter.onMessage(handler)
 
@@ -275,27 +275,12 @@ describe("TelegramAdapter", () => {
       expect(msg.chatId).toBe("100")
     })
 
-    it("ignores messages from disallowed users", async () => {
+    it("passes through messages from any user (authorization delegated to dispatch layer)", async () => {
       const handler = vi.fn().mockResolvedValue(undefined)
       adapter.onMessage(handler)
 
       const messageHandler = getHandler("message:text")
-      await messageHandler(makeMessageCtx(999, "hacker"))
-
-      expect(handler).not.toHaveBeenCalled()
-    })
-
-    it("allows all users when allowedUsers is empty", async () => {
-      const openAdapter = new TelegramAdapter({
-        botToken: "test",
-        allowedUsers: new Set(),
-      })
-
-      const handler = vi.fn().mockResolvedValue(undefined)
-      openAdapter.onMessage(handler)
-
-      const messageHandler = messageHandlers.get("message:text")!
-      await messageHandler(makeMessageCtx(9999, "anyone"))
+      await messageHandler(makeMessageCtx(999, "newcomer"))
 
       expect(handler).toHaveBeenCalledOnce()
     })
@@ -308,7 +293,7 @@ describe("TelegramAdapter", () => {
   })
 
   describe("onCallback — inline button handling", () => {
-    it("invokes callback handler for allowed users", async () => {
+    it("invokes callback handler for any user", async () => {
       const handler = vi.fn<(cb: CallbackQuery) => Promise<void>>().mockResolvedValue(undefined)
       adapter.onCallback(handler)
 
@@ -321,44 +306,13 @@ describe("TelegramAdapter", () => {
       expect(cb.channelType).toBe("telegram")
       expect(cb.channelUserId).toBe("111")
       expect(cb.data).toBe("apr:a:abcdef1234567890abcdef1234567890")
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith()
     })
 
-    it("rejects callback from disallowed users", async () => {
-      const handler = vi.fn().mockResolvedValue(undefined)
-      adapter.onCallback(handler)
-
-      const cbHandler = getHandler("callback_query:data")
-      const ctx = makeCallbackCtx(999, "apr:a:0000")
-      await cbHandler(ctx)
-
-      expect(handler).not.toHaveBeenCalled()
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
-        text: "You are not authorized.",
-        show_alert: true,
-      })
-    })
-
-    it("answers callback query even without handler", async () => {
+    it("does nothing when no handler is registered", async () => {
       const cbHandler = getHandler("callback_query:data")
       const ctx = makeCallbackCtx(111, "apr:a:0000")
+      // Should not throw
       await cbHandler(ctx)
-
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith()
-    })
-
-    it("answers with error when handler throws", async () => {
-      const handler = vi.fn().mockRejectedValue(new Error("db error"))
-      adapter.onCallback(handler)
-
-      const cbHandler = getHandler("callback_query:data")
-      const ctx = makeCallbackCtx(111, "apr:a:0000")
-      await cbHandler(ctx)
-
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
-        text: "An error occurred.",
-        show_alert: true,
-      })
     })
   })
 

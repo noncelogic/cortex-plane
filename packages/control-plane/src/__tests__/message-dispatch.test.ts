@@ -2,6 +2,7 @@ import type { RoutedMessage } from "@cortex/shared/channels"
 import type { Kysely } from "kysely"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { AgentChannelService } from "../channels/agent-channel-service.js"
 import { createMessageDispatch, watchJobCompletion } from "../channels/message-dispatch.js"
 import type { Database } from "../db/types.js"
@@ -127,6 +128,17 @@ function mockDb(
     insertInto: insertIntoFn,
     updateTable: updateTableFn,
   } as unknown as Kysely<Database>
+}
+
+function mockChannelAuthGuard(decision: AuthDecision) {
+  return {
+    authorize: vi.fn().mockResolvedValue(decision),
+    handlePairingCode: vi.fn().mockResolvedValue({
+      success: true,
+      message: "Pairing code accepted.",
+    }),
+    resolveOrCreateIdentity: vi.fn(),
+  } as unknown as ChannelAuthGuard
 }
 
 // ---------------------------------------------------------------------------
@@ -408,5 +420,225 @@ describe("watchJobCompletion", () => {
     await vi.advanceTimersByTimeAsync(200)
     // selectFrom is called once per interval tick, should be exactly 1 call
     expect(selectFn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("ChannelAuthGuard integration", () => {
+  it("blocks message when guard denies access and sends rejection reply", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: false,
+      userId: "user-111",
+      reason: "denied",
+      replyToUser: "This agent is private. Ask an operator for a pairing code.",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Guard was called
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(guard.authorize).toHaveBeenCalledWith({
+      agentId: "agent-aaa",
+      channelType: "telegram",
+      channelUserId: "tg-user-1",
+      chatId: "chat-42",
+      messageText: "Hello agent",
+    })
+
+    // Rejection message sent
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: "This agent is private. Ask an operator for a pairing code.",
+    })
+
+    // No job created
+    expect(enqueueJob).not.toHaveBeenCalled()
+
+    // Blocked log entry
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "denied" }),
+      "Message blocked by ChannelAuthGuard",
+    )
+  })
+
+  it("blocks message when guard returns pending_approval", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: false,
+      userId: "user-111",
+      reason: "pending_approval",
+      replyToUser: "Your request has been submitted. You'll be notified when approved.",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: "Your request has been submitted. You'll be notified when approved.",
+    })
+    expect(enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it("allows message through when guard grants access", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: true,
+      userId: "user-111",
+      grantId: "grant-999",
+      reason: "granted",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Job was created and enqueued
+    expect(enqueueJob).toHaveBeenCalledWith("job-123")
+
+    // Dispatch logged (not blocked)
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: "job-123" }),
+      "Chat message dispatched — job created",
+    )
+  })
+
+  it("intercepts pairing codes and calls handlePairingCode", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: false,
+      userId: "user-111",
+      reason: "denied",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      logger,
+    })
+
+    // Send a 6-char uppercase alphanumeric code
+    await dispatch(
+      makeRoutedMessage({
+        message: {
+          channelType: "telegram",
+          channelUserId: "tg-user-1",
+          chatId: "chat-42",
+          messageId: "msg-1",
+          text: "ABC123",
+          timestamp: new Date(),
+          metadata: {},
+        },
+      }),
+    )
+
+    // handlePairingCode was called instead of authorize
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(guard.handlePairingCode).toHaveBeenCalledWith("ABC123", "mapping-222", "user-111")
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(guard.authorize).not.toHaveBeenCalled()
+
+    // Pairing result relayed to user
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: "Pairing code accepted.",
+    })
+
+    // No job created
+    expect(enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it("does not intercept non-pairing-code text as pairing code", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: true,
+      userId: "user-111",
+      reason: "granted",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      logger,
+    })
+
+    // Regular text, not a pairing code
+    await dispatch(makeRoutedMessage())
+
+    // authorize called, not handlePairingCode
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(guard.authorize).toHaveBeenCalled()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(guard.handlePairingCode).not.toHaveBeenCalled()
+    expect(enqueueJob).toHaveBeenCalled()
+  })
+
+  it("skips guard when channelAuthGuard is not provided", async () => {
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      // No channelAuthGuard
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Job created normally without guard
+    expect(enqueueJob).toHaveBeenCalledWith("job-123")
   })
 })

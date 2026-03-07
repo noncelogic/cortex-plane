@@ -11,6 +11,7 @@ import type { JobStatus } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
+import type { ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { SessionService } from "../auth/session-service.js"
 import { loadConversationHistory, watchJobCompletion } from "../channels/message-dispatch.js"
 import type { Database } from "../db/types.js"
@@ -49,10 +50,11 @@ export interface ChatRouteDeps {
   authConfig: AuthConfig
   enqueueJob: (jobId: string) => Promise<void>
   sessionService?: SessionService
+  channelAuthGuard?: ChannelAuthGuard
 }
 
 export function chatRoutes(deps: ChatRouteDeps) {
-  const { db, authConfig, enqueueJob, sessionService } = deps
+  const { db, authConfig, enqueueJob, sessionService, channelAuthGuard } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -124,6 +126,25 @@ export function chatRoutes(deps: ChatRouteDeps) {
         // Resolve user from auth principal
         const principal = (request as AuthenticatedRequest).principal
         const userAccountId = principal?.userId ?? "api-user"
+
+        // Per-agent authorization guard
+        if (channelAuthGuard) {
+          const decision = await channelAuthGuard.authorize({
+            agentId,
+            channelType: "rest",
+            channelUserId: userAccountId,
+            chatId: "rest:api",
+            messageText: text,
+          })
+
+          if (!decision.allowed) {
+            return reply.status(403).send({
+              error: "forbidden",
+              message: decision.replyToUser ?? "Access denied",
+              reason: decision.reason,
+            })
+          }
+        }
 
         // Find or create session
         const channelId = "rest:api"
