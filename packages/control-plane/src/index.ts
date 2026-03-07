@@ -44,7 +44,7 @@ if (config.auth?.credentialMasterKey) {
 
   for (const channel of enabledChannels) {
     if (channel.type === "telegram") {
-      const botToken = String(channel.config.botToken ?? "")
+      const botToken = typeof channel.config.botToken === "string" ? channel.config.botToken : ""
       if (!botToken) continue
 
       const allowed = channel.config.allowedUsers
@@ -64,7 +64,7 @@ if (config.auth?.credentialMasterKey) {
     }
 
     if (channel.type === "discord") {
-      const token = String(channel.config.token ?? "")
+      const token = typeof channel.config.token === "string" ? channel.config.token : ""
       if (!token) continue
 
       const guildIds = Array.isArray(channel.config.guildIds)
