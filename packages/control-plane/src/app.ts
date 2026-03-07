@@ -30,6 +30,7 @@ import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentCheckpointRoutes } from "./routes/agent-checkpoints.js"
 import { agentControlRoutes } from "./routes/agent-control.js"
 import { agentCredentialRoutes } from "./routes/agent-credentials.js"
+import { agentLifecycleRoutes } from "./routes/agent-lifecycle.js"
 import { agentToolBindingRoutes } from "./routes/agent-tool-bindings.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
@@ -241,6 +242,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       db,
       authConfig,
       sessionService,
+    }),
+  )
+
+  // Register agent lifecycle routes (quarantine, release, safe-mode boot)
+  await app.register(
+    agentLifecycleRoutes({
+      db,
+      authConfig,
+      sessionService,
+      lifecycleManager: options.lifecycleManager,
     }),
   )
 

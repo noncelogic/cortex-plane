@@ -32,8 +32,8 @@ describe("VALID_TRANSITIONS", () => {
     expect(VALID_TRANSITIONS.TERMINATED).toEqual([])
   })
 
-  it("BOOTING can go to HYDRATING or TERMINATED", () => {
-    expect(VALID_TRANSITIONS.BOOTING).toEqual(["HYDRATING", "TERMINATED"])
+  it("BOOTING can go to HYDRATING, TERMINATED, or SAFE_MODE", () => {
+    expect(VALID_TRANSITIONS.BOOTING).toEqual(["HYDRATING", "TERMINATED", "SAFE_MODE"])
   })
 
   it("HYDRATING can go to READY or TERMINATED", () => {
