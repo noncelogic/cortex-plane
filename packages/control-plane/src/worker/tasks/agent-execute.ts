@@ -757,6 +757,19 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
           // Emit session_end event with accumulated cost
           if (eventEmitter) {
+            const sessionEndPayload: Record<string, unknown> = {
+              status: jobStatus,
+              llmCalls: costSnapshot.llmCalls,
+              toolCalls: costSnapshot.toolCalls,
+              durationMs: result.durationMs,
+            }
+
+            // Tag replay events for tracing
+            if (typeof job.payload.replay_source_checkpoint_id === "string") {
+              sessionEndPayload.replay_source_checkpoint_id =
+                job.payload.replay_source_checkpoint_id
+            }
+
             await eventEmitter
               .emit({
                 eventType: "session_end",
@@ -766,12 +779,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 tokensIn: costSnapshot.tokensIn,
                 tokensOut: costSnapshot.tokensOut,
                 costUsd: costSnapshot.costUsd,
-                payload: {
-                  status: jobStatus,
-                  llmCalls: costSnapshot.llmCalls,
-                  toolCalls: costSnapshot.toolCalls,
-                  durationMs: result.durationMs,
-                },
+                payload: sessionEndPayload,
               })
               .catch(() => {
                 // Non-fatal
@@ -979,7 +987,7 @@ function buildExecutionTask(
     }
   }
 
-  return {
+  const task: ExecutionTask = {
     id: job.id,
     jobId: job.id,
     agentId: agent.id,
@@ -1026,6 +1034,32 @@ function buildExecutionTask(
       shellAccess,
     },
   }
+
+  // Apply REPLAY modifications when present
+  if (
+    payload.type === "REPLAY" &&
+    typeof payload.replay_modifications === "object" &&
+    payload.replay_modifications !== null
+  ) {
+    const mods = payload.replay_modifications as Record<string, unknown>
+
+    if (typeof mods.model === "string") {
+      task.constraints.model = mods.model
+    }
+
+    if (typeof mods.systemPromptAppend === "string") {
+      task.context.systemPrompt += "\n" + mods.systemPromptAppend
+    }
+
+    if (typeof mods.resourceLimits === "object" && mods.resourceLimits !== null) {
+      const rl = mods.resourceLimits as Record<string, unknown>
+      if (typeof rl.maxTokens === "number") task.constraints.maxTokens = rl.maxTokens
+      if (typeof rl.maxTurns === "number") task.constraints.maxTurns = rl.maxTurns
+      if (typeof rl.timeoutMs === "number") task.constraints.timeoutMs = rl.timeoutMs
+    }
+  }
+
+  return task
 }
 
 // ── Helper: check approval gate ──
