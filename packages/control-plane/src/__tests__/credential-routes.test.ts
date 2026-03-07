@@ -371,3 +371,35 @@ describe("GET /credentials?class=tool_specific", () => {
     expect(credentialService.listToolSecrets).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Tests: DELETE /credentials/:id
+// ---------------------------------------------------------------------------
+
+describe("DELETE /credentials/:id", () => {
+  it("deletes a credential and returns ok", async () => {
+    const { app, credentialService } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/credentials/${CRED_ID}`,
+      headers: withSession(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toEqual({ ok: true })
+    expect(credentialService.deleteCredential).toHaveBeenCalledWith("user-1", CRED_ID)
+  })
+
+  it("returns 401 without auth", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/credentials/${CRED_ID}`,
+    })
+
+    expect(res.statusCode).toBe(401)
+  })
+})
