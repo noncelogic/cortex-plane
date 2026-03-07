@@ -44,7 +44,7 @@ export type AgentLifecycleState =
  * - SAFE_MODE → READY / TERMINATED: minimal hydration complete / fatal error
  */
 export const VALID_TRANSITIONS: Record<AgentLifecycleState, AgentLifecycleState[]> = {
-  BOOTING: ["HYDRATING", "TERMINATED"],
+  BOOTING: ["HYDRATING", "TERMINATED", "SAFE_MODE"],
   HYDRATING: ["READY", "TERMINATED"],
   READY: ["EXECUTING", "DRAINING"],
   EXECUTING: ["DRAINING", "TERMINATED", "DEGRADED", "QUARANTINED"],

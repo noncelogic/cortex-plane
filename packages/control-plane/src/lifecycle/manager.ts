@@ -420,6 +420,37 @@ export class AgentLifecycleManager {
   }
 
   // -------------------------------------------------------------------------
+  // bootSafeMode: BOOTING → SAFE_MODE (minimal config, no tools/memory)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Boot an agent in safe mode for debugging. Skips hydration entirely:
+   * no tools, no memory context, identity-only system prompt,
+   * 10k token budget, single-turn only.
+   */
+  bootSafeMode(agentId: string, jobId?: string): AgentContext {
+    const sm = new AgentLifecycleStateMachine(agentId)
+    sm.onTransition(recordStateTransition)
+    if (this.onLifecycleEvent) {
+      sm.onTransition(this.onLifecycleEvent)
+    }
+
+    const ctx: AgentContext = {
+      agentId,
+      jobId: jobId ?? `safe-mode-${Date.now()}`,
+      stateMachine: sm,
+      hydration: null,
+      deploymentConfig: null,
+    }
+    this.agents.set(agentId, ctx)
+
+    // BOOTING → SAFE_MODE (skip hydration entirely)
+    sm.transition("SAFE_MODE", "Booted in safe mode — no tools, no memory")
+
+    return ctx
+  }
+
+  // -------------------------------------------------------------------------
   // Steering: mid-execution message injection
   // -------------------------------------------------------------------------
 
