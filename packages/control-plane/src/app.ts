@@ -27,6 +27,7 @@ import { McpToolRouter } from "./mcp/tool-router.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
+import { agentControlRoutes } from "./routes/agent-control.js"
 import { agentCredentialRoutes } from "./routes/agent-credentials.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
@@ -191,6 +192,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       enqueueJob: async (jobId: string) => {
         await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
       },
+    }),
+  )
+
+  // Register agent control routes (dry run, etc.)
+  await app.register(
+    agentControlRoutes({
+      db,
+      authConfig,
+      sessionService,
+      mcpToolRouter,
     }),
   )
 
