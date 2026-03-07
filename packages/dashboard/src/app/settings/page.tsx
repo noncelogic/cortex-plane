@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
+import { ChannelConfigSection } from "@/components/settings/channel-config-section"
 import { useOAuthPopup } from "@/hooks/use-oauth-popup"
 import {
   type Credential,
@@ -300,6 +301,9 @@ function SettingsInner() {
           )}
         </div>
       </section>
+
+      {/* Channels */}
+      <ChannelConfigSection />
 
       {/* OAuth popup / code-paste fallback dialog */}
       {popupProvider && popup.status !== "idle" && popup.status !== "success" && (

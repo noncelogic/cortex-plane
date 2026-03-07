@@ -18,6 +18,7 @@ import { AuthHandoffService } from "./browser/auth-handoff.js"
 import { ScreenshotModeService } from "./browser/screenshot-mode.js"
 import { TraceCaptureService } from "./browser/trace-capture.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
+import { ChannelConfigService } from "./channels/channel-config-service.js"
 import type { Config } from "./config.js"
 import type { Database } from "./db/types.js"
 import { FeedbackService } from "./feedback/service.js"
@@ -40,6 +41,7 @@ import { agentUserRoutes } from "./routes/agent-user-routes.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { authRoutes } from "./routes/auth.js"
+import { channelRoutes } from "./routes/channels.js"
 import { chatRoutes } from "./routes/chat.js"
 import { credentialRoutes } from "./routes/credentials.js"
 import { dashboardRoutes } from "./routes/dashboard.js"
@@ -235,6 +237,18 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       sessionService,
     }),
   )
+
+  // Register channel configuration routes (if master key available for encryption)
+  if (config.auth?.credentialMasterKey) {
+    const channelConfigService = new ChannelConfigService(db, config.auth.credentialMasterKey)
+    await app.register(
+      channelRoutes({
+        service: channelConfigService,
+        authConfig,
+        sessionService,
+      }),
+    )
+  }
 
   // Register agent user grant, pairing code, and access request routes
   const pairingService = new PairingService(db)
