@@ -17,6 +17,7 @@ export type SSEEventType =
   | "agent:state"
   | "agent:error"
   | "agent:complete"
+  | "agent:killed"
   | "steer:ack"
   | "steer:injected"
   | "steer:acknowledged"
