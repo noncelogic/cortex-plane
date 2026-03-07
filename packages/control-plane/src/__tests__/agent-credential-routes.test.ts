@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { Database } from "../db/types.js"
 import type { AuthConfig } from "../middleware/types.js"
 import { agentCredentialRoutes } from "../routes/agent-credentials.js"
+import { ensureUuid } from "../util/name-uuid.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -17,7 +18,7 @@ const DEV_AUTH_CONFIG: AuthConfig = {
 
 const AGENT_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 const CRED_ID = "cccccccc-1111-2222-3333-444444444444"
-const USER_ID = "dev-user"
+const USER_ID = ensureUuid("dev-user")
 const BINDING_ID = "bbbbbbbb-1111-2222-3333-444444444444"
 
 function makeCredential(overrides: Record<string, unknown> = {}) {

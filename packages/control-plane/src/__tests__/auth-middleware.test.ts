@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { findApiKey, hashApiKey, loadAuthConfig } from "../middleware/api-keys.js"
 import { createRequireAuth, createRequireRole } from "../middleware/auth.js"
 import type { ApiKeyRecord, AuthConfig, AuthenticatedRequest } from "../middleware/types.js"
+import { ensureUuid } from "../util/name-uuid.js"
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // ---------------------------------------------------------------------------
 // hashApiKey
@@ -185,7 +188,8 @@ describe("requireAuth middleware", () => {
       headers: { authorization: `Bearer ${TEST_KEY}` },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json<{ userId: string }>().userId).toBe("user-1")
+    // Non-UUID config userId "user-1" is normalised to a deterministic UUID
+    expect(res.json<{ userId: string }>().userId).toBe(ensureUuid("user-1"))
     expect(res.json<{ roles: string[] }>().roles).toEqual(["operator", "approver"])
   })
 
@@ -196,7 +200,7 @@ describe("requireAuth middleware", () => {
       headers: { "x-api-key": TEST_KEY },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json<{ userId: string }>().userId).toBe("user-1")
+    expect(res.json<{ userId: string }>().userId).toBe(ensureUuid("user-1"))
   })
 
   it("prefers Authorization header over X-API-Key", async () => {
@@ -209,7 +213,7 @@ describe("requireAuth middleware", () => {
       },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json<{ userId: string }>().userId).toBe("user-1")
+    expect(res.json<{ userId: string }>().userId).toBe(ensureUuid("user-1"))
   })
 })
 
@@ -242,10 +246,13 @@ describe("requireAuth dev mode", () => {
     await app.close()
   })
 
-  it("allows requests without credentials in dev mode", async () => {
+  it("allows requests without credentials in dev mode and assigns a valid UUID", async () => {
     const res = await app.inject({ method: "GET", url: "/protected" })
     expect(res.statusCode).toBe(200)
-    expect(res.json<{ userId: string }>().userId).toBe("dev-user")
+    // "dev-user" is normalised to a deterministic UUID for DB FK integrity
+    const userId = res.json<{ userId: string }>().userId
+    expect(userId).toMatch(UUID_RE)
+    expect(userId).toBe(ensureUuid("dev-user"))
   })
 
   it("allows requests with invalid credentials in dev mode", async () => {
@@ -255,7 +262,7 @@ describe("requireAuth dev mode", () => {
       headers: { authorization: "Bearer bad-key" },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json<{ userId: string }>().userId).toBe("dev-user")
+    expect(res.json<{ userId: string }>().userId).toMatch(UUID_RE)
   })
 })
 
