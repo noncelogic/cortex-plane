@@ -95,6 +95,25 @@ interface ResumeAgentBody {
 }
 
 // ---------------------------------------------------------------------------
+// Health status mapping
+// ---------------------------------------------------------------------------
+
+type HealthStatus = "healthy" | "degraded" | "quarantined" | "unknown"
+
+function mapAgentHealthStatus(status: AgentStatus): HealthStatus {
+  switch (status) {
+    case "ACTIVE":
+      return "healthy"
+    case "DISABLED":
+      return "degraded"
+    case "ARCHIVED":
+      return "quarantined"
+    default:
+      return "unknown"
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
 
@@ -148,14 +167,56 @@ export function agentRoutes(deps: AgentRouteDeps) {
 
         const total = Number(countResult.total)
 
+        // Enrich with cost, health, and running job data
+        const todayStart = new Date()
+        todayStart.setUTCHours(0, 0, 0, 0)
+        const agentIds = agents.map((a) => a.id)
+
+        const costMap = new Map<string, number>()
+        const jobMap = new Map<string, string>()
+
+        if (agents.length > 0) {
+          const [costEvents, runningJobs] = await Promise.all([
+            db
+              .selectFrom("agent_event")
+              .selectAll()
+              .where("agent_id", "in", agentIds)
+              .where("created_at", ">=", todayStart)
+              .execute(),
+            db
+              .selectFrom("job")
+              .selectAll()
+              .where("agent_id", "in", agentIds)
+              .where("status", "=", "RUNNING" as JobStatus)
+              .execute(),
+          ])
+
+          for (const e of costEvents) {
+            costMap.set(e.agent_id, (costMap.get(e.agent_id) ?? 0) + (Number(e.cost_usd) || 0))
+          }
+
+          for (const j of runningJobs) {
+            if (!jobMap.has(j.agent_id)) {
+              jobMap.set(j.agent_id, j.id)
+            }
+          }
+        }
+
+        const enrichedAgents = agents.map((a) => ({
+          ...a,
+          costToday: costMap.get(a.id) ?? 0,
+          healthStatus: mapAgentHealthStatus(a.status),
+          runningJobId: jobMap.get(a.id) ?? null,
+        }))
+
         return reply.status(200).send({
-          agents,
-          count: agents.length,
+          agents: enrichedAgents,
+          count: enrichedAgents.length,
           pagination: {
             total,
             limit,
             offset,
-            hasMore: offset + agents.length < total,
+            hasMore: offset + enrichedAgents.length < total,
           },
         })
       },
@@ -188,16 +249,83 @@ export function agentRoutes(deps: AgentRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Agent not found" })
         }
 
-        // Fetch latest job for this agent
-        const latestJob = await db
-          .selectFrom("job")
-          .selectAll()
-          .where("agent_id", "=", agent.id)
-          .orderBy("created_at", "desc")
-          .limit(1)
-          .executeTakeFirst()
+        // Fetch latest job, events, and running job in parallel
+        const [latestJob, agentEvents, runningJob] = await Promise.all([
+          db
+            .selectFrom("job")
+            .selectAll()
+            .where("agent_id", "=", agent.id)
+            .orderBy("created_at", "desc")
+            .limit(1)
+            .executeTakeFirst(),
+          db
+            .selectFrom("agent_event")
+            .selectAll()
+            .where("agent_id", "=", agent.id)
+            .orderBy("created_at", "desc")
+            .execute(),
+          db
+            .selectFrom("job")
+            .selectAll()
+            .where("agent_id", "=", agent.id)
+            .where("status", "=", "RUNNING" as JobStatus)
+            .limit(1)
+            .executeTakeFirst(),
+        ])
 
-        return reply.status(200).send({ ...agent, latest_job: latestJob ?? null })
+        // Build cost summary
+        const todayStart = new Date()
+        todayStart.setUTCHours(0, 0, 0, 0)
+        let totalToday = 0
+        let totalAllTime = 0
+        const byModel: Record<string, number> = {}
+
+        for (const e of agentEvents) {
+          const cost = Number(e.cost_usd) || 0
+          totalAllTime += cost
+          if (new Date(e.created_at).getTime() >= todayStart.getTime()) {
+            totalToday += cost
+          }
+          const detailModel = e.details?.model
+          const model = typeof detailModel === "string" ? detailModel : "unknown"
+          if (cost > 0) {
+            byModel[model] = (byModel[model] ?? 0) + cost
+          }
+        }
+
+        // Build circuit breaker state from consecutive recent failures
+        let consecutiveFailures = 0
+        let tripReason: string | null = null
+        for (const e of agentEvents) {
+          const t = e.event_type
+          if (t === "error" || t === "tool_error" || t === "llm_error") {
+            consecutiveFailures++
+            if (!tripReason) {
+              const reason = e.details?.reason
+              tripReason = typeof reason === "string" ? reason : t
+            }
+          } else {
+            break
+          }
+        }
+
+        const cbConfig = agent.resource_limits?.circuitBreaker as Record<string, number> | undefined
+        const maxFailures =
+          typeof cbConfig?.maxConsecutiveFailures === "number" ? cbConfig.maxConsecutiveFailures : 3
+        const tripped = consecutiveFailures >= maxFailures
+
+        return reply.status(200).send({
+          ...agent,
+          latest_job: latestJob ?? null,
+          costSummary: { totalToday, totalAllTime, byModel },
+          healthStatus: mapAgentHealthStatus(agent.status),
+          runningJobId: runningJob?.id ?? null,
+          circuitBreakerState: {
+            tripped,
+            consecutiveFailures,
+            tripReason: tripped ? tripReason : null,
+          },
+        })
       },
     )
 

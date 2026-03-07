@@ -59,11 +59,25 @@ function makeJob(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function makeAgentEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "eeeeeeee-1111-2222-3333-444444444444",
+    agent_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    job_id: null,
+    event_type: "llm_call",
+    cost_usd: "0.005000",
+    details: { model: "claude-3-sonnet" },
+    created_at: new Date(),
+    ...overrides,
+  }
+}
+
 /** Build a chainable mock that simulates Kysely's fluent query API. */
 function mockDb(
   opts: {
     agents?: Record<string, unknown>[]
     jobs?: Record<string, unknown>[]
+    agentEvents?: Record<string, unknown>[]
     insertedAgent?: Record<string, unknown>
     updatedAgent?: Record<string, unknown> | null
     insertedJob?: Record<string, unknown>
@@ -72,6 +86,7 @@ function mockDb(
   const {
     agents = [makeAgent()],
     jobs = [],
+    agentEvents = [],
     insertedAgent = makeAgent(),
     updatedAgent = makeAgent(),
     insertedJob = makeJob(),
@@ -140,6 +155,7 @@ function mockDb(
     selectFrom: vi.fn().mockImplementation((table: string) => {
       if (table === "agent") return selectChain(agents)
       if (table === "job") return selectChain(jobs)
+      if (table === "agent_event") return selectChain(agentEvents)
       return selectChain([])
     }),
     insertInto: vi.fn().mockImplementation((table: string) => {
@@ -198,6 +214,57 @@ describe("GET /agents", () => {
 
     expect(res.statusCode).toBe(200)
   })
+
+  it("includes costToday, healthStatus, and runningJobId", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent()],
+      agentEvents: [
+        makeAgentEvent({ cost_usd: "0.005000" }),
+        makeAgentEvent({ id: "event-2", cost_usd: "0.003000" }),
+      ],
+      jobs: [makeJob({ status: "RUNNING" })],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.costToday).toBe(0.008)
+    expect(agent.healthStatus).toBe("healthy")
+    expect(agent.runningJobId).toBe("11111111-2222-3333-4444-555555555555")
+  })
+
+  it("returns zero costToday and null runningJobId when no events or running jobs", async () => {
+    const { app } = await buildTestApp({ agents: [makeAgent()] })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.costToday).toBe(0)
+    expect(agent.runningJobId).toBeNull()
+  })
+
+  it("maps DISABLED status to degraded healthStatus", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent({ status: "DISABLED" })],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.healthStatus).toBe("degraded")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -230,6 +297,96 @@ describe("GET /agents/:id", () => {
     })
 
     expect(res.statusCode).toBe(404)
+  })
+
+  it("includes costSummary, healthStatus, runningJobId, and circuitBreakerState", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent()],
+      agentEvents: [
+        makeAgentEvent({ cost_usd: "0.010000", details: { model: "claude-3-opus" } }),
+        makeAgentEvent({
+          id: "event-2",
+          cost_usd: "0.005000",
+          details: { model: "claude-3-sonnet" },
+        }),
+      ],
+      jobs: [makeJob({ status: "RUNNING" })],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    expect(body).toHaveProperty("costSummary")
+    expect(body).toHaveProperty("healthStatus", "healthy")
+    expect(body).toHaveProperty("runningJobId", "11111111-2222-3333-4444-555555555555")
+    expect(body).toHaveProperty("circuitBreakerState")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const cs = body.costSummary as Record<string, unknown>
+    expect(cs.totalAllTime).toBe(0.015)
+    expect(cs.totalToday).toBe(0.015)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const cb = body.circuitBreakerState as Record<string, unknown>
+    expect(cb.tripped).toBe(false)
+    expect(cb.consecutiveFailures).toBe(0)
+  })
+
+  it("reports tripped circuit breaker on consecutive failures", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent()],
+      agentEvents: [
+        makeAgentEvent({
+          id: "e1",
+          event_type: "error",
+          cost_usd: "0",
+          details: { reason: "timeout" },
+        }),
+        makeAgentEvent({ id: "e2", event_type: "tool_error", cost_usd: "0", details: {} }),
+        makeAgentEvent({ id: "e3", event_type: "error", cost_usd: "0", details: {} }),
+      ],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const cb = body.circuitBreakerState as Record<string, unknown>
+    expect(cb.tripped).toBe(true)
+    expect(cb.consecutiveFailures).toBe(3)
+    expect(cb.tripReason).toBe("timeout")
+  })
+
+  it("includes costSummary model breakdown", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent()],
+      agentEvents: [
+        makeAgentEvent({ id: "e1", cost_usd: "0.010000", details: { model: "claude-3-opus" } }),
+        makeAgentEvent({ id: "e2", cost_usd: "0.002000", details: { model: "claude-3-opus" } }),
+        makeAgentEvent({ id: "e3", cost_usd: "0.005000", details: { model: "claude-3-sonnet" } }),
+      ],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const cs = body.costSummary as { byModel: Record<string, number> }
+    expect(cs.byModel["claude-3-opus"]).toBeCloseTo(0.012)
+    expect(cs.byModel["claude-3-sonnet"]).toBeCloseTo(0.005)
   })
 })
 
