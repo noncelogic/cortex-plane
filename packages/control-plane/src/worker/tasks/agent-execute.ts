@@ -39,6 +39,9 @@ import type { AgentLifecycleManager, SteerMessage } from "../../lifecycle/manage
 import { recordCircuitBreakerTrip, recordContextBudgetExceeded } from "../../lifecycle/metrics.js"
 import type { McpClientPool } from "../../mcp/client-pool.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
+import { CostTracker } from "../../observability/cost-tracker.js"
+import type { AgentEventEmitter } from "../../observability/event-emitter.js"
+import type { ExecutionRegistry } from "../../observability/execution-registry.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
 import { classifyError } from "../error-classifier.js"
@@ -66,6 +69,10 @@ export interface AgentExecuteDeps {
   credentialService?: CredentialService
   /** Optional lifecycle manager for steer consumption during execution. */
   lifecycleManager?: AgentLifecycleManager
+  /** Optional event emitter for persisting structured agent events. */
+  eventEmitter?: AgentEventEmitter
+  /** Optional execution registry for tracking in-flight handles. */
+  executionRegistry?: ExecutionRegistry
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -90,6 +97,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     mcpClientPool,
     credentialService,
     lifecycleManager,
+    eventEmitter,
+    executionRegistry,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -470,6 +479,19 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             handle = await backend.executeTask(task)
           }
 
+          // ── Step 8b: Register handle in execution registry ──
+          if (executionRegistry) {
+            executionRegistry.register(jobId, handle)
+          }
+
+          // Per-job cost tracker (always created; wired to event emitter + budget below)
+          const costTracker = new CostTracker()
+
+          // Resolve cost budget from resource_limits (optional)
+          const rawCostBudget = agent.resource_limits.costBudgetUsd
+          const costBudgetUsd =
+            typeof rawCostBudget === "number" && rawCostBudget > 0 ? rawCostBudget : undefined
+
           // Store the user prompt as a session message for memory extraction batching.
           if (job.session_id && task.instruction.prompt.trim().length > 0) {
             await memoryScheduler
@@ -569,6 +591,76 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 agentCB.recordLlmRetry()
               }
 
+              // ── Event emission + cost tracking ──
+              if (event.type === "usage") {
+                const { inputTokens, outputTokens, costUsd } = event.tokenUsage
+                costTracker.recordLlmCost(inputTokens, outputTokens, costUsd)
+
+                if (eventEmitter) {
+                  await eventEmitter
+                    .emit({
+                      eventType: "llm_call_end",
+                      agentId: agent.id,
+                      sessionId: job.session_id,
+                      jobId,
+                      model: task.constraints.model,
+                      tokensIn: inputTokens,
+                      tokensOut: outputTokens,
+                      costUsd,
+                      payload: {
+                        cacheReadTokens: event.tokenUsage.cacheReadTokens,
+                        cacheCreationTokens: event.tokenUsage.cacheCreationTokens,
+                      },
+                    })
+                    .catch(() => {
+                      // Non-fatal: event persistence must not block execution.
+                    })
+                }
+
+                // Cost budget enforcement
+                if (costBudgetUsd != null && !costTracker.checkBudget(costBudgetUsd)) {
+                  void handle.cancel("cost_budget_exceeded")
+                }
+              }
+              if (event.type === "tool_use") {
+                costTracker.recordToolCall()
+
+                if (eventEmitter) {
+                  // Fire-and-forget start event; duration tracked by tool_result
+                  eventEmitter
+                    .emit({
+                      eventType: "tool_call_start",
+                      agentId: agent.id,
+                      sessionId: job.session_id,
+                      jobId,
+                      toolRef: event.toolName,
+                      payload: { input: event.toolInput },
+                    })
+                    .catch(() => {
+                      // Non-fatal
+                    })
+                }
+              }
+              if (event.type === "tool_result") {
+                if (eventEmitter) {
+                  eventEmitter
+                    .emit({
+                      eventType: "tool_call_end",
+                      agentId: agent.id,
+                      sessionId: job.session_id,
+                      jobId,
+                      toolRef: event.toolName,
+                      payload: {
+                        isError: event.isError,
+                        outputLength: event.output.length,
+                      },
+                    })
+                    .catch(() => {
+                      // Non-fatal
+                    })
+                }
+              }
+
               if (job.session_id && event.type === "text" && event.content.trim().length > 0) {
                 await memoryScheduler
                   .recordMessage(
@@ -629,6 +721,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
           // ── Step 12: Map status and persist result ──
           const jobStatus = mapExecutionStatus(result.status)
+          const costSnapshot = costTracker.getSnapshot()
 
           await db
             .updateTable("job")
@@ -636,10 +729,54 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               status: jobStatus,
               completed_at: new Date(),
               result: executionResultToJson(result),
+              tokens_in: costSnapshot.tokensIn,
+              tokens_out: costSnapshot.tokensOut,
+              cost_usd: String(costSnapshot.costUsd),
+              llm_call_count: costSnapshot.llmCalls,
+              tool_call_count: costSnapshot.toolCalls,
             })
             .where("id", "=", jobId)
             .where("status", "=", "RUNNING")
             .execute()
+
+          // Update session-level cost accumulators
+          if (job.session_id) {
+            await db
+              .updateTable("session")
+              .set({
+                total_tokens_in: costSnapshot.tokensIn,
+                total_tokens_out: costSnapshot.tokensOut,
+                total_cost_usd: String(costSnapshot.costUsd),
+              })
+              .where("id", "=", job.session_id)
+              .execute()
+              .catch(() => {
+                // Non-fatal: session cost update is best-effort
+              })
+          }
+
+          // Emit session_end event with accumulated cost
+          if (eventEmitter) {
+            await eventEmitter
+              .emit({
+                eventType: "session_end",
+                agentId: agent.id,
+                sessionId: job.session_id,
+                jobId,
+                tokensIn: costSnapshot.tokensIn,
+                tokensOut: costSnapshot.tokensOut,
+                costUsd: costSnapshot.costUsd,
+                payload: {
+                  status: jobStatus,
+                  llmCalls: costSnapshot.llmCalls,
+                  toolCalls: costSnapshot.toolCalls,
+                  durationMs: result.durationMs,
+                },
+              })
+              .catch(() => {
+                // Non-fatal
+              })
+          }
 
           // Broadcast completion via SSE
           if (streamManager) {
@@ -653,6 +790,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           permit.release()
           if (bufferWriter) {
             bufferWriter.close()
+          }
+          if (executionRegistry) {
+            executionRegistry.unregister(jobId)
           }
         }
       } catch (err: unknown) {

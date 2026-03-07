@@ -18,6 +18,8 @@ import type { Pool } from "pg"
 import type { AuthOAuthConfig } from "../config.js"
 import type { Database } from "../db/types.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
+import type { AgentEventEmitter } from "../observability/event-emitter.js"
+import type { ExecutionRegistry } from "../observability/execution-registry.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
 import { createApprovalExpireTask } from "./tasks/approval-expire.js"
@@ -39,6 +41,10 @@ export interface WorkerOptions {
   mcpToolRouter?: McpToolRouter
   /** OAuth config for proactive credential refresh (optional — task is no-op if absent). */
   authConfig?: AuthOAuthConfig
+  /** Optional event emitter for structured agent event persistence. */
+  eventEmitter?: AgentEventEmitter
+  /** Optional execution registry for tracking in-flight handles. */
+  executionRegistry?: ExecutionRegistry
 }
 
 /**
@@ -56,6 +62,8 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     concurrency,
     mcpToolRouter,
     authConfig,
+    eventEmitter,
+    executionRegistry,
   } = options
 
   const workerConcurrency =
@@ -69,6 +77,8 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
       sessionBufferFactory,
       memoryExtractThreshold,
       mcpToolRouter,
+      eventEmitter,
+      executionRegistry,
     }),
     memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),
