@@ -29,6 +29,10 @@ export const CortexAttributes = {
   ERROR_CATEGORY: "cortex.error.category",
   EXECUTION_STATUS: "cortex.execution.status",
   EXECUTION_DURATION_MS: "cortex.execution.duration_ms",
+  LIFECYCLE_STATE: "cortex.agent.lifecycle_state",
+  CIRCUIT_BREAKER_STATE: "cortex.agent.circuit_breaker_state",
+  CONTEXT_BUDGET_USAGE_PCT: "cortex.agent.context_budget_usage_pct",
+  TOKEN_BUDGET_REMAINING: "cortex.agent.token_budget_remaining",
 } as const
 
 // ──────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import type { AgentDeploymentConfig } from "../k8s/types.js"
 import { type AgentHeartbeat, CrashLoopDetector, HeartbeatReceiver } from "./health.js"
 import { hydrateAgent, type HydrationResult, type QdrantClient } from "./hydration.js"
 import { IdleDetector } from "./idle-detector.js"
+import { recordStateTransition } from "./metrics.js"
 import {
   type AgentLifecycleState,
   AgentLifecycleStateMachine,
@@ -114,6 +115,7 @@ export class AgentLifecycleManager {
     }
 
     const sm = new AgentLifecycleStateMachine(agentId)
+    sm.onTransition(recordStateTransition)
     if (this.onLifecycleEvent) {
       sm.onTransition(this.onLifecycleEvent)
     }
