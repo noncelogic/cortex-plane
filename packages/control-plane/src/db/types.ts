@@ -694,6 +694,31 @@ export type NewAgentUserGrant = Insertable<AgentUserGrantTable>
 export type AgentUserGrantUpdate = Updateable<AgentUserGrantTable>
 
 // ---------------------------------------------------------------------------
+// Enum: access_request_status
+// ---------------------------------------------------------------------------
+export type AccessRequestStatus = "pending" | "approved" | "denied"
+
+// ---------------------------------------------------------------------------
+// Table: access_request
+// ---------------------------------------------------------------------------
+export interface AccessRequestTable {
+  id: Generated<string>
+  agent_id: string
+  channel_mapping_id: string
+  user_account_id: string
+  status: ColumnType<AccessRequestStatus, AccessRequestStatus | undefined, AccessRequestStatus>
+  message_preview: string | null
+  reviewed_by: string | null
+  reviewed_at: ColumnType<Date | null, Date | null | undefined, Date | null>
+  deny_reason: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AccessRequest = Selectable<AccessRequestTable>
+export type NewAccessRequest = Insertable<AccessRequestTable>
+export type AccessRequestUpdate = Updateable<AccessRequestTable>
+
+// ---------------------------------------------------------------------------
 // Table: agent_event
 // ---------------------------------------------------------------------------
 export interface AgentEventTable {
@@ -744,4 +769,5 @@ export interface Database {
   agent_event: AgentEventTable
   pairing_code: PairingCodeTable
   agent_user_grant: AgentUserGrantTable
+  access_request: AccessRequestTable
 }
