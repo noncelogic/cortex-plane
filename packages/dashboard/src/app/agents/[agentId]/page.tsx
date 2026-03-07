@@ -5,6 +5,7 @@ import { use, useCallback, useMemo, useState } from "react"
 import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
 import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
+import { ChatPanel } from "@/components/agents/chat-panel"
 import { CredentialBindingPanel } from "@/components/agents/credential-binding"
 import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifecycle-timeline"
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
@@ -26,7 +27,15 @@ import {
 // Mobile tabs
 // ---------------------------------------------------------------------------
 
-const MOBILE_TABS = ["Output", "Details", "Jobs", "Credentials", "Browser", "Memory"] as const
+const MOBILE_TABS = [
+  "Output",
+  "Chat",
+  "Details",
+  "Jobs",
+  "Credentials",
+  "Browser",
+  "Memory",
+] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 
 // ---------------------------------------------------------------------------
@@ -109,6 +118,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   const { data: agent, isLoading, refetch } = useApiQuery(() => getAgent(agentId), [agentId])
   const { events } = useAgentStream(agentId)
   const [mobileTab, setMobileTab] = useState<MobileTab>("Output")
+  const [desktopCenter, setDesktopCenter] = useState<"console" | "chat">("console")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Build lifecycle transitions from state events
@@ -260,9 +270,37 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           <LifecycleDetails transitions={transitions} currentState={currentState} />
         </div>
 
-        {/* Center: console */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <AgentConsole agentId={agentId} />
+        {/* Center: console / chat */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+            <button
+              onClick={() => setDesktopCenter("console")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                desktopCenter === "console"
+                  ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">terminal</span>
+              Console
+            </button>
+            <button
+              onClick={() => setDesktopCenter("chat")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                desktopCenter === "chat"
+                  ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">chat</span>
+              Chat
+            </button>
+          </div>
+          {desktopCenter === "console" ? (
+            <AgentConsole agentId={agentId} />
+          ) : (
+            <ChatPanel agentId={agentId} />
+          )}
         </div>
 
         {/* Right column: resources */}
@@ -287,6 +325,11 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
               ))}
             </div>
             <AgentConsole agentId={agentId} />
+          </div>
+        )}
+        {mobileTab === "Chat" && (
+          <div className="flex flex-1 flex-col">
+            <ChatPanel agentId={agentId} />
           </div>
         )}
         {mobileTab === "Details" && (

@@ -907,3 +907,72 @@ export async function revokeUserGrant(agentId: string, grantId: string): Promise
     schema: z.unknown(),
   })
 }
+
+// ---------------------------------------------------------------------------
+// Chat & session endpoint functions
+// ---------------------------------------------------------------------------
+
+import {
+  ChatResponseSchema,
+  MessageListResponseSchema,
+  SessionDeleteResponseSchema,
+  SessionListResponseSchema,
+} from "./schemas/chat"
+
+export type { ChatResponse, Session, SessionMessage } from "./schemas/chat"
+
+export async function listAgentSessions(
+  agentId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<{
+  sessions: import("./schemas/chat").Session[]
+  count: number
+}> {
+  const search = new URLSearchParams()
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/sessions${qs ? `?${qs}` : ""}`, {
+    schema: SessionListResponseSchema,
+  })
+}
+
+export async function getSessionMessages(
+  sessionId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<{
+  messages: import("./schemas/chat").SessionMessage[]
+  count: number
+}> {
+  const search = new URLSearchParams()
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/sessions/${sessionId}/messages${qs ? `?${qs}` : ""}`, {
+    schema: MessageListResponseSchema,
+  })
+}
+
+export async function sendChatMessage(
+  agentId: string,
+  body: { text: string; session_id?: string },
+  opts?: { wait?: boolean; timeout?: number },
+): Promise<import("./schemas/chat").ChatResponse> {
+  const search = new URLSearchParams()
+  if (opts?.wait) search.set("wait", "true")
+  if (opts?.timeout) search.set("timeout", String(opts.timeout))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/chat${qs ? `?${qs}` : ""}`, {
+    method: "POST",
+    body,
+    schema: ChatResponseSchema,
+    timeoutMs: (opts?.timeout ?? 60_000) + 5_000, // extra buffer beyond server timeout
+  })
+}
+
+export async function deleteSession(sessionId: string): Promise<{ id: string; status: "ended" }> {
+  return apiFetch(`/sessions/${sessionId}`, {
+    method: "DELETE",
+    schema: SessionDeleteResponseSchema,
+  })
+}
