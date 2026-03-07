@@ -8,7 +8,9 @@ import type { Kysely } from "kysely"
 import type pg from "pg"
 
 import { ApprovalService } from "./approval/service.js"
+import { AccessRequestService } from "./auth/access-request-service.js"
 import { CredentialService } from "./auth/credential-service.js"
+import { PairingService } from "./auth/pairing-service.js"
 import { SessionService } from "./auth/session-service.js"
 import { ClaudeCodeBackend } from "./backends/claude-code.js"
 import { HttpLlmBackend } from "./backends/http-llm.js"
@@ -34,6 +36,7 @@ import { agentControlRoutes } from "./routes/agent-control.js"
 import { agentCredentialRoutes } from "./routes/agent-credentials.js"
 import { agentLifecycleRoutes } from "./routes/agent-lifecycle.js"
 import { agentToolBindingRoutes } from "./routes/agent-tool-bindings.js"
+import { agentUserRoutes } from "./routes/agent-user-routes.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { authRoutes } from "./routes/auth.js"
@@ -228,6 +231,19 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   await app.register(
     agentChannelRoutes({
       service: agentChannelService,
+      authConfig,
+      sessionService,
+    }),
+  )
+
+  // Register agent user grant, pairing code, and access request routes
+  const pairingService = new PairingService(db)
+  const accessRequestService = new AccessRequestService(db)
+  await app.register(
+    agentUserRoutes({
+      db,
+      pairingService,
+      accessRequestService,
       authConfig,
       sessionService,
     }),
