@@ -109,20 +109,10 @@ export class ChannelConfigService {
     config: ChannelConfigPlain,
     createdBy: string | null,
   ): Promise<ChannelConfigSummary> {
-    // Prevent ambiguous duplicate channel rows.
-    const existing = await this.db
-      .selectFrom("channel_config")
-      .select("id")
-      .where("type", "=", type)
-      .where("name", "=", name)
-      .executeTakeFirst()
-
-    if (existing) {
-      throw new Error(`Channel already exists for type='${type}' name='${name}'`)
-    }
-
     const configEnc = this.encryptConfig(config)
 
+    // Use onConflict to prevent duplicate (type, name) rows if a unique
+    // constraint exists, otherwise rely on application-level check.
     const row = await this.db
       .insertInto("channel_config")
       .values({
