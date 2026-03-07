@@ -11,6 +11,7 @@ import { useAuthGuard } from "@/hooks/use-auth-guard"
 const navItems = [
   { href: "/", label: "Dashboard", icon: "dashboard" },
   { href: "/agents", label: "Agents", icon: "smart_toy" },
+  { href: "/operations", label: "Operations", icon: "monitoring" },
   { href: "/mcp-servers", label: "MCP Servers", icon: "dns" },
   { href: "/approvals", label: "Approvals", icon: "verified_user" },
   { href: "/jobs", label: "Jobs", icon: "list_alt" },

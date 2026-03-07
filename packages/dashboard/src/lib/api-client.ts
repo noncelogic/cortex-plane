@@ -49,6 +49,15 @@ import {
   McpServerSchema,
 } from "./schemas/mcp-servers"
 import { MemorySearchResponseSchema } from "./schemas/memory"
+import {
+  AgentCostResponseSchema,
+  AgentEventListResponseSchema,
+  DryRunResponseSchema,
+  KillResponseSchema,
+  QuarantineResponseSchema,
+  ReleaseResponseSchema,
+  ReplayResponseSchema,
+} from "./schemas/operations"
 
 // ---------------------------------------------------------------------------
 // Re-export types from schemas for backward compatibility
@@ -92,6 +101,20 @@ export type {
   JobSummary,
 } from "./schemas/jobs"
 export type { MemoryRecord } from "./schemas/memory"
+export type {
+  AgentCostResponse,
+  AgentEvent,
+  AgentEventListResponse,
+  AgentEventType,
+  CostBreakdownEntry,
+  CostSummary,
+  DryRunResponse,
+  KillResponse,
+  PlannedAction,
+  QuarantineResponse,
+  ReleaseResponse,
+  ReplayResponse,
+} from "./schemas/operations"
 
 // ---------------------------------------------------------------------------
 // Request types (validated by schema on response side)
@@ -974,5 +997,106 @@ export async function deleteSession(sessionId: string): Promise<{ id: string; st
   return apiFetch(`/sessions/${sessionId}`, {
     method: "DELETE",
     schema: SessionDeleteResponseSchema,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Operations: events, cost, control
+// ---------------------------------------------------------------------------
+
+export async function getAgentEvents(
+  agentId: string,
+  params?: {
+    eventTypes?: string
+    since?: string
+    until?: string
+    limit?: number
+    offset?: number
+  },
+): Promise<import("./schemas/operations").AgentEventListResponse> {
+  const search = new URLSearchParams()
+  if (params?.eventTypes) search.set("eventTypes", params.eventTypes)
+  if (params?.since) search.set("since", params.since)
+  if (params?.until) search.set("until", params.until)
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/events${qs ? `?${qs}` : ""}`, {
+    schema: AgentEventListResponseSchema,
+  })
+}
+
+export async function getAgentCost(
+  agentId: string,
+  params?: { since?: string; until?: string; groupBy?: "model" | "session" | "day" },
+): Promise<import("./schemas/operations").AgentCostResponse> {
+  const search = new URLSearchParams()
+  if (params?.since) search.set("since", params.since)
+  if (params?.until) search.set("until", params.until)
+  if (params?.groupBy) search.set("groupBy", params.groupBy)
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/cost${qs ? `?${qs}` : ""}`, {
+    schema: AgentCostResponseSchema,
+  })
+}
+
+export async function killAgent(
+  agentId: string,
+  reason: string,
+): Promise<import("./schemas/operations").KillResponse> {
+  return apiFetch(`/agents/${agentId}/kill`, {
+    method: "POST",
+    body: { reason },
+    schema: KillResponseSchema,
+  })
+}
+
+export async function dryRunAgent(
+  agentId: string,
+  message: string,
+  sessionId?: string,
+): Promise<import("./schemas/operations").DryRunResponse> {
+  return apiFetch(`/agents/${agentId}/dry-run`, {
+    method: "POST",
+    body: { message, ...(sessionId ? { sessionId } : {}) },
+    schema: DryRunResponseSchema,
+  })
+}
+
+export async function replayAgent(
+  agentId: string,
+  checkpointId: string,
+  modifications?: {
+    model?: string
+    systemPromptAppend?: string
+    resourceLimits?: Record<string, unknown>
+  },
+): Promise<import("./schemas/operations").ReplayResponse> {
+  return apiFetch(`/agents/${agentId}/replay`, {
+    method: "POST",
+    body: { checkpointId, ...(modifications ? { modifications } : {}) },
+    schema: ReplayResponseSchema,
+  })
+}
+
+export async function quarantineAgent(
+  agentId: string,
+  reason: string,
+): Promise<import("./schemas/operations").QuarantineResponse> {
+  return apiFetch(`/agents/${agentId}/quarantine`, {
+    method: "POST",
+    body: { reason },
+    schema: QuarantineResponseSchema,
+  })
+}
+
+export async function releaseAgent(
+  agentId: string,
+  resetCircuitBreaker?: boolean,
+): Promise<import("./schemas/operations").ReleaseResponse> {
+  return apiFetch(`/agents/${agentId}/release`, {
+    method: "POST",
+    body: { ...(resetCircuitBreaker != null ? { resetCircuitBreaker } : {}) },
+    schema: ReleaseResponseSchema,
   })
 }
