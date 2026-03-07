@@ -710,6 +710,39 @@ export type NewAgentUserGrant = Insertable<AgentUserGrantTable>
 export type AgentUserGrantUpdate = Updateable<AgentUserGrantTable>
 
 // ---------------------------------------------------------------------------
+// Table: user_usage_ledger
+// ---------------------------------------------------------------------------
+export interface UserUsageLedgerTable {
+  id: Generated<string>
+  user_account_id: string
+  agent_id: string
+  period_start: Date
+  period_end: Date
+  messages_sent: ColumnType<number, number | undefined, number>
+  tokens_in: ColumnType<number, number | undefined, number>
+  tokens_out: ColumnType<number, number | undefined, number>
+  cost_usd: ColumnType<string, string | number | undefined, string | number>
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type UserUsageLedger = Selectable<UserUsageLedgerTable>
+export type NewUserUsageLedger = Insertable<UserUsageLedgerTable>
+export type UserUsageLedgerUpdate = Updateable<UserUsageLedgerTable>
+
+// ---------------------------------------------------------------------------
+// Rate limit / token budget shapes (stored as JSONB in agent_user_grant)
+// ---------------------------------------------------------------------------
+export interface RateLimit {
+  max_messages: number
+  window_seconds: number
+}
+
+export interface TokenBudget {
+  max_tokens: number
+  window_seconds: number
+}
+
+// ---------------------------------------------------------------------------
 // Enum: access_request_status
 // ---------------------------------------------------------------------------
 export type AccessRequestStatus = "pending" | "approved" | "denied"
@@ -817,4 +850,5 @@ export interface Database {
   pairing_code: PairingCodeTable
   agent_user_grant: AgentUserGrantTable
   access_request: AccessRequestTable
+  user_usage_ledger: UserUsageLedgerTable
 }
