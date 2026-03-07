@@ -127,6 +127,9 @@ export function chatRoutes(deps: ChatRouteDeps) {
         const principal = (request as AuthenticatedRequest).principal
         const userAccountId = principal?.userId ?? "api-user"
 
+        // Ensure principal user exists for session FK integrity (dev/api-key modes).
+        await ensureUserAccount(db, userAccountId, principal?.displayName)
+
         // Per-agent authorization guard
         if (channelAuthGuard) {
           const decision = await channelAuthGuard.authorize({
@@ -255,6 +258,29 @@ export function chatRoutes(deps: ChatRouteDeps) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+async function ensureUserAccount(
+  db: Kysely<Database>,
+  userAccountId: string,
+  displayName?: string,
+): Promise<void> {
+  const existing = await db
+    .selectFrom("user_account")
+    .select("id")
+    .where("id", "=", userAccountId)
+    .executeTakeFirst()
+
+  if (existing) return
+
+  await db
+    .insertInto("user_account")
+    .values({
+      id: userAccountId,
+      display_name: displayName ?? null,
+      role: "operator",
+    })
+    .execute()
+}
 
 async function findOrCreateSession(
   db: Kysely<Database>,
