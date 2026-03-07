@@ -49,6 +49,11 @@ export type ToolApprovalPolicy = "auto" | "always_approve" | "conditional"
 export type McpServerStatus = "PENDING" | "ACTIVE" | "DEGRADED" | "ERROR" | "DISABLED"
 
 // ---------------------------------------------------------------------------
+// Enum: agent_auth_model
+// ---------------------------------------------------------------------------
+export type AgentAuthModel = "allowlist" | "approval_queue" | "team" | "open"
+
+// ---------------------------------------------------------------------------
 // Enum: mcp_transport
 // ---------------------------------------------------------------------------
 export type McpTransport = "streamable-http" | "stdio"
@@ -92,6 +97,7 @@ export interface AgentTable {
     Record<string, unknown> | null | undefined,
     Record<string, unknown> | null
   >
+  auth_model: ColumnType<AgentAuthModel, AgentAuthModel | undefined, AgentAuthModel>
   status: ColumnType<AgentStatus, AgentStatus | undefined, AgentStatus>
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, never>
