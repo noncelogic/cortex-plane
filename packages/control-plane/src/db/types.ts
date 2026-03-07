@@ -631,6 +631,26 @@ export type AgentCheckpoint = Selectable<AgentCheckpointTable>
 export type NewAgentCheckpoint = Insertable<AgentCheckpointTable>
 
 // ---------------------------------------------------------------------------
+// Table: agent_event
+// ---------------------------------------------------------------------------
+export interface AgentEventTable {
+  id: Generated<string>
+  agent_id: string
+  job_id: string | null
+  event_type: string
+  cost_usd: ColumnType<string | null, string | number | null | undefined, string | number | null>
+  details: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AgentEvent = Selectable<AgentEventTable>
+export type NewAgentEvent = Insertable<AgentEventTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -658,4 +678,5 @@ export interface Database {
   tool_category: ToolCategoryTable
   tool_category_membership: ToolCategoryMembershipTable
   agent_checkpoint: AgentCheckpointTable
+  agent_event: AgentEventTable
 }

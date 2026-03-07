@@ -25,6 +25,7 @@ import { createCorrectionStrengthenTask } from "./tasks/correction-strengthen.js
 import { createCredentialRefreshTask } from "./tasks/credential-refresh.js"
 import { createMemoryExtractTask } from "./tasks/memory-extract.js"
 import { createProactiveDetectTask } from "./tasks/proactive-detect.js"
+import { createPruneAgentEventsTask } from "./tasks/prune-agent-events.js"
 
 export interface WorkerOptions {
   pgPool: Pool
@@ -74,6 +75,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     correction_strengthen: createCorrectionStrengthenTask(),
     proactive_detect: createProactiveDetectTask(),
     ...(authConfig ? { credential_refresh: createCredentialRefreshTask(db, authConfig) } : {}),
+    prune_agent_events: createPruneAgentEventsTask(db),
   }
 
   const runner = await run({
@@ -90,6 +92,8 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
             "*/15 * * * * credential_refresh ?jobKey=credential_refresh_periodic&jobKeyMode=preserve_run_at&max=1",
           ]
         : []),
+      // Prune stale agent events daily at 03:00 UTC
+      "0 3 * * * prune_agent_events ?jobKey=prune_agent_events_daily&jobKeyMode=preserve_run_at&max=1",
     ].join("\n"),
   })
 
