@@ -364,6 +364,77 @@ describe("Approval routes with auth", () => {
   })
 
   // -----------------------------------------------------------------------
+  // GET /approvals/pending — alias for ?status=PENDING
+  // -----------------------------------------------------------------------
+  describe("GET /approvals/pending", () => {
+    it("returns 401 without auth", async () => {
+      const res = await app.inject({ method: "GET", url: "/approvals/pending" })
+      expect(res.statusCode).toBe(401)
+    })
+
+    it("returns 200 with auth and filters by PENDING status", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/approvals/pending",
+        headers: { authorization: `Bearer ${VIEWER_KEY}` },
+      })
+      expect(res.statusCode).toBe(200)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(res.json().approvals).toEqual([])
+
+      const listCall = (mockService.list as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect(listCall![0]).toMatchObject({ status: "PENDING" })
+    })
+
+    it("does not match /:id route (no UUID validation error)", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/approvals/pending",
+        headers: { authorization: `Bearer ${VIEWER_KEY}` },
+      })
+      // Must NOT return 400 "params/id must match format uuid"
+      expect(res.statusCode).toBe(200)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Decide response uses snake_case keys (#438)
+  // -----------------------------------------------------------------------
+  describe("decide response contract", () => {
+    const approvalId = "00000000-0000-0000-0000-000000000001"
+
+    it("POST /approval/:id/decide returns snake_case keys", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: `/approval/${approvalId}/decide`,
+        headers: { authorization: `Bearer ${APPROVER_KEY}` },
+        payload: { decision: "APPROVED" },
+      })
+      expect(res.statusCode).toBe(200)
+      const body: Record<string, unknown> = res.json()
+      expect(body).toHaveProperty("approval_request_id")
+      expect(body).toHaveProperty("decided_at")
+      expect(body).not.toHaveProperty("approvalRequestId")
+      expect(body).not.toHaveProperty("decidedAt")
+    })
+
+    it("POST /approval/token/decide returns snake_case keys", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/approval/token/decide",
+        headers: { authorization: `Bearer ${APPROVER_KEY}` },
+        payload: { token: "cortex_apr_1_test", decision: "APPROVED" },
+      })
+      expect(res.statusCode).toBe(200)
+      const body: Record<string, unknown> = res.json()
+      expect(body).toHaveProperty("approval_request_id")
+      expect(body).toHaveProperty("decided_at")
+      expect(body).not.toHaveProperty("approvalRequestId")
+      expect(body).not.toHaveProperty("decidedAt")
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // GET /approvals/:id — requires auth (any role)
   // -----------------------------------------------------------------------
   describe("GET /approvals/:id", () => {

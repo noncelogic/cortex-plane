@@ -5,6 +5,7 @@
  * POST /approval/:id/decide        — Approve or reject by request ID (requires: approver)
  * POST /approval/token/decide      — Approve or reject by plaintext token (requires: approver)
  * GET  /approvals                   — List approval requests (requires: auth)
+ * GET  /approvals/pending           — Alias for GET /approvals?status=PENDING (requires: auth)
  * GET  /approvals/:id               — Get a single approval request (requires: auth)
  * GET  /approvals/:id/audit         — Get audit trail for an approval (requires: auth)
  * GET  /approvals/stream            — SSE stream for real-time approval events (requires: auth)
@@ -246,9 +247,9 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
         }
 
         return reply.status(200).send({
-          approvalRequestId: id,
+          approval_request_id: id,
           decision,
-          decidedAt: new Date().toISOString(),
+          decided_at: new Date().toISOString(),
         })
       },
     )
@@ -307,9 +308,9 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
         }
 
         return reply.status(200).send({
-          approvalRequestId: result.approvalRequestId,
+          approval_request_id: result.approvalRequestId,
           decision,
-          decidedAt: new Date().toISOString(),
+          decided_at: new Date().toISOString(),
         })
       },
     )
@@ -360,6 +361,55 @@ export function approvalRoutes(deps: ApprovalRouteDeps) {
             "=",
             request.query.approverUserId,
           )
+        const countResult = await countQuery.executeTakeFirstOrThrow()
+        const total = Number(countResult.total)
+
+        return reply.status(200).send({
+          approvals: requests,
+          pagination: {
+            total,
+            limit,
+            offset,
+            hasMore: offset + requests.length < total,
+          },
+        })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // GET /approvals/pending — Alias for GET /approvals?status=PENDING
+    // Prevents "pending" from matching /:id and returning a 400.
+    // Requires: auth (any role)
+    // -----------------------------------------------------------------
+    app.get<{ Querystring: Pick<ListQuery, "limit" | "offset"> }>(
+      "/approvals/pending",
+      {
+        preHandler: [requireAuth],
+        schema: {
+          querystring: {
+            type: "object",
+            properties: {
+              limit: { type: "number", minimum: 1, maximum: 100 },
+              offset: { type: "number", minimum: 0 },
+            },
+          },
+        },
+      },
+      async (
+        request: FastifyRequest<{ Querystring: Pick<ListQuery, "limit" | "offset"> }>,
+        reply: FastifyReply,
+      ) => {
+        const limit = request.query.limit ?? 50
+        const offset = request.query.offset ?? 0
+
+        const requests = await approvalService.list({
+          status: "PENDING",
+          limit,
+          offset,
+        })
+
+        let countQuery = approvalService.countQuery()
+        countQuery = countQuery.where("status", "=", "PENDING")
         const countResult = await countQuery.executeTakeFirstOrThrow()
         const total = Number(countResult.total)
 

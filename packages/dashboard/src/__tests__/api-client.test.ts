@@ -489,6 +489,8 @@ describe("API Client", () => {
         expect(apiErr.code).not.toBe("CONNECTION_REFUSED")
         expect(apiErr.isConnectionError).toBe(false)
         expect(apiErr.message).toContain("Unexpected response format")
+        // #438: error includes the endpoint path for diagnostics
+        expect(apiErr.message).toContain("/agents")
       }
     })
   })
