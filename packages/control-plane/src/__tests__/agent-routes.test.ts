@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { Database } from "../db/types.js"
 import type { AuthConfig } from "../middleware/types.js"
-import { agentRoutes } from "../routes/agents.js"
+import { agentRoutes, deriveLifecycleState } from "../routes/agents.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -651,5 +651,114 @@ describe("POST /agents/:id/jobs", () => {
 
     // Job is still created and returned with SCHEDULED status
     expect(res.statusCode).toBe(201)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: deriveLifecycleState (#426)
+// ---------------------------------------------------------------------------
+
+describe("deriveLifecycleState", () => {
+  it("returns READY for ACTIVE agent with no running job", () => {
+    expect(deriveLifecycleState("ACTIVE", false)).toBe("READY")
+  })
+
+  it("returns EXECUTING for ACTIVE agent with a running job", () => {
+    expect(deriveLifecycleState("ACTIVE", true)).toBe("EXECUTING")
+  })
+
+  it("returns DRAINING for DISABLED agent", () => {
+    expect(deriveLifecycleState("DISABLED", false)).toBe("DRAINING")
+  })
+
+  it("returns TERMINATED for ARCHIVED agent", () => {
+    expect(deriveLifecycleState("ARCHIVED", false)).toBe("TERMINATED")
+  })
+
+  it("returns READY for unknown status", () => {
+    expect(deriveLifecycleState("QUARANTINED" as never, false)).toBe("READY")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: lifecycle_state in API responses (#426)
+// ---------------------------------------------------------------------------
+
+describe("lifecycle_state in responses (#426)", () => {
+  it("GET /agents includes lifecycle_state READY for ACTIVE agent without running job", async () => {
+    const { app } = await buildTestApp({ agents: [makeAgent()] })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.lifecycle_state).toBe("READY")
+  })
+
+  it("GET /agents includes lifecycle_state EXECUTING when agent has running job", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent()],
+      jobs: [makeJob({ status: "RUNNING" })],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.lifecycle_state).toBe("EXECUTING")
+  })
+
+  it("GET /agents includes lifecycle_state DRAINING for DISABLED agent", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent({ status: "DISABLED" })],
+    })
+
+    const res = await app.inject({ method: "GET", url: "/agents" })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const agent = body.agents[0] as Record<string, unknown>
+    expect(agent.lifecycle_state).toBe("DRAINING")
+  })
+
+  it("GET /agents/:id includes lifecycle_state READY for ACTIVE agent", async () => {
+    const { app } = await buildTestApp({ agents: [makeAgent()] })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.lifecycle_state).toBe("READY")
+  })
+
+  it("GET /agents/:id includes lifecycle_state EXECUTING when running job exists", async () => {
+    const { app } = await buildTestApp({
+      agents: [makeAgent()],
+      jobs: [makeJob({ status: "RUNNING" })],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.lifecycle_state).toBe("EXECUTING")
   })
 })

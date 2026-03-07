@@ -135,7 +135,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   // Current lifecycle state
   const currentState: AgentLifecycleState = useMemo(() => {
     const lastState = transitions[transitions.length - 1]
-    return lastState?.state ?? agent?.lifecycle_state ?? "BOOTING"
+    return lastState?.state ?? agent?.lifecycle_state ?? "READY"
   }, [transitions, agent])
 
   // Resource metrics from events

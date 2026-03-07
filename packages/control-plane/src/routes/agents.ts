@@ -117,6 +117,34 @@ function mapAgentHealthStatus(status: AgentStatus): HealthStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Lifecycle state derivation (#426)
+// ---------------------------------------------------------------------------
+
+type DerivedLifecycleState = "READY" | "EXECUTING" | "DRAINING" | "TERMINATED"
+
+/**
+ * Derive a UI-facing lifecycle state from persisted agent status and whether
+ * the agent currently has a running job.  The lifecycle state machine lives
+ * in-memory during pod execution and is never persisted, so the API must
+ * synthesise a reasonable value for the dashboard.
+ */
+export function deriveLifecycleState(
+  status: AgentStatus,
+  hasRunningJob: boolean,
+): DerivedLifecycleState {
+  switch (status) {
+    case "ACTIVE":
+      return hasRunningJob ? "EXECUTING" : "READY"
+    case "DISABLED":
+      return "DRAINING"
+    case "ARCHIVED":
+      return "TERMINATED"
+    default:
+      return "READY"
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
 
@@ -207,12 +235,16 @@ export function agentRoutes(deps: AgentRouteDeps) {
           }
         }
 
-        const enrichedAgents = agents.map((a) => ({
-          ...a,
-          costToday: costMap.get(a.id) ?? 0,
-          healthStatus: mapAgentHealthStatus(a.status),
-          runningJobId: jobMap.get(a.id) ?? null,
-        }))
+        const enrichedAgents = agents.map((a) => {
+          const hasRunningJob = jobMap.has(a.id)
+          return {
+            ...a,
+            lifecycle_state: deriveLifecycleState(a.status, hasRunningJob),
+            costToday: costMap.get(a.id) ?? 0,
+            healthStatus: mapAgentHealthStatus(a.status),
+            runningJobId: jobMap.get(a.id) ?? null,
+          }
+        })
 
         return reply.status(200).send({
           agents: enrichedAgents,
@@ -321,6 +353,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
 
         return reply.status(200).send({
           ...agent,
+          lifecycle_state: deriveLifecycleState(agent.status, !!runningJob),
           latest_job: latestJob ?? null,
           costSummary: { totalToday, totalAllTime, byModel },
           healthStatus: mapAgentHealthStatus(agent.status),
