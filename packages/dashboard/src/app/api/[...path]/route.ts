@@ -24,6 +24,7 @@ async function proxyRequest(
   const init: RequestInit = {
     method: request.method,
     headers,
+    redirect: "manual",
   }
 
   // Forward body for non-GET/HEAD requests
