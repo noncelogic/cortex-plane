@@ -1,17 +1,22 @@
 /**
  * Agent lifecycle state machine.
  *
- * Defines the six lifecycle states of an agent pod and enforces
+ * Defines the lifecycle states of an agent pod and enforces
  * valid transitions between them. Modeled after the job state machine
  * (spike #24) but for the ephemeral pod process, not the durable job.
  *
- * States:
+ * Core states (happy path):
  * - BOOTING: container started, loading config, establishing DB connection
  * - HYDRATING: loading checkpoint, Qdrant context, JSONL buffer
  * - READY: hydration complete, probes pass, SSE connected
  * - EXECUTING: actively processing job steps
  * - DRAINING: SIGTERM received, flushing state, closing connections
  * - TERMINATED: process exited
+ *
+ * Resilience states (#266):
+ * - DEGRADED: executing with impaired subsystems (e.g. Qdrant unreachable)
+ * - QUARANTINED: frozen, no new jobs, operator intervention required
+ * - SAFE_MODE: booted with minimal config for debugging (no tools/memory)
  */
 
 export type AgentLifecycleState =
@@ -21,18 +26,33 @@ export type AgentLifecycleState =
   | "EXECUTING"
   | "DRAINING"
   | "TERMINATED"
+  | "DEGRADED"
+  | "QUARANTINED"
+  | "SAFE_MODE"
 
 /**
  * Valid state transitions for the agent lifecycle.
  * Each key maps to the set of states it can transition to.
+ *
+ * Resilience transitions (#266):
+ * - EXECUTING → DEGRADED: subsystem failure detected
+ * - EXECUTING → QUARANTINED: circuit breaker trips / operator quarantine
+ * - DEGRADED → EXECUTING: subsystem recovers
+ * - DEGRADED → QUARANTINED: further failures
+ * - DEGRADED → DRAINING / TERMINATED: shutdown / crash
+ * - QUARANTINED → DRAINING / TERMINATED: operator release / terminate
+ * - SAFE_MODE → READY / TERMINATED: minimal hydration complete / fatal error
  */
 export const VALID_TRANSITIONS: Record<AgentLifecycleState, AgentLifecycleState[]> = {
   BOOTING: ["HYDRATING", "TERMINATED"],
   HYDRATING: ["READY", "TERMINATED"],
   READY: ["EXECUTING", "DRAINING"],
-  EXECUTING: ["DRAINING", "TERMINATED"],
+  EXECUTING: ["DRAINING", "TERMINATED", "DEGRADED", "QUARANTINED"],
   DRAINING: ["TERMINATED"],
   TERMINATED: [],
+  DEGRADED: ["EXECUTING", "QUARANTINED", "DRAINING", "TERMINATED"],
+  QUARANTINED: ["DRAINING", "TERMINATED"],
+  SAFE_MODE: ["READY", "TERMINATED"],
 }
 
 export class InvalidTransitionError extends Error {
@@ -116,7 +136,7 @@ export class AgentLifecycleStateMachine {
 
   /** Check if the agent is in a state where readiness probes should return 200. */
   get isReady(): boolean {
-    return this._state === "READY" || this._state === "EXECUTING"
+    return this._state === "READY" || this._state === "EXECUTING" || this._state === "DEGRADED"
   }
 
   /** Check if the agent is in a state where liveness probes should return 200. */
@@ -127,5 +147,20 @@ export class AgentLifecycleStateMachine {
   /** Check if the agent is in a terminal state. */
   get isTerminal(): boolean {
     return this._state === "TERMINATED"
+  }
+
+  /** Check if the agent is executing with impaired subsystems. */
+  get isDegraded(): boolean {
+    return this._state === "DEGRADED"
+  }
+
+  /** Check if the agent is frozen pending operator intervention. */
+  get isQuarantined(): boolean {
+    return this._state === "QUARANTINED"
+  }
+
+  /** Check if the agent is booted in safe mode (no tools/memory). */
+  get isSafeMode(): boolean {
+    return this._state === "SAFE_MODE"
   }
 }

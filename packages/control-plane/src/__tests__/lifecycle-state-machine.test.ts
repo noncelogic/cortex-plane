@@ -18,6 +18,9 @@ describe("VALID_TRANSITIONS", () => {
       "EXECUTING",
       "DRAINING",
       "TERMINATED",
+      "DEGRADED",
+      "QUARANTINED",
+      "SAFE_MODE",
     ]
     for (const state of states) {
       expect(VALID_TRANSITIONS).toHaveProperty(state)
@@ -41,8 +44,13 @@ describe("VALID_TRANSITIONS", () => {
     expect(VALID_TRANSITIONS.READY).toEqual(["EXECUTING", "DRAINING"])
   })
 
-  it("EXECUTING can go to DRAINING or TERMINATED", () => {
-    expect(VALID_TRANSITIONS.EXECUTING).toEqual(["DRAINING", "TERMINATED"])
+  it("EXECUTING can go to DRAINING, TERMINATED, DEGRADED, or QUARANTINED", () => {
+    expect(VALID_TRANSITIONS.EXECUTING).toEqual([
+      "DRAINING",
+      "TERMINATED",
+      "DEGRADED",
+      "QUARANTINED",
+    ])
   })
 
   it("DRAINING can only go to TERMINATED", () => {

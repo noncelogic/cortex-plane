@@ -241,7 +241,11 @@ export class CrashLoopDetector {
  * States where readiness probes should return 200.
  * Only READY and EXECUTING agents are ready to serve.
  */
-export const READY_STATES: ReadonlySet<AgentLifecycleState> = new Set(["READY", "EXECUTING"])
+export const READY_STATES: ReadonlySet<AgentLifecycleState> = new Set([
+  "READY",
+  "EXECUTING",
+  "DEGRADED",
+])
 
 /**
  * States where liveness probes should return 200.

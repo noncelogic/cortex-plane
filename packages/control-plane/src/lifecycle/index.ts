@@ -1,4 +1,21 @@
 export {
+  type AbortDecision,
+  AgentCircuitBreaker,
+  type AgentCircuitBreakerConfig,
+  type AgentCircuitBreakerState,
+  DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG,
+  type QuarantineDecision,
+} from "./agent-circuit-breaker.js"
+export {
+  type BudgetResult,
+  type ComponentBudget,
+  type ContextBudgetConfig,
+  DEFAULT_CONTEXT_BUDGET,
+  type ExecutionContext,
+  truncateComponent,
+  validateContextBudget,
+} from "./context-budget.js"
+export {
   type AgentHealthRecord,
   type AgentHealthStatus,
   type AgentHeartbeat,
