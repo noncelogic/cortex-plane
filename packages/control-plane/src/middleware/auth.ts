@@ -28,7 +28,8 @@ const ROLE_MAP: Record<string, string[]> = {
 }
 
 const DEV_PRINCIPAL: Principal = {
-  userId: "dev-user",
+  // Must be UUID-like because DB/session paths expect user_account_id UUIDs.
+  userId: "00000000-0000-4000-8000-000000000001",
   roles: ["operator", "approver", "admin"],
   displayName: "Dev User (no auth configured)",
   authMethod: "api_key",

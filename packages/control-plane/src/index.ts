@@ -6,6 +6,7 @@ import { GatewayIntentBits } from "discord.js"
 
 import { buildApp } from "./app.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
+import { ChannelConfigService } from "./channels/channel-config-service.js"
 import { createMessageDispatch } from "./channels/message-dispatch.js"
 import { KyselyRouterDb } from "./channels/router-db.js"
 import { loadConfig } from "./config.js"
@@ -35,7 +36,61 @@ let channelSupervisor: ChannelSupervisor | undefined
 
 const registry = new ChannelAdapterRegistry()
 
-if (config.channels.telegram) {
+// Prefer DB-backed channel configs when encryption/auth key is available;
+// fall back to env-only config for bootstrap/dev.
+if (config.auth?.credentialMasterKey) {
+  const channelConfigService = new ChannelConfigService(db, config.auth.credentialMasterKey)
+  const enabledChannels = await channelConfigService.listEnabled()
+
+  for (const channel of enabledChannels) {
+    if (channel.type === "telegram") {
+      const botToken = String(channel.config.botToken ?? "")
+      if (!botToken) continue
+
+      const allowed = channel.config.allowedUsers
+      const allowedUsers = new Set<number>(
+        Array.isArray(allowed)
+          ? allowed
+              .map((v) => Number(v))
+              .filter((v) => Number.isInteger(v) && v > 0)
+          : [],
+      )
+
+      registry.register(
+        new TelegramAdapter({
+          botToken,
+          allowedUsers,
+        }),
+      )
+      continue
+    }
+
+    if (channel.type === "discord") {
+      const token = String(channel.config.token ?? "")
+      if (!token) continue
+
+      const guildIds = Array.isArray(channel.config.guildIds)
+        ? channel.config.guildIds.map((g) => String(g)).filter((g) => g.length > 0)
+        : []
+
+      registry.register(
+        new DiscordAdapter({
+          botToken: token,
+          applicationId: process.env.CHANNEL_DISCORD_APPLICATION_ID ?? "",
+          allowedGuilds: new Set(guildIds),
+          intents: [
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildMessages,
+            GatewayIntentBits.GuildMessageReactions,
+            GatewayIntentBits.MessageContent,
+          ],
+        }),
+      )
+    }
+  }
+}
+
+if (registry.getAll().length === 0 && config.channels.telegram) {
   const adapter = new TelegramAdapter({
     botToken: config.channels.telegram.botToken,
     allowedUsers: config.channels.telegram.allowedUsers,
@@ -43,7 +98,7 @@ if (config.channels.telegram) {
   registry.register(adapter)
 }
 
-if (config.channels.discord) {
+if (registry.getAll().length === 0 && config.channels.discord) {
   const adapter = new DiscordAdapter({
     botToken: config.channels.discord.token,
     applicationId: process.env.CHANNEL_DISCORD_APPLICATION_ID ?? "",

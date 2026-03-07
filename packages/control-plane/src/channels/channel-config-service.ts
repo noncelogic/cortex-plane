@@ -109,6 +109,18 @@ export class ChannelConfigService {
     config: ChannelConfigPlain,
     createdBy: string | null,
   ): Promise<ChannelConfigSummary> {
+    // Prevent ambiguous duplicate channel rows.
+    const existing = await this.db
+      .selectFrom("channel_config")
+      .select("id")
+      .where("type", "=", type)
+      .where("name", "=", name)
+      .executeTakeFirst()
+
+    if (existing) {
+      throw new Error(`Channel already exists for type='${type}' name='${name}'`)
+    }
+
     const configEnc = this.encryptConfig(config)
 
     const row = await this.db
@@ -153,6 +165,25 @@ export class ChannelConfigService {
 
   /** Delete a channel config. Returns true if deleted. */
   async delete(id: string): Promise<boolean> {
+    const channel = await this.db
+      .selectFrom("channel_config")
+      .select(["id", "type"])
+      .where("id", "=", id)
+      .executeTakeFirst()
+
+    if (!channel) return false
+
+    // Safety guard: do not allow deleting channel config while bindings of that type exist.
+    const inUse = await this.db
+      .selectFrom("agent_channel_binding")
+      .select((eb) => eb.fn.countAll<string>().as("total"))
+      .where("channel_type", "=", channel.type)
+      .executeTakeFirstOrThrow()
+
+    if (Number(inUse.total) > 0) {
+      throw new Error(`Cannot delete channel type='${channel.type}' while agent bindings exist`)
+    }
+
     const result = await this.db
       .deleteFrom("channel_config")
       .where("id", "=", id)
