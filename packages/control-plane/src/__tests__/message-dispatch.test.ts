@@ -3,6 +3,7 @@ import type { Kysely } from "kysely"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.js"
+import type { RateLimitDecision, UserRateLimiter } from "../auth/user-rate-limiter.js"
 import type { AgentChannelService } from "../channels/agent-channel-service.js"
 import { createMessageDispatch, watchJobCompletion } from "../channels/message-dispatch.js"
 import type { Database } from "../db/types.js"
@@ -139,6 +140,14 @@ function mockChannelAuthGuard(decision: AuthDecision) {
     }),
     resolveOrCreateIdentity: vi.fn(),
   } as unknown as ChannelAuthGuard
+}
+
+function mockUserRateLimiter(decision: RateLimitDecision) {
+  return {
+    check: vi.fn().mockResolvedValue(decision),
+    recordUsage: vi.fn().mockResolvedValue(undefined),
+    getUsageSummary: vi.fn(),
+  } as unknown as UserRateLimiter
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +648,198 @@ describe("ChannelAuthGuard integration", () => {
     await dispatch(makeRoutedMessage())
 
     // Job created normally without guard
+    expect(enqueueJob).toHaveBeenCalledWith("job-123")
+  })
+})
+
+describe("UserRateLimiter integration", () => {
+  it("blocks message when user exceeds rate limit", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: true,
+      userId: "user-111",
+      grantId: "grant-999",
+      reason: "granted",
+    })
+    const rateLimiter = mockUserRateLimiter({
+      allowed: false,
+      reason: "rate_limited",
+      replyToUser: "You've reached the message limit (60 per hour). Please try again later.",
+      retryAfterSeconds: 3600,
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      userRateLimiter: rateLimiter,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Rate limit reply sent
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: "You've reached the message limit (60 per hour). Please try again later.",
+    })
+
+    // No job created
+    expect(enqueueJob).not.toHaveBeenCalled()
+
+    // Blocked log entry
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "rate_limited" }),
+      "Message blocked by rate limiter",
+    )
+  })
+
+  it("blocks message when user exceeds token budget", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: true,
+      userId: "user-111",
+      grantId: "grant-999",
+      reason: "granted",
+    })
+    const rateLimiter = mockUserRateLimiter({
+      allowed: false,
+      reason: "budget_exceeded",
+      replyToUser:
+        "You've reached the token budget (100000 tokens per day). Please try again later.",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      userRateLimiter: rateLimiter,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: "You've reached the token budget (100000 tokens per day). Please try again later.",
+    })
+    expect(enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it("allows message through when rate limiter approves", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: true,
+      userId: "user-111",
+      grantId: "grant-999",
+      reason: "granted",
+    })
+    const rateLimiter = mockUserRateLimiter({
+      allowed: true,
+      reason: "allowed",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      userRateLimiter: rateLimiter,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Job created
+    expect(enqueueJob).toHaveBeenCalledWith("job-123")
+
+    // Rate limiter was called
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(rateLimiter.check).toHaveBeenCalledWith("user-111", "agent-aaa", undefined, undefined)
+  })
+
+  it("skips rate limiting when no auth guard is provided", async () => {
+    const rateLimiter = mockUserRateLimiter({
+      allowed: false,
+      reason: "rate_limited",
+      replyToUser: "Rate limited",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      // No channelAuthGuard — rate limiter should be skipped
+      userRateLimiter: rateLimiter,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Rate limiter never called (no auth decision)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(rateLimiter.check).not.toHaveBeenCalled()
+
+    // Job still created
+    expect(enqueueJob).toHaveBeenCalledWith("job-123")
+  })
+
+  it("skips rate limiting when auth grants without grantId", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: true,
+      userId: "user-111",
+      // No grantId — e.g. guard is permissive
+      reason: "granted",
+    })
+    const rateLimiter = mockUserRateLimiter({
+      allowed: false,
+      reason: "rate_limited",
+      replyToUser: "Rate limited",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      userRateLimiter: rateLimiter,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Rate limiter skipped — no grantId means no per-user limits apply
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(rateLimiter.check).not.toHaveBeenCalled()
+
+    // Job created
     expect(enqueueJob).toHaveBeenCalledWith("job-123")
   })
 })
