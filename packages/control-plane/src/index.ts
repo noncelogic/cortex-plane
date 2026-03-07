@@ -50,9 +50,7 @@ if (config.auth?.credentialMasterKey) {
       const allowed = channel.config.allowedUsers
       const allowedUsers = new Set<number>(
         Array.isArray(allowed)
-          ? allowed
-              .map((v) => Number(v))
-              .filter((v) => Number.isInteger(v) && v > 0)
+          ? allowed.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v > 0)
           : [],
       )
 
