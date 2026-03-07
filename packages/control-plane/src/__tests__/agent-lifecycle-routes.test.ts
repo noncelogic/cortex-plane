@@ -376,6 +376,86 @@ describe("POST /agents/:agentId/release", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Tests: POST /agents/:agentId/reset-health (#443)
+// ---------------------------------------------------------------------------
+
+describe("POST /agents/:agentId/reset-health", () => {
+  it("resets health for an existing agent", async () => {
+    const app = Fastify({ logger: false })
+
+    const agentRow = {
+      id: AGENT_ID,
+      status: "ACTIVE",
+      health_reset_at: new Date(),
+    }
+
+    const db = {
+      selectFrom: vi.fn(),
+      updateTable: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returningAll: vi.fn().mockReturnValue({
+              executeTakeFirst: vi.fn().mockResolvedValue(agentRow),
+            }),
+            execute: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      }),
+    } as unknown as Kysely<Database>
+
+    await app.register(
+      agentLifecycleRoutes({
+        db,
+        authConfig: DEV_AUTH_CONFIG,
+      }),
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/reset-health`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.agentId).toBe(AGENT_ID)
+    expect(body.healthResetAt).toBeDefined()
+  })
+
+  it("returns 404 when agent does not exist", async () => {
+    const app = Fastify({ logger: false })
+
+    const db = {
+      selectFrom: vi.fn(),
+      updateTable: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returningAll: vi.fn().mockReturnValue({
+              executeTakeFirst: vi.fn().mockResolvedValue(null),
+            }),
+            execute: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      }),
+    } as unknown as Kysely<Database>
+
+    await app.register(
+      agentLifecycleRoutes({
+        db,
+        authConfig: DEV_AUTH_CONFIG,
+      }),
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/reset-health`,
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error).toBe("not_found")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests: POST /agents/:agentId/boot?mode=safe
 // ---------------------------------------------------------------------------
 

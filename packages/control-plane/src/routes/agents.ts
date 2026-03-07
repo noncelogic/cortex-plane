@@ -617,7 +617,13 @@ export function agentRoutes(deps: AgentRouteDeps) {
         if (body.channel_permissions !== undefined)
           updateValues.channel_permissions = body.channel_permissions
         if (body.config !== undefined) updateValues.config = body.config
-        if (body.status !== undefined) updateValues.status = body.status
+        if (body.status !== undefined) {
+          updateValues.status = body.status
+          // Reset circuit breaker history when (re-)activating an agent (#443)
+          if (body.status === "ACTIVE") {
+            updateValues.health_reset_at = new Date()
+          }
+        }
 
         if (Object.keys(updateValues).length === 0) {
           return reply.status(400).send({ error: "bad_request", message: "No fields to update" })
