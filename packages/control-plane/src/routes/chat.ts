@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+
 /**
  * Chat Routes
  *
@@ -7,7 +8,6 @@ import { createHash } from "node:crypto"
  * Provides a REST interface for the same flow that channel adapters use:
  * session management → message storage → job creation → response relay.
  */
-
 import type { JobStatus } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
