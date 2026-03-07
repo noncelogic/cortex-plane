@@ -80,6 +80,7 @@ describe("PostgreSQL migrations", () => {
       expect(await enumExists(client, "job_status")).toBe(true)
       expect(await enumExists(client, "agent_status")).toBe(true)
       expect(await enumExists(client, "approval_status")).toBe(true)
+      expect(await enumExists(client, "tool_approval_policy")).toBe(true)
 
       // Verify tables exist
       expect(await tableExists(client, "agent")).toBe(true)
@@ -90,6 +91,10 @@ describe("PostgreSQL migrations", () => {
       expect(await tableExists(client, "memory_extract_message")).toBe(true)
       expect(await tableExists(client, "job")).toBe(true)
       expect(await tableExists(client, "approval_request")).toBe(true)
+      expect(await tableExists(client, "agent_tool_binding")).toBe(true)
+      expect(await tableExists(client, "capability_audit_log")).toBe(true)
+      expect(await tableExists(client, "tool_category")).toBe(true)
+      expect(await tableExists(client, "tool_category_membership")).toBe(true)
 
       // Verify job_status enum values
       const enumResult = await client.query<{ enumlabel: string }>(
@@ -255,6 +260,162 @@ describe("PostgreSQL migrations", () => {
 
       // Clean up
       await client.query("DELETE FROM user_account WHERE id = $1", [userId])
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 018: creates agent_tool_binding, capability_audit_log, tool_category tables and enum", async () => {
+    const client = await pool.connect()
+    try {
+      // Tables
+      expect(await tableExists(client, "agent_tool_binding")).toBe(true)
+      expect(await tableExists(client, "capability_audit_log")).toBe(true)
+      expect(await tableExists(client, "tool_category")).toBe(true)
+      expect(await tableExists(client, "tool_category_membership")).toBe(true)
+
+      // Enum
+      expect(await enumExists(client, "tool_approval_policy")).toBe(true)
+      const enumResult = await client.query<{ enumlabel: string }>(
+        `SELECT enumlabel FROM pg_enum
+         JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+         WHERE pg_type.typname = 'tool_approval_policy'
+         ORDER BY enumsortorder`,
+      )
+      expect(enumResult.rows.map((r) => r.enumlabel)).toEqual([
+        "auto",
+        "always_approve",
+        "conditional",
+      ])
+
+      // effective_capabilities column on agent
+      const colResult = await client.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'agent'
+            AND column_name = 'effective_capabilities'
+            AND data_type = 'jsonb'
+        )`,
+      )
+      expect(colResult.rows[0]?.exists).toBe(true)
+
+      // Deprecation comment on mcp_server.agent_scope
+      const commentResult = await client.query<{ description: string | null }>(
+        `SELECT col_description(c.oid, a.attnum) AS description
+         FROM pg_class c
+         JOIN pg_attribute a ON a.attrelid = c.oid
+         WHERE c.relname = 'mcp_server' AND a.attname = 'agent_scope'`,
+      )
+      expect(commentResult.rows[0]?.description).toContain("DEPRECATED")
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 018: enforces UNIQUE(agent_id, tool_ref) on agent_tool_binding", async () => {
+    const client = await pool.connect()
+    try {
+      const agentResult = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('uniq-agent', 'uniq-agent', 'test')
+         RETURNING id`,
+      )
+      const agentId = agentResult.rows[0]!.id
+
+      await client.query(
+        `INSERT INTO agent_tool_binding (agent_id, tool_ref) VALUES ($1, 'tool_a')`,
+        [agentId],
+      )
+
+      // Duplicate (agent_id, tool_ref) should fail
+      await expect(
+        client.query(`INSERT INTO agent_tool_binding (agent_id, tool_ref) VALUES ($1, 'tool_a')`, [
+          agentId,
+        ]),
+      ).rejects.toThrow(/unique|duplicate/i)
+
+      // Same tool_ref with different agent_id should succeed
+      const agent2Result = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('uniq-agent-2', 'uniq-agent-2', 'test')
+         RETURNING id`,
+      )
+      const agent2Id = agent2Result.rows[0]!.id
+
+      await expect(
+        client.query(`INSERT INTO agent_tool_binding (agent_id, tool_ref) VALUES ($1, 'tool_a')`, [
+          agent2Id,
+        ]),
+      ).resolves.toBeTruthy()
+
+      // Clean up
+      await client.query("DELETE FROM agent WHERE id IN ($1, $2)", [agentId, agent2Id])
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 018: CASCADE delete removes bindings when agent is deleted", async () => {
+    const client = await pool.connect()
+    try {
+      const agentResult = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('cascade-agent', 'cascade-agent', 'test')
+         RETURNING id`,
+      )
+      const agentId = agentResult.rows[0]!.id
+
+      await client.query(
+        `INSERT INTO agent_tool_binding (agent_id, tool_ref) VALUES ($1, 'tool_x'), ($1, 'tool_y')`,
+        [agentId],
+      )
+
+      // Verify bindings exist
+      const before = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM agent_tool_binding WHERE agent_id = $1`,
+        [agentId],
+      )
+      expect(before.rows[0]!.cnt).toBe("2")
+
+      // Delete the agent
+      await client.query("DELETE FROM agent WHERE id = $1", [agentId])
+
+      // Bindings should be gone
+      const after = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM agent_tool_binding WHERE agent_id = $1`,
+        [agentId],
+      )
+      expect(after.rows[0]!.cnt).toBe("0")
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 018: auto-updates updated_at on agent_tool_binding", async () => {
+    const client = await pool.connect()
+    try {
+      const agentResult = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('trigger-agent', 'trigger-agent', 'test')
+         RETURNING id`,
+      )
+      const agentId = agentResult.rows[0]!.id
+
+      const insertResult = await client.query<{ id: string; updated_at: Date }>(
+        `INSERT INTO agent_tool_binding (agent_id, tool_ref) VALUES ($1, 'tool_z')
+         RETURNING id, updated_at`,
+        [agentId],
+      )
+      const bindingId = insertResult.rows[0]!.id
+      const originalUpdatedAt = insertResult.rows[0]!.updated_at
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const updated = await client.query<{ updated_at: Date }>(
+        `UPDATE agent_tool_binding SET approval_policy = 'always_approve' WHERE id = $1
+         RETURNING updated_at`,
+        [bindingId],
+      )
+      expect(updated.rows[0]!.updated_at.getTime()).toBeGreaterThan(originalUpdatedAt.getTime())
+
+      // Clean up
+      await client.query("DELETE FROM agent WHERE id = $1", [agentId])
     } finally {
       client.release()
     }
@@ -458,10 +619,15 @@ describe("PostgreSQL migrations", () => {
       expect(await tableExists(client, "channel_mapping")).toBe(false)
       expect(await tableExists(client, "user_account")).toBe(false)
       expect(await tableExists(client, "agent")).toBe(false)
+      expect(await tableExists(client, "agent_tool_binding")).toBe(false)
+      expect(await tableExists(client, "capability_audit_log")).toBe(false)
+      expect(await tableExists(client, "tool_category")).toBe(false)
+      expect(await tableExists(client, "tool_category_membership")).toBe(false)
 
       expect(await enumExists(client, "job_status")).toBe(false)
       expect(await enumExists(client, "agent_status")).toBe(false)
       expect(await enumExists(client, "approval_status")).toBe(false)
+      expect(await enumExists(client, "tool_approval_policy")).toBe(false)
     } finally {
       client.release()
     }
