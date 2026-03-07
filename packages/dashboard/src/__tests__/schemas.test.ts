@@ -11,6 +11,15 @@ import { PaginationSchema } from "@/lib/schemas/common"
 import { ContentListResponseSchema, ContentPieceSchema } from "@/lib/schemas/content"
 import { JobDetailSchema, JobListResponseSchema, JobSummarySchema } from "@/lib/schemas/jobs"
 import { MemoryRecordSchema, MemorySearchResponseSchema } from "@/lib/schemas/memory"
+import {
+  BulkBindResponseSchema,
+  CapabilityAuditEntrySchema,
+  CapabilityAuditResponseSchema,
+  EffectiveToolSchema,
+  EffectiveToolsResponseSchema,
+  ToolBindingListResponseSchema,
+  ToolBindingSchema,
+} from "@/lib/schemas/tool-bindings"
 
 // ---------------------------------------------------------------------------
 // Common
@@ -429,5 +438,169 @@ describe("ScreenshotSchema", () => {
         fullUrl: "u",
       }),
     ).toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tool Bindings
+// ---------------------------------------------------------------------------
+
+const validBinding = {
+  id: "tb-001",
+  agentId: "agt-001",
+  toolRef: "my-server::search",
+  approvalPolicy: "auto" as const,
+  approvalCondition: null,
+  rateLimit: { maxCalls: 100, windowSeconds: 3600 },
+  costBudget: null,
+  dataScope: null,
+  enabled: true,
+  createdAt: "2026-03-01T00:00:00Z",
+  updatedAt: "2026-03-01T00:00:00Z",
+}
+
+describe("ToolBindingSchema", () => {
+  it("accepts a valid binding", () => {
+    expect(ToolBindingSchema.parse(validBinding).toolRef).toBe("my-server::search")
+  })
+
+  it("accepts all approval policies", () => {
+    for (const policy of ["auto", "always_approve", "conditional"] as const) {
+      const b = { ...validBinding, approvalPolicy: policy }
+      expect(ToolBindingSchema.parse(b).approvalPolicy).toBe(policy)
+    }
+  })
+
+  it("rejects invalid approval policy", () => {
+    expect(() => ToolBindingSchema.parse({ ...validBinding, approvalPolicy: "yolo" })).toThrow()
+  })
+
+  it("rejects missing toolRef", () => {
+    const { toolRef: _, ...rest } = validBinding
+    expect(() => ToolBindingSchema.parse(rest)).toThrow()
+  })
+})
+
+describe("ToolBindingListResponseSchema", () => {
+  it("accepts a valid list response", () => {
+    const data = { bindings: [validBinding], total: 1 }
+    expect(ToolBindingListResponseSchema.parse(data).total).toBe(1)
+  })
+
+  it("accepts empty list", () => {
+    expect(ToolBindingListResponseSchema.parse({ bindings: [], total: 0 }).bindings).toEqual([])
+  })
+})
+
+describe("BulkBindResponseSchema", () => {
+  it("accepts a valid bulk response", () => {
+    const data = {
+      created: 2,
+      bindings: [
+        {
+          id: "tb-1",
+          agentId: "agt-1",
+          toolRef: "s::t1",
+          approvalPolicy: "auto" as const,
+          enabled: true,
+          createdAt: "2026-03-01T00:00:00Z",
+        },
+        {
+          id: "tb-2",
+          agentId: "agt-1",
+          toolRef: "s::t2",
+          approvalPolicy: "auto" as const,
+          enabled: true,
+          createdAt: "2026-03-01T00:00:00Z",
+        },
+      ],
+    }
+    expect(BulkBindResponseSchema.parse(data).created).toBe(2)
+  })
+})
+
+describe("EffectiveToolSchema", () => {
+  it("accepts a valid effective tool", () => {
+    const tool = {
+      toolRef: "s::search",
+      bindingId: "tb-001",
+      approvalPolicy: "auto" as const,
+      approvalCondition: null,
+      rateLimit: null,
+      costBudget: null,
+      dataScope: null,
+    }
+    expect(EffectiveToolSchema.parse(tool).toolRef).toBe("s::search")
+  })
+})
+
+describe("EffectiveToolsResponseSchema", () => {
+  it("accepts a valid response", () => {
+    const data = {
+      tools: [
+        {
+          toolRef: "s::t",
+          bindingId: "b",
+          approvalPolicy: "auto" as const,
+          approvalCondition: null,
+          rateLimit: null,
+          costBudget: null,
+          dataScope: null,
+        },
+      ],
+      assembledAt: "2026-03-01T00:00:00Z",
+    }
+    expect(EffectiveToolsResponseSchema.parse(data).tools).toHaveLength(1)
+  })
+})
+
+describe("CapabilityAuditEntrySchema", () => {
+  it("accepts a valid entry", () => {
+    const entry = {
+      id: "ca-001",
+      agentId: "agt-001",
+      toolRef: "s::t",
+      eventType: "binding_created",
+      actorUserId: "user-1",
+      jobId: null,
+      details: { binding_id: "tb-001" },
+      createdAt: "2026-03-01T00:00:00Z",
+    }
+    expect(CapabilityAuditEntrySchema.parse(entry).eventType).toBe("binding_created")
+  })
+
+  it("accepts null actorUserId", () => {
+    const entry = {
+      id: "ca-002",
+      agentId: "agt-001",
+      toolRef: "s::t",
+      eventType: "tool_invoked",
+      actorUserId: null,
+      jobId: "job-1",
+      details: {},
+      createdAt: "2026-03-01T00:00:00Z",
+    }
+    expect(CapabilityAuditEntrySchema.parse(entry).actorUserId).toBeNull()
+  })
+})
+
+describe("CapabilityAuditResponseSchema", () => {
+  it("accepts a valid response", () => {
+    const data = {
+      entries: [
+        {
+          id: "ca-001",
+          agentId: "agt-001",
+          toolRef: "s::t",
+          eventType: "binding_created",
+          actorUserId: "u1",
+          jobId: null,
+          details: {},
+          createdAt: "2026-03-01T00:00:00Z",
+        },
+      ],
+      total: 1,
+    }
+    expect(CapabilityAuditResponseSchema.parse(data).total).toBe(1)
   })
 })

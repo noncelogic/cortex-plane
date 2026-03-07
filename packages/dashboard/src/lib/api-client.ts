@@ -62,6 +62,13 @@ import {
   ReleaseResponseSchema,
   ReplayResponseSchema,
 } from "./schemas/operations"
+import {
+  BulkBindResponseSchema,
+  CapabilityAuditResponseSchema,
+  EffectiveToolsResponseSchema,
+  ToolBindingListResponseSchema,
+  ToolBindingSchema,
+} from "./schemas/tool-bindings"
 
 // ---------------------------------------------------------------------------
 // Re-export types from schemas for backward compatibility
@@ -119,6 +126,12 @@ export type {
   ReleaseResponse,
   ReplayResponse,
 } from "./schemas/operations"
+export type {
+  CapabilityAuditEntry,
+  EffectiveTool,
+  ToolApprovalPolicy,
+  ToolBinding,
+} from "./schemas/tool-bindings"
 
 // ---------------------------------------------------------------------------
 // Request types (validated by schema on response side)
@@ -1246,4 +1259,108 @@ export async function updateChannelConfig(
 
 export async function deleteChannelConfig(id: string): Promise<unknown> {
   return apiFetch(`/channels/${id}`, { method: "DELETE", schema: z.unknown() })
+}
+
+// ---------------------------------------------------------------------------
+// Tool Bindings
+// ---------------------------------------------------------------------------
+
+export async function listToolBindings(
+  agentId: string,
+  params?: { enabled?: boolean; category?: string; limit?: number; offset?: number },
+): Promise<{
+  bindings: import("./schemas/tool-bindings").ToolBinding[]
+  total: number
+}> {
+  const search = new URLSearchParams()
+  if (params?.enabled !== undefined) search.set("enabled", String(params.enabled))
+  if (params?.category) search.set("category", params.category)
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/tool-bindings${qs ? `?${qs}` : ""}`, {
+    schema: ToolBindingListResponseSchema,
+  })
+}
+
+export async function createToolBinding(
+  agentId: string,
+  body: {
+    toolRef: string
+    approvalPolicy?: import("./schemas/tool-bindings").ToolApprovalPolicy
+    rateLimit?: Record<string, unknown> | null
+    dataScope?: Record<string, unknown> | null
+  },
+): Promise<import("./schemas/tool-bindings").ToolBinding> {
+  return apiFetch(`/agents/${agentId}/tool-bindings`, {
+    method: "POST",
+    body,
+    schema: ToolBindingSchema,
+  })
+}
+
+export async function updateToolBinding(
+  agentId: string,
+  bindingId: string,
+  body: {
+    approvalPolicy?: import("./schemas/tool-bindings").ToolApprovalPolicy
+    rateLimit?: Record<string, unknown> | null
+    dataScope?: Record<string, unknown> | null
+    enabled?: boolean
+  },
+): Promise<import("./schemas/tool-bindings").ToolBinding> {
+  return apiFetch(`/agents/${agentId}/tool-bindings/${bindingId}`, {
+    method: "PUT",
+    body,
+    schema: ToolBindingSchema,
+  })
+}
+
+export async function deleteToolBinding(agentId: string, bindingId: string): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/tool-bindings/${bindingId}`, {
+    method: "DELETE",
+    schema: z.unknown(),
+  })
+}
+
+export async function bulkBindTools(
+  agentId: string,
+  body: {
+    mcpServerId: string
+    toolRefs?: string[]
+    approvalPolicy?: import("./schemas/tool-bindings").ToolApprovalPolicy
+  },
+): Promise<import("zod").infer<typeof BulkBindResponseSchema>> {
+  return apiFetch(`/agents/${agentId}/tool-bindings/bulk`, {
+    method: "POST",
+    body,
+    schema: BulkBindResponseSchema,
+  })
+}
+
+export async function getEffectiveTools(agentId: string): Promise<{
+  tools: import("./schemas/tool-bindings").EffectiveTool[]
+  assembledAt: string
+}> {
+  return apiFetch(`/agents/${agentId}/effective-tools`, {
+    schema: EffectiveToolsResponseSchema,
+  })
+}
+
+export async function getCapabilityAudit(
+  agentId: string,
+  params?: { toolRef?: string; eventType?: string; limit?: number; offset?: number },
+): Promise<{
+  entries: import("./schemas/tool-bindings").CapabilityAuditEntry[]
+  total: number
+}> {
+  const search = new URLSearchParams()
+  if (params?.toolRef) search.set("toolRef", params.toolRef)
+  if (params?.eventType) search.set("eventType", params.eventType)
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/capability-audit${qs ? `?${qs}` : ""}`, {
+    schema: CapabilityAuditResponseSchema,
+  })
 }
