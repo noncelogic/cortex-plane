@@ -35,6 +35,10 @@ import {
   TraceStateSchema,
   TraceStopResponseSchema,
 } from "./schemas/browser"
+import {
+  ChannelConfigListResponseSchema,
+  ChannelConfigResponseSchema,
+} from "./schemas/channel-config"
 import { AgentChannelBindingListResponseSchema } from "./schemas/channels"
 import { ContentListResponseSchema } from "./schemas/content"
 import {
@@ -1193,4 +1197,53 @@ export async function releaseAgent(
     body: { ...(resetCircuitBreaker != null ? { resetCircuitBreaker } : {}) },
     schema: ReleaseResponseSchema,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Channel configuration endpoint functions
+// ---------------------------------------------------------------------------
+
+export type { ChannelConfigSummary } from "./schemas/channel-config"
+
+export async function listChannelConfigs(): Promise<{
+  channels: import("./schemas/channel-config").ChannelConfigSummary[]
+}> {
+  return apiFetch("/channels", { schema: ChannelConfigListResponseSchema })
+}
+
+export async function getChannelConfig(
+  id: string,
+): Promise<{ channel: import("./schemas/channel-config").ChannelConfigSummary }> {
+  return apiFetch(`/channels/${id}`, { schema: ChannelConfigResponseSchema })
+}
+
+export async function createChannelConfig(body: {
+  type: string
+  name: string
+  config: Record<string, unknown>
+}): Promise<{ channel: import("./schemas/channel-config").ChannelConfigSummary }> {
+  return apiFetch("/channels", {
+    method: "POST",
+    body,
+    schema: ChannelConfigResponseSchema,
+  })
+}
+
+export async function updateChannelConfig(
+  id: string,
+  body: {
+    name?: string
+    config?: Record<string, unknown>
+    enabled?: boolean
+  },
+): Promise<{ channel: import("./schemas/channel-config").ChannelConfigSummary }> {
+  return apiFetch(`/channels/${id}`, {
+    method: "PUT",
+    body,
+    schema: ChannelConfigResponseSchema,
+  })
+}
+
+export async function deleteChannelConfig(id: string): Promise<unknown> {
+  return apiFetch(`/channels/${id}`, { method: "DELETE", schema: z.unknown() })
 }

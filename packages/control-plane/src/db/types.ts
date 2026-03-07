@@ -819,6 +819,26 @@ export type AgentEvent = Selectable<AgentEventTable>
 export type NewAgentEvent = Insertable<AgentEventTable>
 
 // ---------------------------------------------------------------------------
+// Table: channel_config
+// ---------------------------------------------------------------------------
+export type ChannelType = "telegram" | "discord" | "whatsapp"
+
+export interface ChannelConfigTable {
+  id: Generated<string>
+  type: ChannelType
+  name: string
+  config_enc: string
+  enabled: ColumnType<boolean, boolean | undefined, boolean>
+  created_by: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type ChannelConfig = Selectable<ChannelConfigTable>
+export type NewChannelConfig = Insertable<ChannelConfigTable>
+export type ChannelConfigUpdate = Updateable<ChannelConfigTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -851,4 +871,5 @@ export interface Database {
   agent_user_grant: AgentUserGrantTable
   access_request: AccessRequestTable
   user_usage_ledger: UserUsageLedgerTable
+  channel_config: ChannelConfigTable
 }
