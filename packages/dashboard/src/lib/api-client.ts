@@ -904,7 +904,18 @@ export async function refreshMcpServer(id: string): Promise<unknown> {
 
 export type { ChannelMapping, UserAccount, UserGrant, UserUsageLedger } from "./schemas/users"
 
-import { UserDetailResponseSchema, UserUsageResponseSchema } from "./schemas/users"
+import {
+  AccessRequestListResponseSchema,
+  CreateGrantResponseSchema,
+  GeneratePairingCodeResponseSchema,
+  GrantListResponseSchema,
+  PairingCodeListResponseSchema,
+  PendingCountResponseSchema,
+  UserDetailResponseSchema,
+  UserUsageResponseSchema,
+} from "./schemas/users"
+
+export type { AccessRequest, PairingCode } from "./schemas/users"
 
 export async function getUser(
   userId: string,
@@ -928,6 +939,89 @@ export async function revokeUserGrant(agentId: string, grantId: string): Promise
   return apiFetch(`/agents/${agentId}/users/${grantId}`, {
     method: "DELETE",
     schema: z.unknown(),
+  })
+}
+
+export async function listAgentUsers(
+  agentId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<import("./schemas/users").GrantListResponse> {
+  const search = new URLSearchParams()
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/users${qs ? `?${qs}` : ""}`, {
+    schema: GrantListResponseSchema,
+  })
+}
+
+export async function createAgentUserGrant(
+  agentId: string,
+  body: {
+    user_account_id: string
+    access_level?: "read" | "write"
+  },
+): Promise<import("./schemas/users").CreateGrantResponse> {
+  return apiFetch(`/agents/${agentId}/users`, {
+    method: "POST",
+    body,
+    schema: CreateGrantResponseSchema,
+  })
+}
+
+export async function generatePairingCode(
+  agentId: string,
+): Promise<import("./schemas/users").GeneratePairingCodeResponse> {
+  return apiFetch(`/agents/${agentId}/pairing-codes`, {
+    method: "POST",
+    schema: GeneratePairingCodeResponseSchema,
+  })
+}
+
+export async function listPairingCodes(
+  agentId: string,
+): Promise<import("./schemas/users").PairingCodeListResponse> {
+  return apiFetch(`/agents/${agentId}/pairing-codes`, {
+    schema: PairingCodeListResponseSchema,
+  })
+}
+
+export async function revokePairingCode(agentId: string, codeId: string): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/pairing-codes/${codeId}`, {
+    method: "DELETE",
+    schema: z.unknown(),
+  })
+}
+
+export async function listAccessRequests(
+  agentId: string,
+  params?: { status?: string; limit?: number; offset?: number },
+): Promise<import("./schemas/users").AccessRequestListResponse> {
+  const search = new URLSearchParams()
+  if (params?.status) search.set("status", params.status)
+  if (params?.limit) search.set("limit", String(params.limit))
+  if (params?.offset) search.set("offset", String(params.offset))
+  const qs = search.toString()
+  return apiFetch(`/agents/${agentId}/access-requests${qs ? `?${qs}` : ""}`, {
+    schema: AccessRequestListResponseSchema,
+  })
+}
+
+export async function resolveAccessRequest(
+  agentId: string,
+  requestId: string,
+  body: { status: "approved" | "denied"; deny_reason?: string },
+): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/access-requests/${requestId}`, {
+    method: "PATCH",
+    body,
+    schema: z.unknown(),
+  })
+}
+
+export async function getPendingCounts(): Promise<import("./schemas/users").PendingCountResponse> {
+  return apiFetch(`/access-requests/pending-count`, {
+    schema: PendingCountResponseSchema,
   })
 }
 

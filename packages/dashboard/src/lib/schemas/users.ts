@@ -73,6 +73,104 @@ export const UserUsageLedgerSchema = z.object({
 export type UserUsageLedger = z.infer<typeof UserUsageLedgerSchema>
 
 // ---------------------------------------------------------------------------
+// Access request
+// ---------------------------------------------------------------------------
+
+export const AccessRequestSchema = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  user_account_id: z.string(),
+  channel_mapping_id: z.string().nullable(),
+  status: z.enum(["pending", "approved", "denied"]),
+  message_preview: z.string().nullable(),
+  deny_reason: z.string().nullable(),
+  created_at: z.string(),
+  resolved_at: z.string().nullable(),
+})
+
+export type AccessRequest = z.infer<typeof AccessRequestSchema>
+
+// ---------------------------------------------------------------------------
+// Pairing code
+// ---------------------------------------------------------------------------
+
+export const PairingCodeSchema = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  code: z.string(),
+  generated_by: z.string().nullable(),
+  created_at: z.string(),
+  expires_at: z.string(),
+  redeemed_at: z.string().nullable(),
+  redeemed_by: z.string().nullable(),
+})
+
+export type PairingCode = z.infer<typeof PairingCodeSchema>
+
+// ---------------------------------------------------------------------------
+// GET /agents/:agentId/users response
+// ---------------------------------------------------------------------------
+
+export const GrantListResponseSchema = z.object({
+  grants: z.array(UserGrantSchema),
+  total: z.number(),
+})
+
+export type GrantListResponse = z.infer<typeof GrantListResponseSchema>
+
+// ---------------------------------------------------------------------------
+// POST /agents/:agentId/users response
+// ---------------------------------------------------------------------------
+
+export const CreateGrantResponseSchema = z.object({
+  grant: UserGrantSchema,
+})
+
+export type CreateGrantResponse = z.infer<typeof CreateGrantResponseSchema>
+
+// ---------------------------------------------------------------------------
+// GET /agents/:agentId/access-requests response
+// ---------------------------------------------------------------------------
+
+export const AccessRequestListResponseSchema = z.object({
+  requests: z.array(AccessRequestSchema),
+  total: z.number(),
+})
+
+export type AccessRequestListResponse = z.infer<typeof AccessRequestListResponseSchema>
+
+// ---------------------------------------------------------------------------
+// POST /agents/:agentId/pairing-codes response
+// ---------------------------------------------------------------------------
+
+export const GeneratePairingCodeResponseSchema = z.object({
+  code: z.string(),
+  expiresAt: z.string(),
+})
+
+export type GeneratePairingCodeResponse = z.infer<typeof GeneratePairingCodeResponseSchema>
+
+// ---------------------------------------------------------------------------
+// GET /agents/:agentId/pairing-codes response
+// ---------------------------------------------------------------------------
+
+export const PairingCodeListResponseSchema = z.object({
+  codes: z.array(PairingCodeSchema),
+})
+
+export type PairingCodeListResponse = z.infer<typeof PairingCodeListResponseSchema>
+
+// ---------------------------------------------------------------------------
+// GET /access-requests/pending-count response
+// ---------------------------------------------------------------------------
+
+export const PendingCountResponseSchema = z.object({
+  counts: z.record(z.string(), z.number()),
+})
+
+export type PendingCountResponse = z.infer<typeof PendingCountResponseSchema>
+
+// ---------------------------------------------------------------------------
 // GET /users/:id response
 // ---------------------------------------------------------------------------
 
