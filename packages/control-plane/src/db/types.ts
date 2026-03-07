@@ -154,6 +154,9 @@ export interface SessionTable {
     Record<string, unknown> | null | undefined,
     Record<string, unknown> | null
   >
+  total_tokens_in: ColumnType<number, number | undefined, number>
+  total_tokens_out: ColumnType<number, number | undefined, number>
+  total_cost_usd: ColumnType<string, string | number | undefined, string | number>
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, never>
 }
@@ -236,6 +239,13 @@ export interface JobTable {
   completed_at: Date | null
   heartbeat_at: Date | null
   approval_expires_at: Date | null
+  tokens_in: ColumnType<number, number | undefined, number>
+  tokens_out: ColumnType<number, number | undefined, number>
+  cost_usd: ColumnType<string, string | number | undefined, string | number>
+  tool_call_count: ColumnType<number, number | undefined, number>
+  llm_call_count: ColumnType<number, number | undefined, number>
+  parent_job_id: string | null
+  delegation_depth: ColumnType<number, number | undefined, number>
 }
 
 export type Job = Selectable<JobTable>
@@ -719,19 +729,50 @@ export type NewAccessRequest = Insertable<AccessRequestTable>
 export type AccessRequestUpdate = Updateable<AccessRequestTable>
 
 // ---------------------------------------------------------------------------
+// Enum: agent_event_type
+// ---------------------------------------------------------------------------
+export type AgentEventType =
+  | "llm_call_start"
+  | "llm_call_end"
+  | "tool_call_start"
+  | "tool_call_end"
+  | "tool_denied"
+  | "tool_rate_limited"
+  | "message_received"
+  | "message_sent"
+  | "state_transition"
+  | "circuit_breaker_trip"
+  | "cost_alert"
+  | "steer_injected"
+  | "steer_acknowledged"
+  | "kill_requested"
+  | "checkpoint_created"
+  | "error"
+  | "session_start"
+  | "session_end"
+
+// ---------------------------------------------------------------------------
 // Table: agent_event
 // ---------------------------------------------------------------------------
 export interface AgentEventTable {
   id: Generated<string>
   agent_id: string
+  session_id: string | null
   job_id: string | null
+  parent_event_id: string | null
   event_type: string
-  cost_usd: ColumnType<string | null, string | number | null | undefined, string | number | null>
-  details: ColumnType<
+  payload: ColumnType<
     Record<string, unknown>,
     Record<string, unknown> | undefined,
     Record<string, unknown>
   >
+  tokens_in: number | null
+  tokens_out: number | null
+  cost_usd: ColumnType<string | null, string | number | null | undefined, string | number | null>
+  duration_ms: number | null
+  model: string | null
+  tool_ref: string | null
+  actor: string | null
   created_at: ColumnType<Date, Date | undefined, never>
 }
 

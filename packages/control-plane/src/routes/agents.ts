@@ -291,7 +291,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
           if (new Date(e.created_at).getTime() >= todayStart.getTime()) {
             totalToday += cost
           }
-          const detailModel = e.details?.model
+          const detailModel = e.payload?.model
           const model = typeof detailModel === "string" ? detailModel : "unknown"
           if (cost > 0) {
             byModel[model] = (byModel[model] ?? 0) + cost
@@ -306,7 +306,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
           if (t === "error" || t === "tool_error" || t === "llm_error") {
             consecutiveFailures++
             if (!tripReason) {
-              const reason = e.details?.reason
+              const reason = e.payload?.reason
               tripReason = typeof reason === "string" ? reason : t
             }
           } else {
