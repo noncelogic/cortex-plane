@@ -66,7 +66,7 @@ function makeAgentEvent(overrides: Record<string, unknown> = {}) {
     job_id: null,
     event_type: "llm_call",
     cost_usd: "0.005000",
-    details: { model: "claude-3-sonnet" },
+    payload: { model: "claude-3-sonnet" },
     created_at: new Date(),
     ...overrides,
   }
@@ -303,11 +303,11 @@ describe("GET /agents/:id", () => {
     const { app } = await buildTestApp({
       agents: [makeAgent()],
       agentEvents: [
-        makeAgentEvent({ cost_usd: "0.010000", details: { model: "claude-3-opus" } }),
+        makeAgentEvent({ cost_usd: "0.010000", payload: { model: "claude-3-opus" } }),
         makeAgentEvent({
           id: "event-2",
           cost_usd: "0.005000",
-          details: { model: "claude-3-sonnet" },
+          payload: { model: "claude-3-sonnet" },
         }),
       ],
       jobs: [makeJob({ status: "RUNNING" })],
@@ -343,10 +343,10 @@ describe("GET /agents/:id", () => {
           id: "e1",
           event_type: "error",
           cost_usd: "0",
-          details: { reason: "timeout" },
+          payload: { reason: "timeout" },
         }),
-        makeAgentEvent({ id: "e2", event_type: "tool_error", cost_usd: "0", details: {} }),
-        makeAgentEvent({ id: "e3", event_type: "error", cost_usd: "0", details: {} }),
+        makeAgentEvent({ id: "e2", event_type: "tool_error", cost_usd: "0", payload: {} }),
+        makeAgentEvent({ id: "e3", event_type: "error", cost_usd: "0", payload: {} }),
       ],
     })
 
@@ -369,9 +369,9 @@ describe("GET /agents/:id", () => {
     const { app } = await buildTestApp({
       agents: [makeAgent()],
       agentEvents: [
-        makeAgentEvent({ id: "e1", cost_usd: "0.010000", details: { model: "claude-3-opus" } }),
-        makeAgentEvent({ id: "e2", cost_usd: "0.002000", details: { model: "claude-3-opus" } }),
-        makeAgentEvent({ id: "e3", cost_usd: "0.005000", details: { model: "claude-3-sonnet" } }),
+        makeAgentEvent({ id: "e1", cost_usd: "0.010000", payload: { model: "claude-3-opus" } }),
+        makeAgentEvent({ id: "e2", cost_usd: "0.002000", payload: { model: "claude-3-opus" } }),
+        makeAgentEvent({ id: "e3", cost_usd: "0.005000", payload: { model: "claude-3-sonnet" } }),
       ],
     })
 

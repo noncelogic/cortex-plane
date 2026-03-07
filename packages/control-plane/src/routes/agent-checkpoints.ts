@@ -328,7 +328,7 @@ export function agentCheckpointRoutes(deps: AgentCheckpointRouteDeps) {
             agent_id: agentId,
             job_id: latestJob?.id ?? null,
             event_type: "rollback",
-            details: {
+            payload: {
               checkpoint_id: checkpointId,
               restored_by: principal.userId,
               restore_context: restoreContext ?? false,
