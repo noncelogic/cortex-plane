@@ -181,6 +181,13 @@ function SettingsInner() {
   const getCredentialForProvider = (providerId: string) =>
     credentials.find((c) => c.provider === providerId)
 
+  // Only show LLM providers in the "Connected Providers" section.
+  // User services (google-workspace, github-user, slack-user) and
+  // tool-specific providers (brave) are managed separately.
+  const llmProviders = providers.filter(
+    (p) => !p.credentialClass || p.credentialClass === "llm_provider",
+  )
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -243,7 +250,7 @@ function SettingsInner() {
         )}
 
         <div className="mt-4 space-y-3">
-          {providers.map((p) => {
+          {llmProviders.map((p) => {
             const cred = getCredentialForProvider(p.id)
             const isOAuth = p.authType === "oauth"
             const isCodePaste = CODE_PASTE_PROVIDER_IDS.has(p.id)
@@ -324,9 +331,9 @@ function SettingsInner() {
             )
           })}
 
-          {providers.length === 0 && (
+          {llmProviders.length === 0 && (
             <p className="py-4 text-center text-sm text-text-muted">
-              No providers configured. Configure provider credentials in the control plane.
+              No LLM providers configured. Configure provider credentials in the control plane.
             </p>
           )}
         </div>
