@@ -399,6 +399,108 @@ describe("GET /operators/activity-stream", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Tests: GET /events — cross-agent event feed
+// ---------------------------------------------------------------------------
+
+describe("GET /events", () => {
+  it("returns 200 with events and total", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/events",
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.events).toBeDefined()
+    expect(Array.isArray(body.events)).toBe(true)
+    expect(body.total).toBeDefined()
+  })
+
+  it("accepts agentIds filter", async () => {
+    const { app, db } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/events?agentIds=${AGENT_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.selectFrom).toHaveBeenCalled()
+  })
+
+  it("accepts eventTypes filter", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/events?eventTypes=llm_call_end,tool_call_end",
+    })
+
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("accepts since and until date filters", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/events?since=2026-03-07T00:00:00Z&until=2026-03-08T00:00:00Z",
+    })
+
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("accepts limit and offset pagination", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/events?limit=10&offset=5",
+    })
+
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects limit > 200", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/events?limit=201",
+    })
+
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("rejects negative offset", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/events?offset=-1",
+    })
+
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("requires auth when requireAuth is true", async () => {
+    const { app } = await buildTestApp({
+      authConfig: { requireAuth: true, apiKeys: [] },
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/events",
+    })
+
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests: Auth role enforcement
 // ---------------------------------------------------------------------------
 

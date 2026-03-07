@@ -2,7 +2,7 @@
 
 **Issue:** #265
 **Epic:** #320
-**Status:** Proposed
+**Status:** Implemented
 **Authors:** Joe Graham, Hessian
 **Date:** 2026-03-03
 **Depends on:** [Agent Capability Model](./agent-capabilities.md) (#264), [Agent Lifecycle & Resilience](./agent-lifecycle.md) (#266)
@@ -771,24 +771,20 @@ abortController.abort()
 
 ## 12. API Surface Summary
 
-### 12.1 New Endpoints
+### 12.1 Endpoints (All Implemented)
 
 ```
-GET    /agents/:agentId/events/stream    — SSE activity stream
-GET    /agents/:agentId/events           — Historical event query
+GET    /operators/activity-stream         — SSE activity stream (all agents)
 GET    /events                            — Cross-agent event feed (admin)
-POST   /agents/:agentId/kill             — Kill switch
-POST   /agents/:agentId/replay           — Replay from checkpoint
-```
-
-### 12.2 Existing Endpoints (Already Implemented)
-
-```
-POST   /agents/:agentId/dry-run          — Simulate turn (#329)
+GET    /agents/:agentId/events            — Historical event query (operator)
+GET    /agents/:agentId/cost              — Cost aggregation (operator)
+POST   /agents/:agentId/kill             — Kill switch (operator)
+POST   /agents/:agentId/replay           — Replay from checkpoint (admin)
+POST   /agents/:agentId/dry-run          — Simulate turn (operator)
 POST   /agents/:agentId/pause            — Pause execution
 POST   /agents/:agentId/resume           — Resume from checkpoint
-POST   /agents/:agentId/steer            — Steering injection (#327)
-GET    /agents                            — List with cost + health (#332)
+POST   /agents/:agentId/steer            — Steering injection (operator)
+GET    /agents                            — List with cost + health
 ```
 
 ### 12.3 Endpoints from Related Epics
@@ -810,41 +806,39 @@ POST   /agents/:agentId/rollback         — Restore checkpoint (#266)
 
 | # | Ticket | Issue | Size | Status | Dependencies |
 |---|--------|-------|------|--------|-------------|
-| T1 | DB migration — `agent_event` table + job/session cost columns | #321 | M | Done (migration 021) | None |
-| T2 | AgentEventEmitter service — persist + broadcast events | #322 | L | Open | T1 |
-| T3 | CostTracker service — estimation, accumulation, budget enforcement | #323 | L | Open | T1, T2 |
-| T4 | Wire event emitter + cost tracker into agent-execute | #324 | M | Open | T2, T3 |
-| T5 | Activity stream SSE + event query REST endpoints | #325 | M | Open | T2 |
-| T6 | Kill switch — immediate execution cancellation | #326 | M | Open | T4 |
+| T1 | DB migration — `agent_event` table + job/session cost columns | #321 | M | **Done** (migration 021, 025) | None |
+| T2 | AgentEventEmitter service — persist + broadcast events | #322 | L | **Done** | T1 |
+| T3 | CostTracker service — estimation, accumulation, budget enforcement | #323 | L | **Done** | T1, T2 |
+| T4 | Wire event emitter + cost tracker into agent-execute | #324 | M | **Done** | T2, T3 |
+| T5 | Activity stream SSE + event query REST endpoints | #325 | M | **Done** | T2 |
+| T6 | Kill switch — immediate execution cancellation | #326 | M | **Done** | T4 |
 | T7 | Enhanced steer — acknowledgment + operator feedback loop | #327 | S | **Done** | T2, T4 |
-| T8 | Replay — re-run from checkpoint with modifications | #328 | M | Open | #266-T6, #266-T7 |
+| T8 | Replay — re-run from checkpoint with modifications | #328 | M | **Done** | #266-T6, #266-T7 |
 | T9 | Dry run — simulate agent turn without tool execution | #329 | S | **Done** | T2, T3 |
 | T10 | Event retention pruning task | #330 | S | **Done** | T1 |
-| T11 | Dashboard — operations page + agent operations tab | #331 | L | Open | T5, T6, T7, T9 |
+| T11 | Dashboard — operations page + agent operations tab | #331 | L | **Done** | T5, T6, T7, T9 |
 | T12 | Extend GET /agents with cost + health summary fields | #332 | S | **Done** | T1, T3 |
 
 ### Dependency Graph
 
 ```
 T1 (migration) ✓
-├── T2 (event emitter)
-│   ├── T3 (cost tracker)
-│   │   ├── T4 (wire into agent-execute)
-│   │   │   ├── T6 (kill switch)
+├── T2 (event emitter) ✓
+│   ├── T3 (cost tracker) ✓
+│   │   ├── T4 (wire into agent-execute) ✓
+│   │   │   ├── T6 (kill switch) ✓
 │   │   │   └── T7 (enhanced steer) ✓
 │   │   └── T12 (extend /agents API) ✓
-│   ├── T5 (SSE + REST endpoints)
+│   ├── T5 (SSE + REST endpoints) ✓
 │   └── T9 (dry run) ✓
 ├── T10 (event pruning) ✓
 
-T8 (replay)                           ← #266-T6, #266-T7
+T8 (replay) ✓                        ← #266-T6, #266-T7
 
-T11 (dashboard)                       ← T5, T6, T7, T9
+T11 (dashboard) ✓                    ← T5, T6, T7, T9
 ```
 
-**Critical path:** T2 → T3 → T4 → T6 → T11
-
-**Next tickets to implement:** T2 (AgentEventEmitter) and T5 (activity stream endpoints) can proceed in parallel.
+All tickets complete.
 
 ---
 
