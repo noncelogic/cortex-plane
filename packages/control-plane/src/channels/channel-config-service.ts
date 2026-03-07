@@ -167,31 +167,33 @@ export class ChannelConfigService {
 
   /** Delete a channel config. Returns true if deleted. */
   async delete(id: string): Promise<boolean> {
-    const channel = await this.db
-      .selectFrom("channel_config")
-      .select(["id", "type"])
-      .where("id", "=", id)
-      .executeTakeFirst()
-
-    if (!channel) return false
-
-    // Safety guard: do not allow deleting channel config while bindings of that type exist.
-    const inUse = await this.db
-      .selectFrom("agent_channel_binding")
-      .select((eb) => eb.fn.countAll<string>().as("total"))
-      .where("channel_type", "=", channel.type)
-      .executeTakeFirstOrThrow()
-
-    if (Number(inUse.total) > 0) {
-      throw new Error(`Cannot delete channel type='${channel.type}' while agent bindings exist`)
-    }
-
     const result = await this.db
       .deleteFrom("channel_config")
       .where("id", "=", id)
       .executeTakeFirst()
 
     return Number(result.numDeletedRows) > 0
+  }
+
+  /** Return agent bindings for a given channel type. */
+  async getBindingsByChannelType(
+    channelType: string,
+  ): Promise<{ agent_id: string; chat_id: string }[]> {
+    return this.db
+      .selectFrom("agent_channel_binding")
+      .select(["agent_id", "chat_id"])
+      .where("channel_type", "=", channelType)
+      .execute()
+  }
+
+  /** Remove all agent bindings for a channel type (for force-delete). */
+  async removeBindingsByChannelType(channelType: string): Promise<number> {
+    const result = await this.db
+      .deleteFrom("agent_channel_binding")
+      .where("channel_type", "=", channelType)
+      .executeTakeFirst()
+
+    return Number(result.numDeletedRows)
   }
 
   // ---------------------------------------------------------------------------

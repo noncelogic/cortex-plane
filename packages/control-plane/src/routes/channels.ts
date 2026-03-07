@@ -29,6 +29,10 @@ interface ChannelIdParams {
   id: string
 }
 
+interface DeleteChannelQuery {
+  force?: string
+}
+
 interface CreateChannelBody {
   type: string
   name: string
@@ -177,7 +181,7 @@ export function channelRoutes(deps: ChannelRouteDeps) {
     // -----------------------------------------------------------------
     // DELETE /channels/:id — Remove a channel config
     // -----------------------------------------------------------------
-    app.delete<{ Params: ChannelIdParams }>(
+    app.delete<{ Params: ChannelIdParams; Querystring: DeleteChannelQuery }>(
       "/channels/:id",
       {
         preHandler: [requireAuth, requireOperator],
@@ -187,10 +191,39 @@ export function channelRoutes(deps: ChannelRouteDeps) {
             properties: { id: { type: "string" } },
             required: ["id"],
           },
+          querystring: {
+            type: "object",
+            properties: { force: { type: "string" } },
+          },
         },
       },
-      async (request: FastifyRequest<{ Params: ChannelIdParams }>, reply: FastifyReply) => {
-        const deleted = await service.delete(request.params.id)
+      async (
+        request: FastifyRequest<{ Params: ChannelIdParams; Querystring: DeleteChannelQuery }>,
+        reply: FastifyReply,
+      ) => {
+        const { id } = request.params
+        const force = request.query.force === "true"
+
+        const channel = await service.getById(id)
+        if (!channel) {
+          return reply.status(404).send({ error: "not_found", message: "Channel config not found" })
+        }
+
+        const bindings = await service.getBindingsByChannelType(channel.type)
+        if (bindings.length > 0 && !force) {
+          const agentIds = [...new Set(bindings.map((b) => b.agent_id))]
+          return reply.status(409).send({
+            error: "conflict",
+            message: `Cannot delete channel '${channel.name}': ${agentIds.length} agent(s) bound to channel type '${channel.type}'`,
+            bound_agents: agentIds,
+          })
+        }
+
+        if (bindings.length > 0) {
+          await service.removeBindingsByChannelType(channel.type)
+        }
+
+        const deleted = await service.delete(id)
         if (!deleted) {
           return reply.status(404).send({ error: "not_found", message: "Channel config not found" })
         }
