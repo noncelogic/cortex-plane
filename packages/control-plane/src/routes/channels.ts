@@ -102,6 +102,14 @@ export function channelRoutes(deps: ChannelRouteDeps) {
           })
         }
 
+        const existing = await service.findByTypeName(type as ChannelType, name)
+        if (existing) {
+          return reply.status(409).send({
+            error: "conflict",
+            message: `A ${type} channel named '${name}' already exists`,
+          })
+        }
+
         const channel = await service.create(type as ChannelType, name, config, null)
         return reply.status(201).send({ channel })
       },

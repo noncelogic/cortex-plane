@@ -107,6 +107,27 @@ describe("ChannelConfigService", () => {
     })
   })
 
+  describe("findByTypeName", () => {
+    it("returns a summary when a match exists", async () => {
+      const db = mockDb()
+      const service = new ChannelConfigService(db, MASTER_KEY)
+
+      const result = await service.findByTypeName("telegram", "My Telegram Bot")
+
+      expect(result).toBeDefined()
+      expect(result!.type).toBe("telegram")
+    })
+
+    it("returns undefined when no match", async () => {
+      const db = mockDb({ selectRows: [] })
+      const service = new ChannelConfigService(db, MASTER_KEY)
+
+      const result = await service.findByTypeName("telegram", "Nonexistent")
+
+      expect(result).toBeUndefined()
+    })
+  })
+
   describe("getById", () => {
     it("returns a summary when found", async () => {
       const db = mockDb()
