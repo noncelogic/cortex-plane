@@ -168,9 +168,7 @@ describe("MessageRouter", () => {
       expect(dc.onMessage).toHaveBeenCalledOnce()
 
       // Simulate inbound message from the new adapter — trigger the bound handler
-      const boundHandler = dc.onMessage.mock.calls[0]![0] as (
-        msg: InboundMessage,
-      ) => Promise<void>
+      const boundHandler = dc.onMessage.mock.calls[0]![0] as (msg: InboundMessage) => Promise<void>
       const msg = makeInbound({ channelType: "discord", channelUserId: "dc-user-1" })
       await boundHandler(msg)
 
