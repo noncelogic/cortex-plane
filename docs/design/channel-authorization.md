@@ -1,7 +1,7 @@
 # Channel Authorization — Design Document
 
 **Issue:** #268
-**Status:** Proposed
+**Status:** Implemented
 **Authors:** Joe Graham, Hessian
 **Date:** 2026-03-07
 **Depends on:** [Agent Capability Model](./agent-capabilities.md) (#264), [Operator Dashboard](./operator-dashboard.md) (#267)
@@ -442,6 +442,17 @@ Linked from the grant list. Shows:
 ---
 
 ## 10. Implementation Tickets
+
+| Ticket | Title | Issue | Size | Status | Dependencies |
+|--------|-------|-------|------|--------|-------------|
+| T1 | Authorization check in message dispatch | #335, #338 | M | **Done** | None |
+| T2 | Per-user rate limiting enforcement | #339 | S | **Done** | T1 |
+| T3 | Per-user token budget enforcement | #339 | S | **Done** | T1 |
+| T4 | Adapter simplification — remove env var allow lists | #338 | S | **Done** | T1 |
+| T5 | Agent user management API routes | #340 | M | **Done** | T1 |
+| T6 | Auto-create anonymous user accounts in dispatch | #335 | S | **Done** | None |
+| T7 | Account merge on dashboard authentication | — | M | **Deferred** | T6 |
+| T8 | Dashboard — Users tab on agent detail | #341, #342 | L | **Done** | T5 |
 
 ### T1: Authorization check in message dispatch (#333-T1)
 

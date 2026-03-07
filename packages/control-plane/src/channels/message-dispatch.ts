@@ -18,7 +18,8 @@ import type { MessageRouter, RoutedMessage } from "@cortex/shared/channels"
 import type { Kysely } from "kysely"
 
 import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.js"
-import type { Database } from "../db/types.js"
+import type { UserRateLimiter } from "../auth/user-rate-limiter.js"
+import type { Database, RateLimit, TokenBudget } from "../db/types.js"
 import type { AgentChannelService } from "./agent-channel-service.js"
 
 /** Pattern matching pairing codes (6-char uppercase alphanumeric). */
@@ -30,6 +31,7 @@ export interface MessageDispatchDeps {
   router: MessageRouter
   enqueueJob: (jobId: string) => Promise<void>
   channelAuthGuard?: ChannelAuthGuard
+  userRateLimiter?: UserRateLimiter
   logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }
 }
 
@@ -57,7 +59,15 @@ const TERMINAL_STATUSES: ReadonlySet<string> = new Set<JobStatus>([
 export function createMessageDispatch(
   deps: MessageDispatchDeps,
 ): (msg: RoutedMessage) => Promise<void> {
-  const { db, agentChannelService, router, enqueueJob, channelAuthGuard, logger = console } = deps
+  const {
+    db,
+    agentChannelService,
+    router,
+    enqueueJob,
+    channelAuthGuard,
+    userRateLimiter,
+    logger = console,
+  } = deps
 
   return async function dispatch(routed: RoutedMessage): Promise<void> {
     const { channelType, chatId } = routed.message
@@ -105,6 +115,37 @@ export function createMessageDispatch(
         logger.info(
           { agentId, channelType, chatId, reason: authDecision.reason },
           "Message blocked by ChannelAuthGuard",
+        )
+        return
+      }
+    }
+
+    // ── Per-user rate limit & token budget enforcement ──────────────────
+    if (userRateLimiter && authDecision?.allowed && authDecision.grantId) {
+      // Fetch grant's rate_limit and token_budget for cascade resolution
+      const grant = await db
+        .selectFrom("agent_user_grant")
+        .select(["rate_limit", "token_budget"])
+        .where("id", "=", authDecision.grantId)
+        .executeTakeFirst()
+
+      const grantRateLimit = grant?.rate_limit as RateLimit | null | undefined
+      const grantTokenBudget = grant?.token_budget as TokenBudget | null | undefined
+
+      const rateLimitDecision = await userRateLimiter.check(
+        authDecision.userId,
+        agentId,
+        grantRateLimit ?? undefined,
+        grantTokenBudget ?? undefined,
+      )
+
+      if (!rateLimitDecision.allowed) {
+        if (rateLimitDecision.replyToUser) {
+          await router.send(channelType, chatId, { text: rateLimitDecision.replyToUser })
+        }
+        logger.info(
+          { agentId, channelType, chatId, reason: rateLimitDecision.reason },
+          "Message blocked by rate limiter",
         )
         return
       }
