@@ -25,6 +25,7 @@ import type { JobHelpers, Task } from "graphile-worker"
 import type { Kysely } from "kysely"
 
 import type { CredentialService } from "../../auth/credential-service.js"
+import type { UserRateLimiter } from "../../auth/user-rate-limiter.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
 import type { Database, Job } from "../../db/types.js"
 import type { AgentCircuitBreakerConfig } from "../../lifecycle/agent-circuit-breaker.js"
@@ -73,6 +74,8 @@ export interface AgentExecuteDeps {
   eventEmitter?: AgentEventEmitter
   /** Optional execution registry for tracking in-flight handles. */
   executionRegistry?: ExecutionRegistry
+  /** Optional user rate limiter for recording per-user usage after execution. */
+  userRateLimiter?: UserRateLimiter
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -99,6 +102,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     lifecycleManager,
     eventEmitter,
     executionRegistry,
+    userRateLimiter,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -753,6 +757,30 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               .catch(() => {
                 // Non-fatal: session cost update is best-effort
               })
+          }
+
+          // Record per-user usage in the usage ledger
+          if (userRateLimiter && job.session_id) {
+            const session = await db
+              .selectFrom("session")
+              .select("user_account_id")
+              .where("id", "=", job.session_id)
+              .executeTakeFirst()
+
+            if (session) {
+              await userRateLimiter
+                .recordUsage(
+                  session.user_account_id,
+                  agent.id,
+                  1,
+                  costSnapshot.tokensIn,
+                  costSnapshot.tokensOut,
+                  costSnapshot.costUsd,
+                )
+                .catch(() => {
+                  // Non-fatal: usage recording is best-effort
+                })
+            }
           }
 
           // Emit session_end event with accumulated cost
