@@ -1,0 +1,59 @@
+{
+  "user": {
+    "id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "display_name": "Alice Johnson",
+    "email": "alice@example.com",
+    "avatar_url": "https://example.com/avatars/alice.png",
+    "role": "operator",
+    "oauth_provider": "google",
+    "oauth_provider_id": "112233445566",
+    "created_at": "2025-06-01T09:00:00.000Z",
+    "updated_at": "2025-12-15T14:30:00.000Z"
+  },
+  "channelMappings": [
+    {
+      "id": "cm-001",
+      "user_account_id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "channel_type": "telegram",
+      "channel_user_id": "tg_alice_42",
+      "metadata": { "username": "alice_tg" },
+      "created_at": "2025-06-02T10:00:00.000Z"
+    },
+    {
+      "id": "cm-002",
+      "user_account_id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "channel_type": "discord",
+      "channel_user_id": "disc_alice_99",
+      "metadata": null,
+      "created_at": "2025-07-10T12:00:00.000Z"
+    }
+  ],
+  "grants": [
+    {
+      "id": "grant-001",
+      "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "user_account_id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "access_level": "write",
+      "origin": "dashboard_invite",
+      "granted_by": "admin-user-id",
+      "rate_limit": { "max_messages": 100, "window_seconds": 3600 },
+      "token_budget": { "max_tokens": 50000, "window_seconds": 86400 },
+      "expires_at": null,
+      "revoked_at": null,
+      "created_at": "2025-08-01T08:00:00.000Z"
+    },
+    {
+      "id": "grant-002",
+      "agent_id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+      "user_account_id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "access_level": "read",
+      "origin": "pairing_code",
+      "granted_by": null,
+      "rate_limit": null,
+      "token_budget": null,
+      "expires_at": "2026-06-01T00:00:00.000Z",
+      "revoked_at": null,
+      "created_at": "2025-09-15T16:00:00.000Z"
+    }
+  ]
+}

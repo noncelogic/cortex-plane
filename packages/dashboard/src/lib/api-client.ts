@@ -874,3 +874,36 @@ export async function deleteMcpServer(id: string): Promise<unknown> {
 export async function refreshMcpServer(id: string): Promise<unknown> {
   return apiFetch(`/mcp-servers/${id}/refresh`, { method: "POST", schema: McpServerSchema })
 }
+
+// ---------------------------------------------------------------------------
+// User endpoint functions
+// ---------------------------------------------------------------------------
+
+export type { ChannelMapping, UserAccount, UserGrant, UserUsageLedger } from "./schemas/users"
+
+import { UserDetailResponseSchema, UserUsageResponseSchema } from "./schemas/users"
+
+export async function getUser(
+  userId: string,
+): Promise<import("./schemas/users").UserDetailResponse> {
+  return apiFetch(`/users/${userId}`, { schema: UserDetailResponseSchema })
+}
+
+export async function getUserUsage(
+  userId: string,
+  params?: { range?: "24h" | "7d" | "30d" },
+): Promise<import("./schemas/users").UserUsageResponse> {
+  const search = new URLSearchParams()
+  if (params?.range) search.set("range", params.range)
+  const qs = search.toString()
+  return apiFetch(`/users/${userId}/usage${qs ? `?${qs}` : ""}`, {
+    schema: UserUsageResponseSchema,
+  })
+}
+
+export async function revokeUserGrant(agentId: string, grantId: string): Promise<unknown> {
+  return apiFetch(`/agents/${agentId}/users/${grantId}`, {
+    method: "DELETE",
+    schema: z.unknown(),
+  })
+}
