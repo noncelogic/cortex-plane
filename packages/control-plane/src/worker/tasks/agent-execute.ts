@@ -29,7 +29,6 @@ import type { UserRateLimiter } from "../../auth/user-rate-limiter.js"
 import type { TokenRefresher } from "../../backends/http-llm.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
 import type { Database, Job } from "../../db/types.js"
-import type { AgentCircuitBreakerConfig } from "../../lifecycle/agent-circuit-breaker.js"
 import { AgentCircuitBreaker } from "../../lifecycle/agent-circuit-breaker.js"
 import {
   type ContextBudgetConfig,
@@ -37,6 +36,7 @@ import {
   enforceContextBudget,
   type ExecutionContext,
 } from "../../lifecycle/context-budget.js"
+import { resolveCircuitBreakerConfig } from "../../lifecycle/defaults.js"
 import type { AgentLifecycleManager, SteerMessage } from "../../lifecycle/manager.js"
 import { recordCircuitBreakerTrip, recordContextBudgetExceeded } from "../../lifecycle/metrics.js"
 import type { McpClientPool } from "../../mcp/client-pool.js"
@@ -169,11 +169,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         loadedAgentId = agent.id
 
         // ── Step 1b: Instantiate agent-level circuit breaker ──
-        const rawCb = agent.resource_limits.circuitBreaker
-        const cbConfig =
-          typeof rawCb === "object" && rawCb !== null
-            ? (rawCb as Partial<AgentCircuitBreakerConfig>)
-            : undefined
+        const cbConfig = resolveCircuitBreakerConfig(agent.resource_limits)
         agentCB = new AgentCircuitBreaker(agent.id, cbConfig)
 
         // Hydrate consecutive failure count from recent jobs

@@ -17,6 +17,7 @@ export {
   truncateComponent,
   validateContextBudget,
 } from "./context-budget.js"
+export { resolveCircuitBreakerConfig } from "./defaults.js"
 export {
   type AgentHealthRecord,
   type AgentHealthStatus,
