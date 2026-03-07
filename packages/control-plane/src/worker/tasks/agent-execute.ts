@@ -27,7 +27,14 @@ import type { Kysely } from "kysely"
 import type { CredentialService } from "../../auth/credential-service.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
 import type { Database, Job } from "../../db/types.js"
+import {
+  type ContextBudgetConfig,
+  DEFAULT_CONTEXT_BUDGET,
+  enforceContextBudget,
+  type ExecutionContext,
+} from "../../lifecycle/context-budget.js"
 import type { AgentLifecycleManager, SteerMessage } from "../../lifecycle/manager.js"
+import { recordContextBudgetExceeded } from "../../lifecycle/metrics.js"
 import type { McpClientPool } from "../../mcp/client-pool.js"
 import type { McpToolRouter } from "../../mcp/tool-router.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
@@ -185,6 +192,79 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
 
         // ── Step 4: Build ExecutionTask (needed for routing) ──
         const task = buildExecutionTask(job, agent, agentConfig, resolvedSkills)
+
+        // ── Step 4a: Enforce context budget ──
+        {
+          const rawBudget = agent.resource_limits.contextBudget
+          const budgetConfig: ContextBudgetConfig =
+            typeof rawBudget === "object" && rawBudget !== null
+              ? (rawBudget as ContextBudgetConfig)
+              : DEFAULT_CONTEXT_BUDGET
+
+          const identity = agent.description ?? ""
+          const execCtx: ExecutionContext = {
+            systemPrompt: task.context.systemPrompt,
+            identity,
+            memory: task.context.memories.join("\n"),
+            toolDefinitions: task.context.skillInstructions ?? "",
+            conversationHistory: task.instruction.conversationHistory
+              ? JSON.stringify(task.instruction.conversationHistory)
+              : undefined,
+          }
+
+          const { budgetResult, enforcedContext } = enforceContextBudget(execCtx, budgetConfig)
+
+          if (!budgetResult.valid) {
+            // Total context exceeds budget — refuse to dispatch
+            for (const [comp, budget] of Object.entries(budgetResult.components)) {
+              if (budget.truncated) recordContextBudgetExceeded(agent.id, comp)
+            }
+            rootSpan.addEvent("context_budget_exceeded")
+
+            await db
+              .updateTable("job")
+              .set({
+                status: "FAILED",
+                error: {
+                  category: "CONTEXT_BUDGET_EXCEEDED",
+                  message: budgetResult.warnings.join("; "),
+                  attempt: job.attempt + 1,
+                },
+                completed_at: new Date(),
+              })
+              .where("id", "=", jobId)
+              .where("status", "=", "RUNNING")
+              .execute()
+
+            return
+          }
+
+          // Apply truncated values back to the task
+          task.context.systemPrompt = enforcedContext.systemPrompt
+          if (enforcedContext.memory) {
+            task.context.memories = [enforcedContext.memory]
+          } else {
+            task.context.memories = []
+          }
+          if (task.context.skillInstructions != null) {
+            task.context.skillInstructions = enforcedContext.toolDefinitions
+          }
+
+          // If identity was truncated and we used auto-generated systemPrompt,
+          // rebuild it with the truncated description
+          if (
+            budgetResult.components["identity"]?.truncated &&
+            typeof agentConfig.systemPrompt !== "string"
+          ) {
+            const desc = enforcedContext.identity
+            task.context.systemPrompt = `You are ${agent.name}, a ${agent.role} agent.${desc ? ` ${desc}` : ""}`
+          }
+
+          // Log truncation warnings (job still proceeds)
+          for (const [comp, budget] of Object.entries(budgetResult.components)) {
+            if (budget.truncated) recordContextBudgetExceeded(agent.id, comp)
+          }
+        }
 
         // ── Step 4b: Resolve LLM credential from agent_credential_binding ──
         let credentialResolver: CredentialResolver | undefined
