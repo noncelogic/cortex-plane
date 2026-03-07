@@ -207,20 +207,40 @@ export function agentUserRoutes(deps: AgentUserRouteDeps) {
         const body = request.body
         const principal = (request as AuthenticatedRequest).principal
 
-        // Check for duplicate active grant
+        // Check for any existing grant (active or revoked)
         const existing = await db
           .selectFrom("agent_user_grant")
           .selectAll()
           .where("agent_id", "=", agentId)
           .where("user_account_id", "=", body.user_account_id)
-          .where("revoked_at", "is", null)
           .executeTakeFirst()
 
-        if (existing) {
+        if (existing && !existing.revoked_at) {
           return reply.status(409).send({
             error: "conflict",
             message: "User already has an active grant for this agent",
           })
+        }
+
+        // Re-activate a previously revoked grant instead of inserting
+        // (UNIQUE constraint on agent_id + user_account_id prevents duplicates)
+        if (existing) {
+          const grant = await db
+            .updateTable("agent_user_grant")
+            .set({
+              access_level: body.access_level ?? "write",
+              origin: "dashboard_invite" as const,
+              granted_by: principal.userId,
+              rate_limit: body.rate_limit ?? null,
+              token_budget: body.token_budget ?? null,
+              expires_at: body.expires_at ? new Date(body.expires_at) : null,
+              revoked_at: null,
+            })
+            .where("id", "=", existing.id)
+            .returningAll()
+            .executeTakeFirstOrThrow()
+
+          return reply.status(201).send({ grant })
         }
 
         const grant = await db

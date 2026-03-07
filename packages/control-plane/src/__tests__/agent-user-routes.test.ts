@@ -231,6 +231,7 @@ function mockDb(opts: MockDbOptions = {}) {
       chain.where = vi.fn().mockReturnValue(chain)
       chain.returningAll = vi.fn().mockReturnValue(chain)
       chain.executeTakeFirst = vi.fn().mockResolvedValue(updatedGrant)
+      chain.executeTakeFirstOrThrow = vi.fn().mockResolvedValue(updatedGrant)
       return chain
     }),
   }
@@ -343,6 +344,28 @@ describe("POST /agents/:agentId/users", () => {
     expect(res.statusCode).toBe(409)
     const body = res.json()
     expect(body.error).toBe("conflict")
+  })
+
+  it("re-activates a revoked grant instead of inserting (re-invite)", async () => {
+    const revokedGrant = makeGrant({ revoked_at: new Date("2026-03-01") })
+    const reactivatedGrant = makeGrant({ revoked_at: null, origin: "dashboard_invite" })
+    const { app, db } = await buildTestApp({
+      existingGrant: revokedGrant,
+      updatedGrant: reactivatedGrant,
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/users`,
+      payload: { user_account_id: USER_ID },
+    })
+
+    expect(res.statusCode).toBe(201)
+    const body = res.json()
+    expect(body.grant).toBeDefined()
+    expect(body.grant.revoked_at).toBeNull()
+    // Should update, not insert
+    expect(db.updateTable).toHaveBeenCalled()
   })
 
   it("validates required user_account_id", async () => {
