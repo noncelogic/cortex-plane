@@ -20,6 +20,7 @@ import type { ResolvedSkills, SkillIndex } from "@cortex/shared/skills"
 import type { Kysely } from "kysely"
 
 import type { Database } from "../db/types.js"
+import { verifyCheckpointIntegrity } from "./output-validator.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,6 +92,13 @@ export async function loadCheckpoint(jobId: string, db: Kysely<Database>): Promi
 
   if (!job) {
     throw new Error(`Job not found: ${jobId}`)
+  }
+
+  // Verify CRC integrity when both checkpoint and CRC are present
+  if (job.checkpoint && job.checkpoint_crc != null) {
+    if (!verifyCheckpointIntegrity(job.checkpoint, job.checkpoint_crc)) {
+      console.warn("[checkpoint_corruption_detected] CRC mismatch for job %s", jobId)
+    }
   }
 
   return {
