@@ -15,6 +15,7 @@ function createMockHandle(taskId = "task-1"): ExecutionHandle & { _cancelReason?
     async *events(): AsyncGenerator<OutputEvent> {
       /* no events */
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async result(): Promise<ExecutionResult> {
       return {
         taskId,
