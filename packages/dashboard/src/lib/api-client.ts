@@ -355,12 +355,11 @@ async function apiFetch<T>(
       // Schema validation errors (e.g. ZodError) mean the API responded
       // successfully but with an unexpected shape — not a connectivity issue.
       if (err instanceof Error && err.name === "ZodError") {
-        throw new ApiError(
-          0,
-          "Unexpected response format from the control plane",
-          undefined,
-          "SCHEMA_MISMATCH",
-        )
+        const zodMessage =
+          process.env.NODE_ENV === "development"
+            ? `Schema mismatch on ${method} ${path}: ${err.message}`
+            : `Unexpected response format from the control plane (${method} ${path})`
+        throw new ApiError(0, zodMessage, undefined, "SCHEMA_MISMATCH")
       }
 
       // Network errors and timeouts are retryable
