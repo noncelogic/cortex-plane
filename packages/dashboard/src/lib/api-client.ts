@@ -1257,8 +1257,12 @@ export async function updateChannelConfig(
   })
 }
 
-export async function deleteChannelConfig(id: string): Promise<unknown> {
-  return apiFetch(`/channels/${id}`, { method: "DELETE", schema: z.unknown() })
+export async function deleteChannelConfig(
+  id: string,
+  options?: { force?: boolean },
+): Promise<unknown> {
+  const query = options?.force ? "?force=true" : ""
+  return apiFetch(`/channels/${id}${query}`, { method: "DELETE", schema: z.unknown() })
 }
 
 // ---------------------------------------------------------------------------

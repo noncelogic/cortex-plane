@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
+  ApiError,
   type ChannelConfigSummary,
   createChannelConfig,
   deleteChannelConfig,
@@ -45,6 +46,12 @@ export function ChannelConfigSection() {
   const [form, setForm] = useState<AddChannelForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string
+    name: string
+    conflict?: string
+  } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -93,15 +100,29 @@ export function ChannelConfigSection() {
   )
 
   const handleDelete = useCallback(
-    async (id: string) => {
+    async (id: string, force?: boolean) => {
+      setDeleting(true)
+      setError(null)
       try {
-        await deleteChannelConfig(id)
+        await deleteChannelConfig(id, force ? { force: true } : undefined)
+        setDeleteConfirm(null)
         void fetchChannels()
-      } catch {
-        // silent
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          const ch = channels.find((c) => c.id === id)
+          setDeleteConfirm({
+            id,
+            name: ch?.name ?? id,
+            conflict: err.message,
+          })
+        } else {
+          setError(err instanceof Error ? err.message : "Failed to delete channel")
+        }
+      } finally {
+        setDeleting(false)
       }
     },
-    [fetchChannels],
+    [fetchChannels, channels],
   )
 
   const isDuplicate = useMemo(
@@ -142,6 +163,12 @@ export function ChannelConfigSection() {
         </button>
       </div>
 
+      {error && (
+        <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {error}
+        </div>
+      )}
+
       {/* Channel list */}
       <div className="mt-4 space-y-3">
         {channels.map((ch) => (
@@ -173,7 +200,7 @@ export function ChannelConfigSection() {
               </button>
               <button
                 type="button"
-                onClick={() => void handleDelete(ch.id)}
+                onClick={() => setDeleteConfirm({ id: ch.id, name: ch.name })}
                 className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
               >
                 Remove
@@ -188,6 +215,46 @@ export function ChannelConfigSection() {
           </p>
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-text-main">Remove Channel</h3>
+            {deleteConfirm.conflict ? (
+              <div className="mt-2">
+                <p className="text-sm text-text-muted">{deleteConfirm.conflict}</p>
+                <p className="mt-2 text-sm text-text-muted">
+                  Force-remove to unbind agents and delete this channel?
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-text-muted">
+                Are you sure you want to remove
+                <strong> &ldquo;{deleteConfirm.name}&rdquo;</strong>?
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+                className="rounded-lg px-4 py-2 text-sm text-text-muted hover:bg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete(deleteConfirm.id, !!deleteConfirm.conflict)}
+                disabled={deleting}
+                className="rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? "Removing..." : deleteConfirm.conflict ? "Force Remove" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add channel modal */}
       {showAdd && (
