@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
-import type { JobDetail, JobLogEntry, JobMetrics, JobStep } from "@/lib/api-client"
+import type { JobDetail, JobLogEntry, JobMetrics, JobStep, TokenUsage } from "@/lib/api-client"
 import { getJob } from "@/lib/api-client"
 import { bytes, duration, relativeTime } from "@/lib/format"
 
@@ -134,6 +134,83 @@ function LogViewer({ logs }: { logs: JobLogEntry[] }): React.JSX.Element {
   )
 }
 
+function FailureReasonBlock({
+  reason,
+  attempt,
+  maxAttempts,
+}: {
+  reason: { message: string; category?: string }
+  attempt?: number
+  maxAttempts?: number
+}): React.JSX.Element {
+  return (
+    <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="material-symbols-outlined text-base text-red-400">error</span>
+        <span className="text-sm font-bold text-red-400">Failure Reason</span>
+        {reason.category && (
+          <span className="rounded bg-red-500/20 px-1.5 py-0.5 font-mono text-[10px] text-red-300">
+            {reason.category}
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-red-300">{reason.message}</p>
+      {attempt !== undefined && maxAttempts !== undefined && (
+        <p className="mt-2 text-xs text-red-300/70">
+          Attempt {attempt} of {maxAttempts}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ExecutionStats({ usage }: { usage: TokenUsage }): React.JSX.Element {
+  const items = [
+    { label: "LLM Calls", value: String(usage.llmCallCount), icon: "neurology" },
+    { label: "Tool Calls", value: String(usage.toolCallCount), icon: "build" },
+    {
+      label: "Tokens",
+      value: `${usage.tokensIn.toLocaleString()} in / ${usage.tokensOut.toLocaleString()} out`,
+      icon: "token",
+    },
+    ...(usage.costUsd !== undefined
+      ? [{ label: "Cost", value: `$${usage.costUsd.toFixed(4)}`, icon: "payments" }]
+      : []),
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {items.map((item) => (
+        <div key={item.label} className="rounded-lg border border-surface-border bg-secondary p-3">
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-sm text-text-muted">{item.icon}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+              {item.label}
+            </span>
+          </div>
+          <span className="font-mono text-sm font-bold text-text-main">{item.value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EmptyStepsNotice(): React.JSX.Element {
+  return (
+    <div className="flex flex-col items-center rounded-lg border border-surface-border bg-secondary py-6">
+      <span className="material-symbols-outlined text-2xl text-text-muted">
+        info
+      </span>
+      <span className="mt-2 text-sm font-semibold text-text-muted">
+        No telemetry collected
+      </span>
+      <span className="mt-1 text-xs text-text-muted">
+        No execution steps or events were recorded for this job.
+      </span>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Drawer
 // ---------------------------------------------------------------------------
@@ -219,14 +296,40 @@ export function JobDetailDrawer({
         <div className="flex-1 space-y-6 overflow-y-auto p-6">
           {job ? (
             <>
+              {/* Failure Reason */}
+              {job.failureReason && (
+                <section>
+                  <FailureReasonBlock
+                    reason={job.failureReason}
+                    attempt={job.attempt}
+                    maxAttempts={job.maxAttempts}
+                  />
+                </section>
+              )}
+
               {/* Execution Steps */}
               <section>
                 <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
                   <span className="material-symbols-outlined text-sm">timeline</span>
                   Execution Steps
                 </h3>
-                <StepTimeline steps={job.steps} />
+                {job.steps.length > 0 ? (
+                  <StepTimeline steps={job.steps} />
+                ) : (
+                  <EmptyStepsNotice />
+                )}
               </section>
+
+              {/* Execution Stats */}
+              {job.tokenUsage && (
+                <section>
+                  <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
+                    <span className="material-symbols-outlined text-sm">analytics</span>
+                    Execution Stats
+                  </h3>
+                  <ExecutionStats usage={job.tokenUsage} />
+                </section>
+              )}
 
               {/* Metrics */}
               {job.metrics && (

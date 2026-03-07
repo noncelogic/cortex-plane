@@ -29,12 +29,22 @@ function makeJob(overrides: Record<string, unknown> = {}) {
     completed_at: null,
     heartbeat_at: null,
     approval_expires_at: null,
+    tokens_in: 0,
+    tokens_out: 0,
+    cost_usd: null,
+    tool_call_count: 0,
+    llm_call_count: 0,
+    parent_job_id: null,
+    delegation_depth: 0,
     ...overrides,
   }
 }
 
-function mockDb() {
-  const jobs = [makeJob()]
+function mockDb(
+  jobOverrides: Record<string, unknown> = {},
+  agentEventRows: Record<string, unknown>[] = [],
+) {
+  const jobs = [makeJob(jobOverrides)]
   const memoryRows = [
     {
       id: "mem-1",
@@ -81,6 +91,7 @@ function mockDb() {
     selectFrom: vi.fn().mockImplementation((table: string) => {
       if (table === "job") return selectChain(jobs)
       if (table === "agent") return selectChain([{ id: AGENT_UUID, name: "Agent One" }])
+      if (table === "agent_event") return selectChain(agentEventRows)
       if (table === "memory_extract_message") return selectChain(memoryRows)
       return selectChain([])
     }),
@@ -91,9 +102,12 @@ function mockDb() {
   } as unknown as Kysely<Database>
 }
 
-async function buildTestApp() {
+async function buildTestApp(
+  jobOverrides: Record<string, unknown> = {},
+  agentEventRows: Record<string, unknown>[] = [],
+) {
   const app = Fastify({ logger: false })
-  const db = mockDb()
+  const db = mockDb(jobOverrides, agentEventRows)
 
   await app.register(
     dashboardRoutes({
@@ -143,17 +157,132 @@ describe("dashboard routes", () => {
     expect(body.pagination).toBeDefined()
   })
 
-  it("returns job detail and retry response", async () => {
-    const { app } = await buildTestApp()
+  it("returns job detail with failureReason and attempt info", async () => {
+    const { app } = await buildTestApp({
+      error: { message: "context budget exceeded", category: "CONTEXT_BUDGET_EXCEEDED" },
+      attempt: 2,
+      max_attempts: 3,
+    })
 
     const detail = await app.inject({ method: "GET", url: `/jobs/${JOB_UUID}` })
     expect(detail.statusCode).toBe(200)
     expect(detail.json()).toMatchObject({
       id: JOB_UUID,
       agentId: AGENT_UUID,
+      failureReason: {
+        message: "context budget exceeded",
+        category: "CONTEXT_BUDGET_EXCEEDED",
+      },
+      attempt: 2,
+      maxAttempts: 3,
+    })
+  })
+
+  it("synthesizes steps and logs from agent_event when result is empty", async () => {
+    const events = [
+      {
+        event_type: "state_transition",
+        payload: { from: "SCHEDULED", to: "RUNNING" },
+        created_at: new Date("2026-02-26T00:00:10.000Z"),
+        duration_ms: null,
+        tool_ref: null,
+        model: null,
+        tokens_in: null,
+        tokens_out: null,
+      },
+      {
+        event_type: "tool_call_end",
+        payload: {},
+        created_at: new Date("2026-02-26T00:00:20.000Z"),
+        duration_ms: 500,
+        tool_ref: "web_search",
+        model: null,
+        tokens_in: null,
+        tokens_out: null,
+      },
+      {
+        event_type: "error",
+        payload: { message: "Rate limit hit" },
+        created_at: new Date("2026-02-26T00:00:30.000Z"),
+        duration_ms: null,
+        tool_ref: null,
+        model: null,
+        tokens_in: null,
+        tokens_out: null,
+      },
+    ]
+
+    const { app } = await buildTestApp({}, events)
+
+    const detail = await app.inject({ method: "GET", url: `/jobs/${JOB_UUID}` })
+    expect(detail.statusCode).toBe(200)
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = detail.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.steps).toHaveLength(3)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.steps[0]).toMatchObject({ name: "State → RUNNING", status: "COMPLETED" })
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.steps[1]).toMatchObject({
+      name: "Tool: web_search",
+      status: "COMPLETED",
+      durationMs: 500,
+    })
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.steps[2]).toMatchObject({
+      name: "Rate limit hit",
+      status: "FAILED",
+      error: "Rate limit hit",
+    })
+
+    // Logs synthesized from the same events
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.logs).toHaveLength(3)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.logs[2]).toMatchObject({ level: "ERR", message: "Rate limit hit" })
+  })
+
+  it("returns empty steps/logs when no events exist and shows no tokenUsage", async () => {
+    const { app } = await buildTestApp({ error: null })
+
+    const detail = await app.inject({ method: "GET", url: `/jobs/${JOB_UUID}` })
+    expect(detail.statusCode).toBe(200)
+    expect(detail.json()).toMatchObject({
+      id: JOB_UUID,
       steps: [],
       logs: [],
     })
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(detail.json().failureReason).toBeUndefined()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(detail.json().tokenUsage).toBeUndefined()
+  })
+
+  it("returns tokenUsage when job has execution stats", async () => {
+    const { app } = await buildTestApp({
+      tokens_in: 1200,
+      tokens_out: 350,
+      cost_usd: "0.0042",
+      llm_call_count: 3,
+      tool_call_count: 5,
+    })
+
+    const detail = await app.inject({ method: "GET", url: `/jobs/${JOB_UUID}` })
+    expect(detail.statusCode).toBe(200)
+    expect(detail.json()).toMatchObject({
+      tokenUsage: {
+        tokensIn: 1200,
+        tokensOut: 350,
+        costUsd: 0.0042,
+        llmCallCount: 3,
+        toolCallCount: 5,
+      },
+    })
+  })
+
+  it("returns retry response", async () => {
+    const { app } = await buildTestApp()
 
     const retry = await app.inject({ method: "POST", url: `/jobs/${JOB_UUID}/retry` })
     expect(retry.statusCode).toBe(202)

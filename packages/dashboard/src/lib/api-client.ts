@@ -104,12 +104,14 @@ export type {
   ContentType,
 } from "./schemas/content"
 export type {
+  FailureReason,
   JobDetail,
   JobLogEntry,
   JobMetrics,
   JobStatus,
   JobStep,
   JobSummary,
+  TokenUsage,
 } from "./schemas/jobs"
 export type { MemoryRecord } from "./schemas/memory"
 export type {
