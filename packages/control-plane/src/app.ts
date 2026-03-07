@@ -207,13 +207,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     }),
   )
 
-  // Register agent control routes (dry run, etc.)
+  // Register agent control routes (dry run, kill switch, etc.)
   await app.register(
     agentControlRoutes({
       db,
       authConfig,
       sessionService,
       mcpToolRouter,
+      executionRegistry,
+      eventEmitter,
+      sseManager,
     }),
   )
 

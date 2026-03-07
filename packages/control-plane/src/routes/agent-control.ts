@@ -2,6 +2,7 @@
  * Agent Control Routes
  *
  * POST /agents/:agentId/dry-run — simulate an agent turn without tool execution
+ * POST /agents/:agentId/kill    — immediate execution cancellation (kill switch)
  */
 
 import Anthropic from "@anthropic-ai/sdk"
@@ -25,6 +26,9 @@ import {
   loadConversationContext,
   type PlannedAction,
 } from "../observability/dry-run.js"
+import type { AgentEventEmitter } from "../observability/event-emitter.js"
+import type { ExecutionRegistry } from "../observability/execution-registry.js"
+import type { SSEConnectionManager } from "../streaming/manager.js"
 
 // ---------------------------------------------------------------------------
 // Route types
@@ -40,6 +44,14 @@ interface DryRunBody {
   maxTurns?: number
 }
 
+interface KillParams {
+  agentId: string
+}
+
+interface KillBody {
+  reason: string
+}
+
 // ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
@@ -49,10 +61,21 @@ export interface AgentControlRouteDeps {
   authConfig: AuthConfig
   sessionService?: SessionService
   mcpToolRouter?: McpToolRouter
+  executionRegistry?: ExecutionRegistry
+  eventEmitter?: AgentEventEmitter
+  sseManager?: SSEConnectionManager
 }
 
 export function agentControlRoutes(deps: AgentControlRouteDeps) {
-  const { db, authConfig, sessionService, mcpToolRouter } = deps
+  const {
+    db,
+    authConfig,
+    sessionService,
+    mcpToolRouter,
+    executionRegistry,
+    eventEmitter,
+    sseManager,
+  } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -216,6 +239,128 @@ export function agentControlRoutes(deps: AgentControlRouteDeps) {
             message: `Dry run LLM call failed: ${errorMsg}`,
           })
         }
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // POST /agents/:agentId/kill — immediate execution cancellation
+    // Requires: auth + operator role
+    // -----------------------------------------------------------------
+    app.post<{ Params: KillParams; Body: KillBody }>(
+      "/agents/:agentId/kill",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: { agentId: { type: "string" } },
+            required: ["agentId"],
+          },
+          body: {
+            type: "object",
+            properties: {
+              reason: { type: "string", minLength: 1, maxLength: 1000 },
+            },
+            required: ["reason"],
+          },
+        },
+      },
+      async (
+        request: FastifyRequest<{ Params: KillParams; Body: KillBody }>,
+        reply: FastifyReply,
+      ) => {
+        const { agentId } = request.params
+        const { reason } = request.body
+
+        // Check agent exists in DB
+        const agent = await db
+          .selectFrom("agent")
+          .select(["id", "status"])
+          .where("id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!agent) {
+          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        if (agent.status === "QUARANTINED") {
+          return reply.status(409).send({
+            error: "conflict",
+            message: "Agent is already quarantined",
+          })
+        }
+
+        const previousState = agent.status
+
+        // Look up the agent's current running job
+        const runningJob = await db
+          .selectFrom("job")
+          .select(["id"])
+          .where("agent_id", "=", agentId)
+          .where("status", "=", "RUNNING")
+          .executeTakeFirst()
+
+        let cancelledJobId: string | null = null
+
+        if (runningJob) {
+          cancelledJobId = runningJob.id
+
+          // Cancel in-flight execution via AbortController
+          if (executionRegistry) {
+            await executionRegistry.cancel(runningJob.id, reason)
+          }
+
+          // Transition job to FAILED with operator_kill category
+          await db
+            .updateTable("job")
+            .set({
+              status: "FAILED",
+              error: { category: "operator_kill", message: reason },
+              completed_at: new Date(),
+            })
+            .where("id", "=", runningJob.id)
+            .where("status", "=", "RUNNING")
+            .execute()
+        }
+
+        // Transition agent to QUARANTINED
+        await db
+          .updateTable("agent")
+          .set({ status: "QUARANTINED" })
+          .where("id", "=", agentId)
+          .execute()
+
+        const killedAt = new Date().toISOString()
+
+        // Emit kill_requested event to agent_event
+        if (eventEmitter) {
+          await eventEmitter.emit({
+            agentId,
+            jobId: cancelledJobId,
+            eventType: "kill_requested",
+            payload: { reason, cancelledJobId },
+          })
+        }
+
+        // Broadcast agent:killed SSE event to connected clients
+        if (sseManager) {
+          sseManager.broadcast(agentId, "agent:killed", {
+            agentId,
+            previousState,
+            cancelledJobId,
+            state: "QUARANTINED",
+            reason,
+            killedAt,
+          })
+        }
+
+        return reply.status(200).send({
+          agentId,
+          previousState,
+          cancelledJobId,
+          state: "QUARANTINED",
+          killedAt,
+        })
       },
     )
   }
