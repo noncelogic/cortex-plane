@@ -63,7 +63,7 @@ describe("AgentLifecycleManager steering", () => {
     const msg: SteerMessage = {
       id: "steer-1",
       agentId: "agent-1",
-      message: "focus on tests",
+      instruction: "focus on tests",
       priority: "normal",
       timestamp: new Date(),
     }
@@ -81,7 +81,7 @@ describe("AgentLifecycleManager steering", () => {
       manager.steer({
         id: "steer-1",
         agentId: "agent-unknown",
-        message: "test",
+        instruction: "test",
         priority: "normal",
         timestamp: new Date(),
       })
@@ -96,7 +96,7 @@ describe("AgentLifecycleManager steering", () => {
       manager.steer({
         id: "steer-1",
         agentId: "agent-1",
-        message: "test",
+        instruction: "test",
         priority: "normal",
         timestamp: new Date(),
       })
@@ -115,7 +115,7 @@ describe("AgentLifecycleManager steering", () => {
     const msg: SteerMessage = {
       id: "steer-1",
       agentId: "agent-1",
-      message: "test",
+      instruction: "test",
       priority: "normal",
       timestamp: new Date(),
     }
@@ -138,7 +138,7 @@ describe("AgentLifecycleManager steering", () => {
     manager.steer({
       id: "steer-1",
       agentId: "agent-1",
-      message: "test",
+      instruction: "test",
       priority: "normal",
       timestamp: new Date(),
     })
@@ -159,7 +159,7 @@ describe("AgentLifecycleManager steering", () => {
     manager.steer({
       id: "steer-1",
       agentId: "agent-1",
-      message: "test",
+      instruction: "test",
       priority: "normal",
       timestamp: new Date(),
     })
@@ -168,7 +168,7 @@ describe("AgentLifecycleManager steering", () => {
     expect(listener2).not.toHaveBeenCalled()
   })
 
-  it("steer with high priority passes through", () => {
+  it("steer with urgent priority passes through", () => {
     const manager = createTestManager()
     setAgentState(manager, "agent-1", "EXECUTING")
 
@@ -178,12 +178,56 @@ describe("AgentLifecycleManager steering", () => {
     manager.steer({
       id: "steer-1",
       agentId: "agent-1",
-      message: "urgent change",
-      priority: "high",
+      instruction: "urgent change",
+      priority: "urgent",
       timestamp: new Date(),
     })
 
-    expect((listener.mock.calls[0]![0] as { priority: string }).priority).toBe("high")
+    expect((listener.mock.calls[0]![0] as { priority: string }).priority).toBe("urgent")
+  })
+
+  it("steerAsync resolves acknowledged when listener calls acknowledgeSteer", async () => {
+    const manager = createTestManager()
+    setAgentState(manager, "agent-1", "EXECUTING")
+
+    // Simulate an execution loop listener that acknowledges immediately
+    manager.onSteer("agent-1", (msg) => {
+      manager.acknowledgeSteer(msg.id, 3)
+    })
+
+    const ack = await manager.steerAsync(
+      {
+        id: "steer-async-1",
+        agentId: "agent-1",
+        instruction: "focus on tests",
+        priority: "normal",
+        timestamp: new Date(),
+      },
+      5_000,
+    )
+
+    expect(ack.acknowledged).toBe(true)
+    expect(ack.turnNumber).toBe(3)
+  })
+
+  it("steerAsync resolves acknowledged:false on timeout", async () => {
+    const manager = createTestManager()
+    setAgentState(manager, "agent-1", "EXECUTING")
+
+    // No listener registered — nobody to acknowledge
+    const ack = await manager.steerAsync(
+      {
+        id: "steer-timeout-1",
+        agentId: "agent-1",
+        instruction: "hello",
+        priority: "normal",
+        timestamp: new Date(),
+      },
+      50, // very short timeout for test speed
+    )
+
+    expect(ack.acknowledged).toBe(false)
+    expect(ack.turnNumber).toBeUndefined()
   })
 
   it("cleanup removes steer listeners", async () => {
@@ -201,7 +245,7 @@ describe("AgentLifecycleManager steering", () => {
       manager.steer({
         id: "steer-1",
         agentId: "agent-1",
-        message: "test",
+        instruction: "test",
         priority: "normal",
         timestamp: new Date(),
       })

@@ -545,10 +545,10 @@ describe("POST /agents/:agentId/observe/annotate", () => {
     })
 
     expect(steerFn).toHaveBeenCalledTimes(1)
-    const msg = steerFn.mock.calls[0]![0] as { message: string }
-    expect(msg.message).toContain("[ANNOTATION]")
-    expect(msg.message).toContain("(100, 200)")
-    expect(msg.message).toContain("#btn")
+    const msg = steerFn.mock.calls[0]![0] as { instruction: string }
+    expect(msg.instruction).toContain("[ANNOTATION]")
+    expect(msg.instruction).toContain("(100, 200)")
+    expect(msg.instruction).toContain("#btn")
   })
 
   it("uses custom prompt when provided", async () => {
@@ -566,8 +566,8 @@ describe("POST /agents/:agentId/observe/annotate", () => {
       payload: { type: "click", x: 100, y: 200, prompt: "Click the submit button" },
     })
 
-    const msg = steerFn.mock.calls[0]![0] as { message: string }
-    expect(msg.message).toContain("[ANNOTATION] Click the submit button")
+    const msg = steerFn.mock.calls[0]![0] as { instruction: string }
+    expect(msg.instruction).toContain("[ANNOTATION] Click the submit button")
   })
 
   it("returns 409 when agent is not EXECUTING", async () => {

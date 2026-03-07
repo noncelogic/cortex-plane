@@ -469,7 +469,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
           lifecycleManager?.steer({
             id: steerMessageId,
             agentId,
-            message: `[ANNOTATION] ${prompt}`,
+            instruction: `[ANNOTATION] ${prompt}`,
             priority: "normal",
             timestamp: new Date(),
           })
@@ -559,7 +559,7 @@ export function observationRoutes(deps: ObservationRouteDeps) {
           lifecycleManager?.steer({
             id: steerMessageId,
             agentId,
-            message: `[STEER] ${prompt}`,
+            instruction: `[STEER] ${prompt}`,
             priority: "normal",
             timestamp: new Date(),
           })

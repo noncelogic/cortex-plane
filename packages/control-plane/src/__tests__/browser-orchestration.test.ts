@@ -758,9 +758,9 @@ describe("POST /agents/:agentId/browser/steer", () => {
     })
 
     expect(steerFn).toHaveBeenCalledTimes(1)
-    const msg = steerFn.mock.calls[0]![0] as { message: string }
-    expect(msg.message).toContain("[STEER]")
-    expect(msg.message).toContain("type")
+    const msg = steerFn.mock.calls[0]![0] as { instruction: string }
+    expect(msg.instruction).toContain("[STEER]")
+    expect(msg.instruction).toContain("type")
   })
 
   it("returns 409 when agent is not EXECUTING", async () => {
