@@ -499,13 +499,35 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             executionRegistry.register(jobId, handle)
           }
 
-          // Per-job cost tracker (always created; wired to event emitter + budget below)
-          const costTracker = new CostTracker()
+          // Per-job cost tracker — atomic DB increments + budget enforcement
+          const costTracker = new CostTracker(db, eventEmitter)
 
           // Resolve cost budget from resource_limits (optional)
-          const rawCostBudget = agent.resource_limits.costBudgetUsd
-          const costBudgetUsd =
-            typeof rawCostBudget === "number" && rawCostBudget > 0 ? rawCostBudget : undefined
+          const rl = agent.resource_limits
+          const rawJobBudget =
+            typeof rl.maxUsdPerJob === "number"
+              ? rl.maxUsdPerJob
+              : typeof rl.costBudgetUsd === "number"
+                ? rl.costBudgetUsd
+                : 0
+          const costBudget =
+            rawJobBudget > 0 ||
+            (typeof rl.maxUsdPerSession === "number" && rl.maxUsdPerSession > 0) ||
+            (typeof rl.maxUsdPerDay === "number" && rl.maxUsdPerDay > 0)
+              ? {
+                  maxUsdPerJob: rawJobBudget,
+                  maxUsdPerSession:
+                    typeof rl.maxUsdPerSession === "number" ? rl.maxUsdPerSession : 0,
+                  maxUsdPerDay: typeof rl.maxUsdPerDay === "number" ? rl.maxUsdPerDay : 0,
+                  warningThresholdPct:
+                    typeof rl.warningThresholdPct === "number" ? rl.warningThresholdPct : 0.8,
+                }
+              : undefined
+          let toolCallCount = 0
+          let accTokensIn = 0
+          let accTokensOut = 0
+          let accCostUsd = 0
+          let llmCallCount = 0
 
           // Store the user prompt as a session message for memory extraction batching.
           if (job.session_id && task.instruction.prompt.trim().length > 0) {
@@ -609,7 +631,25 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               // ── Event emission + cost tracking ──
               if (event.type === "usage") {
                 const { inputTokens, outputTokens, costUsd } = event.tokenUsage
-                costTracker.recordLlmCost(inputTokens, outputTokens, costUsd)
+
+                accTokensIn += inputTokens
+                accTokensOut += outputTokens
+                accCostUsd += costUsd
+                llmCallCount++
+
+                // Atomic DB increments + budget enforcement
+                const { budgetStatuses } = await costTracker
+                  .recordLlmCost({
+                    agentId: agent.id,
+                    jobId,
+                    sessionId: job.session_id,
+                    model: task.constraints.model,
+                    tokensIn: inputTokens,
+                    tokensOut: outputTokens,
+                    cacheReadTokens: event.tokenUsage.cacheReadTokens,
+                    budget: costBudget,
+                  })
+                  .catch(() => ({ budgetStatuses: [] }))
 
                 if (eventEmitter) {
                   await eventEmitter
@@ -633,12 +673,12 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 }
 
                 // Cost budget enforcement
-                if (costBudgetUsd != null && !costTracker.checkBudget(costBudgetUsd)) {
+                if (budgetStatuses.some((s) => s.exceeded)) {
                   void handle.cancel("cost_budget_exceeded")
                 }
               }
               if (event.type === "tool_use") {
-                costTracker.recordToolCall()
+                toolCallCount++
 
                 if (eventEmitter) {
                   // Fire-and-forget start event; duration tracked by tool_result
@@ -735,8 +775,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           rootSpan.setAttribute(CortexAttributes.EXECUTION_DURATION_MS, result.durationMs)
 
           // ── Step 12: Map status and persist result ──
+          // Token/cost fields are already atomically incremented by CostTracker
+          // during execution; only status, result, and tool_call_count written here.
           const jobStatus = mapExecutionStatus(result.status)
-          const costSnapshot = costTracker.getSnapshot()
 
           await db
             .updateTable("job")
@@ -744,31 +785,11 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               status: jobStatus,
               completed_at: new Date(),
               result: executionResultToJson(result),
-              tokens_in: costSnapshot.tokensIn,
-              tokens_out: costSnapshot.tokensOut,
-              cost_usd: String(costSnapshot.costUsd),
-              llm_call_count: costSnapshot.llmCalls,
-              tool_call_count: costSnapshot.toolCalls,
+              tool_call_count: toolCallCount,
             })
             .where("id", "=", jobId)
             .where("status", "=", "RUNNING")
             .execute()
-
-          // Update session-level cost accumulators
-          if (job.session_id) {
-            await db
-              .updateTable("session")
-              .set({
-                total_tokens_in: costSnapshot.tokensIn,
-                total_tokens_out: costSnapshot.tokensOut,
-                total_cost_usd: String(costSnapshot.costUsd),
-              })
-              .where("id", "=", job.session_id)
-              .execute()
-              .catch(() => {
-                // Non-fatal: session cost update is best-effort
-              })
-          }
 
           // Record per-user usage in the usage ledger
           if (userRateLimiter && job.session_id) {
@@ -784,9 +805,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   session.user_account_id,
                   agent.id,
                   1,
-                  costSnapshot.tokensIn,
-                  costSnapshot.tokensOut,
-                  costSnapshot.costUsd,
+                  accTokensIn,
+                  accTokensOut,
+                  accCostUsd,
                 )
                 .catch(() => {
                   // Non-fatal: usage recording is best-effort
@@ -798,8 +819,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           if (eventEmitter) {
             const sessionEndPayload: Record<string, unknown> = {
               status: jobStatus,
-              llmCalls: costSnapshot.llmCalls,
-              toolCalls: costSnapshot.toolCalls,
+              llmCalls: llmCallCount,
+              toolCalls: toolCallCount,
               durationMs: result.durationMs,
             }
 
@@ -815,9 +836,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 agentId: agent.id,
                 sessionId: job.session_id,
                 jobId,
-                tokensIn: costSnapshot.tokensIn,
-                tokensOut: costSnapshot.tokensOut,
-                costUsd: costSnapshot.costUsd,
+                tokensIn: accTokensIn,
+                tokensOut: accTokensOut,
+                costUsd: accCostUsd,
                 payload: sessionEndPayload,
               })
               .catch(() => {
