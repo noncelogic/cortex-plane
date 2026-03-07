@@ -609,6 +609,28 @@ export type ToolCategoryMembership = Selectable<ToolCategoryMembershipTable>
 export type NewToolCategoryMembership = Insertable<ToolCategoryMembershipTable>
 
 // ---------------------------------------------------------------------------
+// Table: agent_checkpoint
+// ---------------------------------------------------------------------------
+export interface AgentCheckpointTable {
+  id: Generated<string>
+  agent_id: string
+  job_id: string | null
+  label: string | null
+  state: ColumnType<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
+  state_crc: number
+  context_snapshot: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+  created_by: ColumnType<string, string | undefined, string>
+}
+
+export type AgentCheckpoint = Selectable<AgentCheckpointTable>
+export type NewAgentCheckpoint = Insertable<AgentCheckpointTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -635,4 +657,5 @@ export interface Database {
   capability_audit_log: CapabilityAuditLogTable
   tool_category: ToolCategoryTable
   tool_category_membership: ToolCategoryMembershipTable
+  agent_checkpoint: AgentCheckpointTable
 }
