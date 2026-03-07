@@ -116,17 +116,21 @@ export function createMessageDispatch(
           await router.send(channelType, chatId, { text: authDecision.replyToUser })
         }
         if (eventEmitter) {
-          await eventEmitter.emit({
-            agentId,
-            eventType: "message_denied",
-            actor: "system",
-            payload: {
-              reason: authDecision.reason,
-              channelType,
-              chatId,
-              userId: authDecision.userId,
-            },
-          })
+          try {
+            await eventEmitter.emit({
+              agentId,
+              eventType: "message_denied",
+              actor: "system",
+              payload: {
+                reason: authDecision.reason,
+                channelType,
+                chatId,
+                userId: authDecision.userId,
+              },
+            })
+          } catch {
+            logger.warn({ agentId, channelType, chatId }, "Failed to emit message_denied event")
+          }
         }
         logger.info(
           { agentId, channelType, chatId, reason: authDecision.reason },
@@ -160,17 +164,21 @@ export function createMessageDispatch(
           await router.send(channelType, chatId, { text: rateLimitDecision.replyToUser })
         }
         if (eventEmitter) {
-          await eventEmitter.emit({
-            agentId,
-            eventType: "message_denied",
-            actor: "system",
-            payload: {
-              reason: rateLimitDecision.reason,
-              channelType,
-              chatId,
-              userId: authDecision.userId,
-            },
-          })
+          try {
+            await eventEmitter.emit({
+              agentId,
+              eventType: "message_denied",
+              actor: "system",
+              payload: {
+                reason: rateLimitDecision.reason,
+                channelType,
+                chatId,
+                userId: authDecision.userId,
+              },
+            })
+          } catch {
+            logger.warn({ agentId, channelType, chatId }, "Failed to emit message_denied event")
+          }
         }
         logger.info(
           { agentId, channelType, chatId, reason: rateLimitDecision.reason },
