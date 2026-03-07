@@ -400,6 +400,8 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     mcpHealthSupervisor.stop()
     channelSupervisor?.stop()
     await mcpClientPool.disconnectAll()
+    await eventEmitter.flush()
+    eventEmitter.dispose()
     sseManager.shutdown()
     screenshotModeService.shutdown()
     authHandoffService.shutdown()
