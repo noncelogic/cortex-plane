@@ -197,9 +197,7 @@ describe("KillResponseSchema", () => {
 describe("DryRunResponseSchema", () => {
   it("accepts valid dry run response", () => {
     const data = {
-      plannedActions: [
-        { type: "tool_call", toolRef: "web_search", input: { query: "test" } },
-      ],
+      plannedActions: [{ type: "tool_call", toolRef: "web_search", input: { query: "test" } }],
       agentResponse: "I would search for...",
       tokensUsed: { in: 200, out: 100 },
       estimatedCostUsd: 0.005,
