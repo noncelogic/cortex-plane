@@ -81,6 +81,7 @@ describe("PostgreSQL migrations", () => {
       expect(await enumExists(client, "agent_status")).toBe(true)
       expect(await enumExists(client, "approval_status")).toBe(true)
       expect(await enumExists(client, "tool_approval_policy")).toBe(true)
+      expect(await enumExists(client, "agent_auth_model")).toBe(true)
 
       // Verify tables exist
       expect(await tableExists(client, "agent")).toBe(true)
@@ -606,6 +607,160 @@ describe("PostgreSQL migrations", () => {
     }
   })
 
+  it("migration 026: creates agent_auth_model enum with correct values", async () => {
+    const client = await pool.connect()
+    try {
+      const enumResult = await client.query<{ enumlabel: string }>(
+        `SELECT enumlabel FROM pg_enum
+         JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+         WHERE pg_type.typname = 'agent_auth_model'
+         ORDER BY enumsortorder`,
+      )
+      expect(enumResult.rows.map((r) => r.enumlabel)).toEqual([
+        "allowlist",
+        "approval_queue",
+        "team",
+        "open",
+      ])
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 026: agent.auth_model defaults to 'allowlist'", async () => {
+    const client = await pool.connect()
+    try {
+      const agentResult = await client.query<{ id: string; auth_model: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('auth-model-agent', 'auth-model-agent', 'test')
+         RETURNING id, auth_model`,
+      )
+      expect(agentResult.rows[0]!.auth_model).toBe("allowlist")
+
+      // Verify explicit values work
+      await client.query(`UPDATE agent SET auth_model = 'approval_queue' WHERE id = $1`, [
+        agentResult.rows[0]!.id,
+      ])
+      const updated = await client.query<{ auth_model: string }>(
+        `SELECT auth_model FROM agent WHERE id = $1`,
+        [agentResult.rows[0]!.id],
+      )
+      expect(updated.rows[0]!.auth_model).toBe("approval_queue")
+
+      // Clean up
+      await client.query("DELETE FROM agent WHERE id = $1", [agentResult.rows[0]!.id])
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 026: creates user_usage_ledger with constraints", async () => {
+    const client = await pool.connect()
+    try {
+      expect(await tableExists(client, "user_usage_ledger")).toBe(true)
+
+      // Seed data
+      const agentResult = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('ledger-agent', 'ledger-agent', 'test')
+         RETURNING id`,
+      )
+      const agentId = agentResult.rows[0]!.id
+
+      const userResult = await client.query<{ id: string }>(
+        `INSERT INTO user_account (display_name) VALUES ('Ledger User') RETURNING id`,
+      )
+      const userId = userResult.rows[0]!.id
+
+      // Insert a valid ledger row
+      await client.query(
+        `INSERT INTO user_usage_ledger (user_account_id, agent_id, period_start, period_end, messages_sent, tokens_in, tokens_out, cost_usd)
+         VALUES ($1, $2, '2026-03-01', '2026-03-02', 10, 500, 200, 0.05)`,
+        [userId, agentId],
+      )
+
+      // Duplicate (user, agent, period_start) should fail
+      await expect(
+        client.query(
+          `INSERT INTO user_usage_ledger (user_account_id, agent_id, period_start, period_end)
+           VALUES ($1, $2, '2026-03-01', '2026-03-02')`,
+          [userId, agentId],
+        ),
+      ).rejects.toThrow(/unique|duplicate/i)
+
+      // period_end <= period_start should fail CHECK constraint
+      await expect(
+        client.query(
+          `INSERT INTO user_usage_ledger (user_account_id, agent_id, period_start, period_end)
+           VALUES ($1, $2, '2026-03-05', '2026-03-05')`,
+          [userId, agentId],
+        ),
+      ).rejects.toThrow()
+
+      // Clean up (CASCADE should remove ledger rows)
+      await client.query("DELETE FROM agent WHERE id = $1", [agentId])
+      await client.query("DELETE FROM user_account WHERE id = $1", [userId])
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 026: CASCADE deletes user_usage_ledger when agent or user is deleted", async () => {
+    const client = await pool.connect()
+    try {
+      const agentResult = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('cascade-ledger-agent', 'cascade-ledger-agent', 'test')
+         RETURNING id`,
+      )
+      const agentId = agentResult.rows[0]!.id
+
+      const userResult = await client.query<{ id: string }>(
+        `INSERT INTO user_account (display_name) VALUES ('Cascade User') RETURNING id`,
+      )
+      const userId = userResult.rows[0]!.id
+
+      await client.query(
+        `INSERT INTO user_usage_ledger (user_account_id, agent_id, period_start, period_end, messages_sent)
+         VALUES ($1, $2, '2026-03-01', '2026-03-02', 5)`,
+        [userId, agentId],
+      )
+
+      // Delete agent — ledger row should be removed
+      await client.query("DELETE FROM agent WHERE id = $1", [agentId])
+
+      const afterAgentDelete = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM user_usage_ledger WHERE agent_id = $1`,
+        [agentId],
+      )
+      expect(afterAgentDelete.rows[0]!.cnt).toBe("0")
+
+      // Re-insert for user cascade test
+      const agent2Result = await client.query<{ id: string }>(
+        `INSERT INTO agent (name, slug, role) VALUES ('cascade-ledger-agent-2', 'cascade-ledger-agent-2', 'test')
+         RETURNING id`,
+      )
+      const agent2Id = agent2Result.rows[0]!.id
+
+      await client.query(
+        `INSERT INTO user_usage_ledger (user_account_id, agent_id, period_start, period_end, messages_sent)
+         VALUES ($1, $2, '2026-03-01', '2026-03-02', 3)`,
+        [userId, agent2Id],
+      )
+
+      // Delete user — ledger row should be removed
+      await client.query("DELETE FROM user_account WHERE id = $1", [userId])
+
+      const afterUserDelete = await client.query<{ cnt: string }>(
+        `SELECT count(*)::text AS cnt FROM user_usage_ledger WHERE user_account_id = $1`,
+        [userId],
+      )
+      expect(afterUserDelete.rows[0]!.cnt).toBe("0")
+
+      // Clean up
+      await client.query("DELETE FROM agent WHERE id = $1", [agent2Id])
+    } finally {
+      client.release()
+    }
+  })
+
   it("rolls back all down migrations cleanly", async () => {
     const client = await pool.connect()
     try {
@@ -628,6 +783,9 @@ describe("PostgreSQL migrations", () => {
       expect(await enumExists(client, "agent_status")).toBe(false)
       expect(await enumExists(client, "approval_status")).toBe(false)
       expect(await enumExists(client, "tool_approval_policy")).toBe(false)
+      expect(await enumExists(client, "agent_auth_model")).toBe(false)
+
+      expect(await tableExists(client, "user_usage_ledger")).toBe(false)
     } finally {
       client.release()
     }
