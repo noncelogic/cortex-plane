@@ -2,6 +2,7 @@
  * Operator Event Routes
  *
  * GET  /operators/activity-stream       — SSE activity stream (all agents)
+ * GET  /events                          — cross-agent event feed (admin)
  * GET  /agents/:agentId/events          — paginated event query
  * GET  /agents/:agentId/cost            — cost aggregation by model/session/day
  */
@@ -43,6 +44,15 @@ interface EventListQuery {
   offset?: number
 }
 
+interface CrossAgentEventQuery {
+  agentIds?: string
+  eventTypes?: string
+  since?: string
+  until?: string
+  limit?: number
+  offset?: number
+}
+
 interface CostQuery {
   since?: string
   until?: string
@@ -66,6 +76,7 @@ export function operatorEventRoutes(deps: OperatorEventRouteDeps) {
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
   const requireOperator: PreHandler = createRequireRole("operator")
+  const requireAdmin: PreHandler = createRequireRole("admin")
 
   return function register(app: FastifyInstance): void {
     // -----------------------------------------------------------------
@@ -162,6 +173,76 @@ export function operatorEventRoutes(deps: OperatorEventRouteDeps) {
         })
 
         reply.hijack()
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // GET /events — cross-agent event feed (admin)
+    // -----------------------------------------------------------------
+    app.get<{ Querystring: CrossAgentEventQuery }>(
+      "/events",
+      {
+        preHandler: [requireAuth, requireAdmin],
+        schema: {
+          querystring: {
+            type: "object",
+            properties: {
+              agentIds: { type: "string" },
+              eventTypes: { type: "string" },
+              since: { type: "string" },
+              until: { type: "string" },
+              limit: { type: "number", minimum: 1, maximum: 200 },
+              offset: { type: "number", minimum: 0 },
+            },
+          },
+        },
+      },
+      async (
+        request: FastifyRequest<{ Querystring: CrossAgentEventQuery }>,
+        reply: FastifyReply,
+      ) => {
+        const { agentIds, eventTypes, since, until, limit = 50, offset = 0 } = request.query
+
+        let baseQuery = db.selectFrom("agent_event")
+
+        if (agentIds) {
+          const ids = agentIds.split(",").filter(Boolean)
+          if (ids.length > 0) {
+            baseQuery = baseQuery.where("agent_id", "in", ids)
+          }
+        }
+        if (eventTypes) {
+          const types = eventTypes.split(",").filter(Boolean)
+          if (types.length > 0) {
+            baseQuery = baseQuery.where("event_type", "in", types)
+          }
+        }
+        if (since) {
+          baseQuery = baseQuery.where("created_at", ">=", new Date(since))
+        }
+        if (until) {
+          baseQuery = baseQuery.where("created_at", "<=", new Date(until))
+        }
+
+        const [events, countResult] = await Promise.all([
+          baseQuery.selectAll().orderBy("created_at", "desc").limit(limit).offset(offset).execute(),
+          baseQuery.select(db.fn.countAll<number>().as("total")).executeTakeFirstOrThrow(),
+        ])
+
+        return reply.status(200).send({
+          events: events.map((e) => ({
+            id: e.id,
+            agentId: e.agent_id,
+            eventType: e.event_type,
+            payload: e.payload,
+            tokensIn: e.tokens_in,
+            tokensOut: e.tokens_out,
+            costUsd: e.cost_usd ? Number(e.cost_usd) : null,
+            toolRef: e.tool_ref,
+            createdAt: e.created_at,
+          })),
+          total: Number(countResult.total),
+        })
       },
     )
 
