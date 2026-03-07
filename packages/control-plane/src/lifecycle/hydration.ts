@@ -73,6 +73,8 @@ export interface QdrantClient {
       score: number
     }>
   >
+  /** Lightweight connectivity check used by the health probe. */
+  getCollections?(): Promise<unknown>
 }
 
 // ---------------------------------------------------------------------------
