@@ -392,6 +392,13 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 const cs = credentialService
                 const auditCtx = { agentId: agent.id, jobId: job.id }
                 tokenRefresher = buildTokenRefresher(cs, db, auditCtx)
+              } else {
+                rootSpan.addEvent("credential_unusable", {
+                  "cortex.credential.provider": binding.provider,
+                  "cortex.credential.reason":
+                    "Bound LLM credential exists but getAccessToken returned null " +
+                    "(token may be expired, revoked, or missing)",
+                })
               }
             }
             // If no binding exists, fall back to env var LLM_API_KEY (backward compat)
