@@ -28,6 +28,7 @@ import type { CredentialService } from "../../auth/credential-service.js"
 import type { UserRateLimiter } from "../../auth/user-rate-limiter.js"
 import type { TokenRefresher } from "../../backends/http-llm.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
+import type { CapabilityAssembler } from "../../capabilities/index.js"
 import type { Database, Job } from "../../db/types.js"
 import { AgentCircuitBreaker } from "../../lifecycle/agent-circuit-breaker.js"
 import {
@@ -77,6 +78,8 @@ export interface AgentExecuteDeps {
   executionRegistry?: ExecutionRegistry
   /** Optional user rate limiter for recording per-user usage after execution. */
   userRateLimiter?: UserRateLimiter
+  /** Optional capability assembler for V2 capability model (CAPABILITY_MODEL_V2=true). */
+  capabilityAssembler?: CapabilityAssembler
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -104,6 +107,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     eventEmitter,
     executionRegistry,
     userRateLimiter,
+    capabilityAssembler,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -451,14 +455,49 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           }
 
           // ── Step 8: Execute task ──
-          // If the backend supports per-agent tool registries (HttpLlmBackend),
-          // build one that includes custom webhook tools from agent config
-          // and MCP tools when a router is available.
+          // Feature flag: CAPABILITY_MODEL_V2=true uses CapabilityAssembler
+          // to resolve effective tools from agent_tool_binding rows instead
+          // of the legacy MCP tool router + allowedTools/deniedTools path.
+          const useCapabilityV2 = capabilityAssembler && process.env.CAPABILITY_MODEL_V2 === "true"
+
           if (
+            useCapabilityV2 &&
             "createAgentRegistry" in backend &&
             typeof backend.createAgentRegistry === "function"
           ) {
-            // Build optional MCP deps from the tool router + task constraints
+            // V2 path: resolve tools from agent_tool_binding
+            const effectiveTools = await capabilityAssembler.resolveEffectiveTools(agent.id)
+            const userId =
+              job.session_id && credentialService
+                ? ((
+                    await db
+                      .selectFrom("session")
+                      .select("user_account_id")
+                      .where("id", "=", job.session_id)
+                      .executeTakeFirst()
+                  )?.user_account_id ?? "system")
+                : "system"
+
+            const guardedRegistry = capabilityAssembler.buildGuardedRegistry(effectiveTools, {
+              agentId: agent.id,
+              jobId: job.id,
+              userId,
+            })
+
+            handle = await (
+              backend as {
+                executeTask: (
+                  t: ExecutionTask,
+                  r: unknown,
+                  tr?: TokenRefresher,
+                ) => Promise<ExecutionHandle>
+              }
+            ).executeTask(task, guardedRegistry, tokenRefresher)
+          } else if (
+            "createAgentRegistry" in backend &&
+            typeof backend.createAgentRegistry === "function"
+          ) {
+            // Legacy path: build registry from MCP tool router + allowedTools/deniedTools
             const mcpDeps = mcpToolRouter
               ? {
                   mcpRouter: mcpToolRouter,
