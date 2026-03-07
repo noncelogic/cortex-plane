@@ -27,6 +27,7 @@ import { McpToolRouter } from "./mcp/tool-router.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
+import { agentCheckpointRoutes } from "./routes/agent-checkpoints.js"
 import { agentControlRoutes } from "./routes/agent-control.js"
 import { agentCredentialRoutes } from "./routes/agent-credentials.js"
 import { agentToolBindingRoutes } from "./routes/agent-tool-bindings.js"
@@ -228,6 +229,15 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Register agent tool binding routes
   await app.register(
     agentToolBindingRoutes({
+      db,
+      authConfig,
+      sessionService,
+    }),
+  )
+
+  // Register agent checkpoint + rollback routes
+  await app.register(
+    agentCheckpointRoutes({
       db,
       authConfig,
       sessionService,
