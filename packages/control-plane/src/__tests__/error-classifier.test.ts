@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { classifyError, type ErrorClassification } from "../worker/error-classifier.js"
+import {
+  classifyError,
+  type ErrorClassification,
+  isConfigErrorCategory,
+} from "../worker/error-classifier.js"
 
 describe("classifyError", () => {
   describe("HTTP status codes", () => {
@@ -212,5 +216,35 @@ describe("classifyError", () => {
       expect(result).toHaveProperty("retryable")
       expect(result).toHaveProperty("message")
     })
+  })
+})
+
+describe("isConfigErrorCategory", () => {
+  it("returns true for PERMANENT", () => {
+    expect(isConfigErrorCategory("PERMANENT")).toBe(true)
+  })
+
+  it("returns true for CONTEXT_BUDGET_EXCEEDED", () => {
+    expect(isConfigErrorCategory("CONTEXT_BUDGET_EXCEEDED")).toBe(true)
+  })
+
+  it("returns true for QUARANTINED", () => {
+    expect(isConfigErrorCategory("QUARANTINED")).toBe(true)
+  })
+
+  it("returns false for TRANSIENT (runtime error)", () => {
+    expect(isConfigErrorCategory("TRANSIENT")).toBe(false)
+  })
+
+  it("returns false for TIMEOUT (runtime error)", () => {
+    expect(isConfigErrorCategory("TIMEOUT")).toBe(false)
+  })
+
+  it("returns false for RESOURCE (runtime error)", () => {
+    expect(isConfigErrorCategory("RESOURCE")).toBe(false)
+  })
+
+  it("returns false for UNKNOWN (runtime error)", () => {
+    expect(isConfigErrorCategory("UNKNOWN")).toBe(false)
   })
 })

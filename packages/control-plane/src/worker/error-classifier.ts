@@ -130,3 +130,31 @@ export function classifyError(error: unknown): ErrorClassification {
 
   return { category: "UNKNOWN", retryable: true, message: error.message }
 }
+
+// ---------------------------------------------------------------------------
+// Config-error detection (#450)
+// ---------------------------------------------------------------------------
+
+/**
+ * Job error categories that represent configuration / setup problems rather
+ * than runtime execution failures.  These should NOT count toward the
+ * agent-level circuit breaker's consecutive-failure threshold because they
+ * require operator intervention (fix credentials, adjust context budget, etc.)
+ * rather than automatic quarantine.
+ */
+const CONFIG_ERROR_CATEGORIES: ReadonlySet<string> = new Set([
+  "PERMANENT",
+  "CONTEXT_BUDGET_EXCEEDED",
+  "QUARANTINED",
+])
+
+/**
+ * Returns `true` when `category` represents a config / setup error that should
+ * be excluded from the circuit breaker failure counter.
+ *
+ * Accepts the uppercase categories stored in the job `error` JSONB column
+ * (e.g. `"PERMANENT"`, `"CONTEXT_BUDGET_EXCEEDED"`).
+ */
+export function isConfigErrorCategory(category: string): boolean {
+  return CONFIG_ERROR_CATEGORIES.has(category)
+}
