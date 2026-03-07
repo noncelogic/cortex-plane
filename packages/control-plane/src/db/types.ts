@@ -631,6 +631,69 @@ export type AgentCheckpoint = Selectable<AgentCheckpointTable>
 export type NewAgentCheckpoint = Insertable<AgentCheckpointTable>
 
 // ---------------------------------------------------------------------------
+// Enum: grant_access_level
+// ---------------------------------------------------------------------------
+export type GrantAccessLevel = "read" | "write"
+
+// ---------------------------------------------------------------------------
+// Enum: grant_origin
+// ---------------------------------------------------------------------------
+export type GrantOrigin =
+  | "pairing_code"
+  | "dashboard_invite"
+  | "auto_team"
+  | "auto_open"
+  | "approval"
+
+// ---------------------------------------------------------------------------
+// Table: pairing_code
+// ---------------------------------------------------------------------------
+export interface PairingCodeTable {
+  id: Generated<string>
+  code: string
+  agent_id: string | null
+  created_by: string
+  redeemed_by: string | null
+  redeemed_at: ColumnType<Date | null, Date | null | undefined, Date | null>
+  revoked_at: ColumnType<Date | null, Date | null | undefined, Date | null>
+  expires_at: Date
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type PairingCode = Selectable<PairingCodeTable>
+export type NewPairingCode = Insertable<PairingCodeTable>
+export type PairingCodeUpdate = Updateable<PairingCodeTable>
+
+// ---------------------------------------------------------------------------
+// Table: agent_user_grant
+// ---------------------------------------------------------------------------
+export interface AgentUserGrantTable {
+  id: Generated<string>
+  agent_id: string
+  user_account_id: string
+  access_level: ColumnType<GrantAccessLevel, GrantAccessLevel | undefined, GrantAccessLevel>
+  origin: GrantOrigin
+  granted_by: string | null
+  rate_limit: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  token_budget: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >
+  expires_at: Date | null
+  revoked_at: ColumnType<Date | null, Date | null | undefined, Date | null>
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type AgentUserGrant = Selectable<AgentUserGrantTable>
+export type NewAgentUserGrant = Insertable<AgentUserGrantTable>
+export type AgentUserGrantUpdate = Updateable<AgentUserGrantTable>
+
+// ---------------------------------------------------------------------------
 // Table: agent_event
 // ---------------------------------------------------------------------------
 export interface AgentEventTable {
@@ -679,4 +742,6 @@ export interface Database {
   tool_category_membership: ToolCategoryMembershipTable
   agent_checkpoint: AgentCheckpointTable
   agent_event: AgentEventTable
+  pairing_code: PairingCodeTable
+  agent_user_grant: AgentUserGrantTable
 }
