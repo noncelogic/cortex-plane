@@ -788,6 +788,7 @@ export type AgentEventType =
   | "kill_requested"
   | "checkpoint_created"
   | "error"
+  | "message_denied"
   | "session_start"
   | "session_end"
 

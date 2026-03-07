@@ -20,6 +20,7 @@ import type { Kysely } from "kysely"
 import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { UserRateLimiter } from "../auth/user-rate-limiter.js"
 import type { Database, RateLimit, TokenBudget } from "../db/types.js"
+import type { AgentEventEmitter } from "../observability/event-emitter.js"
 import type { AgentChannelService } from "./agent-channel-service.js"
 
 /** Pattern matching pairing codes (6-char uppercase alphanumeric). */
@@ -32,6 +33,7 @@ export interface MessageDispatchDeps {
   enqueueJob: (jobId: string) => Promise<void>
   channelAuthGuard?: ChannelAuthGuard
   userRateLimiter?: UserRateLimiter
+  eventEmitter?: AgentEventEmitter
   logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }
 }
 
@@ -66,6 +68,7 @@ export function createMessageDispatch(
     enqueueJob,
     channelAuthGuard,
     userRateLimiter,
+    eventEmitter,
     logger = console,
   } = deps
 
@@ -112,6 +115,19 @@ export function createMessageDispatch(
         if (authDecision.replyToUser) {
           await router.send(channelType, chatId, { text: authDecision.replyToUser })
         }
+        if (eventEmitter) {
+          await eventEmitter.emit({
+            agentId,
+            eventType: "message_denied",
+            actor: "system",
+            payload: {
+              reason: authDecision.reason,
+              channelType,
+              chatId,
+              userId: authDecision.userId,
+            },
+          })
+        }
         logger.info(
           { agentId, channelType, chatId, reason: authDecision.reason },
           "Message blocked by ChannelAuthGuard",
@@ -142,6 +158,19 @@ export function createMessageDispatch(
       if (!rateLimitDecision.allowed) {
         if (rateLimitDecision.replyToUser) {
           await router.send(channelType, chatId, { text: rateLimitDecision.replyToUser })
+        }
+        if (eventEmitter) {
+          await eventEmitter.emit({
+            agentId,
+            eventType: "message_denied",
+            actor: "system",
+            payload: {
+              reason: rateLimitDecision.reason,
+              channelType,
+              chatId,
+              userId: authDecision.userId,
+            },
+          })
         }
         logger.info(
           { agentId, channelType, chatId, reason: rateLimitDecision.reason },

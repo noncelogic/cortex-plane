@@ -207,9 +207,10 @@ export function agentRoutes(deps: AgentRouteDeps) {
 
         const costMap = new Map<string, number>()
         const jobMap = new Map<string, string>()
+        const grantCountMap = new Map<string, number>()
 
         if (agents.length > 0) {
-          const [costEvents, runningJobs] = await Promise.all([
+          const [costEvents, runningJobs, grantCounts] = await Promise.all([
             db
               .selectFrom("agent_event")
               .selectAll()
@@ -222,6 +223,13 @@ export function agentRoutes(deps: AgentRouteDeps) {
               .where("agent_id", "in", agentIds)
               .where("status", "=", "RUNNING" as JobStatus)
               .execute(),
+            db
+              .selectFrom("agent_user_grant")
+              .select(["agent_id", db.fn.countAll<number>().as("cnt")])
+              .where("agent_id", "in", agentIds)
+              .where("revoked_at", "is", null)
+              .groupBy("agent_id")
+              .execute(),
           ])
 
           for (const e of costEvents) {
@@ -233,16 +241,28 @@ export function agentRoutes(deps: AgentRouteDeps) {
               jobMap.set(j.agent_id, j.id)
             }
           }
+
+          for (const g of grantCounts) {
+            grantCountMap.set(g.agent_id, Number(g.cnt))
+          }
         }
 
         const enrichedAgents = agents.map((a) => {
           const hasRunningJob = jobMap.has(a.id)
+          const authModel = a.auth_model ?? "allowlist"
+          const grantCount = grantCountMap.get(a.id) ?? 0
+          const authWarnings: string[] = []
+          if (authModel === "allowlist" && grantCount === 0) {
+            authWarnings.push("Allowlist agent has zero grants — all messages will be denied.")
+          }
           return {
             ...a,
             lifecycle_state: deriveLifecycleState(a.status, hasRunningJob),
             costToday: costMap.get(a.id) ?? 0,
             healthStatus: mapAgentHealthStatus(a.status),
             runningJobId: jobMap.get(a.id) ?? null,
+            grantCount,
+            authWarnings,
           }
         })
 
@@ -286,8 +306,8 @@ export function agentRoutes(deps: AgentRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Agent not found" })
         }
 
-        // Fetch latest job, events, and running job in parallel
-        const [latestJob, agentEvents, runningJob] = await Promise.all([
+        // Fetch latest job, events, running job, and active grant count in parallel
+        const [latestJob, agentEvents, runningJob, grantCountRow] = await Promise.all([
           db
             .selectFrom("job")
             .selectAll()
@@ -308,6 +328,12 @@ export function agentRoutes(deps: AgentRouteDeps) {
             .where("status", "=", "RUNNING" as JobStatus)
             .limit(1)
             .executeTakeFirst(),
+          db
+            .selectFrom("agent_user_grant")
+            .select(db.fn.countAll<number>().as("cnt"))
+            .where("agent_id", "=", agent.id)
+            .where("revoked_at", "is", null)
+            .executeTakeFirstOrThrow(),
         ])
 
         // Build cost summary
@@ -351,6 +377,13 @@ export function agentRoutes(deps: AgentRouteDeps) {
           typeof cbConfig?.maxConsecutiveFailures === "number" ? cbConfig.maxConsecutiveFailures : 3
         const tripped = consecutiveFailures >= maxFailures
 
+        const authModel = agent.auth_model ?? "allowlist"
+        const grantCount = Number(grantCountRow.cnt)
+        const authWarnings: string[] = []
+        if (authModel === "allowlist" && grantCount === 0) {
+          authWarnings.push("Allowlist agent has zero grants — all messages will be denied.")
+        }
+
         return reply.status(200).send({
           ...agent,
           lifecycle_state: deriveLifecycleState(agent.status, !!runningJob),
@@ -358,6 +391,8 @@ export function agentRoutes(deps: AgentRouteDeps) {
           costSummary: { totalToday, totalAllTime, byModel },
           healthStatus: mapAgentHealthStatus(agent.status),
           runningJobId: runningJob?.id ?? null,
+          grantCount,
+          authWarnings,
           circuitBreakerState: {
             tripped,
             consecutiveFailures,

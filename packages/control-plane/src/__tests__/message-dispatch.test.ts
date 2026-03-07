@@ -7,6 +7,7 @@ import type { RateLimitDecision, UserRateLimiter } from "../auth/user-rate-limit
 import type { AgentChannelService } from "../channels/agent-channel-service.js"
 import { createMessageDispatch, watchJobCompletion } from "../channels/message-dispatch.js"
 import type { Database } from "../db/types.js"
+import type { AgentEventEmitter } from "../observability/event-emitter.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -148,6 +149,15 @@ function mockUserRateLimiter(decision: RateLimitDecision) {
     recordUsage: vi.fn().mockResolvedValue(undefined),
     getUsageSummary: vi.fn(),
   } as unknown as UserRateLimiter
+}
+
+function mockEventEmitter() {
+  return {
+    emit: vi.fn().mockResolvedValue({ eventId: "evt-1" }),
+    emitStart: vi.fn(),
+    flush: vi.fn(),
+    dispose: vi.fn(),
+  } as unknown as AgentEventEmitter
 }
 
 // ---------------------------------------------------------------------------
@@ -629,6 +639,75 @@ describe("ChannelAuthGuard integration", () => {
     expect(enqueueJob).toHaveBeenCalled()
   })
 
+  it("emits message_denied event when guard denies access", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: false,
+      userId: "user-111",
+      reason: "denied",
+      replyToUser: "This agent is private.",
+    })
+    const emitter = mockEventEmitter()
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      eventEmitter: emitter,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(emitter.emit).toHaveBeenCalledWith({
+      agentId: "agent-aaa",
+      eventType: "message_denied",
+      actor: "system",
+      payload: {
+        reason: "denied",
+        channelType: "telegram",
+        chatId: "chat-42",
+        userId: "user-111",
+      },
+    })
+  })
+
+  it("does not emit event when no eventEmitter provided", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: false,
+      userId: "user-111",
+      reason: "denied",
+      replyToUser: "Private.",
+    })
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      // no eventEmitter
+      logger,
+    })
+
+    // Should not throw
+    await dispatch(makeRoutedMessage())
+
+    expect(router.send).toHaveBeenCalled()
+  })
+
   it("skips guard when channelAuthGuard is not provided", async () => {
     const agentChannelService = mockAgentChannelService("agent-aaa")
     const router = mockRouter()
@@ -734,6 +813,53 @@ describe("UserRateLimiter integration", () => {
       text: "You've reached the token budget (100000 tokens per day). Please try again later.",
     })
     expect(enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it("emits message_denied event when rate limit exceeded", async () => {
+    const guard = mockChannelAuthGuard({
+      allowed: true,
+      userId: "user-111",
+      grantId: "grant-999",
+      reason: "granted",
+    })
+    const rateLimiter = mockUserRateLimiter({
+      allowed: false,
+      reason: "rate_limited",
+      replyToUser: "Rate limited.",
+      retryAfterSeconds: 3600,
+    })
+    const emitter = mockEventEmitter()
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      channelAuthGuard: guard,
+      userRateLimiter: rateLimiter,
+      eventEmitter: emitter,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(emitter.emit).toHaveBeenCalledWith({
+      agentId: "agent-aaa",
+      eventType: "message_denied",
+      actor: "system",
+      payload: {
+        reason: "rate_limited",
+        channelType: "telegram",
+        chatId: "chat-42",
+        userId: "user-111",
+      },
+    })
   })
 
   it("allows message through when rate limiter approves", async () => {
