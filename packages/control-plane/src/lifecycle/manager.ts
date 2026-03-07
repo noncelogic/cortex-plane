@@ -22,7 +22,16 @@ import type { Kysely } from "kysely"
 import type { Database } from "../db/types.js"
 import type { AgentDeployer } from "../k8s/agent-deployer.js"
 import type { AgentDeploymentConfig } from "../k8s/types.js"
+import type { McpHealthSupervisor } from "../mcp/health-supervisor.js"
+import type { AgentCircuitBreaker } from "./agent-circuit-breaker.js"
 import { type AgentHeartbeat, CrashLoopDetector, HeartbeatReceiver } from "./health.js"
+import {
+  type HealthProbeResult,
+  PROBE_INTERVAL_EXECUTING_MS,
+  PROBE_INTERVAL_READY_MS,
+  PROBE_SKIP_STATES,
+  probeAgentHealth,
+} from "./health-probe.js"
 import { hydrateAgent, type HydrationResult, type QdrantClient } from "./hydration.js"
 import { IdleDetector } from "./idle-detector.js"
 import { recordCircuitBreakerTrip, recordStateTransition } from "./metrics.js"
@@ -40,6 +49,7 @@ export interface LifecycleManagerDeps {
   db: Kysely<Database>
   deployer: AgentDeployer
   qdrantClient?: QdrantClient
+  mcpHealthSupervisor?: McpHealthSupervisor
   idleTimeoutMs?: number
   onLifecycleEvent?: (event: LifecycleTransitionEvent) => void
 }
@@ -81,7 +91,13 @@ export class AgentLifecycleManager {
   readonly heartbeatReceiver: HeartbeatReceiver
   readonly crashDetector: CrashLoopDetector
   readonly idleDetector: IdleDetector
+  private readonly mcpHealthSupervisor?: McpHealthSupervisor
   private readonly onLifecycleEvent?: (event: LifecycleTransitionEvent) => void
+  /** agentId → circuit breaker for the health probe */
+  private readonly circuitBreakers = new Map<string, AgentCircuitBreaker>()
+  /** agentId → last probe timestamp (epoch ms) */
+  private readonly lastProbeAt = new Map<string, number>()
+  private probeTimer: ReturnType<typeof setInterval> | null = null
   /** agentId → listeners for steering messages */
   private readonly steerListeners = new Map<string, Set<SteerListener>>()
   /** steerMessageId → pending ack resolver (for steerAsync) */
@@ -94,6 +110,7 @@ export class AgentLifecycleManager {
     this.db = deps.db
     this.deployer = deps.deployer
     this.qdrantClient = deps.qdrantClient
+    this.mcpHealthSupervisor = deps.mcpHealthSupervisor
     this.onLifecycleEvent = deps.onLifecycleEvent
 
     this.heartbeatReceiver = new HeartbeatReceiver()
@@ -508,6 +525,75 @@ export class AgentLifecycleManager {
   }
 
   // -------------------------------------------------------------------------
+  // Circuit breaker registration (for health probe)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Register an agent's circuit breaker so the health probe can read its state.
+   */
+  registerCircuitBreaker(agentId: string, cb: AgentCircuitBreaker): void {
+    this.circuitBreakers.set(agentId, cb)
+  }
+
+  // -------------------------------------------------------------------------
+  // Health probe scheduling (#317)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start the periodic health probe loop. Runs every 15 seconds and
+   * decides per-agent whether to probe based on lifecycle state.
+   */
+  startHealthProbeLoop(): void {
+    if (this.probeTimer) return
+    // Check every 15s; per-agent intervals are enforced inside the tick
+    this.probeTimer = setInterval(() => void this.healthProbeTick(), 15_000)
+  }
+
+  /**
+   * Run a single health probe for an agent (on-demand).
+   */
+  async probeHealth(agentId: string): Promise<HealthProbeResult | null> {
+    const ctx = this.agents.get(agentId)
+    if (!ctx) return null
+
+    const cb = this.circuitBreakers.get(agentId)
+
+    return probeAgentHealth(agentId, {
+      db: this.db,
+      heartbeatReceiver: this.heartbeatReceiver,
+      circuitBreakerState: cb?.getState(),
+      qdrantClient: this.qdrantClient,
+      mcpHealthSupervisor: this.mcpHealthSupervisor,
+      lifecycleState: ctx.stateMachine.state,
+    })
+  }
+
+  /** Single tick of the probe loop. */
+  private async healthProbeTick(): Promise<void> {
+    const now = Date.now()
+
+    for (const [agentId, ctx] of this.agents) {
+      const state = ctx.stateMachine.state
+
+      // Skip states that should not be probed
+      if (PROBE_SKIP_STATES.has(state)) continue
+
+      const interval = state === "EXECUTING" ? PROBE_INTERVAL_EXECUTING_MS : PROBE_INTERVAL_READY_MS
+      const lastProbe = this.lastProbeAt.get(agentId) ?? 0
+
+      if (now - lastProbe < interval) continue
+
+      this.lastProbeAt.set(agentId, now)
+
+      try {
+        await this.probeHealth(agentId)
+      } catch {
+        // Probe failure is non-fatal — will retry next tick
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Shutdown
   // -------------------------------------------------------------------------
 
@@ -518,6 +604,10 @@ export class AgentLifecycleManager {
   shutdown(): void {
     this.heartbeatReceiver.stopMonitoring()
     this.idleDetector.shutdown()
+    if (this.probeTimer) {
+      clearInterval(this.probeTimer)
+      this.probeTimer = null
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -537,5 +627,7 @@ export class AgentLifecycleManager {
     this.idleDetector.removeAgent(agentId)
     this.heartbeatReceiver.removeAgent(agentId)
     this.steerListeners.delete(agentId)
+    this.circuitBreakers.delete(agentId)
+    this.lastProbeAt.delete(agentId)
   }
 }

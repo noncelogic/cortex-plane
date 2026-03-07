@@ -8,6 +8,7 @@
  * DELETE /agents/:id           — Soft delete (set status=ARCHIVED)
  * GET    /agents/:id/jobs      — List jobs for agent (paginated, ?status filter)
  * POST   /agents/:id/jobs      — Create and enqueue a new job
+ * GET    /agents/:agentId/health — Agent health probe (#317)
  */
 
 import { randomUUID } from "node:crypto"
@@ -18,6 +19,8 @@ import type { Kysely } from "kysely"
 
 import type { SessionService } from "../auth/session-service.js"
 import type { Database } from "../db/types.js"
+import { HeartbeatReceiver } from "../lifecycle/health.js"
+import { type HealthProbeDeps, probeAgentHealth } from "../lifecycle/health-probe.js"
 import {
   type AuthMiddlewareOptions,
   createRequireAuth,
@@ -122,6 +125,8 @@ export interface AgentRouteDeps {
   authConfig: AuthConfig
   enqueueJob: (jobId: string) => Promise<void>
   sessionService?: SessionService
+  /** Partial deps for the health probe — db is shared from the top-level. */
+  healthProbeDeps?: Omit<HealthProbeDeps, "db" | "lifecycleState">
 }
 
 export function agentRoutes(deps: AgentRouteDeps) {
@@ -476,6 +481,56 @@ export function agentRoutes(deps: AgentRouteDeps) {
           status: "resuming",
           fromCheckpoint: request.body?.checkpointId,
         })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // GET /agents/:agentId/health — Agent health probe (#317)
+    // Requires: auth + operator role
+    // -----------------------------------------------------------------
+    app.get<{ Params: PauseAgentParams }>(
+      "/agents/:agentId/health",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              agentId: { type: "string" },
+            },
+            required: ["agentId"],
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: PauseAgentParams }>, reply: FastifyReply) => {
+        const { agentId } = request.params
+        const agent = await db
+          .selectFrom("agent")
+          .select("id")
+          .where("id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!agent) {
+          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        // Determine lifecycle state from the lifecycle manager (if available) or
+        // fall back to a reasonable default based on DB status
+        const lifecycleState =
+          deps.healthProbeDeps?.heartbeatReceiver?.getHealth(agentId)?.lastLifecycleState ?? "READY"
+
+        const probeDeps: HealthProbeDeps = {
+          db,
+          heartbeatReceiver: deps.healthProbeDeps?.heartbeatReceiver ?? new HeartbeatReceiver(),
+          circuitBreakerState: deps.healthProbeDeps?.circuitBreakerState,
+          tokenBudgetConfig: deps.healthProbeDeps?.tokenBudgetConfig,
+          qdrantClient: deps.healthProbeDeps?.qdrantClient,
+          mcpHealthSupervisor: deps.healthProbeDeps?.mcpHealthSupervisor,
+          lifecycleState,
+        }
+
+        const result = await probeAgentHealth(agentId, probeDeps)
+        return reply.status(200).send(result)
       },
     )
 
