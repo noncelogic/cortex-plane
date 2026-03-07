@@ -102,6 +102,18 @@ export class ChannelConfigService {
     return rows.map((r) => this.toFull(r))
   }
 
+  /** Check whether a channel config with the given type + name already exists. */
+  async findByTypeName(type: ChannelType, name: string): Promise<ChannelConfigSummary | undefined> {
+    const row = await this.db
+      .selectFrom("channel_config")
+      .select(["id", "type", "name", "enabled", "created_by", "created_at", "updated_at"])
+      .where("type", "=", type)
+      .where("name", "=", name)
+      .executeTakeFirst()
+
+    return row as ChannelConfigSummary | undefined
+  }
+
   /** Create a new channel config. Returns the summary (secrets masked). */
   async create(
     type: ChannelType,

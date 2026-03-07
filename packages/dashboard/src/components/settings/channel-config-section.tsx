@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
   type ChannelConfigSummary,
@@ -102,6 +102,13 @@ export function ChannelConfigSection() {
       }
     },
     [fetchChannels],
+  )
+
+  const isDuplicate = useMemo(
+    () =>
+      form.name.trim() !== "" &&
+      channels.some((ch) => ch.type === form.type && ch.name === form.name.trim()),
+    [channels, form.type, form.name],
   )
 
   const selectedType = CHANNEL_TYPES.find((t) => t.id === form.type)!
@@ -222,9 +229,14 @@ export function ChannelConfigSection() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className={`w-full rounded-lg border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:outline-none focus:ring-1 ${isDuplicate ? "border-danger focus:border-danger focus:ring-danger" : "border-surface-border focus:border-primary focus:ring-primary"}`}
                   placeholder="e.g., Production Telegram Bot"
                 />
+                {isDuplicate && (
+                  <p className="mt-1 text-xs text-danger">
+                    A {form.type} channel with this name already exists.
+                  </p>
+                )}
               </div>
 
               {/* Dynamic config fields based on type */}
@@ -261,7 +273,7 @@ export function ChannelConfigSection() {
               <button
                 type="button"
                 onClick={() => void handleCreate()}
-                disabled={saving || !form.name.trim()}
+                disabled={saving || !form.name.trim() || isDuplicate}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Saving..." : "Add Channel"}
