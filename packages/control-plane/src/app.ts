@@ -110,6 +110,10 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   const eventEmitter = new AgentEventEmitter(db, sseManager)
   const executionRegistry = new ExecutionRegistry()
 
+  // Credential service — must be created before worker so agent_execute can
+  // resolve per-job LLM credentials from agent_credential_binding (#444).
+  const credentialService = config.auth ? new CredentialService(db, config.auth) : undefined
+
   // Start Graphile Worker alongside Fastify — shared pg.Pool
   const runner = await createWorker({
     pgPool: pool,
@@ -120,6 +124,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     concurrency: config.workerConcurrency,
     mcpToolRouter,
     authConfig: config.auth,
+    credentialService,
     eventEmitter,
     executionRegistry,
   })
@@ -163,13 +168,11 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Load auth configuration for approval gate endpoints
   const authConfig = loadAuthConfig()
 
-  // Session service + credential service (if OAuth is configured)
+  // Session service (if OAuth is configured)
   let sessionService: SessionService | undefined
-  let credentialService: CredentialService | undefined
 
   if (config.auth) {
     sessionService = new SessionService(db, config.auth.sessionMaxAge)
-    credentialService = new CredentialService(db, config.auth)
 
     // Clean up expired sessions on startup
     sessionService.cleanupExpired().catch(() => {

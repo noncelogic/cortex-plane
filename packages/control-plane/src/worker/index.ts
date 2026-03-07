@@ -15,6 +15,7 @@ import { run, type Runner, type TaskList } from "graphile-worker"
 import type { Kysely } from "kysely"
 import type { Pool } from "pg"
 
+import type { CredentialService } from "../auth/credential-service.js"
 import type { AuthOAuthConfig } from "../config.js"
 import type { Database } from "../db/types.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
@@ -45,6 +46,8 @@ export interface WorkerOptions {
   eventEmitter?: AgentEventEmitter
   /** Optional execution registry for tracking in-flight handles. */
   executionRegistry?: ExecutionRegistry
+  /** Optional credential service for resolving per-job LLM credentials from agent bindings. */
+  credentialService?: CredentialService
 }
 
 /**
@@ -64,6 +67,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     authConfig,
     eventEmitter,
     executionRegistry,
+    credentialService,
   } = options
 
   const workerConcurrency =
@@ -77,6 +81,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
       sessionBufferFactory,
       memoryExtractThreshold,
       mcpToolRouter,
+      credentialService,
       eventEmitter,
       executionRegistry,
     }),
