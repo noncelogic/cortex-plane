@@ -44,18 +44,11 @@ export interface AbortDecision {
 }
 
 // ---------------------------------------------------------------------------
-// Defaults
+// Defaults (canonical source: defaults.ts)
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG: AgentCircuitBreakerConfig = {
-  maxConsecutiveFailures: 3,
-  maxToolErrorsPerJob: 10,
-  maxLlmRetriesPerJob: 5,
-  tokenBudgetPerJob: 500_000,
-  tokenBudgetPerSession: 2_000_000,
-  toolCallRateLimit: { maxCalls: 50, windowSeconds: 300 },
-  llmCallRateLimit: { maxCalls: 20, windowSeconds: 300 },
-}
+export { DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG } from "./defaults.js"
+import { DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG } from "./defaults.js"
 
 // ---------------------------------------------------------------------------
 // Implementation
