@@ -35,6 +35,15 @@ export {
   type SteerMessage,
 } from "./manager.js"
 export {
+  computeCheckpointCrc,
+  DEFAULT_CHECKPOINT_MAX_BYTES,
+  DEFAULT_MEMORY_MAX_CHARS,
+  type OutputValidationResult,
+  validateCheckpointWrite,
+  validateMemoryWrite,
+  verifyCheckpointIntegrity,
+} from "./output-validator.js"
+export {
   type AgentLifecycleState,
   AgentLifecycleStateMachine,
   assertValidTransition,
