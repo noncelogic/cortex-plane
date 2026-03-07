@@ -44,6 +44,12 @@ export interface McpDeps {
   credentialResolver?: CredentialResolver
 }
 
+/**
+ * Callback for refreshing an expired OAuth token.
+ * Takes the credentialId and returns a fresh access token, or null on failure.
+ */
+export type TokenRefresher = (credentialId: string) => Promise<string | null>
+
 type LlmProvider = "anthropic" | "openai"
 
 const ZERO_TOKEN_USAGE: TokenUsage = {
@@ -91,22 +97,22 @@ export class HttpLlmBackend implements ExecutionBackend {
       }
     }
 
-    if (!this.apiKey) {
-      return Promise.reject(
-        new Error(`LLM_API_KEY (or provider-specific key) is required for http-llm backend`),
-      )
-    }
-
-    if (this.provider === "anthropic") {
-      this.anthropicClient = new Anthropic({
-        apiKey: this.apiKey,
-        ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
-      })
-    } else {
-      this.openaiClient = new OpenAI({
-        apiKey: this.apiKey,
-        ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
-      })
+    // Create a global client when a global API key is available.
+    // When no key is configured, the backend starts in "credential-required"
+    // mode — per-job credentials from agent_credential_binding will supply
+    // the key at execution time.
+    if (this.apiKey) {
+      if (this.provider === "anthropic") {
+        this.anthropicClient = new Anthropic({
+          apiKey: this.apiKey,
+          ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+        })
+      } else {
+        this.openaiClient = new OpenAI({
+          apiKey: this.apiKey,
+          ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+        })
+      }
     }
 
     this.started = true
@@ -129,6 +135,18 @@ export class HttpLlmBackend implements ExecutionBackend {
         checkedAt: new Date().toISOString(),
         latencyMs: 0,
         details: {},
+      }
+    }
+
+    // Credential-required mode: no global client available
+    if (!this.anthropicClient && !this.openaiClient) {
+      return {
+        backendId: this.backendId,
+        status: "healthy",
+        reason: "Credential-required mode — per-job credentials will supply API keys",
+        checkedAt: new Date().toISOString(),
+        latencyMs: 0,
+        details: { provider: this.provider, model: this.model, credentialRequired: true },
       }
     }
 
@@ -171,7 +189,11 @@ export class HttpLlmBackend implements ExecutionBackend {
    * includes agent-specific custom tools (e.g. webhook tools from
    * agent config). Falls back to the shared default registry.
    */
-  executeTask(task: ExecutionTask, taskToolRegistry?: ToolRegistry): Promise<ExecutionHandle> {
+  executeTask(
+    task: ExecutionTask,
+    taskToolRegistry?: ToolRegistry,
+    tokenRefresher?: TokenRefresher,
+  ): Promise<ExecutionHandle> {
     if (!this.started) {
       return Promise.reject(new Error("HttpLlmBackend not started"))
     }
@@ -179,6 +201,7 @@ export class HttpLlmBackend implements ExecutionBackend {
     const model = task.constraints.model || this.model
     const startTime = Date.now()
     const registry = taskToolRegistry ?? this.toolRegistry
+    const baseUrl = this.baseUrl
 
     // Per-job credential override: create a one-shot client with the job's token
     const cred = task.constraints.llmCredential
@@ -187,16 +210,28 @@ export class HttpLlmBackend implements ExecutionBackend {
       if (credProvider === "anthropic") {
         const client = new Anthropic({
           apiKey: cred.token,
-          ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+          ...(baseUrl ? { baseURL: baseUrl } : {}),
         })
-        return Promise.resolve(new AnthropicHandle(task, client, model, startTime, registry))
+        return Promise.resolve(
+          new AnthropicHandle(task, client, model, startTime, registry, {
+            tokenRefresher,
+            credentialId: cred.credentialId,
+            baseUrl,
+          }),
+        )
       }
       // OpenAI or other providers
       const client = new OpenAI({
         apiKey: cred.token,
-        ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+        ...(baseUrl ? { baseURL: baseUrl } : {}),
       })
-      return Promise.resolve(new OpenAIHandle(task, client, model, startTime, registry))
+      return Promise.resolve(
+        new OpenAIHandle(task, client, model, startTime, registry, {
+          tokenRefresher,
+          credentialId: cred.credentialId,
+          baseUrl,
+        }),
+      )
     }
 
     // Fall back to the backend's global client (env var LLM_API_KEY)
@@ -210,7 +245,12 @@ export class HttpLlmBackend implements ExecutionBackend {
       return Promise.resolve(new OpenAIHandle(task, this.openaiClient, model, startTime, registry))
     }
 
-    return Promise.reject(new Error("No LLM client initialized"))
+    return Promise.reject(
+      new Error(
+        "No LLM credential available. Bind an OAuth credential to this agent " +
+          "or set LLM_API_KEY env var.",
+      ),
+    )
   }
 
   /**
@@ -263,6 +303,18 @@ export class HttpLlmBackend implements ExecutionBackend {
 // ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
+
+/** Options for per-job token refresh (passed to Handle constructors). */
+interface RefreshOpts {
+  tokenRefresher?: TokenRefresher
+  credentialId?: string
+  baseUrl?: string
+}
+
+/** Returns true if the error is a 401 authentication error from an LLM SDK. */
+function is401Error(err: unknown): boolean {
+  return err instanceof Error && "status" in err && (err as { status: number }).status === 401
+}
 
 function accumulateAnthropicUsage(usage: TokenUsage, raw: Anthropic.Usage): void {
   usage.inputTokens += raw.input_tokens
@@ -318,17 +370,25 @@ class AnthropicHandle implements ExecutionHandle {
   private resolveResult!: (result: ExecutionResult) => void
   private resultResolved = false
 
+  private readonly tokenRefresher?: TokenRefresher
+  private readonly credentialId?: string
+  private readonly baseUrl?: string
+
   constructor(
     private readonly task: ExecutionTask,
-    private readonly client: Anthropic,
+    private client: Anthropic,
     private readonly model: string,
     private readonly startTime: number,
     private readonly toolRegistry: ToolRegistry,
+    refreshOpts?: RefreshOpts,
   ) {
     this.taskId = task.id
     this.resultPromise = new Promise<ExecutionResult>((resolve) => {
       this.resolveResult = resolve
     })
+    this.tokenRefresher = refreshOpts?.tokenRefresher
+    this.credentialId = refreshOpts?.credentialId
+    this.baseUrl = refreshOpts?.baseUrl
   }
 
   async *events(): AsyncIterable<OutputEvent> {
@@ -356,90 +416,114 @@ class AnthropicHandle implements ExecutionHandle {
     let fullText = ""
     const usage: TokenUsage = { ...ZERO_TOKEN_USAGE }
     const maxTurns = Math.max(this.task.constraints.maxTurns, 1)
+    let lastRetryTurn = -1
 
     try {
       for (let turn = 0; turn < maxTurns; turn++) {
         if (this.cancelled) break
 
-        const stream = this.client.messages.stream(
-          {
-            model: this.model,
-            max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
-            system: systemPrompt,
-            messages,
-            ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
-          },
-          { signal: this.abortController.signal },
-        )
+        const streamParams = {
+          model: this.model,
+          max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
+          system: systemPrompt,
+          messages,
+          ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
+        }
 
-        for await (const event of stream) {
-          if (this.cancelled) break
+        try {
+          const stream = this.client.messages.stream(streamParams, {
+            signal: this.abortController.signal,
+          })
 
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            fullText += event.delta.text
-            const textEvent: OutputTextEvent = {
-              type: "text",
-              timestamp: new Date().toISOString(),
-              content: event.delta.text,
+          for await (const event of stream) {
+            if (this.cancelled) break
+
+            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+              fullText += event.delta.text
+              const textEvent: OutputTextEvent = {
+                type: "text",
+                timestamp: new Date().toISOString(),
+                content: event.delta.text,
+              }
+              yield textEvent
             }
-            yield textEvent
           }
-        }
 
-        const finalMessage = await stream.finalMessage()
-        accumulateAnthropicUsage(usage, finalMessage.usage)
+          const finalMessage = await stream.finalMessage()
+          accumulateAnthropicUsage(usage, finalMessage.usage)
 
-        // Check for tool_use blocks
-        const toolUseBlocks = finalMessage.content.filter(
-          (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-        )
-
-        if (toolUseBlocks.length === 0 || finalMessage.stop_reason !== "tool_use") {
-          break // text-only response — done
-        }
-
-        // Cannot loop again — we've used our last allowed turn
-        if (turn + 1 >= maxTurns) break
-
-        // Add the assistant response (with tool_use blocks) to the conversation
-        messages.push({ role: "assistant", content: finalMessage.content })
-
-        // Execute each tool and build tool_result blocks
-        const toolResults: Anthropic.ToolResultBlockParam[] = []
-
-        for (const block of toolUseBlocks) {
-          const toolUseEvent: OutputToolUseEvent = {
-            type: "tool_use",
-            timestamp: new Date().toISOString(),
-            toolName: block.name,
-            toolInput: block.input as Record<string, unknown>,
-          }
-          yield toolUseEvent
-
-          const { output, isError } = await this.toolRegistry.execute(
-            block.name,
-            block.input as Record<string, unknown>,
+          // Check for tool_use blocks
+          const toolUseBlocks = finalMessage.content.filter(
+            (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
           )
 
-          const toolResultEvent: OutputToolResultEvent = {
-            type: "tool_result",
-            timestamp: new Date().toISOString(),
-            toolName: block.name,
-            output,
-            isError,
+          if (toolUseBlocks.length === 0 || finalMessage.stop_reason !== "tool_use") {
+            break // text-only response — done
           }
-          yield toolResultEvent
 
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: output,
-            is_error: isError,
-          })
+          // Cannot loop again — we've used our last allowed turn
+          if (turn + 1 >= maxTurns) break
+
+          // Add the assistant response (with tool_use blocks) to the conversation
+          messages.push({ role: "assistant", content: finalMessage.content })
+
+          // Execute each tool and build tool_result blocks
+          const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+          for (const block of toolUseBlocks) {
+            const toolUseEvent: OutputToolUseEvent = {
+              type: "tool_use",
+              timestamp: new Date().toISOString(),
+              toolName: block.name,
+              toolInput: block.input as Record<string, unknown>,
+            }
+            yield toolUseEvent
+
+            const { output, isError } = await this.toolRegistry.execute(
+              block.name,
+              block.input as Record<string, unknown>,
+            )
+
+            const toolResultEvent: OutputToolResultEvent = {
+              type: "tool_result",
+              timestamp: new Date().toISOString(),
+              toolName: block.name,
+              output,
+              isError,
+            }
+            yield toolResultEvent
+
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: output,
+              is_error: isError,
+            })
+          }
+
+          // Add tool results as the next user message
+          messages.push({ role: "user", content: toolResults })
+        } catch (err) {
+          // On 401, attempt token refresh and retry the current turn once
+          if (
+            is401Error(err) &&
+            turn !== lastRetryTurn &&
+            this.tokenRefresher &&
+            this.credentialId
+          ) {
+            lastRetryTurn = turn
+            const newToken = await this.tokenRefresher(this.credentialId)
+            if (newToken) {
+              this.client = new Anthropic({
+                apiKey: newToken,
+                ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+              })
+              turn-- // retry this turn
+              continue
+            }
+          }
+          throw err
         }
-
-        // Add tool results as the next user message
-        messages.push({ role: "user", content: toolResults })
       }
 
       const usageEvent: OutputUsageEvent = {
@@ -551,17 +635,25 @@ class OpenAIHandle implements ExecutionHandle {
   private resolveResult!: (result: ExecutionResult) => void
   private resultResolved = false
 
+  private readonly tokenRefresher?: TokenRefresher
+  private readonly credentialId?: string
+  private readonly baseUrl?: string
+
   constructor(
     private readonly task: ExecutionTask,
-    private readonly client: OpenAI,
+    private client: OpenAI,
     private readonly model: string,
     private readonly startTime: number,
     private readonly toolRegistry: ToolRegistry,
+    refreshOpts?: RefreshOpts,
   ) {
     this.taskId = task.id
     this.resultPromise = new Promise<ExecutionResult>((resolve) => {
       this.resolveResult = resolve
     })
+    this.tokenRefresher = refreshOpts?.tokenRefresher
+    this.credentialId = refreshOpts?.credentialId
+    this.baseUrl = refreshOpts?.baseUrl
   }
 
   async *events(): AsyncIterable<OutputEvent> {
@@ -593,122 +685,146 @@ class OpenAIHandle implements ExecutionHandle {
     let fullText = ""
     const usage: TokenUsage = { ...ZERO_TOKEN_USAGE }
     const maxTurns = Math.max(this.task.constraints.maxTurns, 1)
+    let lastRetryTurn = -1
 
     try {
       for (let turn = 0; turn < maxTurns; turn++) {
         if (this.cancelled) break
 
-        const stream = await this.client.chat.completions.create(
-          {
-            model: this.model,
-            max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
-            messages,
-            stream: true,
-            stream_options: { include_usage: true },
-            ...(openaiTools.length > 0 ? { tools: openaiTools } : {}),
-          },
-          { signal: this.abortController.signal },
-        )
-
-        let iterationText = ""
-        const toolCallAccumulators = new Map<number, OpenAIToolCallAccumulator>()
-        let hasToolCalls = false
-
-        for await (const chunk of stream) {
-          if (this.cancelled) break
-
-          const choice = chunk.choices[0]
-
-          // Accumulate text deltas
-          const delta = choice?.delta?.content
-          if (delta) {
-            iterationText += delta
-            fullText += delta
-            const textEvent: OutputTextEvent = {
-              type: "text",
-              timestamp: new Date().toISOString(),
-              content: delta,
-            }
-            yield textEvent
-          }
-
-          // Accumulate tool call deltas
-          if (choice?.delta?.tool_calls) {
-            hasToolCalls = true
-            for (const tc of choice.delta.tool_calls) {
-              if (!toolCallAccumulators.has(tc.index)) {
-                toolCallAccumulators.set(tc.index, {
-                  id: tc.id ?? "",
-                  name: tc.function?.name ?? "",
-                  arguments: "",
-                })
-              }
-              const acc = toolCallAccumulators.get(tc.index)!
-              if (tc.id) acc.id = tc.id
-              if (tc.function?.name) acc.name = tc.function.name
-              if (tc.function?.arguments) acc.arguments += tc.function.arguments
-            }
-          }
-
-          if (chunk.usage) {
-            usage.inputTokens += chunk.usage.prompt_tokens ?? 0
-            usage.outputTokens += chunk.usage.completion_tokens ?? 0
-          }
+        const createParams = {
+          model: this.model,
+          max_tokens: Math.min(this.task.constraints.maxTokens, 8192),
+          messages,
+          stream: true as const,
+          stream_options: { include_usage: true },
+          ...(openaiTools.length > 0 ? { tools: openaiTools } : {}),
         }
 
-        // No tool calls — done
-        if (!hasToolCalls || toolCallAccumulators.size === 0) {
-          break
-        }
-
-        // Cannot loop again
-        if (turn + 1 >= maxTurns) break
-
-        // Reconstruct the assistant message with tool_calls
-        const toolCalls = [...toolCallAccumulators.values()]
-        messages.push({
-          role: "assistant",
-          content: iterationText || null,
-          tool_calls: toolCalls.map((tc) => ({
-            id: tc.id,
-            type: "function" as const,
-            function: { name: tc.name, arguments: tc.arguments },
-          })),
-        })
-
-        // Execute each tool and add results
-        for (const tc of toolCalls) {
-          let input: Record<string, unknown> = {}
-          try {
-            input = JSON.parse(tc.arguments) as Record<string, unknown>
-          } catch {
-            // Malformed JSON from the model — pass empty input
-          }
-
-          const toolUseEvent: OutputToolUseEvent = {
-            type: "tool_use",
-            timestamp: new Date().toISOString(),
-            toolName: tc.name,
-            toolInput: input,
-          }
-          yield toolUseEvent
-
-          const { output, isError } = await this.toolRegistry.execute(tc.name, input)
-
-          const toolResultEvent: OutputToolResultEvent = {
-            type: "tool_result",
-            timestamp: new Date().toISOString(),
-            toolName: tc.name,
-            output,
-            isError,
-          }
-          yield toolResultEvent
-
-          messages.push({
-            role: "tool" as const,
-            tool_call_id: tc.id,
-            content: output,
+        try {
+          const stream = await this.client.chat.completions.create(createParams, {
+            signal: this.abortController.signal,
           })
+
+          let iterationText = ""
+          const toolCallAccumulators = new Map<number, OpenAIToolCallAccumulator>()
+          let hasToolCalls = false
+
+          for await (const chunk of stream) {
+            if (this.cancelled) break
+
+            const choice = chunk.choices[0]
+
+            // Accumulate text deltas
+            const delta = choice?.delta?.content
+            if (delta) {
+              iterationText += delta
+              fullText += delta
+              const textEvent: OutputTextEvent = {
+                type: "text",
+                timestamp: new Date().toISOString(),
+                content: delta,
+              }
+              yield textEvent
+            }
+
+            // Accumulate tool call deltas
+            if (choice?.delta?.tool_calls) {
+              hasToolCalls = true
+              for (const tc of choice.delta.tool_calls) {
+                if (!toolCallAccumulators.has(tc.index)) {
+                  toolCallAccumulators.set(tc.index, {
+                    id: tc.id ?? "",
+                    name: tc.function?.name ?? "",
+                    arguments: "",
+                  })
+                }
+                const acc = toolCallAccumulators.get(tc.index)!
+                if (tc.id) acc.id = tc.id
+                if (tc.function?.name) acc.name = tc.function.name
+                if (tc.function?.arguments) acc.arguments += tc.function.arguments
+              }
+            }
+
+            if (chunk.usage) {
+              usage.inputTokens += chunk.usage.prompt_tokens ?? 0
+              usage.outputTokens += chunk.usage.completion_tokens ?? 0
+            }
+          }
+
+          // No tool calls — done
+          if (!hasToolCalls || toolCallAccumulators.size === 0) {
+            break
+          }
+
+          // Cannot loop again
+          if (turn + 1 >= maxTurns) break
+
+          // Reconstruct the assistant message with tool_calls
+          const toolCalls = [...toolCallAccumulators.values()]
+          messages.push({
+            role: "assistant",
+            content: iterationText || null,
+            tool_calls: toolCalls.map((tc) => ({
+              id: tc.id,
+              type: "function" as const,
+              function: { name: tc.name, arguments: tc.arguments },
+            })),
+          })
+
+          // Execute each tool and add results
+          for (const tc of toolCalls) {
+            let input: Record<string, unknown> = {}
+            try {
+              input = JSON.parse(tc.arguments) as Record<string, unknown>
+            } catch {
+              // Malformed JSON from the model — pass empty input
+            }
+
+            const toolUseEvent: OutputToolUseEvent = {
+              type: "tool_use",
+              timestamp: new Date().toISOString(),
+              toolName: tc.name,
+              toolInput: input,
+            }
+            yield toolUseEvent
+
+            const { output, isError } = await this.toolRegistry.execute(tc.name, input)
+
+            const toolResultEvent: OutputToolResultEvent = {
+              type: "tool_result",
+              timestamp: new Date().toISOString(),
+              toolName: tc.name,
+              output,
+              isError,
+            }
+            yield toolResultEvent
+
+            messages.push({
+              role: "tool" as const,
+              tool_call_id: tc.id,
+              content: output,
+            })
+          }
+        } catch (err) {
+          // On 401, attempt token refresh and retry the current turn once
+          if (
+            is401Error(err) &&
+            turn !== lastRetryTurn &&
+            this.tokenRefresher &&
+            this.credentialId
+          ) {
+            lastRetryTurn = turn
+            const newToken = await this.tokenRefresher(this.credentialId)
+            if (newToken) {
+              this.client = new OpenAI({
+                apiKey: newToken,
+                ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+              })
+              turn-- // retry this turn
+              continue
+            }
+          }
+          throw err
         }
       }
 
