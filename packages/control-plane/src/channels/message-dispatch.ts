@@ -19,7 +19,7 @@ import type { Kysely } from "kysely"
 
 import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { UserRateLimiter } from "../auth/user-rate-limiter.js"
-import type { Database, RateLimit, TokenBudget } from "../db/types.js"
+import type { ChannelType, Database, RateLimit, TokenBudget } from "../db/types.js"
 import type { AgentEventEmitter } from "../observability/event-emitter.js"
 import type { AgentChannelService } from "./agent-channel-service.js"
 import { mapJobErrorToUserMessage, runPreflight } from "./preflight.js"
@@ -100,6 +100,14 @@ export function createMessageDispatch(
       return
     }
 
+    // ── Resolve channel config for allowlist gate ──────────────────────
+    const channelConfig = await db
+      .selectFrom("channel_config")
+      .select("id")
+      .where("type", "=", channelType as ChannelType)
+      .where("enabled", "=", true)
+      .executeTakeFirst()
+
     // ── Channel authorization guard ────────────────────────────────────
     let authDecision: AuthDecision | undefined
 
@@ -121,6 +129,7 @@ export function createMessageDispatch(
         channelUserId: routed.message.channelUserId,
         chatId,
         messageText: routed.message.text,
+        channelConfigId: channelConfig?.id,
       })
 
       if (!authDecision.allowed) {

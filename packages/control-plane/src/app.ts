@@ -42,6 +42,8 @@ import { agentUserRoutes } from "./routes/agent-user-routes.js"
 import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approval.js"
 import { authRoutes } from "./routes/auth.js"
+import { ChannelAllowlistService } from "./channels/channel-allowlist-service.js"
+import { channelAllowlistRoutes } from "./routes/channel-allowlist.js"
 import { channelRoutes } from "./routes/channels.js"
 import { chatRoutes } from "./routes/chat.js"
 import { credentialRoutes } from "./routes/credentials.js"
@@ -255,6 +257,16 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       }),
     )
   }
+
+  // Register channel allowlist routes
+  const channelAllowlistService = new ChannelAllowlistService(db)
+  await app.register(
+    channelAllowlistRoutes({
+      service: channelAllowlistService,
+      authConfig,
+      sessionService,
+    }),
+  )
 
   // Register agent user grant, pairing code, and access request routes
   const pairingService = new PairingService(db)

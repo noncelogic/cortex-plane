@@ -825,6 +825,11 @@ export type NewAgentEvent = Insertable<AgentEventTable>
 // ---------------------------------------------------------------------------
 export type ChannelType = "telegram" | "discord" | "whatsapp"
 
+// ---------------------------------------------------------------------------
+// Enum: channel_inbound_policy
+// ---------------------------------------------------------------------------
+export type ChannelInboundPolicy = "open" | "allowlist"
+
 export interface BotMetadata {
   bot_id: string
   username: string
@@ -838,6 +843,11 @@ export interface ChannelConfigTable {
   config_enc: string
   bot_metadata: ColumnType<BotMetadata | null, string | null | undefined, string | null>
   enabled: ColumnType<boolean, boolean | undefined, boolean>
+  inbound_policy: ColumnType<
+    ChannelInboundPolicy,
+    ChannelInboundPolicy | undefined,
+    ChannelInboundPolicy
+  >
   created_by: string | null
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, Date>
@@ -846,6 +856,44 @@ export interface ChannelConfigTable {
 export type ChannelConfig = Selectable<ChannelConfigTable>
 export type NewChannelConfig = Insertable<ChannelConfigTable>
 export type ChannelConfigUpdate = Updateable<ChannelConfigTable>
+
+// ---------------------------------------------------------------------------
+// Table: channel_allowlist
+// ---------------------------------------------------------------------------
+export interface ChannelAllowlistTable {
+  id: Generated<string>
+  channel_config_id: string
+  platform_user_id: string
+  display_name: string | null
+  note: string | null
+  added_by: string | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type ChannelAllowlistEntry = Selectable<ChannelAllowlistTable>
+export type NewChannelAllowlistEntry = Insertable<ChannelAllowlistTable>
+export type ChannelAllowlistEntryUpdate = Updateable<ChannelAllowlistTable>
+
+// ---------------------------------------------------------------------------
+// Table: channel_allowlist_audit
+// ---------------------------------------------------------------------------
+export interface ChannelAllowlistAuditTable {
+  id: Generated<string>
+  channel_config_id: string
+  action: string
+  platform_user_id: string | null
+  performed_by: string | null
+  detail: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type ChannelAllowlistAudit = Selectable<ChannelAllowlistAuditTable>
+export type NewChannelAllowlistAudit = Insertable<ChannelAllowlistAuditTable>
 
 // ---------------------------------------------------------------------------
 // Database interface — register all tables here.
@@ -881,4 +929,6 @@ export interface Database {
   access_request: AccessRequestTable
   user_usage_ledger: UserUsageLedgerTable
   channel_config: ChannelConfigTable
+  channel_allowlist: ChannelAllowlistTable
+  channel_allowlist_audit: ChannelAllowlistAuditTable
 }

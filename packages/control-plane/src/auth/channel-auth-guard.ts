@@ -1,5 +1,6 @@
 import type { Kysely } from "kysely"
 
+import type { ChannelAllowlistService } from "../channels/channel-allowlist-service.js"
 import type { AgentAuthModel, Database } from "../db/types.js"
 import type { AccessRequestService } from "./access-request-service.js"
 import type { PairingService, RedeemResult } from "./pairing-service.js"
@@ -14,6 +15,7 @@ export interface AuthorizeParams {
   channelUserId: string
   chatId: string
   messageText?: string
+  channelConfigId?: string
 }
 
 export type AuthDecisionReason =
@@ -22,6 +24,7 @@ export type AuthDecisionReason =
   | "auto_open"
   | "pending_approval"
   | "denied"
+  | "channel_denied"
   | "rate_limited"
   | "budget_exceeded"
   | "revoked"
@@ -45,6 +48,7 @@ export interface ChannelAuthGuardDeps {
   db: Kysely<Database>
   pairingService: PairingService
   accessRequestService: AccessRequestService
+  channelAllowlistService?: ChannelAllowlistService
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +57,8 @@ export interface ChannelAuthGuardDeps {
 
 const DEFAULT_REJECTION_MESSAGE = "This agent is private. Ask an operator for a pairing code."
 const DEFAULT_PENDING_MESSAGE = "Your request has been submitted. You'll be notified when approved."
+const DEFAULT_CHANNEL_DENIED_MESSAGE =
+  "You are not authorized to use this channel. Contact an operator to be added to the allowlist."
 
 // ---------------------------------------------------------------------------
 // Service
@@ -62,11 +68,13 @@ export class ChannelAuthGuard {
   private db: Kysely<Database>
   private pairingService: PairingService
   private accessRequestService: AccessRequestService
+  private channelAllowlistService?: ChannelAllowlistService
 
   constructor(deps: ChannelAuthGuardDeps) {
     this.db = deps.db
     this.pairingService = deps.pairingService
     this.accessRequestService = deps.accessRequestService
+    this.channelAllowlistService = deps.channelAllowlistService
   }
 
   /**
@@ -76,13 +84,29 @@ export class ChannelAuthGuard {
    * checks for an existing grant, and applies the appropriate policy.
    */
   async authorize(params: AuthorizeParams): Promise<AuthDecision> {
-    const { agentId, channelType, channelUserId, chatId, messageText } = params
+    const { agentId, channelType, channelUserId, chatId, messageText, channelConfigId } = params
 
     // 1. Resolve or create identity
     const { userAccountId, channelMappingId } = await this.resolveOrCreateIdentity(
       channelType,
       channelUserId,
     )
+
+    // 1b. Channel-level allowlist gate
+    if (channelConfigId && this.channelAllowlistService) {
+      const policy = await this.channelAllowlistService.getPolicy(channelConfigId)
+      if (policy === "allowlist") {
+        const allowed = await this.channelAllowlistService.isAllowed(channelConfigId, channelUserId)
+        if (!allowed) {
+          return {
+            allowed: false,
+            userId: userAccountId,
+            reason: "channel_denied",
+            replyToUser: DEFAULT_CHANNEL_DENIED_MESSAGE,
+          }
+        }
+      }
+    }
 
     // 2. Fetch agent to get auth_model + channel_permissions
     const agent = await this.db
