@@ -269,6 +269,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           <SteerInput agentId={agentId} />
           <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
           <CredentialBindingPanel agentId={agentId} />
+          <ChannelBindingTab agentId={agentId} />
           <LifecycleDetails transitions={transitions} currentState={currentState} />
         </div>
 

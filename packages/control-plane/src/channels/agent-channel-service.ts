@@ -9,6 +9,18 @@ import type { Kysely } from "kysely"
 
 import type { AgentChannelBinding, Database } from "../db/types.js"
 
+/** Binding row enriched with the agent's name and slug. */
+export interface BindingWithAgent {
+  id: string
+  agent_id: string
+  agent_name: string
+  agent_slug: string
+  channel_type: string
+  chat_id: string
+  is_default: boolean
+  created_at: Date
+}
+
 export class AgentChannelService {
   constructor(private readonly db: Kysely<Database>) {}
 
@@ -88,6 +100,30 @@ export class AgentChannelService {
       .where("agent_id", "=", agentId)
       .orderBy("created_at", "desc")
       .execute()
+  }
+
+  /**
+   * List bindings for a channel type, enriched with agent name/slug.
+   */
+  async listBindingsByChannelType(channelType: string): Promise<BindingWithAgent[]> {
+    const rows = await this.db
+      .selectFrom("agent_channel_binding")
+      .innerJoin("agent", "agent.id", "agent_channel_binding.agent_id")
+      .select([
+        "agent_channel_binding.id",
+        "agent_channel_binding.agent_id",
+        "agent.name as agent_name",
+        "agent.slug as agent_slug",
+        "agent_channel_binding.channel_type",
+        "agent_channel_binding.chat_id",
+        "agent_channel_binding.is_default",
+        "agent_channel_binding.created_at",
+      ])
+      .where("agent_channel_binding.channel_type", "=", channelType)
+      .orderBy("agent_channel_binding.created_at", "desc")
+      .execute()
+
+    return rows as BindingWithAgent[]
   }
 
   /**

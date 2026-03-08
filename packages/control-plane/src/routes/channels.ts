@@ -12,6 +12,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
 import type { SessionService } from "../auth/session-service.js"
+import type { AgentChannelService } from "../channels/agent-channel-service.js"
 import type { ChannelConfigService } from "../channels/channel-config-service.js"
 import type { ChannelReloader } from "../channels/channel-reloader.js"
 import { fetchTelegramBotIdentity } from "../channels/telegram-identity.js"
@@ -56,13 +57,14 @@ const VALID_CHANNEL_TYPES = new Set<string>(["telegram", "discord", "whatsapp"])
 
 export interface ChannelRouteDeps {
   service: ChannelConfigService
+  agentChannelService?: AgentChannelService
   authConfig: AuthConfig
   sessionService?: SessionService
   reloader?: ChannelReloader
 }
 
 export function channelRoutes(deps: ChannelRouteDeps) {
-  const { service, authConfig, sessionService, reloader } = deps
+  const { service, agentChannelService, authConfig, sessionService, reloader } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -248,6 +250,36 @@ export function channelRoutes(deps: ChannelRouteDeps) {
 
         const channel = await service.update(request.params.id, { bot_metadata: botMetadata })
         return reply.status(200).send({ channel })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // GET /channels/:id/bindings — List agent bindings for this channel
+    // -----------------------------------------------------------------
+    app.get<{ Params: ChannelIdParams }>(
+      "/channels/:id/bindings",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: { id: { type: "string" } },
+            required: ["id"],
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: ChannelIdParams }>, reply: FastifyReply) => {
+        const channel = await service.getById(request.params.id)
+        if (!channel) {
+          return reply.status(404).send({ error: "not_found", message: "Channel config not found" })
+        }
+
+        if (!agentChannelService) {
+          return reply.status(200).send({ bindings: [] })
+        }
+
+        const bindings = await agentChannelService.listBindingsByChannelType(channel.type)
+        return reply.status(200).send({ bindings })
       },
     )
 

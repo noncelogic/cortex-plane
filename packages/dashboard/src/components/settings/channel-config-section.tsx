@@ -3,11 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
+  type AgentSummary,
   ApiError,
+  bindAgentChannel,
+  type BindingWithAgent,
   type ChannelConfigSummary,
   createChannelConfig,
   deleteChannelConfig,
+  listAgents,
+  listChannelBindings,
   listChannelConfigs,
+  unbindAgentChannel,
   updateChannelConfig,
 } from "@/lib/api-client"
 
@@ -50,8 +56,22 @@ export function ChannelConfigSection() {
     id: string
     name: string
     conflict?: string
+    boundAgents?: string[]
   } | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Expanded channel cards showing their bindings
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [channelBindings, setChannelBindings] = useState<Record<string, BindingWithAgent[]>>({})
+  const [loadingBindings, setLoadingBindings] = useState<string | null>(null)
+
+  // Bind-to-agent modal
+  const [bindTarget, setBindTarget] = useState<ChannelConfigSummary | null>(null)
+  const [agents, setAgents] = useState<AgentSummary[]>([])
+  const [loadingAgents, setLoadingAgents] = useState(false)
+  const [bindForm, setBindForm] = useState({ agentId: "", chatId: "", isDefault: false })
+  const [binding, setBinding] = useState(false)
+  const [bindError, setBindError] = useState<string | null>(null)
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -67,6 +87,30 @@ export function ChannelConfigSection() {
   useEffect(() => {
     void fetchChannels()
   }, [fetchChannels])
+
+  const fetchBindingsForChannel = useCallback(async (channelId: string) => {
+    setLoadingBindings(channelId)
+    try {
+      const res = await listChannelBindings(channelId)
+      setChannelBindings((prev) => ({ ...prev, [channelId]: res.bindings ?? [] }))
+    } catch {
+      setChannelBindings((prev) => ({ ...prev, [channelId]: [] }))
+    } finally {
+      setLoadingBindings(null)
+    }
+  }, [])
+
+  const handleToggleExpand = useCallback(
+    (ch: ChannelConfigSummary) => {
+      if (expandedId === ch.id) {
+        setExpandedId(null)
+        return
+      }
+      setExpandedId(ch.id)
+      void fetchBindingsForChannel(ch.id)
+    },
+    [expandedId, fetchBindingsForChannel],
+  )
 
   const handleCreate = useCallback(async () => {
     setSaving(true)
@@ -106,14 +150,25 @@ export function ChannelConfigSection() {
       try {
         await deleteChannelConfig(id, force ? { force: true } : undefined)
         setDeleteConfirm(null)
+        if (expandedId === id) setExpandedId(null)
         void fetchChannels()
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
           const ch = channels.find((c) => c.id === id)
+          // Fetch bound agents to display in the confirmation dialog
+          let boundAgents: string[] = []
+          try {
+            const res = await listChannelBindings(id)
+            const agentNames = [...new Set(res.bindings.map((b) => b.agent_name))]
+            boundAgents = agentNames
+          } catch {
+            // fall back to generic conflict message
+          }
           setDeleteConfirm({
             id,
             name: ch?.name ?? id,
             conflict: err.message,
+            boundAgents,
           })
         } else {
           setError(err instanceof Error ? err.message : "Failed to delete channel")
@@ -122,7 +177,54 @@ export function ChannelConfigSection() {
         setDeleting(false)
       }
     },
-    [fetchChannels, channels],
+    [fetchChannels, channels, expandedId],
+  )
+
+  const handleOpenBindModal = useCallback(async (ch: ChannelConfigSummary) => {
+    setBindTarget(ch)
+    setBindForm({ agentId: "", chatId: "", isDefault: false })
+    setBindError(null)
+    setLoadingAgents(true)
+    try {
+      const res = await listAgents({ status: "ACTIVE" })
+      setAgents(res.agents ?? [])
+    } catch {
+      setAgents([])
+    } finally {
+      setLoadingAgents(false)
+    }
+  }, [])
+
+  const handleBind = useCallback(async () => {
+    if (!bindTarget || !bindForm.agentId || !bindForm.chatId.trim()) return
+    setBinding(true)
+    setBindError(null)
+    try {
+      await bindAgentChannel(bindForm.agentId, bindTarget.type, bindForm.chatId.trim())
+      setBindTarget(null)
+      // Refresh bindings for the expanded channel
+      if (expandedId) {
+        void fetchBindingsForChannel(expandedId)
+      }
+    } catch (err) {
+      setBindError(err instanceof Error ? err.message : "Failed to bind channel")
+    } finally {
+      setBinding(false)
+    }
+  }, [bindTarget, bindForm, expandedId, fetchBindingsForChannel])
+
+  const handleUnbindFromChannel = useCallback(
+    async (b: BindingWithAgent) => {
+      try {
+        await unbindAgentChannel(b.agent_id, b.id)
+        if (expandedId) {
+          void fetchBindingsForChannel(expandedId)
+        }
+      } catch {
+        // silent
+      }
+    },
+    [expandedId, fetchBindingsForChannel],
   )
 
   const isDuplicate = useMemo(
@@ -171,49 +273,124 @@ export function ChannelConfigSection() {
 
       {/* Channel list */}
       <div className="mt-4 space-y-3">
-        {channels.map((ch) => (
-          <div
-            key={ch.id}
-            className="flex items-center justify-between rounded-lg border border-surface-border p-4"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-text-main">{ch.name}</span>
-                <span className="inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-text-muted">
-                  {ch.type}
-                </span>
-                <span
-                  className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${ch.enabled ? "bg-success/10 text-success" : "bg-secondary text-text-muted"}`}
+        {channels.map((ch) => {
+          const isExpanded = expandedId === ch.id
+          const bindings = channelBindings[ch.id] ?? []
+          const isLoadingThisBindings = loadingBindings === ch.id
+
+          return (
+            <div key={ch.id} className="rounded-lg border border-surface-border">
+              {/* Channel header row */}
+              <div className="flex items-center justify-between p-4">
+                <button
+                  type="button"
+                  onClick={() => handleToggleExpand(ch)}
+                  className="min-w-0 flex-1 text-left"
                 >
-                  {ch.enabled ? "Enabled" : "Disabled"}
-                </span>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm text-text-muted">
+                      {isExpanded ? "expand_more" : "chevron_right"}
+                    </span>
+                    <span className="text-sm font-semibold text-text-main">{ch.name}</span>
+                    <span className="inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-text-muted">
+                      {ch.type}
+                    </span>
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${ch.enabled ? "bg-success/10 text-success" : "bg-secondary text-text-muted"}`}
+                    >
+                      {ch.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                    {isExpanded && bindings.length > 0 && (
+                      <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                        {bindings.length} binding{bindings.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  {ch.bot_metadata?.username && (
+                    <p className="mt-1 ml-6 text-xs text-text-muted">
+                      Bot: @{ch.bot_metadata.username}
+                      {ch.bot_metadata.display_name ? ` (${ch.bot_metadata.display_name})` : ""}
+                    </p>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleOpenBindModal(ch)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    Bind to Agent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleToggle(ch)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-text-muted hover:bg-secondary transition-colors"
+                  >
+                    {ch.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm({ id: ch.id, name: ch.name })}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
-              {ch.bot_metadata?.username && (
-                <p className="mt-1 text-xs text-text-muted">
-                  Bot: @{ch.bot_metadata.username}
-                  {ch.bot_metadata.display_name ? ` (${ch.bot_metadata.display_name})` : ""}
-                </p>
+
+              {/* Expanded bindings panel */}
+              {isExpanded && (
+                <div className="border-t border-surface-border bg-surface-dark/30 px-4 py-3">
+                  {isLoadingThisBindings ? (
+                    <div className="flex justify-center py-3">
+                      <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    </div>
+                  ) : bindings.length === 0 ? (
+                    <p className="py-2 text-center text-xs text-text-muted">
+                      No agents bound to this channel type. Click &ldquo;Bind to Agent&rdquo; to
+                      create a binding.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                        Agent Bindings
+                      </p>
+                      {bindings.map((b) => (
+                        <div
+                          key={b.id}
+                          className="flex items-center justify-between rounded-lg border border-surface-border bg-surface-light px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={`/agents/${b.agent_id}`}
+                              className="text-sm font-medium text-primary hover:underline"
+                            >
+                              {b.agent_name}
+                            </a>
+                            <span className="font-mono text-xs text-text-muted">{b.chat_id}</span>
+                            {b.is_default && (
+                              <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handleUnbindFromChannel(b)}
+                            className="rounded-lg px-2 py-1 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                          >
+                            Unbind
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void handleToggle(ch)}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-text-muted hover:bg-secondary transition-colors"
-              >
-                {ch.enabled ? "Disable" : "Enable"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeleteConfirm({ id: ch.id, name: ch.name })}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
 
         {channels.length === 0 && (
           <p className="py-4 text-center text-sm text-text-muted">
@@ -230,8 +407,20 @@ export function ChannelConfigSection() {
             {deleteConfirm.conflict ? (
               <div className="mt-2">
                 <p className="text-sm text-text-muted">{deleteConfirm.conflict}</p>
+                {deleteConfirm.boundAgents && deleteConfirm.boundAgents.length > 0 && (
+                  <div className="mt-2 rounded-lg border border-surface-border bg-surface-dark p-2">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                      Bound agents that will be detached:
+                    </p>
+                    {deleteConfirm.boundAgents.map((name) => (
+                      <p key={name} className="text-sm text-text-main">
+                        {name}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 <p className="mt-2 text-sm text-text-muted">
-                  Force-remove to unbind agents and delete this channel?
+                  Force-remove to unbind all agents and delete this channel?
                 </p>
               </div>
             ) : (
@@ -350,6 +539,100 @@ export function ChannelConfigSection() {
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Saving..." : "Add Channel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bind to agent modal */}
+      {bindTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-text-main">Bind to Agent</h3>
+            <p className="mt-1 text-xs text-text-muted">
+              Route messages from <strong>{bindTarget.name}</strong> ({bindTarget.type}) to an
+              agent.
+            </p>
+
+            {bindError && (
+              <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                {bindError}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              {/* Agent selector */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text-muted">Agent</label>
+                {loadingAgents ? (
+                  <div className="flex justify-center py-3">
+                    <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  </div>
+                ) : agents.length === 0 ? (
+                  <p className="text-xs text-text-muted">No active agents available.</p>
+                ) : (
+                  <select
+                    value={bindForm.agentId}
+                    onChange={(e) => setBindForm({ ...bindForm, agentId: e.target.value })}
+                    className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">Select an agent...</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.slug})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Chat ID */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text-muted">
+                  Chat ID
+                  {bindTarget.type === "telegram" && (
+                    <span className="ml-1 text-text-muted/70">(Telegram group/user ID)</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={bindForm.chatId}
+                  onChange={(e) => setBindForm({ ...bindForm, chatId: e.target.value })}
+                  className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="e.g., -1001234567890"
+                />
+              </div>
+
+              {/* Default checkbox */}
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={bindForm.isDefault}
+                  onChange={(e) => setBindForm({ ...bindForm, isDefault: e.target.checked })}
+                  className="size-4 rounded border-surface-border text-primary focus:ring-primary"
+                />
+                <span className="text-xs text-text-muted">
+                  Set as default binding for {bindTarget.type}
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBindTarget(null)}
+                className="rounded-lg px-4 py-2 text-sm text-text-muted hover:bg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBind()}
+                disabled={binding || !bindForm.agentId || !bindForm.chatId.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {binding ? "Binding..." : "Bind"}
               </button>
             </div>
           </div>

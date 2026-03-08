@@ -204,6 +204,47 @@ describe("AgentChannelService", () => {
   })
 
   // ---------------------------------------------------------------------------
+  // Tests: listBindingsByChannelType
+  // ---------------------------------------------------------------------------
+
+  describe("listBindingsByChannelType", () => {
+    it("returns bindings with agent name and slug", async () => {
+      const rows = [
+        {
+          id: "b1",
+          agent_id: "a1",
+          agent_name: "My Agent",
+          agent_slug: "my-agent",
+          channel_type: "telegram",
+          chat_id: "12345",
+          is_default: false,
+          created_at: new Date(),
+        },
+      ]
+
+      const execute = vi.fn().mockResolvedValue(rows)
+      const orderBy = vi.fn().mockReturnValue({ execute })
+      const whereFn: ReturnType<typeof vi.fn> = vi.fn()
+      whereFn.mockReturnValue({ where: whereFn, orderBy, execute })
+      const select = vi.fn().mockReturnValue({ where: whereFn, orderBy, execute })
+      const innerJoin = vi.fn().mockReturnValue({ select })
+
+      const db = {
+        selectFrom: vi.fn().mockReturnValue({ innerJoin }),
+      } as unknown as Kysely<Database>
+
+      const service = new AgentChannelService(db)
+      const result = await service.listBindingsByChannelType("telegram")
+
+      expect(result).toHaveLength(1)
+      expect(result[0]!.agent_name).toBe("My Agent")
+      expect(result[0]!.agent_slug).toBe("my-agent")
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(db.selectFrom).toHaveBeenCalledWith("agent_channel_binding")
+    })
+  })
+
+  // ---------------------------------------------------------------------------
   // Tests: setDefault
   // ---------------------------------------------------------------------------
 
