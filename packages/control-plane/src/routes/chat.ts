@@ -13,7 +13,7 @@ import type { Kysely } from "kysely"
 import type { ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { SessionService } from "../auth/session-service.js"
 import { loadConversationHistory, watchJobCompletion } from "../channels/message-dispatch.js"
-import { runPreflight } from "../channels/preflight.js"
+import { mapJobErrorToUserMessage, runPreflight } from "../channels/preflight.js"
 import type { Database } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
@@ -238,6 +238,25 @@ export function chatRoutes(deps: ChatRouteDeps) {
             .execute()
         }
 
+        // Surface error details for failed/timed-out jobs
+        const isFailed = result.status === "FAILED" || result.status === "TIMED_OUT"
+        if (isFailed && !responseText) {
+          const errorMessage =
+            result.status === "TIMED_OUT"
+              ? "The request timed out. Please try again."
+              : mapJobErrorToUserMessage(result.error)
+          return reply.status(200).send({
+            job_id: job.id,
+            session_id: session.id,
+            status: result.status,
+            response: null,
+            error: {
+              message: errorMessage,
+              code: result.status === "TIMED_OUT" ? "job_timed_out" : "job_failed",
+            },
+          })
+        }
+
         return reply.status(200).send({
           job_id: job.id,
           session_id: session.id,
@@ -321,11 +340,17 @@ async function findOrCreateSession(
     .executeTakeFirstOrThrow()
 }
 
+interface WaitForJobResult {
+  status: string
+  result: Record<string, unknown>
+  error: Record<string, unknown> | null
+}
+
 function waitForJob(
   db: Kysely<Database>,
   jobId: string,
   timeoutMs: number,
-): Promise<{ status: string; result: Record<string, unknown> } | null> {
+): Promise<WaitForJobResult | null> {
   return new Promise((resolve) => {
     const deadline = Date.now() + timeoutMs
     let resolved = false
@@ -336,10 +361,26 @@ function waitForJob(
       (_result, status) => {
         if (!resolved) {
           resolved = true
-          resolve({
-            status,
-            result: (_result as Record<string, unknown>) ?? {},
-          })
+          // Fetch the error column separately (watchJobCompletion only returns result)
+          void db
+            .selectFrom("job")
+            .select(["error"])
+            .where("id", "=", jobId)
+            .executeTakeFirst()
+            .then((row) => {
+              resolve({
+                status,
+                result: (_result as Record<string, unknown>) ?? {},
+                error: (row?.error as Record<string, unknown>) ?? null,
+              })
+            })
+            .catch(() => {
+              resolve({
+                status,
+                result: (_result as Record<string, unknown>) ?? {},
+                error: null,
+              })
+            })
         }
         return Promise.resolve()
       },

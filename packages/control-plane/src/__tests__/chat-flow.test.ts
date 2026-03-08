@@ -397,6 +397,59 @@ describe("end-to-end chat flow", () => {
   })
 })
 
+describe("job error feedback — FAILED job with error result passed to mapJobErrorToUserMessage", () => {
+  it("calls mapJobErrorToUserMessage with the job result for FAILED status", async () => {
+    vi.useFakeTimers()
+
+    const { mapJobErrorToUserMessage } = await import("../channels/preflight.js")
+    const mockMapFn = vi.mocked(mapJobErrorToUserMessage)
+    mockMapFn.mockClear()
+
+    const errorResult = { category: "QUARANTINED", message: "Agent quarantined after 5 failures" }
+
+    const selectFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          executeTakeFirst: vi.fn().mockResolvedValue({
+            status: "FAILED",
+            result: errorResult,
+          }),
+        }),
+      }),
+    })
+
+    const db = { selectFrom: selectFn } as unknown as Kysely<Database>
+    const router = mockRouter()
+
+    watchJobCompletion(
+      db,
+      "job-quarantine",
+      async (result, status) => {
+        const responseText =
+          typeof result?.stdout === "string" && result.stdout.length > 0 ? result.stdout : null
+
+        if (!responseText && status === "FAILED") {
+          const errMsg = mapJobErrorToUserMessage(result)
+          await router.send("telegram", "chat-42", { text: errMsg })
+        }
+      },
+      { warn: vi.fn() },
+      { intervalMs: 100 },
+    )
+
+    await vi.advanceTimersByTimeAsync(150)
+
+    // Verify mapJobErrorToUserMessage was called with the error result
+    expect(mockMapFn).toHaveBeenCalledWith(errorResult)
+    // Verify the mapped message was sent
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: expect.any(String) as string,
+    })
+
+    vi.useRealTimers()
+  })
+})
+
 describe("conversation history round-trip", () => {
   it("loads prior messages and passes them to job payload", async () => {
     // Simulate 3-turn conversation history (DESC from DB)

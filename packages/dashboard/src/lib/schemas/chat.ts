@@ -50,6 +50,12 @@ export const ChatResponseSchema = z.object({
   status: z.string(),
   response: z.string().nullable().optional(),
   message: z.string().optional(),
+  error: z
+    .object({
+      message: z.string(),
+      code: z.string(),
+    })
+    .optional(),
 })
 
 export type ChatResponse = z.infer<typeof ChatResponseSchema>
