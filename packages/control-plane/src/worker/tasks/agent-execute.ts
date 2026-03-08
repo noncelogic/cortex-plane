@@ -377,6 +377,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 "provider_credential.user_account_id",
                 "provider_credential.provider",
                 "provider_credential.credential_class",
+                "provider_credential.account_id",
               ])
               .where("agent_credential_binding.agent_id", "=", agent.id)
               .where("provider_credential.credential_class", "=", "llm_provider")
@@ -393,6 +394,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   provider: binding.provider,
                   token: result.token,
                   credentialId: result.credentialId,
+                  accountId: binding.account_id,
                 }
 
                 // Build a token refresher for transparent 401 retry.

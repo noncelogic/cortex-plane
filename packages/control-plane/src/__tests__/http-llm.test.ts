@@ -1284,3 +1284,119 @@ describe("HttpLlmBackend — 401 token refresh retry", () => {
     expect(callCount).toBe(2)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Credential routing: google-antigravity vs anthropic vs openai
+// ---------------------------------------------------------------------------
+
+describe("HttpLlmBackend — credential provider routing", () => {
+  it("routes google-antigravity to Anthropic SDK with Vertex base URL and authToken", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "google-antigravity",
+          token: "gcp-oauth-token",
+          credentialId: "cred-gcp",
+          accountId: "my-gcp-project-123",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    const client = (handle as any).client as { baseURL: string; authToken: string | null }
+    expect(client.baseURL).toBe(
+      "https://us-central1-aiplatform.googleapis.com/v1/projects/my-gcp-project-123/locations/us-central1/publishers/anthropic",
+    )
+    expect(client.authToken).toBe("gcp-oauth-token")
+
+    await handle.cancel("test")
+  })
+
+  it("routes plain anthropic credential with apiKey and default base URL", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "anthropic-api-key",
+          credentialId: "cred-anthropic",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    const client = (handle as any).client as {
+      baseURL: string
+      authToken: string | null
+      apiKey: string
+    }
+    // Default Anthropic base URL (no custom override)
+    expect(client.baseURL).toContain("api.anthropic.com")
+    expect(client.apiKey).toBe("anthropic-api-key")
+    expect(client.authToken).toBeNull()
+
+    await handle.cancel("test")
+  })
+
+  it("routes openai-codex credential to OpenAI SDK", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "openai-codex",
+          token: "openai-api-key",
+          credentialId: "cred-openai",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+
+    // OpenAI handles have a different client type — verify it's not an AnthropicHandle
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    const client = (handle as any).client as { apiKey: string }
+    expect(client.apiKey).toBe("openai-api-key")
+
+    await handle.cancel("test")
+  })
+
+  it("does not set Vertex base URL when accountId is missing", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "google-antigravity",
+          token: "gcp-oauth-token",
+          credentialId: "cred-gcp-no-account",
+          // accountId omitted
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    const client = (handle as any).client as { baseURL: string; authToken: string | null }
+    // Without accountId, should fall back to default Anthropic base URL
+    expect(client.baseURL).toContain("api.anthropic.com")
+
+    await handle.cancel("test")
+  })
+})
