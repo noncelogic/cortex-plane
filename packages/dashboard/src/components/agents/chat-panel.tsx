@@ -24,6 +24,7 @@ interface ChatPanelProps {
 export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [showSessions, setShowSessions] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Fetch sessions
   const {
@@ -61,11 +62,16 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
 
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
-      await deleteSession(sessionId)
-      if (activeSessionId === sessionId) {
-        setActiveSessionId(null)
+      setDeleteError(null)
+      try {
+        await deleteSession(sessionId)
+        if (activeSessionId === sessionId) {
+          setActiveSessionId(null)
+        }
+        void refetchSessions()
+      } catch (err) {
+        setDeleteError(err instanceof Error ? err.message : "Failed to delete session")
       }
-      void refetchSessions()
     },
     [activeSessionId, refetchSessions],
   )
@@ -100,6 +106,19 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
           </button>
         </div>
       </div>
+
+      {/* Delete error banner */}
+      {deleteError && (
+        <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
+          <span className="text-xs text-red-600 dark:text-red-400">{deleteError}</span>
+          <button
+            onClick={() => setDeleteError(null)}
+            className="ml-2 text-xs font-medium text-red-500 hover:text-red-700 dark:hover:text-red-300"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Session list dropdown */}
       {showSessions && (

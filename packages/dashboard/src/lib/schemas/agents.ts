@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import { PaginationSchema } from "./common"
 
-export const AgentStatusSchema = z.enum(["ACTIVE", "DISABLED", "ARCHIVED"])
+export const AgentStatusSchema = z.enum(["ACTIVE", "DISABLED", "ARCHIVED", "QUARANTINED"])
 
 export const AgentLifecycleStateSchema = z.enum([
   "BOOTING",
