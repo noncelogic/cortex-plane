@@ -185,10 +185,9 @@ function buildMockDb(opts: {
 
     deleteFrom: vi.fn().mockImplementation(() => {
       const execute = vi.fn().mockResolvedValue(undefined)
-      const whereFn: ReturnType<typeof vi.fn> = vi.fn().mockReturnValue({
-        where: whereFn,
-        execute,
-      })
+      const chain: Record<string, unknown> = { execute }
+      const whereFn = vi.fn().mockReturnValue(chain)
+      chain.where = whereFn
       return { where: whereFn, execute }
     }),
   } as unknown as Kysely<Database>
@@ -664,5 +663,101 @@ describe("CredentialService.getAuditLog", () => {
     // Verify the query was built (no errors)
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(db.selectFrom).toHaveBeenCalledWith("credential_audit_log")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: deleteCredential
+// ---------------------------------------------------------------------------
+
+describe("CredentialService.deleteCredential", () => {
+  it("audit-logs before deleting so FK constraint is satisfied", async () => {
+    const cred = makeCredRow({
+      credential_type: "api_key",
+      provider: "openai",
+    })
+
+    const { db, auditValues } = buildMockDb({ existingCred: cred })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    await service.deleteCredential(ADMIN_USER_ID, CRED_ID)
+
+    // Audit log was written with correct event type
+    expect(auditValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: "credential_deleted",
+        provider: "openai",
+        provider_credential_id: CRED_ID,
+      }),
+    )
+
+    // Credential was deleted
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.deleteFrom).toHaveBeenCalledWith("provider_credential")
+  })
+
+  it("uses oauth_disconnected event type for OAuth credentials", async () => {
+    const cred = makeCredRow({
+      credential_type: "oauth",
+      provider: "google-antigravity",
+      api_key_enc: null,
+      access_token_enc: encryptCredential("oauth-token", USER_KEY),
+    })
+
+    const { db, auditValues } = buildMockDb({ existingCred: cred })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    await service.deleteCredential(ADMIN_USER_ID, CRED_ID)
+
+    expect(auditValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: "oauth_disconnected",
+        provider: "google-antigravity",
+      }),
+    )
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.deleteFrom).toHaveBeenCalledWith("provider_credential")
+  })
+
+  it("is a no-op when credential does not exist", async () => {
+    const { db, auditValues } = buildMockDb({ existingCred: null })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    await service.deleteCredential(ADMIN_USER_ID, CRED_ID)
+
+    expect(auditValues).not.toHaveBeenCalled()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.deleteFrom).not.toHaveBeenCalled()
+  })
+
+  it("writes audit log before delete to prevent FK violation", async () => {
+    const callOrder: string[] = []
+
+    const cred = makeCredRow({ credential_type: "api_key", provider: "openai" })
+    const { db } = buildMockDb({ existingCred: cred })
+
+    // Instrument insertInto and deleteFrom to track call order
+    const origInsertInto = db.insertInto.bind(db) as (table: string) => unknown
+    ;(db as Record<string, unknown>).insertInto = vi.fn().mockImplementation((table: string) => {
+      callOrder.push(`insertInto:${table}`)
+      return origInsertInto(table)
+    })
+
+    const origDeleteFrom = db.deleteFrom.bind(db) as (table: string) => unknown
+    ;(db as Record<string, unknown>).deleteFrom = vi.fn().mockImplementation((table: string) => {
+      callOrder.push(`deleteFrom:${table}`)
+      return origDeleteFrom(table)
+    })
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    await service.deleteCredential(ADMIN_USER_ID, CRED_ID)
+
+    const auditIdx = callOrder.indexOf("insertInto:credential_audit_log")
+    const deleteIdx = callOrder.indexOf("deleteFrom:provider_credential")
+
+    expect(auditIdx).toBeGreaterThanOrEqual(0)
+    expect(deleteIdx).toBeGreaterThanOrEqual(0)
+    expect(auditIdx).toBeLessThan(deleteIdx)
   })
 })

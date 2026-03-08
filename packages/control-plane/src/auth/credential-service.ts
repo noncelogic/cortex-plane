@@ -594,10 +594,10 @@ export class CredentialService {
 
     if (!cred) return
 
-    await this.db.deleteFrom("provider_credential").where("id", "=", credentialId).execute()
-
     const eventType = cred.credential_type === "oauth" ? "oauth_disconnected" : "credential_deleted"
     await this.auditLog(userId, credentialId, eventType, cred.provider)
+
+    await this.db.deleteFrom("provider_credential").where("id", "=", credentialId).execute()
   }
 
   /**
