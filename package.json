@@ -26,6 +26,8 @@
     "db:seed": "pnpm --filter @cortex/control-plane run db:seed",
     "smoke": "./scripts/smoke-test.sh",
     "smoke:cluster": "./scripts/smoke-test-cluster.sh",
+    "e2e": "pnpm --filter @cortex/e2e e2e",
+    "e2e:cluster": "./scripts/run-e2e-cluster.sh",
     "preflight": "./scripts/preflight-deploy.sh",
     "rollback": "./scripts/rollback-cluster.sh"
   },

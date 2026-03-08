@@ -3,6 +3,26 @@
 - [ ] If this PR changes an API response shape: updated the matching fixture + dashboard schema
 - [ ] If this PR changes a dashboard Zod schema: verified field names against API fixture
 
+## Integration Acceptance Criteria
+
+> Every PR must address all three levels. Mark N/A if truly not applicable.
+
+### Unit — does the feature work in isolation?
+
+- [ ] New/changed logic has unit tests
+- [ ] Tests pass locally (`pnpm test`)
+
+### Integration — does it work with the rest of the system?
+
+- [ ] Verified against a running stack (compose or cluster)
+- [ ] Cross-package dependencies confirmed (API ↔ dashboard ↔ adapters)
+
+### Regression — did it break anything that was working?
+
+- [ ] Ran full CI locally (`pnpm lint && pnpm typecheck && pnpm test`)
+- [ ] Checked sibling surfaces (see AQS section below)
+- [ ] No new error toasts or console errors on affected pages
+
 ## AQS — Agent Quality System
 
 > Fill in this section for every PR. See [AGENT_QUALITY_SYSTEM.md](/AGENT_QUALITY_SYSTEM.md) for details.

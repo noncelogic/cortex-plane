@@ -1,0 +1,121 @@
+name: Deploy Gate
+
+on:
+  workflow_run:
+    workflows: ["Deploy to k3s (self-hosted)"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+  deployments: write
+  statuses: write
+
+jobs:
+  smoke:
+    name: Smoke test
+    # Run only when deploy succeeded (or manual dispatch)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, linux, cortex-k3s]
+    environment: production
+
+    env:
+      NAMESPACE: cortex
+
+    steps:
+      - name: Resolve commit SHA
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            SHA="${{ github.sha }}"
+          fi
+          echo "full=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.sha.outputs.full }}
+
+      - name: Run cluster smoke tests
+        run: |
+          set -euo pipefail
+          chmod +x scripts/smoke-test-cluster.sh
+          ./scripts/smoke-test-cluster.sh "$NAMESPACE"
+
+  e2e:
+    name: E2E validation
+    needs: smoke
+    runs-on: [self-hosted, linux, cortex-k3s]
+    environment: production
+
+    env:
+      NAMESPACE: cortex
+
+    steps:
+      - name: Resolve commit SHA
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            SHA="${{ github.sha }}"
+          fi
+          echo "full=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.sha.outputs.full }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests against cluster
+        run: |
+          set -euo pipefail
+          chmod +x scripts/run-e2e-cluster.sh
+          ./scripts/run-e2e-cluster.sh "$NAMESPACE"
+
+      - name: Upload E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+  gate:
+    name: Deploy gate status
+    needs: [smoke, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Evaluate gate
+        run: |
+          if [ "${{ needs.smoke.result }}" != "success" ] || \
+             [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "::error::Deploy gate FAILED — smoke=${{ needs.smoke.result }}, e2e=${{ needs.e2e.result }}"
+            echo "Block next ticket pickup until failures are resolved."
+            exit 1
+          fi
+          echo "Deploy gate PASSED — all checks green."

@@ -10,7 +10,7 @@ NS       ?= cortex
 .PHONY: help up up-app up-full down logs ps \
         build dev test lint typecheck format \
         db-migrate db-seed \
-        smoke smoke-cluster preflight rollback docker-build docker-push clean
+        smoke smoke-cluster e2e e2e-cluster preflight rollback docker-build docker-push clean
 
 # ---------------------------------------------------------------------------
 # Docker Compose
@@ -93,6 +93,12 @@ smoke: ## Run smoke tests against running compose stack
 
 smoke-cluster: ## Run smoke tests against k8s/k3s cluster (NS=cortex)
 	./scripts/smoke-test-cluster.sh $(NS)
+
+e2e: ## Run Playwright E2E tests against local stack
+	pnpm e2e
+
+e2e-cluster: ## Run E2E tests against k8s/k3s cluster (NS=cortex)
+	./scripts/run-e2e-cluster.sh $(NS)
 
 preflight: ## Run pre-deploy checks (config, secrets, images)
 	./scripts/preflight-deploy.sh
