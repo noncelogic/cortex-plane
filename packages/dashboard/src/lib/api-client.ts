@@ -625,9 +625,7 @@ export async function retryJob(jobId: string) {
 // Dashboard aggregation endpoints
 // ---------------------------------------------------------------------------
 
-export async function getDashboardSummary(): Promise<
-  import("./schemas/jobs").DashboardSummary
-> {
+export async function getDashboardSummary(): Promise<import("./schemas/jobs").DashboardSummary> {
   return apiFetch("/dashboard/summary", { schema: DashboardSummarySchema })
 }
 
