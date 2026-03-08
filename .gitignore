@@ -28,6 +28,11 @@ Thumbs.db
 coverage/
 .test-pgdata/
 
+# Playwright
+e2e/playwright-report/
+e2e/test-results/
+e2e/blob-report/
+
 # Docker
 pgdata/
 qdrant_data/
