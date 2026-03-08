@@ -46,7 +46,12 @@ import {
   OAuthInitResultSchema,
   ProviderListResponseSchema,
 } from "./schemas/credentials"
-import { JobDetailSchema, JobListResponseSchema } from "./schemas/jobs"
+import {
+  DashboardActivitySchema,
+  DashboardSummarySchema,
+  JobDetailSchema,
+  JobListResponseSchema,
+} from "./schemas/jobs"
 import {
   McpServerDetailSchema,
   McpServerListResponseSchema,
@@ -615,6 +620,29 @@ export async function retryJob(jobId: string) {
     schema: RetryJobResponseSchema,
   })
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard aggregation endpoints
+// ---------------------------------------------------------------------------
+
+export async function getDashboardSummary(): Promise<import("./schemas/jobs").DashboardSummary> {
+  return apiFetch("/dashboard/summary", { schema: DashboardSummarySchema })
+}
+
+export async function getDashboardActivity(params?: {
+  limit?: number
+}): Promise<import("./schemas/jobs").DashboardActivity> {
+  const search = new URLSearchParams()
+  if (params?.limit) search.set("limit", String(params.limit))
+  const qs = search.toString()
+  return apiFetch(`/dashboard/activity${qs ? `?${qs}` : ""}`, {
+    schema: DashboardActivitySchema,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Memory endpoint functions
+// ---------------------------------------------------------------------------
 
 export async function searchMemory(params: {
   agent_id: string

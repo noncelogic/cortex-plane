@@ -36,6 +36,7 @@ function makeJob(overrides: Record<string, unknown> = {}) {
     llm_call_count: 0,
     parent_job_id: null,
     delegation_depth: 0,
+    count: 1,
     ...overrides,
   }
 }
@@ -60,14 +61,23 @@ function mockDb(
 
   function selectChain(rows: Record<string, unknown>[]) {
     const executeTakeFirst = vi.fn().mockResolvedValue(rows[0] ?? null)
+    const executeTakeFirstOrThrow = vi
+      .fn()
+      .mockImplementation(() =>
+        rows[0] ? Promise.resolve(rows[0]) : Promise.reject(new Error("no result")),
+      )
     const execute = vi.fn().mockResolvedValue(rows)
-    const terminal = { execute, executeTakeFirst }
+    const terminal = { execute, executeTakeFirst, executeTakeFirstOrThrow }
     const offset = vi.fn().mockReturnValue(terminal)
     const limit = vi.fn().mockReturnValue({ ...terminal, offset })
     const orderBy = vi.fn().mockReturnValue({ ...terminal, limit, offset })
     const whereFn: ReturnType<typeof vi.fn> = vi.fn()
+    const selectFn = vi
+      .fn()
+      .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
     whereFn.mockReturnValue({
       where: whereFn,
+      select: selectFn,
       orderBy,
       limit,
       offset,
@@ -76,8 +86,7 @@ function mockDb(
     const selectAll = vi
       .fn()
       .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
-    const select = vi.fn().mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
-    return { selectAll, select }
+    return { selectAll, select: selectFn, where: whereFn }
   }
 
   function updateChain() {
@@ -90,9 +99,10 @@ function mockDb(
   return {
     selectFrom: vi.fn().mockImplementation((table: string) => {
       if (table === "job") return selectChain(jobs)
-      if (table === "agent") return selectChain([{ id: AGENT_UUID, name: "Agent One" }])
+      if (table === "agent") return selectChain([{ id: AGENT_UUID, name: "Agent One", count: 1 }])
       if (table === "agent_event") return selectChain(agentEventRows)
       if (table === "memory_extract_message") return selectChain(memoryRows)
+      if (table === "approval_request") return selectChain([{ count: 0 }])
       return selectChain([])
     }),
     updateTable: vi.fn().mockImplementation((table: string) => {
@@ -337,6 +347,35 @@ describe("dashboard routes", () => {
     const events = await app.inject({ method: "GET", url: "/agents/agent-1/browser/events" })
     expect(events.statusCode).toBe(200)
     expect(events.json()).toEqual({ events: [] })
+  })
+
+  it("returns dashboard summary with aggregated counts", async () => {
+    const { app } = await buildTestApp()
+    const res = await app.inject({ method: "GET", url: "/dashboard/summary" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({
+      totalAgents: 1,
+      activeJobs: 1,
+      pendingApprovals: 0,
+      memoryRecords: 0,
+    })
+  })
+
+  it("returns dashboard activity with recent jobs", async () => {
+    const { app } = await buildTestApp()
+    const res = await app.inject({ method: "GET", url: "/dashboard/activity?limit=5" })
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(Array.isArray(body.activity)).toBe(true)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.activity[0]).toMatchObject({
+      id: JOB_UUID,
+      agentId: AGENT_UUID,
+      status: "FAILED",
+      type: "research",
+    })
   })
 
   it("returns 501 for stub endpoints not yet implemented", async () => {

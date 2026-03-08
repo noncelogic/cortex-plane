@@ -80,6 +80,17 @@ export const JobListResponseSchema = z.object({
   pagination: PaginationSchema,
 })
 
+export const DashboardSummarySchema = z.object({
+  totalAgents: z.number(),
+  activeJobs: z.number(),
+  pendingApprovals: z.number(),
+  memoryRecords: z.number(),
+})
+
+export const DashboardActivitySchema = z.object({
+  activity: z.array(JobSummarySchema),
+})
+
 export type JobStatus = z.infer<typeof JobStatusSchema>
 export type JobSummary = z.infer<typeof JobSummarySchema>
 export type JobStep = z.infer<typeof JobStepSchema>
@@ -88,3 +99,5 @@ export type JobLogEntry = z.infer<typeof JobLogEntrySchema>
 export type FailureReason = z.infer<typeof FailureReasonSchema>
 export type TokenUsage = z.infer<typeof TokenUsageSchema>
 export type JobDetail = z.infer<typeof JobDetailSchema>
+export type DashboardSummary = z.infer<typeof DashboardSummarySchema>
+export type DashboardActivity = z.infer<typeof DashboardActivitySchema>
