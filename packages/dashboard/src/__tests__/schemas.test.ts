@@ -79,6 +79,25 @@ describe("AgentSummarySchema", () => {
     expect(() => AgentSummarySchema.parse({ ...validAgent, lifecycle_state: "RUNNING" })).toThrow()
   })
 
+  it("accepts all valid statuses including QUARANTINED", () => {
+    for (const status of ["ACTIVE", "DISABLED", "ARCHIVED", "QUARANTINED"]) {
+      expect(AgentSummarySchema.parse({ ...validAgent, status }).status).toBe(status)
+    }
+  })
+
+  it("parses a full agent response with QUARANTINED status", () => {
+    const quarantinedAgent = {
+      ...validAgent,
+      status: "QUARANTINED",
+      description: "Agent flagged for review",
+      current_job_id: null,
+      updated_at: "2026-03-08T00:00:00Z",
+    }
+    const result = AgentSummarySchema.parse(quarantinedAgent)
+    expect(result.status).toBe("QUARANTINED")
+    expect(result.description).toBe("Agent flagged for review")
+  })
+
   it("rejects missing required fields", () => {
     expect(() => AgentSummarySchema.parse({ id: "a1" })).toThrow()
   })
@@ -110,6 +129,18 @@ describe("AgentDetailSchema", () => {
       skill_config: { tools: ["web"] },
     }
     expect(AgentDetailSchema.parse(detail)).toEqual(detail)
+  })
+
+  it("accepts QUARANTINED status (inherited from AgentSummarySchema)", () => {
+    const detail = {
+      ...validAgent,
+      status: "QUARANTINED",
+      checkpoint: { job_id: "job-1", saved_at: "2026-01-01T00:00:00Z", crc32: 12345 },
+      config: { quarantine_reason: "repeated failures" },
+    }
+    const result = AgentDetailSchema.parse(detail)
+    expect(result.status).toBe("QUARANTINED")
+    expect(result.config).toEqual({ quarantine_reason: "repeated failures" })
   })
 })
 
