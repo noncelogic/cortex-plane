@@ -14,7 +14,7 @@ import {
   encrypt,
   type EncryptedValue,
 } from "../auth/credential-encryption.js"
-import type { ChannelConfig, ChannelType, Database } from "../db/types.js"
+import type { BotMetadata, ChannelConfig, ChannelType, Database } from "../db/types.js"
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -31,6 +31,7 @@ export interface ChannelConfigSummary {
   id: string
   type: ChannelType
   name: string
+  bot_metadata: BotMetadata | null
   enabled: boolean
   created_by: string | null
   created_at: Date
@@ -60,7 +61,16 @@ export class ChannelConfigService {
   async list(): Promise<ChannelConfigSummary[]> {
     const rows = await this.db
       .selectFrom("channel_config")
-      .select(["id", "type", "name", "enabled", "created_by", "created_at", "updated_at"])
+      .select([
+        "id",
+        "type",
+        "name",
+        "bot_metadata",
+        "enabled",
+        "created_by",
+        "created_at",
+        "updated_at",
+      ])
       .orderBy("created_at", "desc")
       .execute()
 
@@ -71,7 +81,16 @@ export class ChannelConfigService {
   async getById(id: string): Promise<ChannelConfigSummary | undefined> {
     const row = await this.db
       .selectFrom("channel_config")
-      .select(["id", "type", "name", "enabled", "created_by", "created_at", "updated_at"])
+      .select([
+        "id",
+        "type",
+        "name",
+        "bot_metadata",
+        "enabled",
+        "created_by",
+        "created_at",
+        "updated_at",
+      ])
       .where("id", "=", id)
       .executeTakeFirst()
 
@@ -106,7 +125,16 @@ export class ChannelConfigService {
   async findByTypeName(type: ChannelType, name: string): Promise<ChannelConfigSummary | undefined> {
     const row = await this.db
       .selectFrom("channel_config")
-      .select(["id", "type", "name", "enabled", "created_by", "created_at", "updated_at"])
+      .select([
+        "id",
+        "type",
+        "name",
+        "bot_metadata",
+        "enabled",
+        "created_by",
+        "created_at",
+        "updated_at",
+      ])
       .where("type", "=", type)
       .where("name", "=", name)
       .executeTakeFirst()
@@ -120,6 +148,7 @@ export class ChannelConfigService {
     name: string,
     config: ChannelConfigPlain,
     createdBy: string | null,
+    botMetadata?: BotMetadata | null,
   ): Promise<ChannelConfigSummary> {
     const configEnc = this.encryptConfig(config)
 
@@ -131,9 +160,19 @@ export class ChannelConfigService {
         type,
         name,
         config_enc: configEnc,
+        bot_metadata: botMetadata ? JSON.stringify(botMetadata) : null,
         created_by: createdBy,
       })
-      .returning(["id", "type", "name", "enabled", "created_by", "created_at", "updated_at"])
+      .returning([
+        "id",
+        "type",
+        "name",
+        "bot_metadata",
+        "enabled",
+        "created_by",
+        "created_at",
+        "updated_at",
+      ])
       .executeTakeFirstOrThrow()
 
     return row as ChannelConfigSummary
@@ -146,6 +185,7 @@ export class ChannelConfigService {
       name?: string
       config?: ChannelConfigPlain
       enabled?: boolean
+      bot_metadata?: BotMetadata | null
     },
   ): Promise<ChannelConfigSummary | undefined> {
     const setClause: Record<string, unknown> = { updated_at: new Date() }
@@ -154,12 +194,24 @@ export class ChannelConfigService {
     if (updates.config !== undefined) {
       setClause.config_enc = this.encryptConfig(updates.config)
     }
+    if (updates.bot_metadata !== undefined) {
+      setClause.bot_metadata = updates.bot_metadata ? JSON.stringify(updates.bot_metadata) : null
+    }
 
     const row = await this.db
       .updateTable("channel_config")
       .set(setClause)
       .where("id", "=", id)
-      .returning(["id", "type", "name", "enabled", "created_by", "created_at", "updated_at"])
+      .returning([
+        "id",
+        "type",
+        "name",
+        "bot_metadata",
+        "enabled",
+        "created_by",
+        "created_at",
+        "updated_at",
+      ])
       .executeTakeFirst()
 
     return row as ChannelConfigSummary | undefined
@@ -217,6 +269,7 @@ export class ChannelConfigService {
       id: row.id,
       type: row.type,
       name: row.name,
+      bot_metadata: row.bot_metadata,
       enabled: row.enabled,
       created_by: row.created_by,
       created_at: row.created_at,
