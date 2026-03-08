@@ -426,9 +426,7 @@ describe("job error feedback — FAILED job with error result passed to mapJobEr
       "job-quarantine",
       async (result, status) => {
         const responseText =
-          typeof result?.stdout === "string" && result.stdout.length > 0
-            ? result.stdout
-            : null
+          typeof result?.stdout === "string" && result.stdout.length > 0 ? result.stdout : null
 
         if (!responseText && status === "FAILED") {
           const errMsg = mapJobErrorToUserMessage(result)
