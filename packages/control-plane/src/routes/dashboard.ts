@@ -7,11 +7,13 @@
  * - Memory: search, sync
  * - Browser observation aliases
  * - SSE: /jobs/stream
+ * - Dashboard aggregation: /dashboard/summary, /dashboard/activity, /dashboard/jobs-stream
  */
 
 import type { JobStatus } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
+import { sql } from "kysely"
 
 import type { Database } from "../db/types.js"
 import type { BrowserObservationService } from "../observation/service.js"
@@ -757,5 +759,150 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         return reply.send({ events: [] })
       },
     )
+
+    // -----------------------------------------------------------------------
+    // Dashboard aggregation endpoints
+    // -----------------------------------------------------------------------
+
+    app.get("/dashboard/summary", async (_request, reply) => {
+      const [agentCount, jobCount, approvalCount] = await Promise.all([
+        db
+          .selectFrom("agent")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("job")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("approval_request")
+          .where("status", "=", "PENDING")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .executeTakeFirstOrThrow(),
+      ])
+
+      return reply.send({
+        totalAgents: agentCount.count,
+        activeJobs: jobCount.count,
+        pendingApprovals: approvalCount.count,
+        memoryRecords: 0,
+      })
+    })
+
+    app.get<{ Querystring: { limit?: number } }>(
+      "/dashboard/activity",
+      {
+        schema: {
+          querystring: {
+            type: "object",
+            properties: {
+              limit: { type: "number", minimum: 1, maximum: 50 },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const limit = request.query.limit ?? 10
+
+        const rows = await db
+          .selectFrom("job")
+          .selectAll()
+          .orderBy("created_at", "desc")
+          .limit(limit)
+          .execute()
+
+        const jobs = rows.map((job) => toJobSummary(job))
+        return reply.send({ activity: jobs })
+      },
+    )
+
+    app.get("/dashboard/jobs-stream", async (_request: FastifyRequest, reply: FastifyReply) => {
+      reply.hijack()
+
+      const raw = reply.raw
+      raw.setHeader("Content-Type", "text/event-stream")
+      raw.setHeader("Cache-Control", "no-cache")
+      raw.setHeader("Connection", "keep-alive")
+      raw.write(": connected\n\n")
+
+      const lastSeen = new Map<string, { status: JobStatus; updatedAt: number }>()
+      let closed = false
+
+      const sendEvent = (event: string, data: Record<string, unknown>) => {
+        raw.write(`event: ${event}\n`)
+        raw.write(`data: ${JSON.stringify(data)}\n\n`)
+      }
+
+      const poll = async () => {
+        if (closed) return
+        const rows = await db
+          .selectFrom("job")
+          .select(["id", "status", "updated_at", "created_at", "error"])
+          .orderBy("updated_at", "desc")
+          .limit(200)
+          .execute()
+
+        for (const row of rows) {
+          const updatedAt = new Date(row.updated_at).getTime()
+          const prev = lastSeen.get(row.id)
+          const error =
+            row.error && typeof row.error === "object" && typeof row.error.message === "string"
+              ? row.error.message
+              : undefined
+
+          if (!prev) {
+            sendEvent("job:created", {
+              jobId: row.id,
+              status: row.status,
+              timestamp: toIso(row.created_at),
+              error,
+            })
+          } else if (prev.status !== row.status || prev.updatedAt !== updatedAt) {
+            let event = "job:updated"
+            if (row.status === "COMPLETED") event = "job:completed"
+            else if (
+              row.status === "FAILED" ||
+              row.status === "TIMED_OUT" ||
+              row.status === "DEAD_LETTER"
+            )
+              event = "job:failed"
+
+            sendEvent(event, {
+              jobId: row.id,
+              status: row.status,
+              timestamp: toIso(row.updated_at),
+              error,
+            })
+          }
+
+          lastSeen.set(row.id, { status: row.status, updatedAt })
+        }
+
+        const activeIds = new Set(rows.map((r) => r.id))
+        for (const id of lastSeen.keys()) {
+          if (!activeIds.has(id)) lastSeen.delete(id)
+        }
+      }
+
+      const pollInterval = setInterval(() => {
+        void poll().catch((err) => {
+          _request.log.warn({ err }, "Dashboard jobs stream poll failed")
+        })
+      }, 2000)
+
+      const heartbeatInterval = setInterval(() => {
+        if (!closed) raw.write(": heartbeat\n\n")
+      }, 15000)
+
+      void poll().catch((err) => {
+        _request.log.warn({ err }, "Dashboard jobs stream initial poll failed")
+      })
+
+      raw.on("close", () => {
+        closed = true
+        clearInterval(pollInterval)
+        clearInterval(heartbeatInterval)
+      })
+    })
   }
 }

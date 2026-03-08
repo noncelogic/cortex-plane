@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
 import type { ApiErrorCode, JobStatus } from "@/lib/api-client"
-import { listAgents, listApprovals, listJobs } from "@/lib/api-client"
+import { getDashboardActivity, getDashboardSummary } from "@/lib/api-client"
 
 export interface DashboardStats {
   totalAgents: number
@@ -32,58 +32,49 @@ export interface DashboardData {
 
 export function useDashboard(): DashboardData {
   const {
-    data: agentData,
-    isLoading: agentsLoading,
-    error: agentsError,
-    errorCode: agentsErrorCode,
-    refetch: refetchAgents,
-  } = useApiQuery(() => listAgents({ limit: 100 }), [])
+    data: summaryData,
+    isLoading: summaryLoading,
+    error: summaryError,
+    errorCode: summaryErrorCode,
+    refetch: refetchSummary,
+  } = useApiQuery(() => getDashboardSummary(), [])
 
   const {
-    data: jobData,
-    isLoading: jobsLoading,
-    error: jobsError,
-    errorCode: jobsErrorCode,
-    refetch: refetchJobs,
-  } = useApiQuery(() => listJobs({ limit: 5 }), [])
+    data: activityData,
+    isLoading: activityLoading,
+    error: activityError,
+    errorCode: activityErrorCode,
+    refetch: refetchActivity,
+  } = useApiQuery(() => getDashboardActivity({ limit: 5 }), [])
 
-  const {
-    data: approvalData,
-    isLoading: approvalsLoading,
-    error: approvalsError,
-    errorCode: approvalsErrorCode,
-    refetch: refetchApprovals,
-  } = useApiQuery(() => listApprovals({ status: "PENDING", limit: 1 }), [])
-
-  const isLoading = agentsLoading || jobsLoading || approvalsLoading
-  const error = agentsError || jobsError || approvalsError
-  const errorCode = agentsErrorCode || jobsErrorCode || approvalsErrorCode || null
+  const isLoading = summaryLoading || activityLoading
+  const error = summaryError || activityError
+  const errorCode = summaryErrorCode || activityErrorCode || null
 
   const stats = useMemo<DashboardStats>(() => {
     return {
-      totalAgents: agentData?.pagination?.total ?? 0,
-      activeJobs: jobData?.pagination?.total ?? 0,
-      pendingApprovals: approvalData?.pagination?.total ?? 0,
-      memoryRecords: 0,
+      totalAgents: summaryData?.totalAgents ?? 0,
+      activeJobs: summaryData?.activeJobs ?? 0,
+      pendingApprovals: summaryData?.pendingApprovals ?? 0,
+      memoryRecords: summaryData?.memoryRecords ?? 0,
     }
-  }, [agentData, jobData, approvalData])
+  }, [summaryData])
 
   const recentJobs = useMemo<RecentJob[]>(() => {
-    if (!jobData?.jobs || jobData.jobs.length === 0) return []
-    return jobData.jobs.map((j) => ({
+    if (!activityData?.activity || activityData.activity.length === 0) return []
+    return activityData.activity.map((j) => ({
       id: j.id,
       agentName: j.agentId,
       status: j.status,
       type: j.type,
       createdAt: j.createdAt,
     }))
-  }, [jobData])
+  }, [activityData])
 
   const refetch = useCallback(() => {
-    void refetchAgents()
-    void refetchJobs()
-    void refetchApprovals()
-  }, [refetchAgents, refetchJobs, refetchApprovals])
+    void refetchSummary()
+    void refetchActivity()
+  }, [refetchSummary, refetchActivity])
 
   return { stats, recentJobs, isLoading, error, errorCode, refetch }
 }
