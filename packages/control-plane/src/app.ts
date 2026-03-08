@@ -251,6 +251,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     await app.register(
       channelRoutes({
         service: channelConfigService,
+        agentChannelService,
         authConfig,
         sessionService,
         reloader: options.channelReloader,

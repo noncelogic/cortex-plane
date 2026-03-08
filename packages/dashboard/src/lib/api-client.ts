@@ -39,7 +39,10 @@ import {
   ChannelConfigListResponseSchema,
   ChannelConfigResponseSchema,
 } from "./schemas/channel-config"
-import { AgentChannelBindingListResponseSchema } from "./schemas/channels"
+import {
+  AgentChannelBindingListResponseSchema,
+  ChannelBindingsResponseSchema,
+} from "./schemas/channels"
 import { ContentListResponseSchema } from "./schemas/content"
 import {
   CredentialListResponseSchema,
@@ -823,7 +826,7 @@ export async function deleteCredential(id: string): Promise<unknown> {
 // Agent channel binding endpoint functions
 // ---------------------------------------------------------------------------
 
-export type { AgentChannelBinding } from "./schemas/channels"
+export type { AgentChannelBinding, BindingWithAgent } from "./schemas/channels"
 
 export async function listAgentChannels(agentId: string): Promise<{
   bindings: import("./schemas/channels").AgentChannelBinding[]
@@ -849,6 +852,14 @@ export async function unbindAgentChannel(agentId: string, bindingId: string): Pr
   return apiFetch(`/agents/${agentId}/channels/${bindingId}`, {
     method: "DELETE",
     schema: z.unknown(),
+  })
+}
+
+export async function listChannelBindings(channelId: string): Promise<{
+  bindings: import("./schemas/channels").BindingWithAgent[]
+}> {
+  return apiFetch(`/channels/${channelId}/bindings`, {
+    schema: ChannelBindingsResponseSchema,
   })
 }
 

@@ -1,6 +1,7 @@
 import Fastify from "fastify"
 import { describe, expect, it, vi } from "vitest"
 
+import type { AgentChannelService } from "../channels/agent-channel-service.js"
 import type { ChannelConfigService } from "../channels/channel-config-service.js"
 import type { AuthConfig } from "../middleware/types.js"
 import { channelRoutes } from "../routes/channels.js"
@@ -59,13 +60,28 @@ function mockService(overrides: Partial<ChannelConfigService> = {}): ChannelConf
   } as unknown as ChannelConfigService
 }
 
-async function buildTestApp(serviceOverrides: Partial<ChannelConfigService> = {}) {
+function mockAgentChannelService(
+  overrides: Partial<AgentChannelService> = {},
+): AgentChannelService {
+  return {
+    listBindingsByChannelType: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  } as unknown as AgentChannelService
+}
+
+async function buildTestApp(
+  serviceOverrides: Partial<ChannelConfigService> = {},
+  agentChannelOverrides?: Partial<AgentChannelService>,
+) {
   const app = Fastify({ logger: false })
   const service = mockService(serviceOverrides)
+  const agentChannelService = agentChannelOverrides
+    ? mockAgentChannelService(agentChannelOverrides)
+    : undefined
 
-  await app.register(channelRoutes({ service, authConfig: DEV_AUTH_CONFIG }))
+  await app.register(channelRoutes({ service, agentChannelService, authConfig: DEV_AUTH_CONFIG }))
 
-  return { app, service }
+  return { app, service, agentChannelService }
 }
 
 // ---------------------------------------------------------------------------
@@ -365,5 +381,73 @@ describe("POST /channels/:id/verify", () => {
     const body = res.json()
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.error).toBe("upstream_error")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: GET /channels/:id/bindings — list agent bindings for a channel
+// ---------------------------------------------------------------------------
+
+describe("GET /channels/:id/bindings", () => {
+  it("returns bindings with agent info", async () => {
+    const bindings = [
+      {
+        id: "b1",
+        agent_id: "a1",
+        agent_name: "Agent Alpha",
+        agent_slug: "agent-alpha",
+        channel_type: "telegram",
+        chat_id: "12345",
+        is_default: false,
+        created_at: new Date().toISOString(),
+      },
+    ]
+    const { app, agentChannelService } = await buildTestApp(
+      { getById: vi.fn().mockResolvedValue(makeSummary()) },
+      { listBindingsByChannelType: vi.fn().mockResolvedValue(bindings) },
+    )
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/channels/cccccccc-1111-2222-3333-444444444444/bindings",
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.bindings).toHaveLength(1)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.bindings[0].agent_name).toBe("Agent Alpha")
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(agentChannelService!.listBindingsByChannelType).toHaveBeenCalledWith("telegram")
+  })
+
+  it("returns 404 when channel does not exist", async () => {
+    const { app } = await buildTestApp({ getById: vi.fn().mockResolvedValue(undefined) }, {})
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/channels/nonexistent/bindings",
+    })
+
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("returns empty bindings when agentChannelService is not provided", async () => {
+    const { app } = await buildTestApp({
+      getById: vi.fn().mockResolvedValue(makeSummary()),
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/channels/cccccccc-1111-2222-3333-444444444444/bindings",
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.bindings).toEqual([])
   })
 })
