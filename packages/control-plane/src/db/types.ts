@@ -825,11 +825,18 @@ export type NewAgentEvent = Insertable<AgentEventTable>
 // ---------------------------------------------------------------------------
 export type ChannelType = "telegram" | "discord" | "whatsapp"
 
+export interface BotMetadata {
+  bot_id: string
+  username: string
+  display_name: string
+}
+
 export interface ChannelConfigTable {
   id: Generated<string>
   type: ChannelType
   name: string
   config_enc: string
+  bot_metadata: ColumnType<BotMetadata | null, string | null | undefined, string | null>
   enabled: ColumnType<boolean, boolean | undefined, boolean>
   created_by: string | null
   created_at: ColumnType<Date, Date | undefined, never>

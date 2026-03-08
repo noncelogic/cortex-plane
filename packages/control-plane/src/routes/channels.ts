@@ -1,11 +1,12 @@
 /**
  * Channel Configuration Routes
  *
- * GET    /channels          — List configured channels (summaries, no secrets)
- * POST   /channels          — Add a new channel configuration
- * GET    /channels/:id      — Get a single channel config
- * PUT    /channels/:id      — Update a channel config
- * DELETE /channels/:id      — Remove a channel config
+ * GET    /channels              — List configured channels (summaries, no secrets)
+ * POST   /channels              — Add a new channel configuration
+ * GET    /channels/:id          — Get a single channel config
+ * PUT    /channels/:id          — Update a channel config
+ * DELETE /channels/:id          — Remove a channel config
+ * POST   /channels/:id/verify   — Re-verify bot identity for a channel
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -13,7 +14,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { SessionService } from "../auth/session-service.js"
 import type { ChannelConfigService } from "../channels/channel-config-service.js"
 import type { ChannelReloader } from "../channels/channel-reloader.js"
-import type { ChannelType } from "../db/types.js"
+import { fetchTelegramBotIdentity } from "../channels/telegram-identity.js"
+import type { BotMetadata, ChannelType } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
   createRequireAuth,
@@ -116,7 +118,13 @@ export function channelRoutes(deps: ChannelRouteDeps) {
           })
         }
 
-        const channel = await service.create(type as ChannelType, name, config, null)
+        // For Telegram channels, verify the bot token and fetch identity
+        let botMetadata: BotMetadata | null = null
+        if (type === "telegram" && typeof config.botToken === "string") {
+          botMetadata = (await fetchTelegramBotIdentity(config.botToken)) ?? null
+        }
+
+        const channel = await service.create(type as ChannelType, name, config, null, botMetadata)
         await reloader?.syncChannelType(type)
         return reply.status(201).send({ channel })
       },
@@ -173,11 +181,72 @@ export function channelRoutes(deps: ChannelRouteDeps) {
         request: FastifyRequest<{ Params: ChannelIdParams; Body: UpdateChannelBody }>,
         reply: FastifyReply,
       ) => {
-        const channel = await service.update(request.params.id, request.body)
+        const updates: Record<string, unknown> = { ...request.body }
+
+        // Re-verify Telegram bot identity when config (token) changes
+        if (request.body.config && typeof request.body.config.botToken === "string") {
+          const existing = await service.getById(request.params.id)
+          if (existing?.type === "telegram") {
+            updates.bot_metadata =
+              (await fetchTelegramBotIdentity(request.body.config.botToken)) ?? null
+          }
+        }
+
+        const channel = await service.update(request.params.id, updates)
         if (!channel) {
           return reply.status(404).send({ error: "not_found", message: "Channel config not found" })
         }
         await reloader?.syncChannelType(channel.type)
+        return reply.status(200).send({ channel })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // POST /channels/:id/verify — Re-verify bot identity
+    // -----------------------------------------------------------------
+    app.post<{ Params: ChannelIdParams }>(
+      "/channels/:id/verify",
+      {
+        preHandler: [requireAuth, requireOperator],
+        schema: {
+          params: {
+            type: "object",
+            properties: { id: { type: "string" } },
+            required: ["id"],
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: ChannelIdParams }>, reply: FastifyReply) => {
+        const full = await service.getByIdFull(request.params.id)
+        if (!full) {
+          return reply.status(404).send({ error: "not_found", message: "Channel config not found" })
+        }
+
+        if (full.type !== "telegram") {
+          return reply.status(400).send({
+            error: "bad_request",
+            message: "Bot identity verification is only supported for Telegram channels",
+          })
+        }
+
+        const botToken = full.config.botToken
+        if (typeof botToken !== "string") {
+          return reply.status(400).send({
+            error: "bad_request",
+            message: "Channel config is missing a bot token",
+          })
+        }
+
+        const botMetadata = await fetchTelegramBotIdentity(botToken)
+        if (!botMetadata) {
+          return reply.status(502).send({
+            error: "upstream_error",
+            message:
+              "Failed to verify bot identity — the token may be invalid or the Telegram API is unreachable",
+          })
+        }
+
+        const channel = await service.update(request.params.id, { bot_metadata: botMetadata })
         return reply.status(200).send({ channel })
       },
     )

@@ -188,6 +188,12 @@ export function ChannelConfigSection() {
                   {ch.enabled ? "Enabled" : "Disabled"}
                 </span>
               </div>
+              {ch.bot_metadata?.username && (
+                <p className="mt-1 text-xs text-text-muted">
+                  Bot: @{ch.bot_metadata.username}
+                  {ch.bot_metadata.display_name ? ` (${ch.bot_metadata.display_name})` : ""}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
