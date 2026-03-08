@@ -50,9 +50,10 @@ export function usePulsePipeline() {
     refetch,
   } = useApiQuery(() => listContent({ limit: 100 }), [])
 
-  // A 404 means the /content route isn't deployed — not a connection failure.
-  const error = rawErrorCode === "NOT_FOUND" ? null : rawError
-  const errorCode = rawErrorCode === "NOT_FOUND" ? null : rawErrorCode
+  // A 404/501 means the /content route isn't deployed or not yet implemented.
+  const suppressError = rawErrorCode === "NOT_FOUND" || rawErrorCode === "NOT_IMPLEMENTED"
+  const error = suppressError ? null : rawError
+  const errorCode = suppressError ? null : rawErrorCode
 
   // Real-time content stream — refetch when events arrive
   const { events: streamEvents } = useContentStream({ maxEvents: 50 })

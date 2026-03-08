@@ -297,7 +297,7 @@ describe("dashboard routes", () => {
     expect(bad.statusCode).toBe(400)
   })
 
-  it("serves content, memory, and browser endpoints", async () => {
+  it("serves content list, memory search, and browser endpoints", async () => {
     const { app } = await buildTestApp()
 
     const content = await app.inject({ method: "GET", url: "/content" })
@@ -306,21 +306,6 @@ describe("dashboard routes", () => {
       content: [],
       pagination: { total: 0, limit: 50, offset: 0, hasMore: false },
     })
-
-    const publish = await app.inject({
-      method: "POST",
-      url: "/content/c-1/publish",
-      payload: { channel: "website" },
-    })
-    expect(publish.statusCode).toBe(200)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(publish.json().contentId).toBe("c-1")
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(publish.json().status).toBe("published")
-
-    const archive = await app.inject({ method: "POST", url: "/content/c-1/archive" })
-    expect(archive.statusCode).toBe(200)
-    expect(archive.json()).toEqual({ contentId: "c-1", status: "archived" })
 
     const memory = await app.inject({
       method: "GET",
@@ -333,15 +318,6 @@ describe("dashboard routes", () => {
       type: "fact",
       source: "session:sess-1",
     })
-
-    const sync = await app.inject({
-      method: "POST",
-      url: "/memory/sync",
-      payload: { agentId: "agent-1" },
-    })
-    expect(sync.statusCode).toBe(200)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(sync.json().status).toBe("completed")
 
     const browser = await app.inject({ method: "GET", url: "/agents/agent-1/browser" })
     expect(browser.statusCode).toBe(200)
@@ -361,5 +337,38 @@ describe("dashboard routes", () => {
     const events = await app.inject({ method: "GET", url: "/agents/agent-1/browser/events" })
     expect(events.statusCode).toBe(200)
     expect(events.json()).toEqual({ events: [] })
+  })
+
+  it("returns 501 for stub endpoints not yet implemented", async () => {
+    const { app } = await buildTestApp()
+
+    const publish = await app.inject({
+      method: "POST",
+      url: "/content/c-1/publish",
+      payload: { channel: "website" },
+    })
+    expect(publish.statusCode).toBe(501)
+    expect(publish.json()).toEqual({
+      error: "not_implemented",
+      message: "Content publishing is not yet implemented",
+    })
+
+    const archive = await app.inject({ method: "POST", url: "/content/c-1/archive" })
+    expect(archive.statusCode).toBe(501)
+    expect(archive.json()).toEqual({
+      error: "not_implemented",
+      message: "Content archiving is not yet implemented",
+    })
+
+    const sync = await app.inject({
+      method: "POST",
+      url: "/memory/sync",
+      payload: { agentId: "agent-1" },
+    })
+    expect(sync.statusCode).toBe(501)
+    expect(sync.json()).toEqual({
+      error: "not_implemented",
+      message: "Memory sync is not yet implemented",
+    })
   })
 })

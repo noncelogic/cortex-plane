@@ -162,6 +162,7 @@ export type ApiErrorCode =
   | "TIMEOUT"
   | "AUTH_ERROR"
   | "NOT_FOUND"
+  | "NOT_IMPLEMENTED"
   | "SERVER_ERROR"
   | "TRANSIENT"
   | "SCHEMA_MISMATCH"
@@ -170,6 +171,7 @@ export type ApiErrorCode =
 function classifyError(status: number): ApiErrorCode {
   if (status === 401 || status === 403) return "AUTH_ERROR"
   if (status === 404) return "NOT_FOUND"
+  if (status === 501) return "NOT_IMPLEMENTED"
   if (status === 503 || status === 502 || status === 504) return "TRANSIENT"
   if (status >= 500) return "SERVER_ERROR"
   return "UNKNOWN"
@@ -422,9 +424,9 @@ export class ApiError extends Error {
     return this.code === "TRANSIENT"
   }
 
-  /** True when the endpoint itself doesn't exist (feature not deployed). */
+  /** True when the endpoint doesn't exist or is not yet implemented. */
   get isFeatureUnavailable(): boolean {
-    return this.code === "NOT_FOUND"
+    return this.code === "NOT_FOUND" || this.code === "NOT_IMPLEMENTED"
   }
 }
 
