@@ -17,12 +17,14 @@ export const JobStatusSchema = z.enum([
 export const JobSummarySchema = z.object({
   id: z.string(),
   agentId: z.string(),
+  agentName: z.string().nullish(),
   status: JobStatusSchema,
   type: z.string(),
   createdAt: z.string(),
   updatedAt: z.string().optional(),
   completedAt: z.string().optional(),
   error: z.string().optional(),
+  errorCategory: z.string().nullish(),
 })
 
 export const JobStepSchema = z.object({
@@ -33,14 +35,6 @@ export const JobStepSchema = z.object({
   durationMs: z.number().optional(),
   worker: z.string().optional(),
   error: z.string().optional(),
-})
-
-export const JobMetricsSchema = z.object({
-  cpu_percent: z.number(),
-  memory_mb: z.number(),
-  network_in_bytes: z.number(),
-  network_out_bytes: z.number(),
-  thread_count: z.number(),
 })
 
 export const JobLogEntrySchema = z.object({
@@ -63,15 +57,14 @@ export const TokenUsageSchema = z.object({
 })
 
 export const JobDetailSchema = JobSummarySchema.extend({
-  agentName: z.string().optional(),
-  durationMs: z.number().optional(),
-  startedAt: z.string().optional(),
-  attempt: z.number().optional(),
-  maxAttempts: z.number().optional(),
-  failureReason: FailureReasonSchema.optional(),
-  tokenUsage: TokenUsageSchema.optional(),
+  agentName: z.string().nullish(),
+  durationMs: z.number().nullish(),
+  startedAt: z.string().nullish(),
+  attempt: z.number().nullish(),
+  maxAttempts: z.number().nullish(),
+  failureReason: FailureReasonSchema.nullish(),
+  tokenUsage: TokenUsageSchema.nullish(),
   steps: z.array(JobStepSchema),
-  metrics: JobMetricsSchema.optional(),
   logs: z.array(JobLogEntrySchema),
 })
 
@@ -94,7 +87,6 @@ export const DashboardActivitySchema = z.object({
 export type JobStatus = z.infer<typeof JobStatusSchema>
 export type JobSummary = z.infer<typeof JobSummarySchema>
 export type JobStep = z.infer<typeof JobStepSchema>
-export type JobMetrics = z.infer<typeof JobMetricsSchema>
 export type JobLogEntry = z.infer<typeof JobLogEntrySchema>
 export type FailureReason = z.infer<typeof FailureReasonSchema>
 export type TokenUsage = z.infer<typeof TokenUsageSchema>

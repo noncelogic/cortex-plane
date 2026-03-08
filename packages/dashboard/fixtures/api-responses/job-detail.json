@@ -1,0 +1,68 @@
+{
+  "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "agentName": "ResearchBot",
+  "status": "FAILED",
+  "type": "task",
+  "createdAt": "2025-01-15T12:00:00.000Z",
+  "updatedAt": "2025-01-15T12:03:00.000Z",
+  "completedAt": "2025-01-15T12:03:00.000Z",
+  "error": "Timeout exceeded",
+  "errorCategory": "timeout",
+  "durationMs": 175000,
+  "startedAt": "2025-01-15T12:00:05.000Z",
+  "attempt": 1,
+  "maxAttempts": 3,
+  "failureReason": {
+    "message": "Timeout exceeded",
+    "category": "timeout"
+  },
+  "tokenUsage": {
+    "tokensIn": 4200,
+    "tokensOut": 1100,
+    "costUsd": 0.0315,
+    "llmCallCount": 3,
+    "toolCallCount": 5
+  },
+  "steps": [
+    {
+      "name": "State \u2192 RUNNING",
+      "status": "COMPLETED",
+      "startedAt": "2025-01-15T12:00:05.000Z",
+      "completedAt": "2025-01-15T12:00:05.000Z",
+      "durationMs": 0
+    },
+    {
+      "name": "LLM call (gpt-4)",
+      "status": "COMPLETED",
+      "startedAt": "2025-01-15T12:00:06.000Z",
+      "completedAt": "2025-01-15T12:00:08.000Z",
+      "durationMs": 2000
+    },
+    {
+      "name": "Tool: web_search",
+      "status": "FAILED",
+      "startedAt": "2025-01-15T12:00:09.000Z",
+      "completedAt": "2025-01-15T12:03:00.000Z",
+      "durationMs": 171000,
+      "error": "Request timed out after 180s"
+    }
+  ],
+  "logs": [
+    {
+      "timestamp": "2025-01-15T12:00:05.000Z",
+      "level": "INFO",
+      "message": "PENDING \u2192 RUNNING"
+    },
+    {
+      "timestamp": "2025-01-15T12:00:08.000Z",
+      "level": "INFO",
+      "message": "LLM call model=gpt-4 in=1200 out=350"
+    },
+    {
+      "timestamp": "2025-01-15T12:03:00.000Z",
+      "level": "ERR",
+      "message": "Timeout exceeded"
+    }
+  ]
+}

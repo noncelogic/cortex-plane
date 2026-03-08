@@ -81,32 +81,41 @@ function toIso(value: Date | string | null | undefined): string | undefined {
   return value
 }
 
-function toJobSummary(job: {
-  id: string
-  agent_id: string
-  status: JobStatus
-  payload: Record<string, unknown>
-  created_at: Date | string
-  updated_at: Date | string
-  completed_at: Date | string | null
-  error: Record<string, unknown> | null
-}) {
+function toJobSummary(
+  job: {
+    id: string
+    agent_id: string
+    status: JobStatus
+    payload: Record<string, unknown>
+    created_at: Date | string
+    updated_at: Date | string
+    completed_at: Date | string | null
+    error: Record<string, unknown> | null
+  },
+  agentName?: string,
+) {
   const payloadType = typeof job.payload.goal_type === "string" ? job.payload.goal_type : "task"
   const rawError = job.error
   const error =
     rawError && typeof rawError === "object" && typeof rawError.message === "string"
       ? rawError.message
       : undefined
+  const errorCategory =
+    rawError && typeof rawError === "object" && typeof rawError.category === "string"
+      ? rawError.category
+      : undefined
 
   return {
     id: job.id,
     agentId: job.agent_id,
+    agentName: agentName ?? undefined,
     status: job.status,
     type: payloadType,
     createdAt: toIso(job.created_at) ?? new Date().toISOString(),
     updatedAt: toIso(job.updated_at),
     completedAt: toIso(job.completed_at),
     error,
+    errorCategory,
   }
 }
 
@@ -252,12 +261,29 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
       async (request, reply) => {
         const { agentId, status, limit = 50, offset = 0 } = request.query
 
-        let query = db.selectFrom("job").selectAll()
-        if (agentId) query = query.where("agent_id", "=", agentId)
-        if (status) query = query.where("status", "=", status)
+        let query = db
+          .selectFrom("job")
+          .leftJoin("agent", "agent.id", "job.agent_id")
+          .select([
+            "job.id",
+            "job.agent_id",
+            "job.status",
+            "job.payload",
+            "job.created_at",
+            "job.updated_at",
+            "job.completed_at",
+            "job.error",
+            "agent.name as agent_name",
+          ])
+        if (agentId) query = query.where("job.agent_id", "=", agentId)
+        if (status) query = query.where("job.status", "=", status)
 
-        const rows = await query.orderBy("created_at", "desc").limit(limit).offset(offset).execute()
-        const jobs = rows.map((job) => toJobSummary(job))
+        const rows = await query
+          .orderBy("job.created_at", "desc")
+          .limit(limit)
+          .offset(offset)
+          .execute()
+        const jobs = rows.map((row) => toJobSummary(row, row.agent_name ?? undefined))
 
         return reply.send({
           jobs,

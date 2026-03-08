@@ -45,7 +45,7 @@ export const ApprovalDecisionResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const RetryJobResponseSchema = z.object({
-  job_id: z.string(),
+  jobId: z.string(),
   status: z.literal("retrying"),
 })
 

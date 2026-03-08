@@ -205,12 +205,15 @@ export function JobTable({
               </tr>
             ) : (
               paginated.map((job) => {
+                const isTerminal =
+                  job.status === "COMPLETED" ||
+                  job.status === "FAILED" ||
+                  job.status === "TIMED_OUT" ||
+                  job.status === "DEAD_LETTER"
                 const durationMs =
                   job.completedAt && job.createdAt
                     ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
-                    : job.updatedAt && job.createdAt
-                      ? new Date(job.updatedAt).getTime() - new Date(job.createdAt).getTime()
-                      : null
+                    : null
 
                 return (
                   <tr
@@ -236,7 +239,9 @@ export function JobTable({
                         <span className="material-symbols-outlined text-lg text-text-muted">
                           smart_toy
                         </span>
-                        <span className="text-sm text-text-main">{truncateUuid(job.agentId)}</span>
+                        <span className="text-sm text-text-main">
+                          {job.agentName ?? truncateUuid(job.agentId)}
+                        </span>
                       </div>
                     </td>
 
@@ -250,7 +255,7 @@ export function JobTable({
                     {/* Duration */}
                     <td className="px-6 py-4">
                       <span className="font-mono text-sm text-text-muted">
-                        {durationMs !== null ? duration(durationMs) : "—"}
+                        {isTerminal && durationMs !== null ? duration(durationMs) : "—"}
                       </span>
                     </td>
 

@@ -3,9 +3,9 @@
 import { useEffect } from "react"
 
 import { useApiQuery } from "@/hooks/use-api"
-import type { JobDetail, JobLogEntry, JobMetrics, JobStep, TokenUsage } from "@/lib/api-client"
+import type { JobDetail, JobLogEntry, JobStep, TokenUsage } from "@/lib/api-client"
 import { getJob } from "@/lib/api-client"
-import { bytes, duration, relativeTime } from "@/lib/format"
+import { duration, relativeTime } from "@/lib/format"
 
 import { JobRetryButton } from "./job-retry-button"
 import { JobStatusBadge } from "./job-status-badge"
@@ -61,47 +61,6 @@ function StepTimeline({ steps }: { steps: JobStep[] }): React.JSX.Element {
               </div>
             )}
           </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function MetricsGrid({ metrics }: { metrics: JobMetrics }): React.JSX.Element {
-  const items = [
-    {
-      label: "CPU",
-      value: `${metrics.cpu_percent}%`,
-      icon: "memory",
-    },
-    {
-      label: "Memory",
-      value: `${metrics.memory_mb} MB`,
-      icon: "storage",
-    },
-    {
-      label: "Network I/O",
-      value: `${bytes(metrics.network_in_bytes)} / ${bytes(metrics.network_out_bytes)}`,
-      icon: "swap_vert",
-    },
-    {
-      label: "Threads",
-      value: String(metrics.thread_count),
-      icon: "account_tree",
-    },
-  ]
-
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {items.map((item) => (
-        <div key={item.label} className="rounded-lg border border-surface-border bg-secondary p-3">
-          <div className="mb-1 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-sm text-text-muted">{item.icon}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-              {item.label}
-            </span>
-          </div>
-          <span className="font-mono text-sm font-bold text-text-main">{item.value}</span>
         </div>
       ))}
     </div>
@@ -293,15 +252,23 @@ export function JobDetailDrawer({
           {job ? (
             <>
               {/* Failure Reason */}
-              {job.failureReason && (
+              {job.failureReason ? (
                 <section>
                   <FailureReasonBlock
                     reason={job.failureReason}
-                    attempt={job.attempt}
-                    maxAttempts={job.maxAttempts}
+                    attempt={job.attempt ?? undefined}
+                    maxAttempts={job.maxAttempts ?? undefined}
                   />
                 </section>
-              )}
+              ) : job.error ? (
+                <section>
+                  <FailureReasonBlock
+                    reason={{ message: job.error, category: job.errorCategory ?? undefined }}
+                    attempt={job.attempt ?? undefined}
+                    maxAttempts={job.maxAttempts ?? undefined}
+                  />
+                </section>
+              ) : null}
 
               {/* Execution Steps */}
               <section>
@@ -320,17 +287,6 @@ export function JobDetailDrawer({
                     Execution Stats
                   </h3>
                   <ExecutionStats usage={job.tokenUsage} />
-                </section>
-              )}
-
-              {/* Metrics */}
-              {job.metrics && (
-                <section>
-                  <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
-                    <span className="material-symbols-outlined text-sm">monitoring</span>
-                    Resource Metrics
-                  </h3>
-                  <MetricsGrid metrics={job.metrics} />
                 </section>
               )}
 

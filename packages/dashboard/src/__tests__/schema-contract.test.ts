@@ -19,6 +19,7 @@ import browserObserveFixture from "../../fixtures/api-responses/browser-observe.
 import channelsListFixture from "../../fixtures/api-responses/channels-list.json"
 import contentListFixture from "../../fixtures/api-responses/content-list.json"
 import credentialsListFixture from "../../fixtures/api-responses/credentials-list.json"
+import jobDetailFixture from "../../fixtures/api-responses/job-detail.json"
 import jobsListFixture from "../../fixtures/api-responses/jobs-list.json"
 import memorySearchFixture from "../../fixtures/api-responses/memory-search.json"
 import oauthInitFixture from "../../fixtures/api-responses/oauth-init.json"
@@ -43,7 +44,7 @@ import {
   ProviderInfoSchema,
   ProviderListResponseSchema,
 } from "../lib/schemas/credentials"
-import { JobListResponseSchema, JobSummarySchema } from "../lib/schemas/jobs"
+import { JobDetailSchema, JobListResponseSchema, JobSummarySchema } from "../lib/schemas/jobs"
 import { MemoryRecordSchema, MemorySearchResponseSchema } from "../lib/schemas/memory"
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,35 @@ describe("API-Dashboard contract tests", () => {
     it("does not silently drop job fields", () => {
       for (const job of jobsListFixture.jobs) {
         assertContractMatch(JobSummarySchema, job, `Job ${job.id}`)
+      }
+    })
+  })
+
+  describe("GET /jobs/:jobId — JobDetailSchema", () => {
+    it("parses the fixture successfully", () => {
+      const result = JobDetailSchema.parse(jobDetailFixture)
+      expect(result.id).toBe("c3d4e5f6-a7b8-9012-cdef-123456789012")
+      expect(result.agentName).toBe("ResearchBot")
+      expect(result.status).toBe("FAILED")
+      expect(result.failureReason?.message).toBe("Timeout exceeded")
+      expect(result.failureReason?.category).toBe("timeout")
+      expect(result.durationMs).toBe(175000)
+      expect(result.steps).toHaveLength(3)
+      expect(result.logs).toHaveLength(3)
+      expect(result.tokenUsage?.tokensIn).toBe(4200)
+    })
+
+    it("does not silently drop job detail fields", () => {
+      const parsed = JobDetailSchema.parse(jobDetailFixture)
+      const parsedKeys = collectKeys(parsed)
+      const fixtureKeys = collectKeys(jobDetailFixture)
+
+      for (const key of parsedKeys) {
+        expect(fixtureKeys.has(key), `parsed key "${key}" not in fixture`).toBe(true)
+      }
+
+      for (const key of fixtureKeys) {
+        expect(parsedKeys.has(key), `fixture key "${key}" was silently dropped`).toBe(true)
       }
     })
   })
