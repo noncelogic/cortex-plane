@@ -181,12 +181,11 @@ function SettingsInner() {
   const getCredentialForProvider = (providerId: string) =>
     credentials.find((c) => c.provider === providerId)
 
-  // Only show LLM providers in the "Connected Providers" section.
-  // User services (google-workspace, github-user, slack-user) and
-  // tool-specific providers (brave) are managed separately.
+  // Split providers by credential class for separate UI sections.
   const llmProviders = providers.filter(
     (p) => !p.credentialClass || p.credentialClass === "llm_provider",
   )
+  const userServiceProviders = providers.filter((p) => p.credentialClass === "user_service")
 
   return (
     <div className="space-y-8">
@@ -285,6 +284,16 @@ function SettingsInner() {
                   {cred?.maskedKey && (
                     <p className="mt-1 font-mono text-xs text-text-muted">{cred.maskedKey}</p>
                   )}
+                  {cred?.accountId && (
+                    <p className="mt-1 text-xs text-text-muted">
+                      Project: <span className="font-mono">{cred.accountId}</span>
+                    </p>
+                  )}
+                  {cred?.lastUsedAt && (
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Last used: {new Date(cred.lastUsedAt).toLocaleString()}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -338,6 +347,82 @@ function SettingsInner() {
           )}
         </div>
       </section>
+
+      {/* Connected Services (user_service providers) */}
+      {userServiceProviders.length > 0 && (
+        <section className="rounded-xl border border-surface-border bg-surface-light p-6">
+          <h2 className="text-lg font-semibold text-text-main">Connected Services</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            Connect third-party services so agents can act on your behalf.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {userServiceProviders.map((p) => {
+              const cred = getCredentialForProvider(p.id)
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded-lg border border-surface-border p-4"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-text-main">{p.name}</span>
+                      {cred ? (
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                            cred.status === "active"
+                              ? "bg-success/10 text-success"
+                              : cred.status === "expired"
+                                ? "bg-warning/10 text-warning"
+                                : "bg-danger/10 text-danger"
+                          }`}
+                        >
+                          {cred.status === "active" ? "Connected" : cred.status}
+                        </span>
+                      ) : (
+                        <span className="inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-text-muted">
+                          Not Connected
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-muted">{p.description}</p>
+                    {cred?.lastUsedAt && (
+                      <p className="mt-0.5 text-xs text-text-muted">
+                        Last used: {new Date(cred.lastUsedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {cred ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDisconnectConfirm({
+                            id: cred.id,
+                            label: credentialLabel(cred, providers),
+                          })
+                        }
+                        className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => connectOAuth(p.id)}
+                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Channels */}
       <ChannelConfigSection />
