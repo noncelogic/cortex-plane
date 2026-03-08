@@ -262,8 +262,9 @@ async function apiFetch<T>(
     maxRetries = MAX_RETRIES,
   } = options
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+  const headers: Record<string, string> = {}
+  if (body) {
+    headers["Content-Type"] = "application/json"
   }
 
   // Session-based CSRF token (stored by auth flow)
