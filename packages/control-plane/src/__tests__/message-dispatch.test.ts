@@ -487,15 +487,17 @@ describe("ChannelAuthGuard integration", () => {
 
     await dispatch(makeRoutedMessage())
 
-    // Guard was called
+    // Guard was called (channelConfigId comes from the mock db's selectFrom("channel_config"))
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(guard.authorize).toHaveBeenCalledWith({
-      agentId: "agent-aaa",
-      channelType: "telegram",
-      channelUserId: "tg-user-1",
-      chatId: "chat-42",
-      messageText: "Hello agent",
-    })
+    expect(guard.authorize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "agent-aaa",
+        channelType: "telegram",
+        channelUserId: "tg-user-1",
+        chatId: "chat-42",
+        messageText: "Hello agent",
+      }),
+    )
 
     // Rejection message sent
     expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
