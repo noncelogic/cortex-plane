@@ -12,6 +12,7 @@ function makeJob(overrides: Record<string, unknown> = {}) {
   return {
     id: JOB_UUID,
     agent_id: AGENT_UUID,
+    agent_name: "Agent One",
     session_id: null,
     status: "FAILED",
     priority: 0,
@@ -86,7 +87,9 @@ function mockDb(
     const selectAll = vi
       .fn()
       .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
-    return { selectAll, select: selectFn, where: whereFn }
+    const chainRoot = { selectAll, select: selectFn, where: whereFn }
+    const leftJoin = vi.fn().mockReturnValue(chainRoot)
+    return { ...chainRoot, leftJoin }
   }
 
   function updateChain() {
@@ -160,8 +163,10 @@ describe("dashboard routes", () => {
     expect(body.jobs[0]).toMatchObject({
       id: JOB_UUID,
       agentId: AGENT_UUID,
+      agentName: "Agent One",
       status: "FAILED",
       type: "research",
+      error: "boom",
     })
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.pagination).toBeDefined()

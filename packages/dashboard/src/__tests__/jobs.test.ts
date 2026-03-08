@@ -5,13 +5,13 @@ import {
   getJob,
   type JobDetail,
   type JobLogEntry,
-  type JobMetrics,
   type JobStatus,
   type JobStep,
   type JobSummary,
   retryJob,
 } from "@/lib/api-client"
 import { duration, relativeTime, truncateUuid } from "@/lib/format"
+import { JobDetailSchema, JobListResponseSchema, JobSummarySchema } from "@/lib/schemas/jobs"
 
 // ---------------------------------------------------------------------------
 // Fetch mock helpers
@@ -266,22 +266,6 @@ describe("JobDetailDrawer data", () => {
     expect(stepColors.PENDING).toBe("slate")
   })
 
-  it("JobMetrics interface has all required fields", () => {
-    const metrics: JobMetrics = {
-      cpu_percent: 45,
-      memory_mb: 512,
-      network_in_bytes: 2_500_000,
-      network_out_bytes: 800_000,
-      thread_count: 8,
-    }
-
-    expect(metrics.cpu_percent).toBe(45)
-    expect(metrics.memory_mb).toBe(512)
-    expect(metrics.network_in_bytes).toBe(2_500_000)
-    expect(metrics.network_out_bytes).toBe(800_000)
-    expect(metrics.thread_count).toBe(8)
-  })
-
   it("JobLogEntry levels are mapped to correct colors conceptually", () => {
     const logLevelColors: Record<JobLogEntry["level"], string> = {
       INFO: "blue",
@@ -296,7 +280,7 @@ describe("JobDetailDrawer data", () => {
     expect(logLevelColors.DEBUG).toBe("slate")
   })
 
-  it("JobDetail extends JobSummary with steps, metrics, logs", () => {
+  it("JobDetail extends JobSummary with steps and logs", () => {
     const detail: JobDetail = {
       id: "job-001",
       agentId: "agt-001",
@@ -310,13 +294,6 @@ describe("JobDetailDrawer data", () => {
         { name: "Execute", status: "COMPLETED", durationMs: 3000 },
         { name: "Cleanup", status: "COMPLETED", durationMs: 1000 },
       ],
-      metrics: {
-        cpu_percent: 30,
-        memory_mb: 256,
-        network_in_bytes: 1_000_000,
-        network_out_bytes: 500_000,
-        thread_count: 4,
-      },
       logs: [
         { timestamp: new Date().toISOString(), level: "INFO", message: "Job started" },
         { timestamp: new Date().toISOString(), level: "INFO", message: "Job completed" },
@@ -324,7 +301,6 @@ describe("JobDetailDrawer data", () => {
     }
 
     expect(detail.steps).toHaveLength(3)
-    expect(detail.metrics?.cpu_percent).toBe(30)
     expect(detail.logs).toHaveLength(2)
     expect(detail.agentName).toBe("TestAgent")
   })
@@ -418,11 +394,11 @@ describe("retryJob API", () => {
   })
 
   it("sends POST to retry endpoint", async () => {
-    mockFetchResponse({ job_id: "job-123", status: "retrying" })
+    mockFetchResponse({ jobId: "job-123", status: "retrying" })
     const result = await retryJob("job-123")
 
     expect(result.status).toBe("retrying")
-    expect(result.job_id).toBe("job-123")
+    expect(result.jobId).toBe("job-123")
     expect(fetch).toHaveBeenCalledWith(
       `${API_BASE}/jobs/job-123/retry`,
       expect.objectContaining({ method: "POST" }),
@@ -433,6 +409,231 @@ describe("retryJob API", () => {
     mockFetchResponse({ message: "Internal error" }, 500)
 
     await expect(retryJob("job-123")).rejects.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Schema parsing tests
+// ---------------------------------------------------------------------------
+
+describe("JobDetailSchema parsing", () => {
+  it("parses a full job detail response with error JSONB and agent info", () => {
+    const response = {
+      id: "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      agentId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      agentName: "ResearchBot",
+      status: "FAILED",
+      type: "task",
+      createdAt: "2025-01-15T12:00:00.000Z",
+      updatedAt: "2025-01-15T12:03:00.000Z",
+      completedAt: "2025-01-15T12:03:00.000Z",
+      error: "Timeout exceeded",
+      errorCategory: "timeout",
+      durationMs: 175000,
+      startedAt: "2025-01-15T12:00:05.000Z",
+      attempt: 1,
+      maxAttempts: 3,
+      failureReason: { message: "Timeout exceeded", category: "timeout" },
+      tokenUsage: {
+        tokensIn: 4200,
+        tokensOut: 1100,
+        costUsd: 0.0315,
+        llmCallCount: 3,
+        toolCallCount: 5,
+      },
+      steps: [
+        {
+          name: "State \u2192 RUNNING",
+          status: "COMPLETED",
+          startedAt: "2025-01-15T12:00:05.000Z",
+          completedAt: "2025-01-15T12:00:05.000Z",
+          durationMs: 0,
+        },
+        {
+          name: "Tool: web_search",
+          status: "FAILED",
+          startedAt: "2025-01-15T12:00:09.000Z",
+          completedAt: "2025-01-15T12:03:00.000Z",
+          durationMs: 171000,
+          error: "Request timed out after 180s",
+        },
+      ],
+      logs: [
+        { timestamp: "2025-01-15T12:00:05.000Z", level: "INFO", message: "PENDING \u2192 RUNNING" },
+        { timestamp: "2025-01-15T12:03:00.000Z", level: "ERR", message: "Timeout exceeded" },
+      ],
+    }
+
+    const result = JobDetailSchema.safeParse(response)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.agentName).toBe("ResearchBot")
+      expect(result.data.durationMs).toBe(175000)
+      expect(result.data.failureReason?.message).toBe("Timeout exceeded")
+      expect(result.data.failureReason?.category).toBe("timeout")
+      expect(result.data.tokenUsage?.tokensIn).toBe(4200)
+      expect(result.data.steps).toHaveLength(2)
+      expect(result.data.logs).toHaveLength(2)
+      expect(result.data.errorCategory).toBe("timeout")
+    }
+  })
+
+  it("parses a minimal completed job (no error, no tokenUsage)", () => {
+    const response = {
+      id: "job-minimal",
+      agentId: "agt-001",
+      status: "COMPLETED",
+      type: "inference",
+      createdAt: "2025-01-15T11:00:00.000Z",
+      steps: [],
+      logs: [],
+    }
+
+    const result = JobDetailSchema.safeParse(response)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.failureReason).toBeUndefined()
+      expect(result.data.tokenUsage).toBeUndefined()
+      expect(result.data.agentName).toBeUndefined()
+    }
+  })
+
+  it("parses a job with null optional fields", () => {
+    const response = {
+      id: "job-nulls",
+      agentId: "agt-001",
+      status: "FAILED",
+      type: "task",
+      createdAt: "2025-01-15T11:00:00.000Z",
+      agentName: null,
+      durationMs: null,
+      startedAt: null,
+      attempt: null,
+      maxAttempts: null,
+      failureReason: null,
+      tokenUsage: null,
+      steps: [],
+      logs: [],
+    }
+
+    const result = JobDetailSchema.safeParse(response)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.agentName).toBeNull()
+      expect(result.data.durationMs).toBeNull()
+      expect(result.data.attempt).toBeNull()
+    }
+  })
+})
+
+describe("JobListResponseSchema parsing", () => {
+  it("parses a list with various statuses", () => {
+    const response = {
+      jobs: [
+        {
+          id: "job-1",
+          agentId: "agt-1",
+          agentName: "Bot A",
+          status: "COMPLETED",
+          type: "research",
+          createdAt: "2025-01-15T11:00:00.000Z",
+          completedAt: "2025-01-15T11:05:00.000Z",
+        },
+        {
+          id: "job-2",
+          agentId: "agt-1",
+          agentName: "Bot A",
+          status: "FAILED",
+          type: "task",
+          createdAt: "2025-01-15T12:00:00.000Z",
+          error: "Rate limit exceeded",
+          errorCategory: "rate_limit",
+        },
+        {
+          id: "job-3",
+          agentId: "agt-2",
+          status: "RUNNING",
+          type: "pipeline",
+          createdAt: "2025-01-15T13:00:00.000Z",
+        },
+      ],
+      pagination: { total: 3, limit: 50, offset: 0, hasMore: false },
+    }
+
+    const result = JobListResponseSchema.safeParse(response)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.jobs).toHaveLength(3)
+      expect(result.data.jobs[0]!.agentName).toBe("Bot A")
+      expect(result.data.jobs[1]!.errorCategory).toBe("rate_limit")
+      expect(result.data.jobs[2]!.agentName).toBeUndefined()
+    }
+  })
+
+  it("parses jobs with null agentName", () => {
+    const response = {
+      jobs: [
+        {
+          id: "job-1",
+          agentId: "agt-orphan",
+          agentName: null,
+          status: "COMPLETED",
+          type: "task",
+          createdAt: "2025-01-15T11:00:00.000Z",
+        },
+      ],
+      pagination: { total: 1, limit: 50, offset: 0, hasMore: false },
+    }
+
+    const result = JobListResponseSchema.safeParse(response)
+    expect(result.success).toBe(true)
+  })
+})
+
+describe("JobSummarySchema error states", () => {
+  it("parses a FAILED job with error and errorCategory", () => {
+    const job = {
+      id: "job-fail",
+      agentId: "agt-1",
+      status: "FAILED",
+      type: "task",
+      createdAt: "2025-01-15T12:00:00.000Z",
+      error: "Connection refused",
+      errorCategory: "network",
+    }
+    const result = JobSummarySchema.safeParse(job)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.error).toBe("Connection refused")
+      expect(result.data.errorCategory).toBe("network")
+    }
+  })
+
+  it("parses a TIMED_OUT job", () => {
+    const job = {
+      id: "job-timeout",
+      agentId: "agt-1",
+      status: "TIMED_OUT",
+      type: "inference",
+      createdAt: "2025-01-15T12:00:00.000Z",
+      error: "Exceeded 300s timeout",
+      errorCategory: "timeout",
+    }
+    const result = JobSummarySchema.safeParse(job)
+    expect(result.success).toBe(true)
+  })
+
+  it("parses a DEAD_LETTER job", () => {
+    const job = {
+      id: "job-dead",
+      agentId: "agt-1",
+      status: "DEAD_LETTER",
+      type: "batch",
+      createdAt: "2025-01-15T12:00:00.000Z",
+      error: "Max retries exceeded",
+    }
+    const result = JobSummarySchema.safeParse(job)
+    expect(result.success).toBe(true)
   })
 })
 

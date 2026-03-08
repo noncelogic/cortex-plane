@@ -115,7 +115,6 @@ export type {
   FailureReason,
   JobDetail,
   JobLogEntry,
-  JobMetrics,
   JobStatus,
   JobStep,
   JobSummary,
