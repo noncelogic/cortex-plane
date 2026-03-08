@@ -9,8 +9,6 @@
  * - SSE: /jobs/stream
  */
 
-import { randomUUID } from "node:crypto"
-
 import type { JobStatus } from "@cortex/shared"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
@@ -625,21 +623,19 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
 
     app.post<{ Params: ContentParams; Body: PublishContentBody }>(
       "/content/:id/publish",
-      async (request, reply) => {
-        const { id } = request.params
-        const channel = request.body?.channel ?? "website"
-        return reply.send({
-          contentId: id,
-          status: "published",
-          publishedAt: new Date().toISOString(),
-          channel,
+      async (_request, reply) => {
+        return reply.status(501).send({
+          error: "not_implemented",
+          message: "Content publishing is not yet implemented",
         })
       },
     )
 
-    app.post<{ Params: ContentParams }>("/content/:id/archive", async (request, reply) => {
-      const { id } = request.params
-      return reply.send({ contentId: id, status: "archived" })
+    app.post<{ Params: ContentParams }>("/content/:id/archive", async (_request, reply) => {
+      return reply.status(501).send({
+        error: "not_implemented",
+        message: "Content archiving is not yet implemented",
+      })
     })
 
     app.get<{ Querystring: SearchMemoryQuery }>(
@@ -715,14 +711,9 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         },
       },
       async (_request, reply) => {
-        return reply.send({
-          syncId: randomUUID(),
-          status: "completed",
-          stats: {
-            upserted: 0,
-            deleted: 0,
-            unchanged: 0,
-          },
+        return reply.status(501).send({
+          error: "not_implemented",
+          message: "Memory sync is not yet implemented",
         })
       },
     )

@@ -23,6 +23,11 @@ describe("ApiError.isFeatureUnavailable", () => {
     expect(err.isFeatureUnavailable).toBe(true)
   })
 
+  it("returns true for NOT_IMPLEMENTED (501)", () => {
+    const err = new ApiError(501, "Not implemented", undefined, "NOT_IMPLEMENTED")
+    expect(err.isFeatureUnavailable).toBe(true)
+  })
+
   it("returns false for CONNECTION_REFUSED", () => {
     const err = new ApiError(0, "Could not connect", undefined, "CONNECTION_REFUSED")
     expect(err.isFeatureUnavailable).toBe(false)
@@ -77,6 +82,10 @@ function isConnectivityError(code: ApiErrorCode | null): boolean {
 describe("error classification for dashboard banner", () => {
   it("NOT_FOUND is NOT a connectivity error", () => {
     expect(isConnectivityError("NOT_FOUND")).toBe(false)
+  })
+
+  it("NOT_IMPLEMENTED is NOT a connectivity error", () => {
+    expect(isConnectivityError("NOT_IMPLEMENTED")).toBe(false)
   })
 
   it("SCHEMA_MISMATCH is NOT a connectivity error", () => {
@@ -194,47 +203,54 @@ describe("dashboard error aggregation scenarios", () => {
 // Feature page NOT_FOUND suppression
 // ---------------------------------------------------------------------------
 
-describe("feature page 404 suppression", () => {
+describe("feature page 404/501 suppression", () => {
   /**
    * Mirrors the pattern used in use-jobs-page.ts, use-memory-explorer.ts,
-   * and use-pulse-pipeline.ts to suppress NOT_FOUND errors.
+   * and use-pulse-pipeline.ts to suppress NOT_FOUND and NOT_IMPLEMENTED errors.
    */
-  function suppressNotFound(
+  function suppressFeatureUnavailable(
     rawError: string | null,
     rawErrorCode: ApiErrorCode | null,
   ): { error: string | null; errorCode: ApiErrorCode | null } {
+    const suppress = rawErrorCode === "NOT_FOUND" || rawErrorCode === "NOT_IMPLEMENTED"
     return {
-      error: rawErrorCode === "NOT_FOUND" ? null : rawError,
-      errorCode: rawErrorCode === "NOT_FOUND" ? null : rawErrorCode,
+      error: suppress ? null : rawError,
+      errorCode: suppress ? null : rawErrorCode,
     }
   }
 
   it("suppresses NOT_FOUND error and code", () => {
-    const result = suppressNotFound("Not Found", "NOT_FOUND")
+    const result = suppressFeatureUnavailable("Not Found", "NOT_FOUND")
+    expect(result.error).toBeNull()
+    expect(result.errorCode).toBeNull()
+  })
+
+  it("suppresses NOT_IMPLEMENTED error and code", () => {
+    const result = suppressFeatureUnavailable("Not implemented", "NOT_IMPLEMENTED")
     expect(result.error).toBeNull()
     expect(result.errorCode).toBeNull()
   })
 
   it("passes through CONNECTION_REFUSED", () => {
-    const result = suppressNotFound("Could not connect", "CONNECTION_REFUSED")
+    const result = suppressFeatureUnavailable("Could not connect", "CONNECTION_REFUSED")
     expect(result.error).toBe("Could not connect")
     expect(result.errorCode).toBe("CONNECTION_REFUSED")
   })
 
   it("passes through TIMEOUT", () => {
-    const result = suppressNotFound("Request timed out", "TIMEOUT")
+    const result = suppressFeatureUnavailable("Request timed out", "TIMEOUT")
     expect(result.error).toBe("Request timed out")
     expect(result.errorCode).toBe("TIMEOUT")
   })
 
   it("passes through SERVER_ERROR", () => {
-    const result = suppressNotFound("Internal error", "SERVER_ERROR")
+    const result = suppressFeatureUnavailable("Internal error", "SERVER_ERROR")
     expect(result.error).toBe("Internal error")
     expect(result.errorCode).toBe("SERVER_ERROR")
   })
 
   it("passes through null (no error)", () => {
-    const result = suppressNotFound(null, null)
+    const result = suppressFeatureUnavailable(null, null)
     expect(result.error).toBeNull()
     expect(result.errorCode).toBeNull()
   })

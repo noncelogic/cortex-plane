@@ -29,6 +29,11 @@ const ERROR_CONFIG: Record<string, { icon: string; title: string; className: str
     title: "Feature not available",
     className: "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400",
   },
+  NOT_IMPLEMENTED: {
+    icon: "construction",
+    title: "Not yet implemented",
+    className: "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400",
+  },
   SERVER_ERROR: {
     icon: "error",
     title: "Server error",

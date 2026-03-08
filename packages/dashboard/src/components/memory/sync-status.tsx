@@ -24,10 +24,12 @@ export function SyncStatus({ agentId }: SyncStatusProps): React.JSX.Element {
     deleted: number
     unchanged: number
   } | null>(null)
-  const { isLoading, error, execute } = useApi(
+  const { isLoading, error, errorCode, execute } = useApi(
     (id: unknown) => syncMemory(id as string),
     `sync:${agentId}`,
   )
+
+  const notImplemented = errorCode === "NOT_IMPLEMENTED"
 
   const handleSync = useCallback(async () => {
     const result = await execute(agentId)
@@ -36,6 +38,17 @@ export function SyncStatus({ agentId }: SyncStatusProps): React.JSX.Element {
       setStats(result.stats)
     }
   }, [execute, agentId])
+
+  if (notImplemented) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+          <span className="material-symbols-outlined text-sm">construction</span>
+          Sync not yet available
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center gap-3">
