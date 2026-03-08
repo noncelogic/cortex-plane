@@ -185,6 +185,32 @@ describe("Chat & Session API Client", () => {
       expect(result.status).toBe("SCHEDULED")
       expect(result.response).toBeUndefined()
     })
+
+    it("returns error object when job fails", async () => {
+      const body = {
+        job_id: "job-4",
+        session_id: "sess-3",
+        status: "FAILED",
+        response: null,
+        error: {
+          message: "This agent does not have an LLM API key configured.",
+          code: "job_failed",
+        },
+      }
+      mockFetchResponse(body)
+
+      const result = await sendChatMessage(
+        "agent-1",
+        { text: "Hello" },
+        { wait: true, timeout: 30_000 },
+      )
+
+      expect(result.status).toBe("FAILED")
+      expect(result.response).toBeNull()
+      expect(result.error).toBeDefined()
+      expect(result.error!.message).toContain("LLM API key")
+      expect(result.error!.code).toBe("job_failed")
+    })
   })
 
   describe("deleteSession", () => {
@@ -308,6 +334,46 @@ describe("Chat schemas", () => {
         response: null,
       })
       expect(result.response).toBeNull()
+    })
+
+    it("parses FAILED response with error object", () => {
+      const result = ChatResponseSchema.parse({
+        job_id: "job-1",
+        session_id: "sess-1",
+        status: "FAILED",
+        response: null,
+        error: {
+          message: "This agent has been quarantined due to repeated failures.",
+          code: "job_failed",
+        },
+      })
+      expect(result.error).toBeDefined()
+      expect(result.error!.message).toContain("quarantined")
+      expect(result.error!.code).toBe("job_failed")
+    })
+
+    it("parses TIMED_OUT response with error object", () => {
+      const result = ChatResponseSchema.parse({
+        job_id: "job-1",
+        session_id: "sess-1",
+        status: "TIMED_OUT",
+        response: null,
+        error: {
+          message: "The request timed out. Please try again.",
+          code: "job_timed_out",
+        },
+      })
+      expect(result.error!.code).toBe("job_timed_out")
+    })
+
+    it("parses successful response without error field", () => {
+      const result = ChatResponseSchema.parse({
+        job_id: "job-1",
+        session_id: "sess-1",
+        status: "COMPLETED",
+        response: "Agent reply",
+      })
+      expect(result.error).toBeUndefined()
     })
   })
 

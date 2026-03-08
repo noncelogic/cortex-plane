@@ -219,6 +219,11 @@ function SessionList({
 // ChatConversation — message list + input
 // ---------------------------------------------------------------------------
 
+/** Local message type — extends SessionMessage with an isError flag for inline error bubbles. */
+interface ChatMessage extends SessionMessage {
+  isError?: boolean
+}
+
 function ChatConversation({
   agentId,
   sessionId,
@@ -228,7 +233,7 @@ function ChatConversation({
   sessionId: string | null
   onSessionCreated: (sessionId: string) => void
 }): React.JSX.Element {
-  const [messages, setMessages] = useState<SessionMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -272,7 +277,7 @@ function ChatConversation({
     setSending(true)
 
     // Optimistic user message
-    const optimisticMsg: SessionMessage = {
+    const optimisticMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
       session_id: sessionId ?? "",
       role: "user",
@@ -296,7 +301,7 @@ function ChatConversation({
 
       // Add assistant response
       if (result.response) {
-        const assistantMsg: SessionMessage = {
+        const assistantMsg: ChatMessage = {
           id: `resp-${Date.now()}`,
           session_id: result.session_id,
           role: "assistant",
@@ -304,9 +309,31 @@ function ChatConversation({
           created_at: new Date().toISOString(),
         }
         setMessages((prev) => [...prev, assistantMsg])
+      } else if (result.error) {
+        // Job failed — show inline error bubble
+        const errorMsg: ChatMessage = {
+          id: `err-${Date.now()}`,
+          session_id: result.session_id,
+          role: "assistant",
+          content: result.error.message,
+          created_at: new Date().toISOString(),
+          isError: true,
+        }
+        setMessages((prev) => [...prev, errorMsg])
+      } else if (result.status === "FAILED" || result.status === "TIMED_OUT") {
+        // Job failed without structured error — show generic error bubble
+        const errorMsg: ChatMessage = {
+          id: `err-${Date.now()}`,
+          session_id: result.session_id,
+          role: "assistant",
+          content: "Something went wrong processing your message. Please try again.",
+          created_at: new Date().toISOString(),
+          isError: true,
+        }
+        setMessages((prev) => [...prev, errorMsg])
       } else if (result.status === "RUNNING" || result.status === "SCHEDULED") {
         // Job still running — show a pending indicator
-        const pendingMsg: SessionMessage = {
+        const pendingMsg: ChatMessage = {
           id: `pending-${Date.now()}`,
           session_id: result.session_id,
           role: "assistant",
@@ -407,8 +434,9 @@ function ChatConversation({
 // MessageBubble
 // ---------------------------------------------------------------------------
 
-function MessageBubble({ message }: { message: SessionMessage }): React.JSX.Element {
+function MessageBubble({ message }: { message: ChatMessage }): React.JSX.Element {
   const isUser = message.role === "user"
+  const isError = message.isError === true
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -416,11 +444,23 @@ function MessageBubble({ message }: { message: SessionMessage }): React.JSX.Elem
         className={`max-w-[80%] rounded-2xl px-4 py-3 ${
           isUser
             ? "rounded-br-md bg-primary text-white"
-            : "rounded-bl-md bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
+            : isError
+              ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
+              : "rounded-bl-md bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
         }`}
       >
+        {isError && (
+          <div className="mb-1 flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm text-red-500 dark:text-red-400">
+              error
+            </span>
+            <span className="text-xs font-semibold text-red-600 dark:text-red-400">Error</span>
+          </div>
+        )}
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
-        <p className={`mt-1 text-[10px] ${isUser ? "text-white/60" : "text-slate-400"}`}>
+        <p
+          className={`mt-1 text-[10px] ${isUser ? "text-white/60" : isError ? "text-red-400 dark:text-red-500" : "text-slate-400"}`}
+        >
           {new Date(message.created_at).toLocaleTimeString("en-US", {
             hour12: false,
             hour: "2-digit",
