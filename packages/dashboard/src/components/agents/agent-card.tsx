@@ -78,17 +78,17 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
   const hasError = agent.lifecycle_state === "TERMINATED" && !!agent.current_job_id
 
   return (
-    <div className="rounded-xl border border-surface-border bg-surface-light p-4 shadow-sm">
+    <div className="flex min-h-[220px] flex-col rounded-xl border border-surface-border bg-surface-light p-4 shadow-sm">
       {/* Header: icon, name, badge */}
-      <div className="mb-3 flex items-start justify-between">
-        <div className="flex gap-3">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 gap-3">
           <div
-            className={`flex size-10 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycle_state ?? "READY", hasError)}`}
+            className={`flex size-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold ${iconBgForState(agent.lifecycle_state ?? "READY", hasError)}`}
           >
             {getInitials(agent.name)}
           </div>
           <div className="min-w-0">
-            <h3 className="font-bold text-text-main">{agent.name}</h3>
+            <h3 className="truncate font-bold text-text-main">{agent.name}</h3>
             <p className="truncate font-mono text-xs tracking-tight text-text-muted">
               ID: {agent.id.slice(0, 8)}
             </p>
@@ -111,12 +111,19 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
       </div>
 
       {/* Resource bars */}
-      {metrics && (
-        <div className="mb-3 grid grid-cols-2 gap-3">
-          <ResourceBar label="CPU" percent={metrics.cpu_percent} />
-          <ResourceBar label="MEM" percent={metrics.mem_percent} />
-        </div>
-      )}
+      <div className="mb-3 grid grid-cols-2 gap-3">
+        {metrics ? (
+          <>
+            <ResourceBar label="CPU" percent={metrics.cpu_percent} />
+            <ResourceBar label="MEM" percent={metrics.mem_percent} />
+          </>
+        ) : (
+          <>
+            <ResourceBar label="CPU" percent={0} />
+            <ResourceBar label="MEM" percent={0} />
+          </>
+        )}
+      </div>
 
       {/* Current task */}
       {metrics?.current_task && (
@@ -124,7 +131,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
       )}
 
       {/* Footer: heartbeat + actions */}
-      <div className="flex items-center justify-between border-t border-surface-border pt-3">
+      <div className="mt-auto flex items-center justify-between border-t border-surface-border pt-3">
         <span className="text-[10px] font-medium text-text-muted">
           {metrics?.last_heartbeat ? relativeTime(metrics.last_heartbeat) : agent.role}
         </span>

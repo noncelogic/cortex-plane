@@ -36,12 +36,12 @@ export default function DashboardPage(): React.JSX.Element {
       {error && <ApiErrorBanner error={error} errorCode={errorCode} onRetry={refetch} />}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
         {cards.map(({ label, value, icon, href }) => (
           <Link
             key={label}
             href={href}
-            className="group rounded-xl border border-surface-border bg-surface-light p-6 transition-shadow hover:shadow-md"
+            className="group min-h-[100px] rounded-xl border border-surface-border bg-surface-light p-6 transition-shadow hover:shadow-md"
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
