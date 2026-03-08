@@ -208,15 +208,22 @@ export class HttpLlmBackend implements ExecutionBackend {
     if (cred) {
       const credProvider = mapCredentialProvider(cred.provider)
       if (credProvider === "anthropic") {
+        // Google Antigravity routes through a GCP Vertex endpoint with Bearer auth
+        const isAntigravity = cred.provider === "google-antigravity" && cred.accountId
+        let clientBaseUrl = baseUrl
+        if (isAntigravity) {
+          clientBaseUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${cred.accountId}/locations/us-central1/publishers/anthropic`
+        }
         const client = new Anthropic({
-          apiKey: cred.token,
-          ...(baseUrl ? { baseURL: baseUrl } : {}),
+          ...(isAntigravity ? { authToken: cred.token, apiKey: null } : { apiKey: cred.token }),
+          ...(clientBaseUrl ? { baseURL: clientBaseUrl } : {}),
         })
         return Promise.resolve(
           new AnthropicHandle(task, client, model, startTime, registry, {
             tokenRefresher,
             credentialId: cred.credentialId,
-            baseUrl,
+            baseUrl: clientBaseUrl,
+            useAuthToken: !!isAntigravity,
           }),
         )
       }
@@ -309,6 +316,8 @@ interface RefreshOpts {
   tokenRefresher?: TokenRefresher
   credentialId?: string
   baseUrl?: string
+  /** When true, use Bearer auth (`authToken`) instead of `apiKey` for the Anthropic SDK. */
+  useAuthToken?: boolean
 }
 
 /** Returns true if the error is a 401 authentication error from an LLM SDK. */
@@ -373,6 +382,7 @@ class AnthropicHandle implements ExecutionHandle {
   private readonly tokenRefresher?: TokenRefresher
   private readonly credentialId?: string
   private readonly baseUrl?: string
+  private readonly useAuthToken: boolean
 
   constructor(
     private readonly task: ExecutionTask,
@@ -389,6 +399,7 @@ class AnthropicHandle implements ExecutionHandle {
     this.tokenRefresher = refreshOpts?.tokenRefresher
     this.credentialId = refreshOpts?.credentialId
     this.baseUrl = refreshOpts?.baseUrl
+    this.useAuthToken = refreshOpts?.useAuthToken ?? false
   }
 
   async *events(): AsyncIterable<OutputEvent> {
@@ -515,7 +526,9 @@ class AnthropicHandle implements ExecutionHandle {
             const newToken = await this.tokenRefresher(this.credentialId)
             if (newToken) {
               this.client = new Anthropic({
-                apiKey: newToken,
+                ...(this.useAuthToken
+                  ? { authToken: newToken, apiKey: null }
+                  : { apiKey: newToken }),
                 ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
               })
               turn-- // retry this turn

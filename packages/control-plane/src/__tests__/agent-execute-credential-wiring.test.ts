@@ -211,6 +211,7 @@ describe("agent-execute credential wiring (#444)", () => {
         user_account_id: "user-owner-1",
         provider: "google-antigravity",
         credential_class: "llm_provider",
+        account_id: "my-gcp-project",
       },
     })
     const { registry, executeTaskSpy } = makeMockRegistry()
@@ -238,6 +239,7 @@ describe("agent-execute credential wiring (#444)", () => {
       provider: "google-antigravity",
       token: "resolved-oauth-token",
       credentialId: "cred-abc",
+      accountId: "my-gcp-project",
     })
   })
 

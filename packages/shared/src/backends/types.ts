@@ -93,6 +93,8 @@ export interface LlmCredentialRef {
   token: string
   /** Credential ID for audit trail. */
   credentialId: string
+  /** Provider account ID (e.g. GCP project ID for google-antigravity). */
+  accountId?: string | null
 }
 
 /**
