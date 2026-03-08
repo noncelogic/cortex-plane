@@ -322,12 +322,14 @@ export function authRoutes(deps: AuthRouteDeps) {
 
     /**
      * GET /auth/connect/callback/:provider — handle LLM provider OAuth callback
+     * Requires active session (the browser carries the session cookie through the redirect).
      */
     app.get<{
       Params: { provider: string }
       Querystring: { code?: string; state?: string; error?: string }
     }>(
       "/auth/connect/callback/:provider",
+      { preHandler: [requireAuth] },
       async (
         request: FastifyRequest<{
           Params: { provider: string }
@@ -377,9 +379,16 @@ export function authRoutes(deps: AuthRouteDeps) {
             codeVerifier,
           })
 
+          // Provider-specific post-exchange actions
+          let accountId: string | undefined
+          if (provider === "google-antigravity") {
+            accountId = await discoverAntigravityProject(tokens.access_token)
+          }
+
           // Detect credential class and scopes from user service provider registry
           const userServiceDef = getUserServiceProvider(provider)
           await credentialService.storeOAuthCredential(principal.userId, provider, tokens, {
+            accountId,
             credentialClass: userServiceDef?.credentialClass,
             scopes: userServiceDef?.defaultScopes,
           })
