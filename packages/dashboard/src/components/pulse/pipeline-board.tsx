@@ -156,11 +156,11 @@ export function PipelineBoard({
       </div>
 
       {/* Desktop: 4-column kanban */}
-      <div className="hidden gap-4 lg:grid lg:grid-cols-4">
+      <div className="hidden gap-4 lg:grid lg:grid-cols-4 2xl:gap-6">
         {COLUMNS.map((col) => {
           const items = grouped[col.status] ?? []
           return (
-            <div key={col.status} className="flex flex-col">
+            <div key={col.status} className="flex min-w-0 flex-col">
               {/* Column header */}
               <div
                 className={`mb-3 flex items-center justify-between rounded-t-lg border-t-2 ${col.borderColor} px-1 pt-3`}

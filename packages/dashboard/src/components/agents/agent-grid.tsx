@@ -23,7 +23,7 @@ export function AgentGrid({ agents, metricsMap }: AgentGridProps): React.JSX.Ele
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
       {agents.map((agent) => (
         <AgentCard key={agent.id} agent={agent} metrics={metricsMap[agent.id]} />
       ))}

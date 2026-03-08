@@ -119,7 +119,7 @@ export default function OperationsPage(): React.JSX.Element {
       </div>
 
       {/* Main content: 2-column on desktop */}
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(280px,320px)_1fr]">
         {/* Agent grid */}
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-text-main">Agent Grid</h3>
@@ -170,7 +170,7 @@ function StatCard({
   loading?: boolean
 }): React.JSX.Element {
   return (
-    <div className="rounded-xl border border-surface-border bg-surface-light p-4">
+    <div className="min-h-[88px] rounded-xl border border-surface-border bg-surface-light p-4">
       <div className="mb-1 flex items-center gap-2">
         <span className={`material-symbols-outlined text-lg ${color ?? "text-text-muted"}`}>
           {icon}
