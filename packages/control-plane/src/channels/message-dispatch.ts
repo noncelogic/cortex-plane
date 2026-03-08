@@ -22,6 +22,7 @@ import type { UserRateLimiter } from "../auth/user-rate-limiter.js"
 import type { Database, RateLimit, TokenBudget } from "../db/types.js"
 import type { AgentEventEmitter } from "../observability/event-emitter.js"
 import type { AgentChannelService } from "./agent-channel-service.js"
+import { mapJobErrorToUserMessage, runPreflight } from "./preflight.js"
 
 /** Pattern matching pairing codes (6-char uppercase alphanumeric). */
 const PAIRING_CODE_PATTERN = /^[A-Z0-9]{6}$/
@@ -85,6 +86,17 @@ export function createMessageDispatch(
         "No agent binding found for chat",
       )
       await router.send(channelType, chatId, { text: NO_AGENT_MESSAGE })
+      return
+    }
+
+    // ── Preflight: agent status + credential check ────────────────────
+    const preflight = await runPreflight(db, agentId)
+    if (!preflight.ok) {
+      logger.warn(
+        { agentId, channelType, chatId, code: preflight.code },
+        "Preflight check failed — agent not ready for dispatch",
+      )
+      await router.send(channelType, chatId, { text: preflight.userMessage! })
       return
     }
 
@@ -279,7 +291,7 @@ export function createMessageDispatch(
           const errMsg =
             status === "TIMED_OUT"
               ? "The request timed out. Please try again."
-              : "Something went wrong processing your message. Please try again."
+              : mapJobErrorToUserMessage(result)
           await router.send(channelType, chatId, { text: errMsg })
         }
       },

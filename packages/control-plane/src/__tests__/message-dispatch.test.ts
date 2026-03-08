@@ -6,8 +6,21 @@ import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.
 import type { RateLimitDecision, UserRateLimiter } from "../auth/user-rate-limiter.js"
 import type { AgentChannelService } from "../channels/agent-channel-service.js"
 import { createMessageDispatch, watchJobCompletion } from "../channels/message-dispatch.js"
+import type { PreflightResult } from "../channels/preflight.js"
 import type { Database } from "../db/types.js"
 import type { AgentEventEmitter } from "../observability/event-emitter.js"
+
+// ---------------------------------------------------------------------------
+// Preflight mock
+// ---------------------------------------------------------------------------
+
+const mockRunPreflight = vi.hoisted(() => vi.fn())
+const mockMapJobErrorToUserMessage = vi.hoisted(() => vi.fn())
+
+vi.mock("../channels/preflight.js", () => ({
+  runPreflight: mockRunPreflight,
+  mapJobErrorToUserMessage: mockMapJobErrorToUserMessage,
+}))
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,6 +178,13 @@ function mockEventEmitter() {
 // ---------------------------------------------------------------------------
 
 describe("createMessageDispatch", () => {
+  beforeEach(() => {
+    mockRunPreflight.mockResolvedValue({ ok: true } as PreflightResult)
+    mockMapJobErrorToUserMessage.mockReturnValue(
+      "Something went wrong processing your message. Please try again.",
+    )
+  })
+
   it("dispatches message to agent with existing session and creates job", async () => {
     const agentChannelService = mockAgentChannelService("agent-aaa")
     const router = mockRouter()
@@ -966,6 +986,136 @@ describe("UserRateLimiter integration", () => {
     expect(rateLimiter.check).not.toHaveBeenCalled()
 
     // Job created
+    expect(enqueueJob).toHaveBeenCalledWith("job-123")
+  })
+})
+
+describe("Preflight check integration", () => {
+  beforeEach(() => {
+    mockRunPreflight.mockResolvedValue({ ok: true } as PreflightResult)
+    mockMapJobErrorToUserMessage.mockReturnValue(
+      "Something went wrong processing your message. Please try again.",
+    )
+  })
+
+  it("blocks message and sends actionable reply when agent is quarantined", async () => {
+    mockRunPreflight.mockResolvedValue({
+      ok: false,
+      code: "agent_not_active",
+      userMessage:
+        "This agent is temporarily quarantined due to repeated failures. " +
+        "An operator can reset it from the agent dashboard.",
+    } as PreflightResult)
+
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Actionable message sent
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: expect.stringContaining("quarantined") as string,
+    })
+
+    // No job created
+    expect(enqueueJob).not.toHaveBeenCalled()
+
+    // Warning logged
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "agent_not_active" }),
+      "Preflight check failed — agent not ready for dispatch",
+    )
+  })
+
+  it("blocks message and sends actionable reply when LLM credential is missing", async () => {
+    mockRunPreflight.mockResolvedValue({
+      ok: false,
+      code: "no_llm_credential",
+      userMessage:
+        "This agent does not have an LLM API key configured. " +
+        "An operator needs to bind an LLM credential in the agent settings.",
+    } as PreflightResult)
+
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: expect.stringContaining("LLM API key") as string,
+    })
+    expect(enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it("skips preflight when no agent is bound (handled before preflight)", async () => {
+    mockRunPreflight.mockClear()
+    const agentChannelService = mockAgentChannelService(null)
+    const router = mockRouter()
+    const enqueueJob = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb()
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    // Preflight never called — no agent to check
+    expect(mockRunPreflight).not.toHaveBeenCalled()
+
+    // No-agent message sent
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: expect.stringContaining("No agent is assigned") as string,
+    })
+  })
+
+  it("proceeds normally when preflight passes", async () => {
+    mockRunPreflight.mockResolvedValue({ ok: true } as PreflightResult)
+
+    const agentChannelService = mockAgentChannelService("agent-aaa")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+    const db = mockDb({ existingSession: { id: "session-1" } })
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage())
+
+    expect(mockRunPreflight).toHaveBeenCalledWith(db, "agent-aaa")
     expect(enqueueJob).toHaveBeenCalledWith("job-123")
   })
 })

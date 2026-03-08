@@ -13,6 +13,7 @@ import type { Kysely } from "kysely"
 import type { ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { SessionService } from "../auth/session-service.js"
 import { loadConversationHistory, watchJobCompletion } from "../channels/message-dispatch.js"
+import { runPreflight } from "../channels/preflight.js"
 import type { Database } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
@@ -105,21 +106,13 @@ export function chatRoutes(deps: ChatRouteDeps) {
         const wait = request.query.wait ?? false
         const timeout = request.query.timeout ?? 60_000
 
-        // Verify agent exists and is active
-        const agent = await db
-          .selectFrom("agent")
-          .select(["id", "status"])
-          .where("id", "=", agentId)
-          .executeTakeFirst()
-
-        if (!agent) {
-          return reply.status(404).send({ error: "not_found", message: "Agent not found" })
-        }
-
-        if (agent.status !== "ACTIVE") {
-          return reply.status(409).send({
-            error: "conflict",
-            message: `Agent is ${agent.status}, must be ACTIVE to accept messages`,
+        // Verify agent is ready (status + credential)
+        const preflight = await runPreflight(db, agentId)
+        if (!preflight.ok) {
+          const statusCode = preflight.code === "agent_not_active" ? 409 : 422
+          return reply.status(statusCode).send({
+            error: preflight.code ?? "preflight_failed",
+            message: preflight.userMessage,
           })
         }
 

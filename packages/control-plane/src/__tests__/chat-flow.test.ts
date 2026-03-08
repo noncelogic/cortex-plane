@@ -20,6 +20,14 @@ import {
 } from "../channels/message-dispatch.js"
 import type { Database } from "../db/types.js"
 
+// Mock preflight to always pass (unit tests for preflight are in preflight.test.ts)
+vi.mock("../channels/preflight.js", () => ({
+  runPreflight: vi.fn().mockResolvedValue({ ok: true }),
+  mapJobErrorToUserMessage: vi
+    .fn()
+    .mockReturnValue("Something went wrong processing your message. Please try again."),
+}))
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
