@@ -14,11 +14,11 @@
 
 All integration points fall into three boundary types:
 
-| Boundary | Scope | Examples |
-|----------|-------|---------|
-| **Data** | DB schema, FK relationships, enum values, migration ordering | credential_class enum, agent_credential_binding FKs, UUID formats |
-| **API** | Route existence, request/response shape, status codes, Content-Type handling | DELETE without body, dashboard endpoint registration, Zod schema alignment |
-| **UX** | Button wiring, form submissions, state display, error feedback, loading states | Settings page render, disconnect button handler, chat response display |
+| Boundary | Scope                                                                          | Examples                                                                   |
+| -------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| **Data** | DB schema, FK relationships, enum values, migration ordering                   | credential_class enum, agent_credential_binding FKs, UUID formats          |
+| **API**  | Route existence, request/response shape, status codes, Content-Type handling   | DELETE without body, dashboard endpoint registration, Zod schema alignment |
+| **UX**   | Button wiring, form submissions, state display, error feedback, loading states | Settings page render, disconnect button handler, chat response display     |
 
 ### Boundary Drift
 
@@ -53,19 +53,19 @@ Every PR must include the AQS block in its description (enforced via PR template
 
 See [PATTERN_LOG.md](PATTERN_LOG.md) for the full catalog. The four primary classes are:
 
-| Class | Description | Signal |
-|-------|-------------|--------|
-| **Data boundary drift** | FK mismatches, UUID format errors, enum inconsistencies | 500 errors on write, constraint violations |
-| **UX boundary inconsistency** | Broken buttons, missing error feedback, silent drops | UI action with no visible result |
-| **Auth/env boundary drift** | Credential resolution failures, quarantine loops, config not applied | "No credential available", death spirals |
-| **Feature parity loss** | Endpoints 404, buttons call nonexistent handlers, schema mismatches | 404/501 responses, "Unexpected API response" toasts |
+| Class                         | Description                                                          | Signal                                              |
+| ----------------------------- | -------------------------------------------------------------------- | --------------------------------------------------- |
+| **Data boundary drift**       | FK mismatches, UUID format errors, enum inconsistencies              | 500 errors on write, constraint violations          |
+| **UX boundary inconsistency** | Broken buttons, missing error feedback, silent drops                 | UI action with no visible result                    |
+| **Auth/env boundary drift**   | Credential resolution failures, quarantine loops, config not applied | "No credential available", death spirals            |
+| **Feature parity loss**       | Endpoints 404, buttons call nonexistent handlers, schema mismatches  | 404/501 responses, "Unexpected API response" toasts |
 
 ## File Index
 
-| File | Purpose |
-|------|---------|
-| [AGENT_QUALITY_SYSTEM.md](AGENT_QUALITY_SYSTEM.md) | This file — principles, boundary model, completion gate |
-| [FEATURE_AUDIT.md](FEATURE_AUDIT.md) | Feature matrix: advertised vs actual working status |
-| [FLOW_MATRIX.md](FLOW_MATRIX.md) | Critical user flows mapped to boundary guarantees |
-| [PATTERN_LOG.md](PATTERN_LOG.md) | Bug classes, root causes, preventative controls |
-| [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) | PR template with AQS evidence block |
+| File                                                                 | Purpose                                                 |
+| -------------------------------------------------------------------- | ------------------------------------------------------- |
+| [AGENT_QUALITY_SYSTEM.md](AGENT_QUALITY_SYSTEM.md)                   | This file — principles, boundary model, completion gate |
+| [FEATURE_AUDIT.md](FEATURE_AUDIT.md)                                 | Feature matrix: advertised vs actual working status     |
+| [FLOW_MATRIX.md](FLOW_MATRIX.md)                                     | Critical user flows mapped to boundary guarantees       |
+| [PATTERN_LOG.md](PATTERN_LOG.md)                                     | Bug classes, root causes, preventative controls         |
+| [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) | PR template with AQS evidence block                     |

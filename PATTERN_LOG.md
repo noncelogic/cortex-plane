@@ -15,11 +15,11 @@ Seeded from issues #424–#463 (2026-03-08 test session).
 
 ### Instances
 
-| Issue | Title | Root Cause | Fix |
-|-------|-------|------------|-----|
-| #424 | Duplicate Telegram channel creation allowed | Missing unique constraint on name+type | Added DB-level uniqueness guard |
-| #425 | Deleting in-use Telegram channel succeeds | No FK check before delete | Added safety check for active bindings |
-| #444 | LLM credential binding exists but execution reports 'No LLM credential available' | Credential lookup query didn't match binding shape | Fixed resolution query |
+| Issue | Title                                                                             | Root Cause                                         | Fix                                    |
+| ----- | --------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------- |
+| #424  | Duplicate Telegram channel creation allowed                                       | Missing unique constraint on name+type             | Added DB-level uniqueness guard        |
+| #425  | Deleting in-use Telegram channel succeeds                                         | No FK check before delete                          | Added safety check for active bindings |
+| #444  | LLM credential binding exists but execution reports 'No LLM credential available' | Credential lookup query didn't match binding shape | Fixed resolution query                 |
 
 ### Preventative Controls
 
@@ -35,15 +35,15 @@ Seeded from issues #424–#463 (2026-03-08 test session).
 
 ### Instances
 
-| Issue | Title | Root Cause | Fix |
-|-------|-------|------------|-----|
-| #426 | Agent state badge shows BOOTING while backend reports ACTIVE | Frontend polling used stale initial state | Fixed state reconciliation |
-| #427 | Remove channel button does not remove channel | Button handler missing or calling wrong endpoint | Wired button to correct API call |
-| #437 | Failed job detail panel often empty | Execution steps not included in job query response | Expanded query to include steps |
-| #445 | Disconnect button on credential/channel does not work | Click handler was a no-op stub | Implemented handler |
-| #446 | Settings page is broken | Render error in settings component | Fixed component |
-| #449 | Users tab grant management not functional | Grant CRUD handlers missing | Implemented grant management (#449) |
-| #455 | Comprehensive button/action audit | Many buttons were dead stubs | Removed stubs, unimplemented endpoints return 501 (#455) |
+| Issue | Title                                                        | Root Cause                                         | Fix                                                      |
+| ----- | ------------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------- |
+| #426  | Agent state badge shows BOOTING while backend reports ACTIVE | Frontend polling used stale initial state          | Fixed state reconciliation                               |
+| #427  | Remove channel button does not remove channel                | Button handler missing or calling wrong endpoint   | Wired button to correct API call                         |
+| #437  | Failed job detail panel often empty                          | Execution steps not included in job query response | Expanded query to include steps                          |
+| #445  | Disconnect button on credential/channel does not work        | Click handler was a no-op stub                     | Implemented handler                                      |
+| #446  | Settings page is broken                                      | Render error in settings component                 | Fixed component                                          |
+| #449  | Users tab grant management not functional                    | Grant CRUD handlers missing                        | Implemented grant management (#449)                      |
+| #455  | Comprehensive button/action audit                            | Many buttons were dead stubs                       | Removed stubs, unimplemented endpoints return 501 (#455) |
 
 ### Preventative Controls
 
@@ -59,13 +59,13 @@ Seeded from issues #424–#463 (2026-03-08 test session).
 
 ### Instances
 
-| Issue | Title | Root Cause | Fix |
-|-------|-------|------------|-----|
-| #428 | Telegram inbound messages create no events/jobs | Adapter not processing webhook updates | Fixed webhook→event pipeline |
-| #430 | DB channel config updates not applied to adapter | Adapter read config from env, not DB | Changed adapter to use DB config |
-| #443 | No API to reset circuit breaker | Missing endpoint for quarantine recovery | Needs reset endpoint |
-| #448 | Zero-grant allowlist silently drops messages | Guard treated empty allowlist as "allow all" | Changed to explicit deny with feedback |
-| #450 | Config errors count toward circuit breaker | All failures incremented breaker equally | Excluded config/credential errors from count (#450) |
+| Issue | Title                                            | Root Cause                                   | Fix                                                 |
+| ----- | ------------------------------------------------ | -------------------------------------------- | --------------------------------------------------- |
+| #428  | Telegram inbound messages create no events/jobs  | Adapter not processing webhook updates       | Fixed webhook→event pipeline                        |
+| #430  | DB channel config updates not applied to adapter | Adapter read config from env, not DB         | Changed adapter to use DB config                    |
+| #443  | No API to reset circuit breaker                  | Missing endpoint for quarantine recovery     | Needs reset endpoint                                |
+| #448  | Zero-grant allowlist silently drops messages     | Guard treated empty allowlist as "allow all" | Changed to explicit deny with feedback              |
+| #450  | Config errors count toward circuit breaker       | All failures incremented breaker equally     | Excluded config/credential errors from count (#450) |
 
 ### Preventative Controls
 
@@ -81,12 +81,12 @@ Seeded from issues #424–#463 (2026-03-08 test session).
 
 ### Instances
 
-| Issue | Title | Root Cause | Fix |
-|-------|-------|------------|-----|
-| #431 | Agent chat sends message but no response | Chat endpoint didn't trigger job execution | Fixed execution pipeline wiring |
-| #438 | Approvals endpoint contract mismatch | Frontend Zod schema didn't match API response shape | Aligned schema with API |
-| #454 | Dashboard endpoints 404 | Routes not registered in app | Registered missing routes (#454) |
-| #463 | Content-Type set on bodyless requests | apiFetch always set JSON header | Conditional Content-Type only when body present (#463) |
+| Issue | Title                                    | Root Cause                                          | Fix                                                    |
+| ----- | ---------------------------------------- | --------------------------------------------------- | ------------------------------------------------------ |
+| #431  | Agent chat sends message but no response | Chat endpoint didn't trigger job execution          | Fixed execution pipeline wiring                        |
+| #438  | Approvals endpoint contract mismatch     | Frontend Zod schema didn't match API response shape | Aligned schema with API                                |
+| #454  | Dashboard endpoints 404                  | Routes not registered in app                        | Registered missing routes (#454)                       |
+| #463  | Content-Type set on bodyless requests    | apiFetch always set JSON header                     | Conditional Content-Type only when body present (#463) |
 
 ### Preventative Controls
 
