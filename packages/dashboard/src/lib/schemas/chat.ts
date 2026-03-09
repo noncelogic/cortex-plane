@@ -41,6 +41,27 @@ export const MessageListResponseSchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
+// Chat message status — used by the chat panel UI for visual indicators
+// ---------------------------------------------------------------------------
+
+/**
+ * Tracks the lifecycle of a chat message through the system:
+ * - sending: message submitted, waiting for server acknowledgment
+ * - sent: server accepted, job created (for user messages)
+ * - streaming: assistant response is being received incrementally
+ * - complete: final response received
+ * - error: job failed or request error
+ * - approval-needed: job requires human approval before continuing
+ */
+export type ChatMessageStatus =
+  | "sending"
+  | "sent"
+  | "streaming"
+  | "complete"
+  | "error"
+  | "approval-needed"
+
+// ---------------------------------------------------------------------------
 // Chat response schemas
 // ---------------------------------------------------------------------------
 
@@ -56,6 +77,7 @@ export const ChatResponseSchema = z.object({
       code: z.string(),
     })
     .optional(),
+  approval_needed: z.boolean().optional(),
 })
 
 export type ChatResponse = z.infer<typeof ChatResponseSchema>

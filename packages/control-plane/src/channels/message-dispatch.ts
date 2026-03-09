@@ -54,6 +54,7 @@ const TERMINAL_STATUSES: ReadonlySet<string> = new Set<JobStatus>([
   "FAILED",
   "TIMED_OUT",
   "DEAD_LETTER",
+  "WAITING_FOR_APPROVAL",
 ])
 
 /**

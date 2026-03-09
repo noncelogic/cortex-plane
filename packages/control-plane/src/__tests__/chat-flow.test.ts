@@ -506,3 +506,105 @@ describe("conversation history round-trip", () => {
     expect(enqueueJob).toHaveBeenCalledWith("job-e2e")
   })
 })
+
+describe("WAITING_FOR_APPROVAL status in watchJobCompletion", () => {
+  it("treats WAITING_FOR_APPROVAL as a terminal status and invokes callback", async () => {
+    vi.useFakeTimers()
+
+    const selectFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          executeTakeFirst: vi.fn().mockResolvedValue({
+            status: "WAITING_FOR_APPROVAL",
+            result: null,
+          }),
+        }),
+      }),
+    })
+
+    const db = { selectFrom: selectFn } as unknown as Kysely<Database>
+    const router = mockRouter()
+
+    watchJobCompletion(
+      db,
+      "job-approval",
+      async (_result, status) => {
+        if (status === "WAITING_FOR_APPROVAL") {
+          await router.send("telegram", "chat-42", {
+            text: "This action requires approval before the agent can continue.",
+          })
+        }
+      },
+      { warn: vi.fn() },
+      { intervalMs: 100 },
+    )
+
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
+      text: "This action requires approval before the agent can continue.",
+    })
+
+    vi.useRealTimers()
+  })
+})
+
+describe("chat message status lifecycle", () => {
+  it("dispatches async message (non-blocking) and gets SCHEDULED status", async () => {
+    const { db } = buildFlowDb({
+      existingSession: { id: "session-status" },
+      historyRows: [],
+    })
+    const agentChannelService = mockAgentChannelService("agent-status")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const logger = { info: vi.fn(), warn: vi.fn() }
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage("Status test"))
+
+    // Job should be created and enqueued (SCHEDULED)
+    expect(enqueueJob).toHaveBeenCalledWith("job-e2e")
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "agent-status",
+        sessionId: "session-status",
+        jobId: "job-e2e",
+      }),
+      "Chat message dispatched — job created",
+    )
+  })
+
+  it("handles DEAD_LETTER as terminal status", async () => {
+    vi.useFakeTimers()
+
+    const selectFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          executeTakeFirst: vi.fn().mockResolvedValue({
+            status: "DEAD_LETTER",
+            result: null,
+          }),
+        }),
+      }),
+    })
+
+    const db = { selectFrom: selectFn } as unknown as Kysely<Database>
+    const onComplete = vi.fn().mockResolvedValue(undefined)
+
+    watchJobCompletion(db, "job-dead", onComplete, { warn: vi.fn() }, { intervalMs: 100 })
+
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(onComplete).toHaveBeenCalledWith(null, "DEAD_LETTER")
+
+    vi.useRealTimers()
+  })
+})

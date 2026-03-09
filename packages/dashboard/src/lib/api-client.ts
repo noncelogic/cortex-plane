@@ -1153,6 +1153,19 @@ export async function deleteSession(sessionId: string): Promise<{ id: string; st
   })
 }
 
+/**
+ * Poll the status of a chat job. Used for non-blocking chat flow where the
+ * client sends with wait=false and then polls for completion.
+ */
+export async function getChatJobStatus(
+  agentId: string,
+  jobId: string,
+): Promise<import("./schemas/chat").ChatResponse> {
+  return apiFetch(`/agents/${agentId}/chat/jobs/${jobId}`, {
+    schema: ChatResponseSchema,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Operations: events, cost, control
 // ---------------------------------------------------------------------------
