@@ -8,6 +8,7 @@ import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
 import { ChannelBindingTab } from "@/components/agents/channel-binding-tab"
 import { ChatPanel } from "@/components/agents/chat-panel"
 import { CredentialBindingPanel } from "@/components/agents/credential-binding"
+import { AVAILABLE_MODELS } from "@/components/agents/deploy-agent-modal"
 import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifecycle-timeline"
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
 import { SteerInput } from "@/components/agents/steer-input"
@@ -430,6 +431,8 @@ function LoadingSkeleton(): React.JSX.Element {
   )
 }
 
+const CUSTOM_MODEL_VALUE = "__custom__"
+
 function ModelConfigPanel({
   agent,
   onSave,
@@ -443,23 +446,34 @@ function ModelConfigPanel({
 
   const [editing, setEditing] = useState(false)
   const [model, setModel] = useState(currentModel)
+  const [customModel, setCustomModel] = useState("")
   const [systemPrompt, setSystemPrompt] = useState(currentPrompt)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  const isKnownModel = AVAILABLE_MODELS.some((m) => m.id === currentModel)
+
   const handleEdit = useCallback(() => {
-    setModel(currentModel)
+    if (isKnownModel || !currentModel) {
+      setModel(currentModel)
+      setCustomModel("")
+    } else {
+      setModel(CUSTOM_MODEL_VALUE)
+      setCustomModel(currentModel)
+    }
     setSystemPrompt(currentPrompt)
     setError(null)
     setSuccess(false)
     setEditing(true)
-  }, [currentModel, currentPrompt])
+  }, [currentModel, currentPrompt, isKnownModel])
 
   const handleCancel = useCallback(() => {
     setEditing(false)
     setError(null)
   }, [])
+
+  const resolvedModel = model === CUSTOM_MODEL_VALUE ? customModel.trim() : model.trim()
 
   const handleSave = useCallback(async () => {
     setSaving(true)
@@ -467,8 +481,8 @@ function ModelConfigPanel({
     setSuccess(false)
     try {
       const newConfig: Record<string, unknown> = { ...modelConfig }
-      if (model.trim()) {
-        newConfig.model = model.trim()
+      if (resolvedModel) {
+        newConfig.model = resolvedModel
       } else {
         delete newConfig.model
       }
@@ -487,7 +501,17 @@ function ModelConfigPanel({
     } finally {
       setSaving(false)
     }
-  }, [agent.id, model, systemPrompt, modelConfig, onSave])
+  }, [agent.id, resolvedModel, systemPrompt, modelConfig, onSave])
+
+  const handleModelSelect = useCallback((value: string) => {
+    setModel(value)
+    if (value !== CUSTOM_MODEL_VALUE) {
+      setCustomModel("")
+    }
+  }, [])
+
+  // Find the display label for the current model
+  const modelLabel = AVAILABLE_MODELS.find((m) => m.id === currentModel)?.label
 
   return (
     <div
@@ -524,15 +548,36 @@ function ModelConfigPanel({
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Model</label>
-            <input
-              type="text"
+            <select
               value={model}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setModel(e.target.value)}
-              placeholder="e.g. claude-opus-4-6-thinking"
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                handleModelSelect(e.target.value)
+              }
               disabled={saving}
-              data-testid="model-config-model-input"
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-            />
+              data-testid="model-config-model-select"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            >
+              <option value="">Select a model...</option>
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+              <option value={CUSTOM_MODEL_VALUE}>Custom...</option>
+            </select>
+            {model === CUSTOM_MODEL_VALUE && (
+              <input
+                type="text"
+                value={customModel}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setCustomModel(e.target.value)
+                }
+                placeholder="e.g. claude-opus-4-6-thinking"
+                disabled={saving}
+                data-testid="model-config-model-input"
+                className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              />
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">System Prompt</label>
@@ -580,7 +625,11 @@ function ModelConfigPanel({
               data-testid="model-config-model-value"
               className="text-right font-mono text-xs text-slate-700 dark:text-slate-300"
             >
-              {currentModel || "Not set"}
+              {currentModel
+                ? modelLabel
+                  ? `${modelLabel} (${currentModel})`
+                  : currentModel
+                : "Not set"}
             </span>
           </div>
           <div className="flex items-start justify-between gap-2">
