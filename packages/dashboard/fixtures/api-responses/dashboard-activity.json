@@ -1,0 +1,14 @@
+{
+  "activity": [
+    {
+      "id": "job-recent-001",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "agentName": "Research Agent",
+      "status": "COMPLETED",
+      "type": "research",
+      "createdAt": "2025-11-01T09:00:00.000Z",
+      "updatedAt": "2025-11-01T09:15:00.000Z",
+      "completedAt": "2025-11-01T09:15:00.000Z"
+    }
+  ]
+}

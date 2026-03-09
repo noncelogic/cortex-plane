@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "id": "cap-001",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "toolRef": "mcp-server-1/web_search",
+      "eventType": "binding_created",
+      "actorUserId": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "jobId": null,
+      "details": { "approvalPolicy": "auto" },
+      "createdAt": "2025-10-01T08:00:00.000Z"
+    }
+  ],
+  "total": 1
+}

@@ -1,0 +1,84 @@
+{
+  "steer": {
+    "steer_message_id": "steer-001",
+    "status": "accepted",
+    "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "priority": "high"
+  },
+  "pause": {
+    "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "pausing"
+  },
+  "resume": {
+    "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "resuming",
+    "from_checkpoint": "ckpt-001"
+  },
+  "createJob": {
+    "id": "job-new-001",
+    "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "SCHEDULED"
+  },
+  "approvalDecision": {
+    "approval_request_id": "apr-001",
+    "decision": "APPROVED",
+    "decided_at": "2025-11-01T12:00:00.000Z"
+  },
+  "retryJob": {
+    "jobId": "job-fail-001",
+    "status": "retrying"
+  },
+  "syncMemory": {
+    "sync_id": "sync-001",
+    "status": "completed",
+    "stats": {
+      "upserted": 12,
+      "deleted": 3,
+      "unchanged": 85
+    }
+  },
+  "publishContent": {
+    "content_id": "cnt-001",
+    "status": "published",
+    "published_at": "2025-11-01T14:00:00.000Z"
+  },
+  "archiveContent": {
+    "content_id": "cnt-002",
+    "status": "archived"
+  },
+  "kill": {
+    "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "previousState": "EXECUTING",
+    "cancelledJobId": "job-active-001",
+    "state": "TERMINATED",
+    "killedAt": "2025-11-01T15:00:00.000Z"
+  },
+  "quarantine": {
+    "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "state": "QUARANTINED",
+    "reason": "Exceeded cost budget",
+    "quarantinedAt": "2025-11-01T16:00:00.000Z"
+  },
+  "release": {
+    "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "state": "READY",
+    "releasedAt": "2025-11-01T17:00:00.000Z"
+  },
+  "dryRun": {
+    "plannedActions": [
+      {
+        "type": "tool_call",
+        "toolRef": "mcp-server-1/web_search",
+        "input": { "query": "latest AI papers" }
+      }
+    ],
+    "agentResponse": "I will search for recent AI papers.",
+    "tokensUsed": { "in": 300, "out": 50 },
+    "estimatedCostUsd": 0.002
+  },
+  "replay": {
+    "replayJobId": "job-replay-001",
+    "fromCheckpoint": "ckpt-001",
+    "modifications": { "prompt": "Updated prompt" }
+  }
+}

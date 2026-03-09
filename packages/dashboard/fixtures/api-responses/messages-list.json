@@ -1,0 +1,19 @@
+{
+  "messages": [
+    {
+      "id": "msg-001",
+      "session_id": "sess-001",
+      "role": "user",
+      "content": "Hello, can you research recent AI papers?",
+      "created_at": "2025-11-01T10:00:00.000Z"
+    },
+    {
+      "id": "msg-002",
+      "session_id": "sess-001",
+      "role": "assistant",
+      "content": "Sure! I'll search for recent AI papers for you.",
+      "created_at": "2025-11-01T10:00:05.000Z"
+    }
+  ],
+  "count": 2
+}

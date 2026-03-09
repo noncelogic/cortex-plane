@@ -1,0 +1,18 @@
+{
+  "bindings": [
+    {
+      "id": "tb-001",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "toolRef": "mcp-server-1/web_search",
+      "approvalPolicy": "auto",
+      "approvalCondition": null,
+      "rateLimit": { "maxCalls": 10, "windowSeconds": 60 },
+      "costBudget": null,
+      "dataScope": null,
+      "enabled": true,
+      "createdAt": "2025-10-01T08:00:00.000Z",
+      "updatedAt": "2025-10-15T12:00:00.000Z"
+    }
+  ],
+  "total": 1
+}

@@ -1,0 +1,32 @@
+{
+  "events": [
+    {
+      "id": "evt-001",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "eventType": "llm_call_end",
+      "payload": { "model": "gpt-4", "duration_ms": 1200 },
+      "tokensIn": 500,
+      "tokensOut": 120,
+      "costUsd": 0.0042,
+      "toolRef": null,
+      "createdAt": "2025-11-01T10:00:01.000Z"
+    },
+    {
+      "id": "evt-002",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "eventType": "tool_call_end",
+      "payload": { "tool": "web_search", "result": "success" },
+      "tokensIn": null,
+      "tokensOut": null,
+      "costUsd": null,
+      "toolRef": "mcp-server-1/web_search",
+      "createdAt": "2025-11-01T10:00:03.000Z"
+    }
+  ],
+  "total": 2,
+  "costSummary": {
+    "totalUsd": 0.0042,
+    "tokensIn": 500,
+    "tokensOut": 120
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "id": "be-001",
+      "type": "NAVIGATE",
+      "timestamp": "2025-11-01T10:00:00.000Z",
+      "url": "https://example.com",
+      "durationMs": 350,
+      "severity": "info"
+    },
+    {
+      "id": "be-002",
+      "type": "CLICK",
+      "timestamp": "2025-11-01T10:00:02.000Z",
+      "selector": "#search-button",
+      "severity": "info"
+    }
+  ]
+}

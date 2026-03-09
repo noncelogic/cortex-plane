@@ -1,0 +1,21 @@
+{
+  "created": 2,
+  "bindings": [
+    {
+      "id": "tb-002",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "toolRef": "mcp-server-1/file_read",
+      "approvalPolicy": "always_approve",
+      "enabled": true,
+      "createdAt": "2025-11-01T09:00:00.000Z"
+    },
+    {
+      "id": "tb-003",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "toolRef": "mcp-server-1/file_write",
+      "approvalPolicy": "conditional",
+      "enabled": true,
+      "createdAt": "2025-11-01T09:00:00.000Z"
+    }
+  ]
+}
