@@ -1,3 +1,4 @@
+import { PhantomFeatureBanner } from "@/components/layout/phantom-feature-banner"
 import { RoutePlaceholder } from "@/components/layout/route-placeholder"
 
 interface Props {
@@ -7,5 +8,10 @@ interface Props {
 export default async function AgentMemoryPage({ params }: Props): Promise<React.JSX.Element> {
   const { agentId } = await params
 
-  return <RoutePlaceholder title={`Memory: ${agentId}`} icon="memory" />
+  return (
+    <div className="space-y-6">
+      <PhantomFeatureBanner feature="Per-agent memory browsing" />
+      <RoutePlaceholder title={`Memory: ${agentId}`} icon="memory" />
+    </div>
+  )
 }
