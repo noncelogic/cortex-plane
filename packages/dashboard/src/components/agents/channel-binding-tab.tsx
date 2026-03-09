@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 
+import { useToast } from "@/components/layout/toast"
 import {
   type AgentChannelBinding,
   bindAgentChannel,
@@ -20,6 +21,7 @@ interface ChannelBindingTabProps {
 const CHANNEL_TYPES = ["telegram", "discord", "whatsapp"] as const
 
 export function ChannelBindingTab({ agentId }: ChannelBindingTabProps) {
+  const { addToast } = useToast()
   const [bindings, setBindings] = useState<AgentChannelBinding[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -33,11 +35,11 @@ export function ChannelBindingTab({ agentId }: ChannelBindingTabProps) {
       const res = await listAgentChannels(agentId)
       setBindings(res.bindings ?? [])
     } catch {
-      // silent
+      addToast("Failed to load channel bindings", "error")
     } finally {
       setLoading(false)
     }
-  }, [agentId])
+  }, [agentId, addToast])
 
   useEffect(() => {
     void fetchBindings()
@@ -65,10 +67,10 @@ export function ChannelBindingTab({ agentId }: ChannelBindingTabProps) {
         await unbindAgentChannel(agentId, bindingId)
         void fetchBindings()
       } catch {
-        // silent
+        addToast("Failed to unbind channel", "error")
       }
     },
-    [agentId, fetchBindings],
+    [agentId, fetchBindings, addToast],
   )
 
   if (loading) {

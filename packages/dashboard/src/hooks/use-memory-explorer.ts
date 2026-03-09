@@ -53,6 +53,7 @@ function applyFilters(
 export function useMemoryExplorer() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [syncError, setSyncError] = useState<string | null>(null)
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     type: "ALL",
     importance: "ALL",
@@ -114,9 +115,15 @@ export function useMemoryExplorer() {
 
   const handleSync = useCallback(async () => {
     if (!agentId) return
-    await syncMemory(agentId)
-    if (searchQuery.trim()) {
-      await refetch()
+    setSyncError(null)
+    try {
+      await syncMemory(agentId)
+      if (searchQuery.trim()) {
+        await refetch()
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to sync memory"
+      setSyncError(msg)
     }
   }, [agentId, searchQuery, refetch])
 
@@ -137,6 +144,7 @@ export function useMemoryExplorer() {
     isLoading,
     error,
     errorCode: errorCode,
+    syncError,
     agentId: agentId ?? "",
   }
 }
