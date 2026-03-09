@@ -124,8 +124,8 @@ export function chatRoutes(deps: ChatRouteDeps) {
         // Ensure principal user exists for session FK integrity (dev/api-key modes).
         await ensureUserAccount(db, userAccountId, principal?.displayName ?? "api-user")
 
-        // Per-agent authorization guard
-        if (channelAuthGuard) {
+        // Per-agent authorization guard (operators own all agents — skip the gate)
+        if (channelAuthGuard && principal?.userRole !== "operator") {
           const decision = await channelAuthGuard.authorize({
             agentId,
             channelType: "rest",
