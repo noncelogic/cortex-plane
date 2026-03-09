@@ -238,6 +238,17 @@ export function chatRoutes(deps: ChatRouteDeps) {
             .execute()
         }
 
+        // Job is waiting for human approval — return approval-needed status
+        if (result.status === "WAITING_FOR_APPROVAL") {
+          return reply.status(200).send({
+            job_id: job.id,
+            session_id: session.id,
+            status: "WAITING_FOR_APPROVAL",
+            response: null,
+            approval_needed: true,
+          })
+        }
+
         // Surface error details for failed/timed-out jobs
         const isFailed = result.status === "FAILED" || result.status === "TIMED_OUT"
         if (isFailed && !responseText) {
@@ -261,6 +272,109 @@ export function chatRoutes(deps: ChatRouteDeps) {
           job_id: job.id,
           session_id: session.id,
           status: result.status,
+          response: responseText,
+        })
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // GET /agents/:agentId/chat/jobs/:jobId — Poll job status for chat
+    // -----------------------------------------------------------------
+    app.get<{ Params: { agentId: string; jobId: string } }>(
+      "/agents/:agentId/chat/jobs/:jobId",
+      {
+        preHandler: [requireAuth],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              agentId: { type: "string" },
+              jobId: { type: "string" },
+            },
+            required: ["agentId", "jobId"],
+          },
+        },
+      },
+      async (request, reply) => {
+        const { agentId, jobId } = request.params
+
+        const row = await db
+          .selectFrom("job")
+          .select(["status", "result", "error", "session_id"])
+          .where("id", "=", jobId)
+          .where("agent_id", "=", agentId)
+          .executeTakeFirst()
+
+        if (!row) {
+          return reply.status(404).send({ error: "not_found", message: "Job not found" })
+        }
+
+        const result = row.result
+        const responseText =
+          typeof result?.stdout === "string" && result.stdout.length > 0
+            ? result.stdout
+            : typeof result?.summary === "string" && result.summary.length > 0
+              ? result.summary
+              : null
+
+        // Store assistant response on completion (if not already stored)
+        if (responseText && (row.status === "COMPLETED" || row.status === "FAILED")) {
+          const sessionId = row.session_id
+          if (sessionId) {
+            const existing = await db
+              .selectFrom("session_message")
+              .select("id")
+              .where("session_id", "=", sessionId)
+              .where("role", "=", "assistant")
+              .where("content", "=", responseText)
+              .executeTakeFirst()
+
+            if (!existing) {
+              await db
+                .insertInto("session_message")
+                .values({
+                  session_id: sessionId,
+                  role: "assistant",
+                  content: responseText,
+                })
+                .execute()
+            }
+          }
+        }
+
+        if (row.status === "WAITING_FOR_APPROVAL") {
+          return reply.status(200).send({
+            job_id: jobId,
+            session_id: row.session_id,
+            status: "WAITING_FOR_APPROVAL",
+            response: null,
+            approval_needed: true,
+          })
+        }
+
+        const isFailed = row.status === "FAILED" || row.status === "TIMED_OUT"
+        if (isFailed && !responseText) {
+          const jobError = row.error
+          const errorMessage =
+            row.status === "TIMED_OUT"
+              ? "The request timed out. Please try again."
+              : mapJobErrorToUserMessage(jobError)
+          return reply.status(200).send({
+            job_id: jobId,
+            session_id: row.session_id,
+            status: row.status,
+            response: null,
+            error: {
+              message: errorMessage,
+              code: row.status === "TIMED_OUT" ? "job_timed_out" : "job_failed",
+            },
+          })
+        }
+
+        return reply.status(200).send({
+          job_id: jobId,
+          session_id: row.session_id,
+          status: row.status,
           response: responseText,
         })
       },

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   deleteSession,
+  getChatJobStatus,
   getSessionMessages,
   listAgentSessions,
   sendChatMessage,
@@ -213,6 +214,97 @@ describe("Chat & Session API Client", () => {
     })
   })
 
+  describe("getChatJobStatus", () => {
+    it("polls job status for a running job", async () => {
+      const body = {
+        job_id: "job-5",
+        session_id: "sess-5",
+        status: "RUNNING",
+        response: null,
+      }
+      mockFetchResponse(body)
+
+      const result = await getChatJobStatus("agent-1", "job-5")
+
+      expect(result.status).toBe("RUNNING")
+      expect(result.response).toBeNull()
+
+      const url = vi.mocked(fetch).mock.calls[0]![0] as string
+      expect(url).toBe(`${API_BASE}/agents/agent-1/chat/jobs/job-5`)
+    })
+
+    it("returns completed job with response", async () => {
+      const body = {
+        job_id: "job-6",
+        session_id: "sess-6",
+        status: "COMPLETED",
+        response: "The agent's response.",
+      }
+      mockFetchResponse(body)
+
+      const result = await getChatJobStatus("agent-1", "job-6")
+
+      expect(result.status).toBe("COMPLETED")
+      expect(result.response).toBe("The agent's response.")
+    })
+
+    it("returns WAITING_FOR_APPROVAL status with approval_needed flag", async () => {
+      const body = {
+        job_id: "job-7",
+        session_id: "sess-7",
+        status: "WAITING_FOR_APPROVAL",
+        response: null,
+        approval_needed: true,
+      }
+      mockFetchResponse(body)
+
+      const result = await getChatJobStatus("agent-1", "job-7")
+
+      expect(result.status).toBe("WAITING_FOR_APPROVAL")
+      expect(result.approval_needed).toBe(true)
+      expect(result.response).toBeNull()
+    })
+
+    it("returns error details for failed job", async () => {
+      const body = {
+        job_id: "job-8",
+        session_id: "sess-8",
+        status: "FAILED",
+        response: null,
+        error: {
+          message: "Agent is quarantined due to repeated failures.",
+          code: "job_failed",
+        },
+      }
+      mockFetchResponse(body)
+
+      const result = await getChatJobStatus("agent-1", "job-8")
+
+      expect(result.status).toBe("FAILED")
+      expect(result.error).toBeDefined()
+      expect(result.error!.message).toContain("quarantined")
+    })
+
+    it("returns error for timed-out job", async () => {
+      const body = {
+        job_id: "job-9",
+        session_id: "sess-9",
+        status: "TIMED_OUT",
+        response: null,
+        error: {
+          message: "The request timed out. Please try again.",
+          code: "job_timed_out",
+        },
+      }
+      mockFetchResponse(body)
+
+      const result = await getChatJobStatus("agent-1", "job-9")
+
+      expect(result.status).toBe("TIMED_OUT")
+      expect(result.error!.code).toBe("job_timed_out")
+    })
+  })
+
   describe("deleteSession", () => {
     it("deletes a session", async () => {
       mockFetchResponse({ id: "sess-1", status: "ended" })
@@ -234,6 +326,7 @@ describe("Chat & Session API Client", () => {
 // ---------------------------------------------------------------------------
 
 import {
+  type ChatMessageStatus,
   ChatResponseSchema,
   MessageListResponseSchema,
   SessionDeleteResponseSchema,
@@ -374,6 +467,43 @@ describe("Chat schemas", () => {
         response: "Agent reply",
       })
       expect(result.error).toBeUndefined()
+    })
+
+    it("parses WAITING_FOR_APPROVAL response with approval_needed flag", () => {
+      const result = ChatResponseSchema.parse({
+        job_id: "job-1",
+        session_id: "sess-1",
+        status: "WAITING_FOR_APPROVAL",
+        response: null,
+        approval_needed: true,
+      })
+      expect(result.status).toBe("WAITING_FOR_APPROVAL")
+      expect(result.approval_needed).toBe(true)
+    })
+
+    it("parses response without approval_needed (defaults to undefined)", () => {
+      const result = ChatResponseSchema.parse({
+        job_id: "job-1",
+        session_id: "sess-1",
+        status: "COMPLETED",
+        response: "Reply",
+      })
+      expect(result.approval_needed).toBeUndefined()
+    })
+  })
+
+  describe("ChatMessageStatus type", () => {
+    it("accepts all valid status values", () => {
+      const statuses: ChatMessageStatus[] = [
+        "sending",
+        "sent",
+        "streaming",
+        "complete",
+        "error",
+        "approval-needed",
+      ]
+      // Type-level check — all values must be assignable
+      expect(statuses).toHaveLength(6)
     })
   })
 

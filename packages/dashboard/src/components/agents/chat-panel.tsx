@@ -1,17 +1,19 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react"
 
 import { EmptyState } from "@/components/layout/empty-state"
 import { useApiQuery } from "@/hooks/use-api"
 import {
   deleteSession,
+  getChatJobStatus,
   getSessionMessages,
   listAgentSessions,
   sendChatMessage,
   type Session,
   type SessionMessage,
 } from "@/lib/api-client"
+import type { ChatMessageStatus } from "@/lib/schemas/chat"
 
 // ---------------------------------------------------------------------------
 // ChatPanel — full chat UI for the agent detail page
@@ -238,10 +240,15 @@ function SessionList({
 // ChatConversation — message list + input
 // ---------------------------------------------------------------------------
 
-/** Local message type — extends SessionMessage with an isError flag for inline error bubbles. */
+/** Local message type — extends SessionMessage with status and error tracking. */
 interface ChatMessage extends SessionMessage {
-  isError?: boolean
+  messageStatus?: ChatMessageStatus
+  jobId?: string
+  errorMessage?: string
 }
+
+/** Interval for polling job status (ms). */
+const JOB_POLL_INTERVAL = 2_000
 
 function ChatConversation({
   agentId,
@@ -258,6 +265,7 @@ function ChatConversation({
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch history when session changes
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -267,7 +275,7 @@ function ChatConversation({
       setLoadingHistory(true)
       void getSessionMessages(sessionId, { limit: 200 })
         .then((data) => {
-          setMessages(data.messages)
+          setMessages(data.messages.map((m) => ({ ...m, messageStatus: "complete" as const })))
         })
         .catch(() => {
           // History load failed — not critical
@@ -288,6 +296,119 @@ function ChatConversation({
     inputRef.current?.focus()
   }, [sessionId])
 
+  // Clean up poll timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+    }
+  }, [])
+
+  /** Start polling a job for completion. Updates messages as status changes. */
+  const startJobPolling = useCallback(
+    (jobId: string, pendingMsgId: string, currentSessionId: string) => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+
+      pollTimerRef.current = setInterval(() => {
+        void getChatJobStatus(agentId, jobId)
+          .then((result) => {
+            const isTerminal =
+              result.status === "COMPLETED" ||
+              result.status === "FAILED" ||
+              result.status === "TIMED_OUT" ||
+              result.status === "DEAD_LETTER" ||
+              result.status === "WAITING_FOR_APPROVAL"
+
+            if (result.status === "RUNNING") {
+              // Update the pending message to show streaming status
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingMsgId
+                    ? { ...m, content: "Agent is thinking...", messageStatus: "streaming" }
+                    : m,
+                ),
+              )
+              return
+            }
+
+            if (!isTerminal) return
+
+            // Terminal state — stop polling
+            if (pollTimerRef.current) {
+              clearInterval(pollTimerRef.current)
+              pollTimerRef.current = null
+            }
+
+            if (result.status === "WAITING_FOR_APPROVAL") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingMsgId
+                    ? {
+                        ...m,
+                        content: "This action requires approval before the agent can continue.",
+                        messageStatus: "approval-needed",
+                        jobId,
+                      }
+                    : m,
+                ),
+              )
+              setSending(false)
+              return
+            }
+
+            if (result.response) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingMsgId
+                    ? {
+                        ...m,
+                        content: result.response!,
+                        messageStatus: "complete",
+                        session_id: currentSessionId,
+                      }
+                    : m,
+                ),
+              )
+            } else if (result.error) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingMsgId
+                    ? {
+                        ...m,
+                        content: result.error!.message,
+                        messageStatus: "error",
+                        errorMessage: result.error!.message,
+                        jobId,
+                      }
+                    : m,
+                ),
+              )
+            } else {
+              const fallbackError =
+                "Something went wrong processing your message. Please try again."
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingMsgId
+                    ? {
+                        ...m,
+                        content: fallbackError,
+                        messageStatus: "error" as const,
+                        errorMessage: fallbackError,
+                        jobId,
+                      }
+                    : m,
+                ),
+              )
+            }
+            setSending(false)
+          })
+          .catch(() => {
+            // Poll error — will retry on next interval
+          })
+      }, JOB_POLL_INTERVAL)
+    },
+    [agentId],
+  )
+
   const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || sending) return
@@ -295,82 +416,103 @@ function ChatConversation({
     setError(null)
     setSending(true)
 
-    // Optimistic user message
+    // Optimistic user message with "sending" status
     const optimisticMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
       session_id: sessionId ?? "",
       role: "user",
       content: text,
       created_at: new Date().toISOString(),
+      messageStatus: "sending",
     }
     setMessages((prev) => [...prev, optimisticMsg])
     setInput("")
 
     try {
+      // Send without waiting — get job_id back immediately
       const result = await sendChatMessage(
         agentId,
         { text, session_id: sessionId ?? undefined },
-        { wait: true, timeout: 60_000 },
+        { wait: false },
       )
 
+      const currentSessionId = result.session_id
+
       // If a new session was created, notify parent
-      if (!sessionId && result.session_id) {
-        onSessionCreated(result.session_id)
+      if (!sessionId && currentSessionId) {
+        onSessionCreated(currentSessionId)
       }
 
-      // Add assistant response
-      if (result.response) {
-        const assistantMsg: ChatMessage = {
-          id: `resp-${Date.now()}`,
-          session_id: result.session_id,
-          role: "assistant",
-          content: result.response,
-          created_at: new Date().toISOString(),
-        }
-        setMessages((prev) => [...prev, assistantMsg])
-      } else if (result.error) {
-        // Job failed — show inline error bubble
-        const errorMsg: ChatMessage = {
-          id: `err-${Date.now()}`,
-          session_id: result.session_id,
-          role: "assistant",
-          content: result.error.message,
-          created_at: new Date().toISOString(),
-          isError: true,
-        }
-        setMessages((prev) => [...prev, errorMsg])
-      } else if (result.status === "FAILED" || result.status === "TIMED_OUT") {
-        // Job failed without structured error — show generic error bubble
-        const errorMsg: ChatMessage = {
-          id: `err-${Date.now()}`,
-          session_id: result.session_id,
-          role: "assistant",
-          content: "Something went wrong processing your message. Please try again.",
-          created_at: new Date().toISOString(),
-          isError: true,
-        }
-        setMessages((prev) => [...prev, errorMsg])
-      } else if (result.status === "RUNNING" || result.status === "SCHEDULED") {
-        // Job still running — show a pending indicator
-        const pendingMsg: ChatMessage = {
-          id: `pending-${Date.now()}`,
-          session_id: result.session_id,
-          role: "assistant",
-          content: "Processing... (job is still running, refresh to see the response)",
-          created_at: new Date().toISOString(),
-        }
-        setMessages((prev) => [...prev, pendingMsg])
+      // Update user message to "sent" status
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticMsg.id
+            ? { ...m, messageStatus: "sent", session_id: currentSessionId }
+            : m,
+        ),
+      )
+
+      // Add a pending assistant message placeholder
+      const pendingMsgId = `pending-${Date.now()}`
+      const pendingMsg: ChatMessage = {
+        id: pendingMsgId,
+        session_id: currentSessionId,
+        role: "assistant",
+        content: "Waiting for response...",
+        created_at: new Date().toISOString(),
+        messageStatus: "streaming",
+        jobId: result.job_id,
       }
+      setMessages((prev) => [...prev, pendingMsg])
+
+      // Start polling for the job result
+      startJobPolling(result.job_id, pendingMsgId, currentSessionId)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message")
       // Remove optimistic message on error
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
       setInput(text) // restore input
-    } finally {
       setSending(false)
-      inputRef.current?.focus()
     }
-  }, [input, sending, agentId, sessionId, onSessionCreated])
+
+    inputRef.current?.focus()
+  }, [input, sending, agentId, sessionId, onSessionCreated, startJobPolling])
+
+  /** Retry a failed message by re-sending the last user message. */
+  const handleRetry = useCallback(
+    (errorMsgId: string) => {
+      // Find the user message just before the error message
+      const idx = messages.findIndex((m) => m.id === errorMsgId)
+      if (idx < 1) return
+
+      // Look backwards for the most recent user message
+      let userMsg: ChatMessage | null = null
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i]!.role === "user") {
+          userMsg = messages[i]!
+          break
+        }
+      }
+      if (!userMsg) return
+
+      // Remove the error message and set input to the original text
+      setMessages((prev) => prev.filter((m) => m.id !== errorMsgId))
+      setInput(userMsg.content)
+
+      // Auto-send after a tick
+      setTimeout(() => {
+        const textarea = inputRef.current
+        if (textarea) {
+          const enterEvent = new KeyboardEvent("keydown", {
+            key: "Enter",
+            bubbles: true,
+          })
+          textarea.dispatchEvent(enterEvent)
+        }
+      }, 100)
+    },
+    [messages],
+  )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -418,19 +560,8 @@ function ChatConversation({
         )}
         <div className="space-y-4">
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble key={msg.id} message={msg} onRetry={handleRetry} />
           ))}
-          {sending && (
-            <div className="flex justify-start">
-              <div className="rounded-2xl rounded-bl-md bg-slate-100 px-4 py-3 dark:bg-slate-800">
-                <div className="flex items-center gap-1">
-                  <span className="inline-block size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:0ms]" />
-                  <span className="inline-block size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:150ms]" />
-                  <span className="inline-block size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]" />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
         <div ref={scrollRef} />
       </div>
@@ -450,12 +581,21 @@ function ChatConversation({
 }
 
 // ---------------------------------------------------------------------------
-// MessageBubble
+// MessageBubble — renders a single chat message with status indicators
 // ---------------------------------------------------------------------------
 
-function MessageBubble({ message }: { message: ChatMessage }): React.JSX.Element {
+function MessageBubble({
+  message,
+  onRetry,
+}: {
+  message: ChatMessage
+  onRetry: (messageId: string) => void
+}): React.JSX.Element {
   const isUser = message.role === "user"
-  const isError = message.isError === true
+  const status = message.messageStatus ?? "complete"
+  const isError = status === "error"
+  const isApproval = status === "approval-needed"
+  const isStreaming = status === "streaming"
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -465,9 +605,12 @@ function MessageBubble({ message }: { message: ChatMessage }): React.JSX.Element
             ? "rounded-br-md bg-primary text-white"
             : isError
               ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
-              : "rounded-bl-md bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
+              : isApproval
+                ? "rounded-bl-md border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                : "rounded-bl-md bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
         }`}
       >
+        {/* Error header */}
         {isError && (
           <div className="mb-1 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm text-red-500 dark:text-red-400">
@@ -476,26 +619,119 @@ function MessageBubble({ message }: { message: ChatMessage }): React.JSX.Element
             <span className="text-xs font-semibold text-red-600 dark:text-red-400">Error</span>
           </div>
         )}
+
+        {/* Approval header */}
+        {isApproval && (
+          <div className="mb-1 flex items-center gap-1">
+            <span className="material-symbols-outlined text-sm text-amber-500 dark:text-amber-400">
+              gavel
+            </span>
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+              Approval Required
+            </span>
+          </div>
+        )}
+
+        {/* Streaming indicator */}
+        {isStreaming && !isUser && (
+          <div className="mb-2 flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
+              <span className="inline-block size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:0ms]" />
+              <span className="inline-block size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:150ms]" />
+              <span className="inline-block size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]" />
+            </div>
+          </div>
+        )}
+
+        {/* Message content */}
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
-        <p
-          className={`mt-1 text-[10px] ${isUser ? "text-white/60" : isError ? "text-red-400 dark:text-red-500" : "text-slate-400"}`}
-        >
-          {new Date(message.created_at).toLocaleTimeString("en-US", {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </p>
+
+        {/* Footer: timestamp + status indicator */}
+        <div className="mt-1 flex items-center gap-1.5">
+          <p
+            className={`text-[10px] ${
+              isUser
+                ? "text-white/60"
+                : isError
+                  ? "text-red-400 dark:text-red-500"
+                  : isApproval
+                    ? "text-amber-400 dark:text-amber-500"
+                    : "text-slate-400"
+            }`}
+          >
+            {new Date(message.created_at).toLocaleTimeString("en-US", {
+              hour12: false,
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+          {/* User message status indicators */}
+          {isUser && <MessageStatusIcon status={status} />}
+        </div>
+
+        {/* Retry button for error messages */}
+        {isError && (
+          <button
+            onClick={() => onRetry(message.id)}
+            className="mt-2 flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30"
+          >
+            <span className="material-symbols-outlined text-sm">refresh</span>
+            Retry
+          </button>
+        )}
+
+        {/* Approval action hint */}
+        {isApproval && (
+          <p className="mt-2 text-[10px] text-amber-500 dark:text-amber-400">
+            Visit the Jobs tab to approve or reject this action.
+          </p>
+        )}
       </div>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// ChatInput
+// MessageStatusIcon — shows sending/sent/delivered indicators on user messages
 // ---------------------------------------------------------------------------
 
-import { forwardRef } from "react"
+function MessageStatusIcon({ status }: { status: ChatMessageStatus }): React.JSX.Element | null {
+  switch (status) {
+    case "sending":
+      return (
+        <span
+          className="material-symbols-outlined animate-pulse text-[12px] text-white/50"
+          title="Sending..."
+        >
+          schedule
+        </span>
+      )
+    case "sent":
+      return (
+        <span className="material-symbols-outlined text-[12px] text-white/60" title="Sent">
+          check
+        </span>
+      )
+    case "complete":
+      return (
+        <span className="material-symbols-outlined text-[12px] text-white/60" title="Delivered">
+          done_all
+        </span>
+      )
+    case "error":
+      return (
+        <span className="material-symbols-outlined text-[12px] text-red-300" title="Failed">
+          error_outline
+        </span>
+      )
+    default:
+      return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ChatInput
+// ---------------------------------------------------------------------------
 
 const ChatInput = forwardRef<
   HTMLTextAreaElement,
