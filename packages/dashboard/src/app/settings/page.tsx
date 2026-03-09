@@ -65,6 +65,12 @@ function CredentialHealthDetails({ cred }: { cred: Credential }) {
 /** Code-paste providers that use the init/exchange flow. */
 const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
 
+/**
+ * Providers that display a device code instead of redirecting to localhost.
+ * For these, we skip the popup entirely and show a code-paste input immediately.
+ */
+const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic"])
+
 // ---------------------------------------------------------------------------
 // Settings page inner (wrapped in Suspense)
 // ---------------------------------------------------------------------------
@@ -132,13 +138,15 @@ function SettingsInner() {
     if (authStatus === "authenticated") void fetchData()
   }, [authStatus, fetchData])
 
-  // Start popup OAuth flow (falls back to code-paste if popup is blocked or URL unreadable)
+  // Start popup OAuth flow (falls back to code-paste if popup is blocked or URL unreadable).
+  // For code-paste-only providers (e.g. Anthropic), skip the popup entirely.
   const startPopupFlow = useCallback(
     async (provider: string) => {
       setCodePasteError(null)
       setCodePastePastedUrl("")
       setPopupProvider(provider)
-      await popup.startFlow(provider)
+      const skipPopup = CODE_PASTE_ONLY_PROVIDER_IDS.has(provider)
+      await popup.startFlow(provider, { skipPopup })
     },
     [popup],
   )
@@ -532,33 +540,63 @@ function SettingsInner() {
 
               {popup.status === "fallback" && popup.fallbackContext && (
                 <>
-                  <div>
-                    <p className="text-sm text-text-muted">
-                      The popup could not capture the redirect automatically. Please complete
-                      authorization and paste the redirect URL below.
-                    </p>
-                  </div>
+                  {popupProvider && CODE_PASTE_ONLY_PROVIDER_IDS.has(popupProvider) ? (
+                    <>
+                      <div>
+                        <p className="text-sm text-text-muted">
+                          1. Click the link below to open the authorization page.
+                        </p>
+                        <a
+                          href={popup.fallbackContext.authUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"
+                        >
+                          Open authorization page
+                        </a>
+                      </div>
 
-                  <div>
-                    <p className="text-sm text-text-muted">
-                      1. Open the authorization page (if not already open).
-                    </p>
-                    <a
-                      href={popup.fallbackContext.authUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"
-                    >
-                      Open authorization page
-                    </a>
-                  </div>
+                      <div>
+                        <p className="text-sm text-text-muted">
+                          2. Authorize the application, then copy the device code shown on the page.
+                        </p>
+                      </div>
 
-                  <div>
-                    <p className="text-sm text-text-muted">
-                      2. After authorizing, copy the URL from your browser address bar and paste it
-                      below.
-                    </p>
-                  </div>
+                      <div>
+                        <p className="text-sm text-text-muted">3. Paste the device code below.</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-sm text-text-muted">
+                          The popup could not capture the redirect automatically. Please complete
+                          authorization and paste the redirect URL below.
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-text-muted">
+                          1. Open the authorization page (if not already open).
+                        </p>
+                        <a
+                          href={popup.fallbackContext.authUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-sm font-medium text-primary hover:underline break-all"
+                        >
+                          Open authorization page
+                        </a>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-text-muted">
+                          2. After authorizing, copy the URL from your browser address bar and paste
+                          it below.
+                        </p>
+                      </div>
+                    </>
+                  )}
 
                   {(codePasteError ?? popup.error) && (
                     <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -568,14 +606,20 @@ function SettingsInner() {
 
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">
-                      Paste redirect URL here
+                      {popupProvider && CODE_PASTE_ONLY_PROVIDER_IDS.has(popupProvider)
+                        ? "Paste device code here"
+                        : "Paste redirect URL here"}
                     </label>
                     <input
                       type="text"
                       value={codePastePastedUrl}
                       onChange={(e) => setCodePastePastedUrl(e.target.value)}
                       className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      placeholder="http://localhost:..."
+                      placeholder={
+                        popupProvider && CODE_PASTE_ONLY_PROVIDER_IDS.has(popupProvider)
+                          ? "e.g. authcode123#state456"
+                          : "http://localhost:..."
+                      }
                       autoFocus
                     />
                   </div>

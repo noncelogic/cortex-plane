@@ -54,6 +54,18 @@ describe("oauth-providers registry", () => {
       expect(provider.usePkce).toBe(true)
     }
   })
+
+  it("anthropic is the only codePasteOnly provider", () => {
+    const codePasteOnly = listCodePasteProviders().filter((p) => p.codePasteOnly)
+    expect(codePasteOnly).toHaveLength(1)
+    expect(codePasteOnly[0]!.id).toBe("anthropic")
+  })
+
+  it("anthropic redirectUri is not localhost (device-code flow)", () => {
+    const anth = getCodePasteProvider("anthropic")!
+    expect(anth.redirectUri).not.toContain("localhost")
+    expect(anth.redirectUri).toContain("console.anthropic.com")
+  })
 })
 
 describe("code-paste init flow builds correct OAuth URL", () => {
