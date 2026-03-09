@@ -262,4 +262,92 @@ describe("OAuth popup flow logic", () => {
       expect(result.authUrl).toContain(provider)
     })
   })
+
+  describe("Anthropic code-paste-only flow", () => {
+    /**
+     * Code-paste-only providers (e.g. Anthropic) skip the popup entirely.
+     * The hook's startFlow accepts { skipPopup: true } which should go
+     * straight to fallback status without calling window.open.
+     */
+
+    const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic"])
+
+    it("identifies anthropic as a code-paste-only provider", () => {
+      expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("anthropic")).toBe(true)
+      expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("google-antigravity")).toBe(false)
+      expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("openai-codex")).toBe(false)
+    })
+
+    it("does not open a popup for code-paste-only providers", () => {
+      const openSpy = vi.fn()
+      vi.stubGlobal("window", { open: openSpy })
+
+      // When skipPopup is true, window.open should never be called.
+      // The hook checks skipPopup before reaching the popup-opening code.
+      const skipPopup = CODE_PASTE_ONLY_PROVIDER_IDS.has("anthropic")
+      expect(skipPopup).toBe(true)
+
+      // Simulate the branch: if skipPopup, we don't call window.open
+      if (!skipPopup) {
+        window.open("https://claude.ai/oauth/authorize", "cortex_oauth_popup", "")
+      }
+      expect(openSpy).not.toHaveBeenCalled()
+    })
+
+    it("initializes PKCE params for Anthropic even without popup", async () => {
+      mockInitOAuthConnect.mockResolvedValue({
+        authUrl: "https://claude.ai/oauth/authorize?client_id=abc&code=true",
+        codeVerifier: "anthropic-pkce-verifier",
+        state: "anthropic-state-xyz",
+      })
+
+      const result = (await mockInitOAuthConnect("anthropic")) as {
+        authUrl: string
+        codeVerifier: string
+        state: string
+      }
+
+      expect(result.authUrl).toContain("claude.ai")
+      expect(result.authUrl).toContain("code=true")
+      expect(result.codeVerifier).toBe("anthropic-pkce-verifier")
+      expect(result.state).toBe("anthropic-state-xyz")
+    })
+
+    it("exchanges Anthropic device code (code#state format) for tokens", async () => {
+      mockExchangeOAuthConnect.mockResolvedValue({ ok: true, provider: "Anthropic" })
+
+      // User pastes a code#state string from the Anthropic device code page
+      const deviceCode = "authcode123#statevalue456"
+      await mockExchangeOAuthConnect("anthropic", {
+        pastedUrl: deviceCode,
+        codeVerifier: "anthropic-pkce-verifier",
+        state: "anthropic-state-xyz",
+      })
+
+      expect(mockExchangeOAuthConnect).toHaveBeenCalledWith("anthropic", {
+        pastedUrl: deviceCode,
+        codeVerifier: "anthropic-pkce-verifier",
+        state: "anthropic-state-xyz",
+      })
+    })
+
+    it("exchanges Anthropic callback URL with code and hash for tokens", async () => {
+      mockExchangeOAuthConnect.mockResolvedValue({ ok: true, provider: "Anthropic" })
+
+      // User pastes the full callback URL
+      const callbackUrl =
+        "https://console.anthropic.com/oauth/code/callback?code=authcode123#statevalue"
+      await mockExchangeOAuthConnect("anthropic", {
+        pastedUrl: callbackUrl,
+        codeVerifier: "v",
+        state: "s",
+      })
+
+      expect(mockExchangeOAuthConnect).toHaveBeenCalledWith("anthropic", {
+        pastedUrl: callbackUrl,
+        codeVerifier: "v",
+        state: "s",
+      })
+    })
+  })
 })

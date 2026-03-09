@@ -28,6 +28,13 @@ export interface CodePasteProviderConfig {
   usePkce: boolean
   /** Use JSON body instead of form-encoded for token exchange. */
   useJsonTokenExchange?: boolean
+  /**
+   * When true, the provider does not redirect to a localhost URL after
+   * authorization. Instead it displays a device code that the user must
+   * copy and paste back into the dashboard. The popup flow is skipped
+   * entirely and a code-paste input is shown immediately.
+   */
+  codePasteOnly?: boolean
 }
 
 export const CODE_PASTE_PROVIDERS: Record<string, CodePasteProviderConfig> = {
@@ -84,6 +91,7 @@ export const CODE_PASTE_PROVIDERS: Record<string, CodePasteProviderConfig> = {
     },
     usePkce: true,
     useJsonTokenExchange: true,
+    codePasteOnly: true,
   },
 }
 

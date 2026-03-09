@@ -8,6 +8,7 @@ import type { Credential, ProviderInfo } from "@/lib/api-client"
  */
 
 const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
+const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic"])
 
 /**
  * credentialLabel — mirrors the helper in settings/page.tsx.
@@ -39,6 +40,27 @@ describe("settings page code-paste providers", () => {
 
   it("contains exactly 3 providers", () => {
     expect(CODE_PASTE_PROVIDER_IDS.size).toBe(3)
+  })
+})
+
+describe("settings page code-paste-only providers", () => {
+  it("identifies anthropic as code-paste-only (device code flow)", () => {
+    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("anthropic")).toBe(true)
+  })
+
+  it("does not mark other code-paste providers as code-paste-only", () => {
+    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("google-antigravity")).toBe(false)
+    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("openai-codex")).toBe(false)
+  })
+
+  it("all code-paste-only providers are also code-paste providers", () => {
+    for (const id of CODE_PASTE_ONLY_PROVIDER_IDS) {
+      expect(CODE_PASTE_PROVIDER_IDS.has(id)).toBe(true)
+    }
+  })
+
+  it("contains exactly 1 provider", () => {
+    expect(CODE_PASTE_ONLY_PROVIDER_IDS.size).toBe(1)
   })
 })
 

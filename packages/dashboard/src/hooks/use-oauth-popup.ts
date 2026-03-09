@@ -17,8 +17,8 @@ export interface UseOAuthPopupReturn {
   error: string | null
   /** PKCE / state context needed if the caller falls back to code-paste. */
   fallbackContext: { authUrl: string; codeVerifier: string; state: string } | null
-  /** Open the popup and begin the OAuth flow. */
-  startFlow: (provider: string) => Promise<void>
+  /** Open the popup and begin the OAuth flow. Pass `skipPopup` to go straight to code-paste. */
+  startFlow: (provider: string, options?: { skipPopup?: boolean }) => Promise<void>
   /** Cancel any in-progress flow, closing the popup if open. */
   cancel: () => void
 }
@@ -76,7 +76,7 @@ export function useOAuthPopup(onSuccess?: () => void): UseOAuthPopupReturn {
   }, [cleanup])
 
   const startFlow = useCallback(
-    async (provider: string) => {
+    async (provider: string, options?: { skipPopup?: boolean }) => {
       // Reset state
       cancel()
       setError(null)
@@ -99,6 +99,13 @@ export function useOAuthPopup(onSuccess?: () => void): UseOAuthPopupReturn {
 
       // Store context for potential fallback
       setFallbackContext({ authUrl, codeVerifier, state })
+
+      // For code-paste-only providers (e.g. Anthropic), skip the popup
+      // and go straight to the code-paste input.
+      if (options?.skipPopup) {
+        setStatus("fallback")
+        return
+      }
 
       // 2. Open popup
       const left = Math.round(screen.width / 2 - POPUP_WIDTH / 2)
