@@ -15,11 +15,50 @@ import {
   type ProviderInfo,
   saveProviderApiKey,
 } from "@/lib/api-client"
+import { errorSummary, refreshStatus, tokenExpiry } from "@/lib/credential-health"
 
 /** Find a human-readable label for a credential (provider name or display label). */
 function credentialLabel(cred: Credential, providers: ProviderInfo[]): string {
   if (cred.displayLabel) return cred.displayLabel
   return providers.find((p) => p.id === cred.provider)?.name ?? cred.provider
+}
+
+/** Render credential health details (errors, token expiry, refresh status). */
+function CredentialHealthDetails({ cred }: { cred: Credential }) {
+  const err = errorSummary(cred)
+  const expiry = tokenExpiry(cred)
+  const refresh = refreshStatus(cred)
+
+  const hasDetails = err || expiry || refresh || cred.lastUsedAt
+  if (!hasDetails) return null
+
+  return (
+    <div className="mt-1.5 space-y-0.5 text-xs">
+      {cred.lastUsedAt && (
+        <p className="text-text-muted">Last used: {new Date(cred.lastUsedAt).toLocaleString()}</p>
+      )}
+      {expiry && (
+        <p
+          className={
+            expiry.severity === "danger"
+              ? "text-danger"
+              : expiry.severity === "warning"
+                ? "text-warning"
+                : "text-text-muted"
+          }
+        >
+          {expiry.label}
+        </p>
+      )}
+      {refresh && <p className="text-text-muted">{refresh}</p>}
+      {err && (
+        <div className="mt-1 rounded border border-danger/20 bg-danger/5 px-2 py-1">
+          <p className="font-medium text-danger">{err.label}</p>
+          {err.message && <p className="mt-0.5 text-text-muted">{err.message}</p>}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** Code-paste providers that use the init/exchange flow. */
@@ -289,11 +328,7 @@ function SettingsInner() {
                       Project: <span className="font-mono">{cred.accountId}</span>
                     </p>
                   )}
-                  {cred?.lastUsedAt && (
-                    <p className="mt-0.5 text-xs text-text-muted">
-                      Last used: {new Date(cred.lastUsedAt).toLocaleString()}
-                    </p>
-                  )}
+                  {cred && <CredentialHealthDetails cred={cred} />}
                   {p.models && p.models.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {p.models.map((m) => (
@@ -398,11 +433,7 @@ function SettingsInner() {
                       )}
                     </div>
                     <p className="text-xs text-text-muted">{p.description}</p>
-                    {cred?.lastUsedAt && (
-                      <p className="mt-0.5 text-xs text-text-muted">
-                        Last used: {new Date(cred.lastUsedAt).toLocaleString()}
-                      </p>
-                    )}
+                    {cred && <CredentialHealthDetails cred={cred} />}
                   </div>
 
                   <div className="flex items-center gap-2">
