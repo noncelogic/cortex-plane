@@ -267,6 +267,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         {/* Left column: steering + config + lifecycle details */}
         <div className="flex w-80 min-w-0 shrink-0 flex-col gap-6">
           <SteerInput agentId={agentId} />
+          <ModelConfigPanel agent={liveAgent} onSave={() => void refetch()} />
           <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
           <CredentialBindingPanel agentId={agentId} />
           <ChannelBindingTab agentId={agentId} />
@@ -338,6 +339,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         {mobileTab === "Details" && (
           <div className="flex flex-col gap-4">
             <SteerInput agentId={agentId} />
+            <ModelConfigPanel agent={liveAgent} onSave={() => void refetch()} />
             <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
             <CredentialBindingPanel agentId={agentId} />
             <LifecycleDetails transitions={transitions} currentState={currentState} />
@@ -392,6 +394,174 @@ function LoadingSkeleton(): React.JSX.Element {
         <Skeleton className="h-96 flex-1" />
         <Skeleton className="h-96 w-72" />
       </div>
+    </div>
+  )
+}
+
+function ModelConfigPanel({
+  agent,
+  onSave,
+}: {
+  agent: AgentDetail
+  onSave: () => void
+}): React.JSX.Element {
+  const modelConfig: Record<string, unknown> = agent.model_config ?? {}
+  const currentModel = typeof modelConfig.model === "string" ? modelConfig.model : ""
+  const currentPrompt = typeof modelConfig.systemPrompt === "string" ? modelConfig.systemPrompt : ""
+
+  const [editing, setEditing] = useState(false)
+  const [model, setModel] = useState(currentModel)
+  const [systemPrompt, setSystemPrompt] = useState(currentPrompt)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  const handleEdit = useCallback(() => {
+    setModel(currentModel)
+    setSystemPrompt(currentPrompt)
+    setError(null)
+    setSuccess(false)
+    setEditing(true)
+  }, [currentModel, currentPrompt])
+
+  const handleCancel = useCallback(() => {
+    setEditing(false)
+    setError(null)
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    setError(null)
+    setSuccess(false)
+    try {
+      const newConfig: Record<string, unknown> = { ...modelConfig }
+      if (model.trim()) {
+        newConfig.model = model.trim()
+      } else {
+        delete newConfig.model
+      }
+      if (systemPrompt.trim()) {
+        newConfig.systemPrompt = systemPrompt.trim()
+      } else {
+        delete newConfig.systemPrompt
+      }
+      await updateAgent(agent.id, { model_config: newConfig })
+      setEditing(false)
+      setSuccess(true)
+      onSave()
+      setTimeout(() => setSuccess(false), 3000)
+    } catch {
+      setError("Failed to save model configuration")
+    } finally {
+      setSaving(false)
+    }
+  }, [agent.id, model, systemPrompt, modelConfig, onSave])
+
+  return (
+    <div
+      data-testid="model-config-panel"
+      className="rounded-xl border border-slate-200 bg-white p-5 dark:border-primary/10 dark:bg-primary/5"
+    >
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary">psychology</span>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            Model Configuration
+          </h3>
+        </div>
+        {!editing && (
+          <button
+            onClick={handleEdit}
+            data-testid="model-config-edit-btn"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            <span className="material-symbols-outlined text-sm">edit</span>
+            Edit
+          </button>
+        )}
+      </div>
+
+      {success && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="material-symbols-outlined text-[16px]">check_circle</span>
+          Model configuration saved
+        </div>
+      )}
+
+      {editing ? (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Model</label>
+            <input
+              type="text"
+              value={model}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setModel(e.target.value)}
+              placeholder="e.g. claude-opus-4-6-thinking"
+              disabled={saving}
+              data-testid="model-config-model-input"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">System Prompt</label>
+            <textarea
+              value={systemPrompt}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setSystemPrompt(e.target.value)
+              }
+              placeholder="Instructions for the agent..."
+              rows={5}
+              disabled={saving}
+              data-testid="model-config-prompt-input"
+              className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+          {error && (
+            <p data-testid="model-config-error" className="text-xs font-medium text-red-500">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={handleCancel}
+              disabled={saving}
+              data-testid="model-config-cancel-btn"
+              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleSave()}
+              disabled={saving}
+              data-testid="model-config-save-btn"
+              className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500">Model</span>
+            <span
+              data-testid="model-config-model-value"
+              className="text-right font-mono text-xs text-slate-700 dark:text-slate-300"
+            >
+              {currentModel || "Not set"}
+            </span>
+          </div>
+          <div className="flex items-start justify-between gap-2">
+            <span className="shrink-0 text-xs font-medium text-slate-500">System Prompt</span>
+            <span
+              data-testid="model-config-prompt-value"
+              className="text-right text-xs text-slate-700 dark:text-slate-300"
+            >
+              {currentPrompt ? <span className="line-clamp-3">{currentPrompt}</span> : "Not set"}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -4,6 +4,18 @@ import { useCallback, useState } from "react"
 
 import { createAgent, type CreateAgentRequest } from "@/lib/api-client"
 
+// ---------------------------------------------------------------------------
+// Available models — keep in sync with control-plane MODEL_PRICING
+// ---------------------------------------------------------------------------
+
+export const AVAILABLE_MODELS = [
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "anthropic" },
+  { id: "claude-opus-4-6", label: "Claude Opus 4.6", provider: "anthropic" },
+  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", provider: "anthropic" },
+  { id: "gpt-4o", label: "GPT-4o", provider: "openai" },
+  { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "openai" },
+] as const
+
 interface DeployAgentModalProps {
   open: boolean
   onClose: () => void
@@ -18,6 +30,7 @@ export function DeployAgentModal({
   const [name, setName] = useState("")
   const [role, setRole] = useState("")
   const [description, setDescription] = useState("")
+  const [model, setModel] = useState("")
   const [systemPrompt, setSystemPrompt] = useState("")
   const [configJson, setConfigJson] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -27,6 +40,7 @@ export function DeployAgentModal({
     setName("")
     setRole("")
     setDescription("")
+    setModel("")
     setSystemPrompt("")
     setConfigJson("")
     setError(null)
@@ -41,7 +55,7 @@ export function DeployAgentModal({
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!name.trim() || !role.trim() || submitting) return
+      if (!name.trim() || !role.trim() || !model.trim() || submitting) return
 
       setSubmitting(true)
       setError(null)
@@ -58,11 +72,15 @@ export function DeployAgentModal({
           }
         }
 
+        const modelConfig: Record<string, unknown> = {}
+        if (model.trim()) modelConfig.model = model.trim()
+        if (systemPrompt.trim()) modelConfig.systemPrompt = systemPrompt.trim()
+
         const body: CreateAgentRequest = {
           name: name.trim(),
           role: role.trim(),
           description: description.trim() || undefined,
-          model_config: systemPrompt.trim() ? { systemPrompt: systemPrompt.trim() } : undefined,
+          model_config: Object.keys(modelConfig).length > 0 ? modelConfig : undefined,
           config: parsedConfig,
         }
         await createAgent(body)
@@ -74,7 +92,7 @@ export function DeployAgentModal({
         setSubmitting(false)
       }
     },
-    [name, role, description, systemPrompt, configJson, submitting, resetForm, onSuccess],
+    [name, role, description, model, systemPrompt, configJson, submitting, resetForm, onSuccess],
   )
 
   if (!open) return null
@@ -151,6 +169,38 @@ export function DeployAgentModal({
             />
           </div>
 
+          {/* Model */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Model <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={submitting}
+              data-testid="deploy-model-select"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            >
+              <option value="">Select a model...</option>
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Credential warning */}
+          {model && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <span className="material-symbols-outlined mt-px text-[16px]">warning</span>
+              <span>
+                The agent will need a provider credential bound after deployment for the model to
+                work. You can bind credentials from the agent detail page.
+              </span>
+            </div>
+          )}
+
           {/* System Prompt */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -205,7 +255,7 @@ export function DeployAgentModal({
             </button>
             <button
               type="submit"
-              disabled={submitting || !name.trim() || !role.trim()}
+              disabled={submitting || !name.trim() || !role.trim() || !model.trim()}
               className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-lg">rocket_launch</span>
