@@ -6,6 +6,7 @@ import { useCallback, useState } from "react"
 
 import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { Skeleton } from "@/components/layout/skeleton"
+import { useToast } from "@/components/layout/toast"
 import { McpHealthBadge } from "@/components/mcp/McpHealthBadge"
 import { McpServerForm } from "@/components/mcp/McpServerForm"
 import { McpToolList } from "@/components/mcp/McpToolList"
@@ -35,6 +36,8 @@ export default function McpServerDetailPage(): React.JSX.Element {
   const [refreshing, setRefreshing] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  const { addToast } = useToast()
+
   const {
     data: server,
     isLoading,
@@ -48,10 +51,12 @@ export default function McpServerDetailPage(): React.JSX.Element {
     try {
       await refreshMcpServer(params.id)
       await refetch()
+    } catch {
+      addToast("Failed to refresh tools", "error")
     } finally {
       setRefreshing(false)
     }
-  }, [params.id, refetch])
+  }, [params.id, refetch, addToast])
 
   const handleDelete = useCallback(async () => {
     setDeleting(true)
@@ -59,10 +64,11 @@ export default function McpServerDetailPage(): React.JSX.Element {
       await deleteMcpServer(params.id)
       router.push("/mcp-servers")
     } catch {
+      addToast("Failed to delete server", "error")
       setDeleting(false)
       setDeleteConfirm(false)
     }
-  }, [params.id, router])
+  }, [params.id, router, addToast])
 
   const handleEditSuccess = useCallback(() => {
     setEditOpen(false)

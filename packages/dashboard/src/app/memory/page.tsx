@@ -28,6 +28,7 @@ export default function MemoryPage(): React.JSX.Element {
     errorCode,
     agentId,
     allRecords,
+    syncError,
   } = useMemoryExplorer()
 
   // Loading skeleton
@@ -82,6 +83,7 @@ export default function MemoryPage(): React.JSX.Element {
 
       {/* Error */}
       {error && <ApiErrorBanner error={error} errorCode={errorCode} />}
+      {syncError && <ApiErrorBanner error={syncError} errorCode={null} />}
 
       {/* Empty state */}
       {!isLoading && !error && allRecords.length === 0 ? (

@@ -13,6 +13,7 @@ import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifec
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
 import { SteerInput } from "@/components/agents/steer-input"
 import { Skeleton } from "@/components/layout/skeleton"
+import { useToast } from "@/components/layout/toast"
 import { type AgentEventPayload, useAgentStream } from "@/hooks/use-agent-stream"
 import { useApiQuery } from "@/hooks/use-api"
 import {
@@ -118,6 +119,7 @@ interface Props {
 
 export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   const { agentId } = use(params)
+  const { addToast } = useToast()
   const { data: agent, isLoading, refetch } = useApiQuery(() => getAgent(agentId), [agentId])
   const { events } = useAgentStream(agentId)
   const [mobileTab, setMobileTab] = useState<MobileTab>("Output")
@@ -148,18 +150,18 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
       await pauseAgent(agentId, { reason: "Paused from dashboard" })
       void refetch()
     } catch {
-      // handled by UI
+      addToast("Failed to pause agent", "error")
     }
-  }, [agentId, refetch])
+  }, [agentId, refetch, addToast])
 
   const handleResume = useCallback(async () => {
     try {
       await resumeAgent(agentId, { instruction: "Resumed from dashboard" })
       void refetch()
     } catch {
-      // handled by UI
+      addToast("Failed to resume agent", "error")
     }
-  }, [agentId, refetch])
+  }, [agentId, refetch, addToast])
 
   const handleDelete = useCallback(async () => {
     setDeleteError(null)
@@ -864,6 +866,7 @@ function MobileKpiCard({
 }
 
 function MobileSteerBar({ agentId }: { agentId: string }): React.JSX.Element {
+  const { addToast } = useToast()
   const [message, setMessage] = useState("")
   const [sending, setSending] = useState(false)
 
@@ -875,11 +878,11 @@ function MobileSteerBar({ agentId }: { agentId: string }): React.JSX.Element {
       await steer(agentId, { message: message.trim() })
       setMessage("")
     } catch {
-      // handled silently on mobile
+      addToast("Failed to send steering instruction", "error")
     } finally {
       setSending(false)
     }
-  }, [agentId, message, sending])
+  }, [agentId, message, sending, addToast])
 
   return (
     <div className="fixed bottom-0 left-0 z-50 w-full lg:hidden">
