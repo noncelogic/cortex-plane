@@ -297,6 +297,61 @@ describe("agent-execute credential wiring (#444)", () => {
     expect(executedTask.constraints.llmCredential).toBeUndefined()
   })
 
+  it("filters credential bindings by compatible provider when model is set", async () => {
+    // Agent has a claude model — credential query should filter for anthropic/google-antigravity
+    const db = makeMockDb({
+      agent: {
+        id: "agent-1",
+        name: "TestAgent",
+        slug: "test-agent",
+        role: "developer",
+        description: null,
+        status: "ACTIVE",
+        model_config: { model: "claude-sonnet-4-6" },
+        skill_config: {},
+        resource_limits: {},
+        config: null,
+        health_reset_at: null,
+      },
+      credentialBinding: {
+        user_account_id: "user-owner-1",
+        provider: "anthropic",
+        credential_class: "llm_provider",
+        account_id: null,
+      },
+    })
+    const { registry, executeTaskSpy } = makeMockRegistry()
+    const credentialService = makeMockCredentialService()
+
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+      credentialService,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    // Verify the credential binding query included a provider filter
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const selectCalls = (db.selectFrom as ReturnType<typeof vi.fn>).mock.calls
+    const credBindingCall = selectCalls.find((c: string[]) => c[0] === "agent_credential_binding")
+    expect(credBindingCall).toBeDefined()
+
+    // Verify getAccessToken was called with the bound provider
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(credentialService.getAccessToken).toHaveBeenCalledWith("user-owner-1", "anthropic")
+
+    // Verify the task has llmCredential set
+    expect(executeTaskSpy).toHaveBeenCalled()
+    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
+    expect(executedTask.constraints.llmCredential).toEqual({
+      provider: "anthropic",
+      token: "resolved-oauth-token",
+      credentialId: "cred-abc",
+      accountId: null,
+    })
+  })
+
   it("proceeds without credential resolution when credentialService is not injected", async () => {
     const db = makeMockDb()
     const { registry, executeTaskSpy } = makeMockRegistry()

@@ -96,6 +96,43 @@ function withSession(headers: Record<string, string> = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Tests: GET /credentials/providers
+// ---------------------------------------------------------------------------
+
+describe("GET /credentials/providers", () => {
+  it("returns providers with models for LLM providers", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/credentials/providers",
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.providers).toBeDefined()
+
+    // Anthropic should include Claude models
+    const anthropic = body.providers.find((p: { id: string }) => p.id === "anthropic")
+    expect(anthropic).toBeDefined()
+    expect(anthropic.models).toBeDefined()
+    expect(anthropic.models.length).toBeGreaterThan(0)
+    expect(anthropic.models.some((m: { id: string }) => m.id === "claude-sonnet-4-6")).toBe(true)
+
+    // OpenAI should include GPT models
+    const openai = body.providers.find((p: { id: string }) => p.id === "openai")
+    expect(openai).toBeDefined()
+    expect(openai.models).toBeDefined()
+    expect(openai.models.some((m: { id: string }) => m.id === "gpt-4o")).toBe(true)
+
+    // user_service providers should not have models
+    const googleWorkspace = body.providers.find((p: { id: string }) => p.id === "google-workspace")
+    expect(googleWorkspace).toBeDefined()
+    expect(googleWorkspace.models).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests: POST /credentials/tool-secret
 // ---------------------------------------------------------------------------
 

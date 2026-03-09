@@ -294,6 +294,18 @@ function SettingsInner() {
                       Last used: {new Date(cred.lastUsedAt).toLocaleString()}
                     </p>
                   )}
+                  {p.models && p.models.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {p.models.map((m) => (
+                        <span
+                          key={m.id}
+                          className="inline-block rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-text-muted"
+                        >
+                          {m.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
