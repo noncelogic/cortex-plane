@@ -1,6 +1,15 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 import { AVAILABLE_MODELS } from "@/components/agents/deploy-agent-modal"
+
+const SRC_DIR = path.resolve(__dirname, "..")
+
+function readSrc(relative: string): string {
+  return readFileSync(path.join(SRC_DIR, relative), "utf-8")
+}
 
 // ---------------------------------------------------------------------------
 // AVAILABLE_MODELS constant
@@ -30,6 +39,12 @@ describe("AVAILABLE_MODELS", () => {
   it("includes the default fallback model (claude-sonnet-4-6)", () => {
     const ids = AVAILABLE_MODELS.map((m) => m.id)
     expect(ids).toContain("claude-sonnet-4-6")
+  })
+
+  it("includes anthropic and openai providers", () => {
+    const providers = new Set(AVAILABLE_MODELS.map((m) => m.provider))
+    expect(providers.has("anthropic")).toBe(true)
+    expect(providers.has("openai")).toBe(true)
   })
 })
 
@@ -68,5 +83,56 @@ describe("model_config construction", () => {
   it("trims whitespace from model and systemPrompt", () => {
     const cfg = buildModelConfig("  claude-opus-4-6  ", "  Hello  ")
     expect(cfg).toEqual({ model: "claude-opus-4-6", systemPrompt: "Hello" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Static analysis: deploy modal structure
+// ---------------------------------------------------------------------------
+
+describe("Deploy modal structure", () => {
+  const content = readSrc("components/agents/deploy-agent-modal.tsx")
+
+  it("has a Model label", () => {
+    expect(content).toContain("Model")
+  })
+
+  it("has model state", () => {
+    expect(content).toContain('useState("")')
+    expect(content).toContain("setModel")
+  })
+
+  it("uses a select element for model selection", () => {
+    expect(content).toContain('data-testid="deploy-model-select"')
+  })
+
+  it("exports AVAILABLE_MODELS list", () => {
+    expect(content).toContain("AVAILABLE_MODELS")
+    expect(content).toContain("claude-sonnet-4-6")
+  })
+
+  it("includes model in model_config when building request body", () => {
+    expect(content).toContain("modelConfig.model = model.trim()")
+  })
+
+  it("includes systemPrompt in model_config when building request body", () => {
+    expect(content).toContain("modelConfig.systemPrompt = systemPrompt.trim()")
+  })
+
+  it("resets model on form reset", () => {
+    expect(content).toContain('setModel("")')
+  })
+
+  it("requires model for form submission", () => {
+    expect(content).toContain("!model.trim()")
+  })
+
+  it("has system prompt textarea", () => {
+    expect(content).toContain("System Prompt")
+    expect(content).toContain("setSystemPrompt")
+  })
+
+  it("shows credential warning when model is selected", () => {
+    expect(content).toContain("provider credential")
   })
 })
