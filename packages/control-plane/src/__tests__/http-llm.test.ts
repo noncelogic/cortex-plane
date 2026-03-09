@@ -1290,7 +1290,7 @@ describe("HttpLlmBackend — 401 token refresh retry", () => {
 // ---------------------------------------------------------------------------
 
 describe("HttpLlmBackend — credential provider routing", () => {
-  it("routes google-antigravity to Anthropic SDK with CloudCode PA base URL and authToken", async () => {
+  it("routes google-antigravity to Anthropic SDK with Vertex AI base URL and authToken", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1310,7 +1310,9 @@ describe("HttpLlmBackend — credential provider routing", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
+    expect(client.baseURL).toBe(
+      "https://us-east5-aiplatform.googleapis.com/v1/projects/my-gcp-project-123/locations/us-east5/publishers/anthropic",
+    )
     expect(client.authToken).toBe("gcp-oauth-token")
 
     await handle.cancel("test")
@@ -1372,7 +1374,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
     await handle.cancel("test")
   })
 
-  it("uses CloudCode PA base URL even when accountId is missing", async () => {
+  it("falls back to default project when accountId is missing", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1383,7 +1385,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
           provider: "google-antigravity",
           token: "gcp-oauth-token",
           credentialId: "cred-gcp-no-account",
-          // accountId omitted — not needed for cloudcode-pa
+          // accountId omitted — falls back to default project
         },
       },
     })
@@ -1392,10 +1394,75 @@ describe("HttpLlmBackend — credential provider routing", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    // CloudCode PA proxy does not require accountId in the URL
-    expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
+    // Without accountId, uses the default project in the Vertex AI URL
+    expect(client.baseURL).toBe(
+      "https://us-east5-aiplatform.googleapis.com/v1/projects/anthropic-cortex-default/locations/us-east5/publishers/anthropic",
+    )
     expect(client.authToken).toBe("gcp-oauth-token")
 
     await handle.cancel("test")
+  })
+
+  it("uses credential baseUrl when provided (provider config override)", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "google-antigravity",
+          token: "gcp-oauth-token",
+          credentialId: "cred-gcp-custom",
+          accountId: "my-project",
+          baseUrl: "https://custom-proxy.example.com/v1",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    const client = (handle as any).client as { baseURL: string; authToken: string | null }
+    expect(client.baseURL).toBe("https://custom-proxy.example.com/v1")
+    expect(client.authToken).toBe("gcp-oauth-token")
+
+    await handle.cancel("test")
+  })
+
+  it("uses ANTIGRAVITY_BASE_URL env var when set", async () => {
+    const originalEnv = process.env.ANTIGRAVITY_BASE_URL
+    process.env.ANTIGRAVITY_BASE_URL = "https://env-override.example.com/anthropic"
+
+    try {
+      const backend = new HttpLlmBackend()
+      await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+      const task = makeTask({
+        constraints: {
+          ...makeTask().constraints,
+          llmCredential: {
+            provider: "google-antigravity",
+            token: "gcp-oauth-token",
+            credentialId: "cred-gcp-env",
+            accountId: "my-project",
+          },
+        },
+      })
+
+      const handle = await backend.executeTask(task)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const client = (handle as any).client as { baseURL: string }
+      expect(client.baseURL).toBe("https://env-override.example.com/anthropic")
+
+      await handle.cancel("test")
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.ANTIGRAVITY_BASE_URL
+      } else {
+        process.env.ANTIGRAVITY_BASE_URL = originalEnv
+      }
+    }
   })
 })

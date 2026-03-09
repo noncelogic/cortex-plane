@@ -208,11 +208,12 @@ export class HttpLlmBackend implements ExecutionBackend {
     if (cred) {
       const credProvider = mapCredentialProvider(cred.provider)
       if (credProvider === "anthropic") {
-        // Google Antigravity routes through the CloudCode PA proxy with Bearer auth
+        // Google Antigravity routes through Vertex AI with Bearer auth.
+        // cloudcode-pa.googleapis.com is only for quota queries, NOT message routing.
         const isAntigravity = cred.provider === "google-antigravity"
         let clientBaseUrl = baseUrl
         if (isAntigravity) {
-          clientBaseUrl = "https://cloudcode-pa.googleapis.com"
+          clientBaseUrl = resolveAntigravityBaseUrl(cred.baseUrl, cred.accountId)
         }
         const client = new Anthropic({
           ...(isAntigravity ? { authToken: cred.token, apiKey: null } : { apiKey: cred.token }),
@@ -353,6 +354,28 @@ function toAnthropicTools(defs: ToolDefinition[]): Anthropic.Tool[] {
 function mapCredentialProvider(provider: string): LlmProvider {
   if (provider === "anthropic" || provider === "google-antigravity") return "anthropic"
   return "openai"
+}
+
+/**
+ * Resolve the correct base URL for Google Antigravity message routing.
+ *
+ * Priority:
+ *   1. Explicit `baseUrl` on the credential ref (set by provider config)
+ *   2. `ANTIGRAVITY_BASE_URL` env var (full URL override)
+ *   3. Constructed Vertex AI URL from accountId + region
+ *
+ * The cloudcode-pa.googleapis.com domain is NOT used here — it serves
+ * only internal quota/project-discovery endpoints, not /v1/messages.
+ */
+function resolveAntigravityBaseUrl(credBaseUrl?: string | null, accountId?: string | null): string {
+  if (credBaseUrl) return credBaseUrl
+
+  const envUrl = process.env.ANTIGRAVITY_BASE_URL
+  if (envUrl) return envUrl
+
+  const region = process.env.ANTIGRAVITY_REGION ?? "us-east5"
+  const project = accountId ?? process.env.ANTIGRAVITY_PROJECT ?? "anthropic-cortex-default"
+  return `https://${region}-aiplatform.googleapis.com/v1/projects/${project}/locations/${region}/publishers/anthropic`
 }
 
 function toOpenAITools(defs: ToolDefinition[]): OpenAI.ChatCompletionTool[] {

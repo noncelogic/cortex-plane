@@ -95,6 +95,11 @@ export interface LlmCredentialRef {
   credentialId: string
   /** Provider account ID (e.g. GCP project ID for google-antigravity). */
   accountId?: string | null
+  /**
+   * Provider-specific base URL for the LLM API.
+   * When set, overrides any URL the backend would derive from the provider.
+   */
+  baseUrl?: string | null
 }
 
 /**
