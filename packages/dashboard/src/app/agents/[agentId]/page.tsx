@@ -166,8 +166,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
       await deleteAgent(agentId)
       window.location.href = "/agents"
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to delete agent"
+      const message = err instanceof Error ? err.message : "Failed to delete agent"
       setDeleteError(message)
     }
   }, [agentId])
