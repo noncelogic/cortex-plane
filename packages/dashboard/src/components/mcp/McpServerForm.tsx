@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import { useToast } from "@/components/layout/toast"
 import type { CreateMcpServerRequest, McpServer, McpTransport } from "@/lib/api-client"
 import { createMcpServer, updateMcpServer } from "@/lib/api-client"
 
@@ -72,6 +73,7 @@ export function McpServerForm({
   onSuccess,
   server,
 }: McpServerFormProps): React.JSX.Element | null {
+  const { addToast } = useToast()
   const [form, setForm] = useState<FormState>(() => initialState(server))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -170,8 +172,10 @@ export function McpServerForm({
       try {
         if (isEdit && server) {
           await updateMcpServer(server.id, body)
+          addToast("MCP server updated", "success")
         } else {
           await createMcpServer(body)
+          addToast("MCP server registered", "success")
         }
         onSuccess()
       } catch (err) {
@@ -180,7 +184,7 @@ export function McpServerForm({
         setSubmitting(false)
       }
     },
-    [form, isEdit, server, onSuccess],
+    [form, isEdit, server, onSuccess, addToast],
   )
 
   if (!open) return null

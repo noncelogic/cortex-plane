@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
+import { useToast } from "@/components/layout/toast"
 import { ChannelConfigSection } from "@/components/settings/channel-config-section"
 import { useOAuthPopup } from "@/hooks/use-oauth-popup"
 import {
@@ -70,6 +71,7 @@ const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "
 
 function SettingsInner() {
   const { user, authStatus } = useAuth()
+  const { addToast } = useToast()
   const searchParams = useSearchParams()
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
@@ -108,16 +110,20 @@ function SettingsInner() {
 
       if (provRes.status === "fulfilled") {
         setProviders(provRes.value.providers ?? [])
+      } else {
+        addToast("Failed to load providers", "error")
       }
       if (credRes.status === "fulfilled") {
         setCredentials(credRes.value.credentials ?? [])
+      } else {
+        addToast("Failed to load credentials", "error")
       }
     } catch {
-      // Silently fail — display empty state
+      addToast("Failed to load settings data", "error")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [addToast])
 
   // Popup OAuth flow (progressive enhancement over code-paste)
   const popup = useOAuthPopup(() => void fetchData())
@@ -153,6 +159,7 @@ function SettingsInner() {
       popup.cancel()
       setPopupProvider(null)
       setCodePastePastedUrl("")
+      addToast("Provider connected successfully", "success")
       void fetchData()
     } catch (err) {
       setCodePasteError(
@@ -182,13 +189,14 @@ function SettingsInner() {
       })
 
       setApiKeyForm(null)
+      addToast("API key saved successfully", "success")
       void fetchData()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save API key")
     } finally {
       setSaving(false)
     }
-  }, [apiKeyForm, fetchData])
+  }, [apiKeyForm, fetchData, addToast])
 
   // Delete credential (called after user confirms)
   const handleDeleteCredential = useCallback(
@@ -198,15 +206,18 @@ function SettingsInner() {
       try {
         await apiDeleteCredential(id)
         setDisconnectConfirm(null)
+        addToast("Credential disconnected", "success")
         void fetchData()
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to disconnect credential")
+        const msg = err instanceof Error ? err.message : "Failed to disconnect credential"
+        setError(msg)
+        addToast(msg, "error")
         setDisconnectConfirm(null)
       } finally {
         setDisconnecting(false)
       }
     },
-    [fetchData],
+    [fetchData, addToast],
   )
 
   if (authStatus === "loading" || loading) {

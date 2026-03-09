@@ -3,6 +3,7 @@
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react"
 
 import { EmptyState } from "@/components/layout/empty-state"
+import { useToast } from "@/components/layout/toast"
 import { useApiQuery } from "@/hooks/use-api"
 import {
   deleteSession,
@@ -24,6 +25,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
+  const { addToast } = useToast()
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [showSessions, setShowSessions] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -70,12 +72,15 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
         if (activeSessionId === sessionId) {
           setActiveSessionId(null)
         }
+        addToast("Session deleted", "success")
         void refetchSessions()
       } catch (err) {
-        setDeleteError(err instanceof Error ? err.message : "Failed to delete session")
+        const msg = err instanceof Error ? err.message : "Failed to delete session"
+        setDeleteError(msg)
+        addToast(msg, "error")
       }
     },
-    [activeSessionId, refetchSessions],
+    [activeSessionId, refetchSessions, addToast],
   )
 
   return (
@@ -259,6 +264,7 @@ function ChatConversation({
   sessionId: string | null
   onSessionCreated: (sessionId: string) => void
 }): React.JSX.Element {
+  const { addToast } = useToast()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
@@ -278,7 +284,7 @@ function ChatConversation({
           setMessages(data.messages.map((m) => ({ ...m, messageStatus: "complete" as const })))
         })
         .catch(() => {
-          // History load failed — not critical
+          addToast("Failed to load conversation history", "warning")
         })
         .finally(() => setLoadingHistory(false))
     } else {

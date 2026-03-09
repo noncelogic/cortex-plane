@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react"
 
+import { useToast } from "@/components/layout/toast"
 import { createAgent, type CreateAgentRequest } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ export function DeployAgentModal({
   const [model, setModel] = useState("")
   const [systemPrompt, setSystemPrompt] = useState("")
   const [configJson, setConfigJson] = useState("")
+  const { addToast } = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -85,6 +87,7 @@ export function DeployAgentModal({
         }
         await createAgent(body)
         resetForm()
+        addToast("Agent deployed successfully", "success")
         onSuccess()
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to deploy agent")
