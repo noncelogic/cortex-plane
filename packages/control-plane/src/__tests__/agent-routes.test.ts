@@ -79,6 +79,7 @@ function mockDb(
     jobs?: Record<string, unknown>[]
     agentEvents?: Record<string, unknown>[]
     grantRows?: Record<string, unknown>[]
+    sessions?: Record<string, unknown>[]
     insertedAgent?: Record<string, unknown>
     updatedAgent?: Record<string, unknown> | null
     insertedJob?: Record<string, unknown>
@@ -89,6 +90,7 @@ function mockDb(
     jobs = [],
     agentEvents = [],
     grantRows = [],
+    sessions = [],
     insertedAgent = makeAgent(),
     updatedAgent = makeAgent(),
     insertedJob = makeJob(),
@@ -161,6 +163,7 @@ function mockDb(
       if (table === "job") return selectChain(jobs)
       if (table === "agent_event") return selectChain(agentEvents)
       if (table === "agent_user_grant") return selectChain(grantRows)
+      if (table === "session") return selectChain(sessions)
       return selectChain([])
     }),
     insertInto: vi.fn().mockImplementation((table: string) => {
@@ -649,8 +652,8 @@ describe("PUT /agents/:id", () => {
 // ---------------------------------------------------------------------------
 
 describe("DELETE /agents/:id", () => {
-  it("soft deletes an agent", async () => {
-    const { app } = await buildTestApp()
+  it("soft deletes an agent with no active sessions", async () => {
+    const { app } = await buildTestApp({ sessions: [] })
 
     const res = await app.inject({
       method: "DELETE",
@@ -658,6 +661,31 @@ describe("DELETE /agents/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
+  })
+
+  it("returns 409 when agent has active sessions", async () => {
+    const { app } = await buildTestApp({
+      sessions: [
+        { id: "s1", agent_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", status: "active" },
+        { id: "s2", agent_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", status: "active" },
+        { id: "s3", agent_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", status: "active" },
+      ],
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+    })
+
+    expect(res.statusCode).toBe(409)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.error).toBe("active_sessions")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.sessionCount).toBe(3)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.message).toContain("3 active sessions")
   })
 
   it("returns 404 for nonexistent agent", async () => {
