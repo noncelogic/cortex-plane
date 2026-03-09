@@ -39,5 +39,7 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Tests (unit + schema contract)
+      # Runs unit tests, schema contract tests (#489), agent lifecycle
+      # integration tests (#491), and chat session CRUD tests (#492).
+      - name: Tests (unit + schema-contract + integration)
         run: pnpm test
