@@ -1,14 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 
 import { ActivityStream } from "@/components/activity-stream"
 import { EmptyState } from "@/components/layout/empty-state"
 import { PageHeader } from "@/components/layout/page-header"
 import { Skeleton } from "@/components/layout/skeleton"
+import { useToast } from "@/components/layout/toast"
 import { useActivityStream } from "@/hooks/use-activity-stream"
 import { useApiQuery } from "@/hooks/use-api"
+import { useApprovalStream } from "@/hooks/use-approval-stream"
 import type { AgentSummary } from "@/lib/api-client"
 import { listAgents } from "@/lib/api-client"
 
@@ -58,10 +60,36 @@ function AgentOverviewCard({ agent }: { agent: AgentSummary }): React.JSX.Elemen
 // ---------------------------------------------------------------------------
 
 export default function OperationsPage(): React.JSX.Element {
-  const { data: agentData, isLoading: agentsLoading } = useApiQuery(() => listAgents(), [])
+  const { data: agentData, isLoading: agentsLoading, refetch } = useApiQuery(() => listAgents(), [])
   const agents = agentData?.agents ?? []
 
   const { events, connected } = useActivityStream()
+  const { events: approvalEvents } = useApprovalStream()
+  const { addToast } = useToast()
+
+  // Auto-refresh agent list when new activity events arrive
+  const prevActivityCount = useRef(0)
+  useEffect(() => {
+    if (events.length > prevActivityCount.current) {
+      prevActivityCount.current = events.length
+      void refetch()
+    }
+  }, [events.length, refetch])
+
+  // Toast for approval events
+  const prevApprovalCount = useRef(0)
+  useEffect(() => {
+    if (approvalEvents.length > prevApprovalCount.current) {
+      const newEvents = approvalEvents.slice(prevApprovalCount.current)
+      prevApprovalCount.current = approvalEvents.length
+      for (const evt of newEvents) {
+        if (evt.type === "created") {
+          addToast(`Approval required: ${evt.data.action_summary}`, "warning")
+        }
+      }
+      void refetch()
+    }
+  }, [approvalEvents.length, approvalEvents, addToast, refetch])
 
   // Build agentId -> name map for activity stream
   const agentNames = useMemo(() => {

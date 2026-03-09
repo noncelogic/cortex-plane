@@ -1,14 +1,16 @@
 "use client"
 
-import { use, useMemo } from "react"
+import { use, useEffect, useMemo, useRef } from "react"
 
 import { ActivityStream } from "@/components/activity-stream"
 import { AgentControlPanel } from "@/components/agent-control-panel"
 import { CostSummary } from "@/components/cost-summary"
 import { PageHeader } from "@/components/layout/page-header"
 import { Skeleton } from "@/components/layout/skeleton"
+import { useToast } from "@/components/layout/toast"
 import { useActivityStream } from "@/hooks/use-activity-stream"
 import { useApiQuery } from "@/hooks/use-api"
+import { useApprovalStream } from "@/hooks/use-approval-stream"
 import { type AgentEvent, getAgent, getAgentCost, getAgentEvents } from "@/lib/api-client"
 import { relativeTime } from "@/lib/format"
 
@@ -63,6 +65,36 @@ export default function AgentOperationsPage({ params }: Props): React.JSX.Elemen
   const { events: liveEvents, connected } = useActivityStream({
     agentIds: agentId,
   })
+
+  // Approval SSE stream — surface notifications without reload
+  const { events: approvalEvents } = useApprovalStream()
+  const { addToast } = useToast()
+
+  // Auto-refresh agent detail when new activity events arrive
+  const prevActivityCount = useRef(0)
+  useEffect(() => {
+    if (liveEvents.length > prevActivityCount.current) {
+      prevActivityCount.current = liveEvents.length
+      void refetch()
+    }
+  }, [liveEvents.length, refetch])
+
+  // Toast for approval events related to this agent
+  const prevApprovalCount = useRef(0)
+  useEffect(() => {
+    if (approvalEvents.length > prevApprovalCount.current) {
+      const newEvents = approvalEvents.slice(prevApprovalCount.current)
+      prevApprovalCount.current = approvalEvents.length
+      for (const evt of newEvents) {
+        if (evt.type === "created" && evt.data.agent_id === agentId) {
+          addToast(`Approval required: ${evt.data.action_summary}`, "warning")
+        } else if (evt.type === "decided" && evt.data.job_id) {
+          addToast(`Approval ${evt.data.decision.toLowerCase()}`, "info")
+        }
+      }
+      void refetch()
+    }
+  }, [approvalEvents.length, approvalEvents, agentId, addToast, refetch])
 
   // Merge REST events + live SSE events for display
   const activityEvents = useMemo(() => {
