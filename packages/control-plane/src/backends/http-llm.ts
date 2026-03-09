@@ -208,11 +208,11 @@ export class HttpLlmBackend implements ExecutionBackend {
     if (cred) {
       const credProvider = mapCredentialProvider(cred.provider)
       if (credProvider === "anthropic") {
-        // Google Antigravity routes through a GCP Vertex endpoint with Bearer auth
-        const isAntigravity = cred.provider === "google-antigravity" && cred.accountId
+        // Google Antigravity routes through the CloudCode PA proxy with Bearer auth
+        const isAntigravity = cred.provider === "google-antigravity"
         let clientBaseUrl = baseUrl
         if (isAntigravity) {
-          clientBaseUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${cred.accountId}/locations/us-central1/publishers/anthropic`
+          clientBaseUrl = "https://cloudcode-pa.googleapis.com"
         }
         const client = new Anthropic({
           ...(isAntigravity ? { authToken: cred.token, apiKey: null } : { apiKey: cred.token }),
