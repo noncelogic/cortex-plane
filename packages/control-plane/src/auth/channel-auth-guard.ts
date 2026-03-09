@@ -333,16 +333,8 @@ export class ChannelAuthGuard {
       }
     }
 
-    // Auto-create grant with origin 'auto_team'
-    const grant = await this.db
-      .insertInto("agent_user_grant")
-      .values({
-        agent_id: agentId,
-        user_account_id: userAccountId,
-        origin: "auto_team",
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow()
+    // Auto-create grant with origin 'auto_team' (idempotent on concurrent requests)
+    const grant = await this.upsertAutoGrant(agentId, userAccountId, "auto_team")
 
     return {
       allowed: true,
@@ -353,22 +345,49 @@ export class ChannelAuthGuard {
   }
 
   private async handleOpen(agentId: string, userAccountId: string): Promise<AuthDecision> {
-    // Auto-create grant with origin 'auto_open'
-    const grant = await this.db
-      .insertInto("agent_user_grant")
-      .values({
-        agent_id: agentId,
-        user_account_id: userAccountId,
-        origin: "auto_open",
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow()
+    // Auto-create grant with origin 'auto_open' (idempotent on concurrent requests)
+    const grant = await this.upsertAutoGrant(agentId, userAccountId, "auto_open")
 
     return {
       allowed: true,
       userId: userAccountId,
       grantId: grant.id,
       reason: "auto_open",
+    }
+  }
+
+  /**
+   * Insert a grant or return the existing one if a concurrent request already
+   * created it (UNIQUE constraint on agent_id + user_account_id).
+   */
+  private async upsertAutoGrant(
+    agentId: string,
+    userAccountId: string,
+    origin: "auto_team" | "auto_open",
+  ): Promise<{ id: string }> {
+    try {
+      return await this.db
+        .insertInto("agent_user_grant")
+        .values({
+          agent_id: agentId,
+          user_account_id: userAccountId,
+          origin,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow()
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code === "23505") {
+        // UNIQUE violation — concurrent request already created the grant
+        const existing = await this.db
+          .selectFrom("agent_user_grant")
+          .select("id")
+          .where("agent_id", "=", agentId)
+          .where("user_account_id", "=", userAccountId)
+          .where("revoked_at", "is", null)
+          .executeTakeFirst()
+        if (existing) return existing
+      }
+      throw err
     }
   }
 }
