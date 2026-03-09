@@ -698,6 +698,23 @@ export function agentRoutes(deps: AgentRouteDeps) {
         },
       },
       async (request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) => {
+        // Check for active sessions before archiving
+        const sessionRow = await db
+          .selectFrom("session")
+          .select(db.fn.countAll().as("cnt"))
+          .where("agent_id", "=", request.params.id)
+          .where("status", "=", "active")
+          .executeTakeFirstOrThrow()
+
+        const activeCount = Number(sessionRow.cnt)
+        if (activeCount > 0) {
+          return reply.status(409).send({
+            error: "active_sessions",
+            message: `Cannot delete agent: ${String(activeCount)} active session${activeCount === 1 ? "" : "s"} must be ended first`,
+            sessionCount: activeCount,
+          })
+        }
+
         const updated = await db
           .updateTable("agent")
           .set({ status: "ARCHIVED" as AgentStatus })

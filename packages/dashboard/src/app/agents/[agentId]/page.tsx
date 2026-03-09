@@ -122,6 +122,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   const [mobileTab, setMobileTab] = useState<MobileTab>("Output")
   const [desktopCenter, setDesktopCenter] = useState<"console" | "chat">("console")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Build lifecycle transitions from state events
   const transitions = useMemo<LifecycleStep[]>(() => {
@@ -160,12 +161,13 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   }, [agentId, refetch])
 
   const handleDelete = useCallback(async () => {
+    setDeleteError(null)
     try {
       await deleteAgent(agentId)
-      // Navigate back to agents list using window.location for simplicity
       window.location.href = "/agents"
-    } catch {
-      // handled by UI
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete agent"
+      setDeleteError(message)
     }
   }, [agentId])
 
@@ -182,7 +184,10 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
       <AgentHeader
         agent={liveAgent}
         onPause={() => void handlePause()}
-        onTerminate={() => setShowDeleteConfirm(true)}
+        onTerminate={() => {
+          setDeleteError(null)
+          setShowDeleteConfirm(true)
+        }}
       />
 
       {/* Resume banner for paused/draining agents */}
@@ -218,10 +223,16 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
               </div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">Delete Agent</h3>
             </div>
-            <p className="mb-6 text-sm text-slate-500">
+            <p className="mb-4 text-sm text-slate-500">
               Are you sure you want to delete <strong>{agent?.name}</strong>? This will archive the
               agent and it will no longer accept jobs.
             </p>
+            {deleteError && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+                <span className="material-symbols-outlined mt-0.5 text-base">error</span>
+                <span>{deleteError}</span>
+              </div>
+            )}
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
