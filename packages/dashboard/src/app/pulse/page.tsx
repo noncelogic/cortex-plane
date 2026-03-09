@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 
 import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { EmptyState } from "@/components/layout/empty-state"
+import { PhantomFeatureBanner } from "@/components/layout/phantom-feature-banner"
 import { ContentFilters } from "@/components/pulse/content-filters"
 import { PipelineBoard } from "@/components/pulse/pipeline-board"
 import { PipelineStats } from "@/components/pulse/pipeline-stats"
@@ -321,6 +322,8 @@ export default function PulsePage(): React.JSX.Element {
           </p>
         </div>
       </div>
+
+      <PhantomFeatureBanner feature="The content pipeline" />
 
       {/* Stats bar */}
       <PipelineStats stats={stats} />
