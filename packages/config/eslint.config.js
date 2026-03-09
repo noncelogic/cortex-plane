@@ -33,8 +33,13 @@ export const config = [
       "prettier/prettier": "error",
       "simple-import-sort/imports": "error",
       "simple-import-sort/exports": "error",
+      // --- Error-handling quality gates (#488) ---
       // Require promises to be awaited, returned, or explicitly voided
       "@typescript-eslint/no-floating-promises": "error",
+      // Prevent passing async functions where void callbacks are expected
+      "@typescript-eslint/no-misused-promises": "error",
+      // Reject promises must use Error objects (not strings/undefined)
+      "@typescript-eslint/prefer-promise-reject-errors": "error",
       // Allow underscore-prefixed unused variables
       "@typescript-eslint/no-unused-vars": [
         "error",
