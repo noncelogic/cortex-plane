@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
+import { useToast } from "@/components/layout/toast"
 import {
   type AgentCredentialBinding,
   bindAgentCredential,
@@ -344,6 +345,7 @@ export function CredentialBindingPanel({
   modelId,
 }: CredentialBindingPanelProps): React.JSX.Element {
   const { user } = useAuth()
+  const { addToast } = useToast()
   const isAdmin = user?.role === "admin"
 
   const [bindings, setBindings] = useState<AgentCredentialBinding[]>([])
@@ -381,11 +383,12 @@ export function CredentialBindingPanel({
       setAvailable(res.credentials)
     } catch {
       setAvailable([])
+      addToast("Failed to load available credentials", "error")
     } finally {
       setLoadingAvailable(false)
     }
     setShowPicker(true)
-  }, [])
+  }, [addToast])
 
   const handleBind = useCallback(
     async (credentialId: string) => {
@@ -394,13 +397,14 @@ export function CredentialBindingPanel({
         await bindAgentCredential(agentId, credentialId)
         setShowPicker(false)
         await fetchBindings()
-      } catch {
-        // surface error in picker area; keep picker open
+        addToast("Credential bound successfully", "success")
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : "Failed to bind credential", "error")
       } finally {
         setBindingInProgress(false)
       }
     },
-    [agentId, fetchBindings],
+    [agentId, fetchBindings, addToast],
   )
 
   const handleUnbind = useCallback(async () => {
@@ -410,12 +414,13 @@ export function CredentialBindingPanel({
       await unbindAgentCredential(agentId, unbindTarget.credentialId)
       setUnbindTarget(null)
       await fetchBindings()
-    } catch {
-      // noop — the confirmation dialog stays open
+      addToast("Credential unbound successfully", "success")
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : "Failed to unbind credential", "error")
     } finally {
       setUnbindingInProgress(false)
     }
-  }, [agentId, unbindTarget, fetchBindings])
+  }, [agentId, unbindTarget, fetchBindings, addToast])
 
   const boundIds = useMemo(() => new Set(bindings.map((b) => b.credentialId)), [bindings])
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import { useToast } from "@/components/layout/toast"
 import { useApi } from "@/hooks/use-api"
 import { approveRequest } from "@/lib/api-client"
 
@@ -151,8 +152,13 @@ export function ApprovalActions({
   approvalId,
   onDecided,
 }: ApprovalActionsProps): React.JSX.Element {
+  const { addToast } = useToast()
   const [dialog, setDialog] = useState<DialogType>(null)
-  const { execute, isLoading } = useApi((...args: unknown[]) =>
+  const {
+    execute,
+    isLoading,
+    error: apiError,
+  } = useApi((...args: unknown[]) =>
     approveRequest(
       args[0] as string,
       args[1] as "APPROVED" | "REJECTED",
@@ -168,10 +174,13 @@ export function ApprovalActions({
       const result = await execute(approvalId, decision, "dashboard-user", reason || undefined)
       if (result) {
         setDialog(null)
+        addToast(`Request ${decision.toLowerCase()}`, "success")
         onDecided?.(decision)
+      } else if (apiError) {
+        addToast(apiError, "error")
       }
     },
-    [dialog, approvalId, execute, onDecided],
+    [dialog, approvalId, execute, onDecided, addToast, apiError],
   )
 
   return (

@@ -5,6 +5,7 @@ import { Inter, Space_Grotesk } from "next/font/google"
 
 import { AuthProvider } from "@/components/auth-provider"
 import { NavShell } from "@/components/layout/nav-shell"
+import { ToastProvider } from "@/components/layout/toast"
 import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({
@@ -45,7 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
       <body className="antialiased">
         <ThemeProvider>
           <AuthProvider>
-            <NavShell>{children}</NavShell>
+            <ToastProvider>
+              <NavShell>{children}</NavShell>
+            </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

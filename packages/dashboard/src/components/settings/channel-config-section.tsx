@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 
+import { useToast } from "@/components/layout/toast"
 import {
   type AgentSummary,
   ApiError,
@@ -46,6 +47,7 @@ const EMPTY_FORM: AddChannelForm = { type: "telegram", name: "", config: {} }
 // ---------------------------------------------------------------------------
 
 export function ChannelConfigSection() {
+  const { addToast } = useToast()
   const [channels, setChannels] = useState<ChannelConfigSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -78,27 +80,31 @@ export function ChannelConfigSection() {
       const res = await listChannelConfigs()
       setChannels(res.channels ?? [])
     } catch {
-      // API may not be available if CREDENTIAL_MASTER_KEY is not set
+      addToast("Failed to load channels", "error")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [addToast])
 
   useEffect(() => {
     void fetchChannels()
   }, [fetchChannels])
 
-  const fetchBindingsForChannel = useCallback(async (channelId: string) => {
-    setLoadingBindings(channelId)
-    try {
-      const res = await listChannelBindings(channelId)
-      setChannelBindings((prev) => ({ ...prev, [channelId]: res.bindings ?? [] }))
-    } catch {
-      setChannelBindings((prev) => ({ ...prev, [channelId]: [] }))
-    } finally {
-      setLoadingBindings(null)
-    }
-  }, [])
+  const fetchBindingsForChannel = useCallback(
+    async (channelId: string) => {
+      setLoadingBindings(channelId)
+      try {
+        const res = await listChannelBindings(channelId)
+        setChannelBindings((prev) => ({ ...prev, [channelId]: res.bindings ?? [] }))
+      } catch {
+        setChannelBindings((prev) => ({ ...prev, [channelId]: [] }))
+        addToast("Failed to load channel bindings", "error")
+      } finally {
+        setLoadingBindings(null)
+      }
+    },
+    [addToast],
+  )
 
   const handleToggleExpand = useCallback(
     (ch: ChannelConfigSummary) => {
@@ -123,24 +129,26 @@ export function ChannelConfigSection() {
       })
       setShowAdd(false)
       setForm(EMPTY_FORM)
+      addToast("Channel created successfully", "success")
       void fetchChannels()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create channel")
     } finally {
       setSaving(false)
     }
-  }, [form, fetchChannels])
+  }, [form, fetchChannels, addToast])
 
   const handleToggle = useCallback(
     async (ch: ChannelConfigSummary) => {
       try {
         await updateChannelConfig(ch.id, { enabled: !ch.enabled })
+        addToast(`Channel ${ch.enabled ? "disabled" : "enabled"}`, "success")
         void fetchChannels()
-      } catch {
-        // silent
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : "Failed to update channel", "error")
       }
     },
-    [fetchChannels],
+    [fetchChannels, addToast],
   )
 
   const handleDelete = useCallback(
@@ -151,6 +159,7 @@ export function ChannelConfigSection() {
         await deleteChannelConfig(id, force ? { force: true } : undefined)
         setDeleteConfirm(null)
         if (expandedId === id) setExpandedId(null)
+        addToast("Channel removed successfully", "success")
         void fetchChannels()
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
@@ -180,20 +189,24 @@ export function ChannelConfigSection() {
     [fetchChannels, channels, expandedId],
   )
 
-  const handleOpenBindModal = useCallback(async (ch: ChannelConfigSummary) => {
-    setBindTarget(ch)
-    setBindForm({ agentId: "", chatId: "", isDefault: false })
-    setBindError(null)
-    setLoadingAgents(true)
-    try {
-      const res = await listAgents({ status: "ACTIVE" })
-      setAgents(res.agents ?? [])
-    } catch {
-      setAgents([])
-    } finally {
-      setLoadingAgents(false)
-    }
-  }, [])
+  const handleOpenBindModal = useCallback(
+    async (ch: ChannelConfigSummary) => {
+      setBindTarget(ch)
+      setBindForm({ agentId: "", chatId: "", isDefault: false })
+      setBindError(null)
+      setLoadingAgents(true)
+      try {
+        const res = await listAgents({ status: "ACTIVE" })
+        setAgents(res.agents ?? [])
+      } catch {
+        setAgents([])
+        addToast("Failed to load agents", "error")
+      } finally {
+        setLoadingAgents(false)
+      }
+    },
+    [addToast],
+  )
 
   const handleBind = useCallback(async () => {
     if (!bindTarget || !bindForm.agentId || !bindForm.chatId.trim()) return
@@ -202,6 +215,7 @@ export function ChannelConfigSection() {
     try {
       await bindAgentChannel(bindForm.agentId, bindTarget.type, bindForm.chatId.trim())
       setBindTarget(null)
+      addToast("Agent bound to channel", "success")
       // Refresh bindings for the expanded channel
       if (expandedId) {
         void fetchBindingsForChannel(expandedId)
@@ -211,20 +225,21 @@ export function ChannelConfigSection() {
     } finally {
       setBinding(false)
     }
-  }, [bindTarget, bindForm, expandedId, fetchBindingsForChannel])
+  }, [bindTarget, bindForm, expandedId, fetchBindingsForChannel, addToast])
 
   const handleUnbindFromChannel = useCallback(
     async (b: BindingWithAgent) => {
       try {
         await unbindAgentChannel(b.agent_id, b.id)
+        addToast("Agent unbound from channel", "success")
         if (expandedId) {
           void fetchBindingsForChannel(expandedId)
         }
-      } catch {
-        // silent
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : "Failed to unbind agent", "error")
       }
     },
-    [expandedId, fetchBindingsForChannel],
+    [expandedId, fetchBindingsForChannel, addToast],
   )
 
   const isDuplicate = useMemo(
