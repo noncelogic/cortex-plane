@@ -176,30 +176,30 @@ Features that exist but do not work correctly.
 
 ### 5.1 Unused Service Methods
 
-| Service | Method | File |
-|---------|--------|------|
-| SessionService | `deleteUserSessions()` | `src/auth/session-service.ts` |
-| AccessRequestService | `listPending()` | `src/auth/access-request-service.ts` |
-| AgentChannelService | `unbindChannel()` | `src/channels/agent-channel-service.ts` |
-| ApprovalService | `resumeApproval()` | `src/approval/service.ts` |
-| ApprovalService | `recordExecution()` | `src/approval/service.ts` |
-| ApprovalService | `recordNotification()` | `src/approval/service.ts` |
-| ApprovalService | `shouldNotify()` | `src/approval/service.ts` |
-| ApprovalService | `getPendingForJob()` | `src/approval/service.ts` |
+| Service              | Method                 | File                                    |
+| -------------------- | ---------------------- | --------------------------------------- |
+| SessionService       | `deleteUserSessions()` | `src/auth/session-service.ts`           |
+| AccessRequestService | `listPending()`        | `src/auth/access-request-service.ts`    |
+| AgentChannelService  | `unbindChannel()`      | `src/channels/agent-channel-service.ts` |
+| ApprovalService      | `resumeApproval()`     | `src/approval/service.ts`               |
+| ApprovalService      | `recordExecution()`    | `src/approval/service.ts`               |
+| ApprovalService      | `recordNotification()` | `src/approval/service.ts`               |
+| ApprovalService      | `shouldNotify()`       | `src/approval/service.ts`               |
+| ApprovalService      | `getPendingForJob()`   | `src/approval/service.ts`               |
 
 ### 5.2 Unused DB Columns
 
-| Table | Column | Notes |
-|-------|--------|-------|
+| Table              | Column         | Notes                     |
+| ------------------ | -------------- | ------------------------- |
 | `agent_user_grant` | `access_level` | Stored but never enforced |
-| `agent_user_grant` | `token_budget` | Stored but never read |
-| `agent_user_grant` | `rate_limit` | Stored but never read |
-| `agent` | `config` | Written but never read |
+| `agent_user_grant` | `token_budget` | Stored but never read     |
+| `agent_user_grant` | `rate_limit`   | Stored but never read     |
+| `agent`            | `config`       | Written but never read    |
 
 ### 5.3 Empty DB Table
 
-| Table | Notes |
-|-------|-------|
+| Table                  | Notes                                              |
+| ---------------------- | -------------------------------------------------- |
 | `capability_audit_log` | Created in migration 018, zero inserts in codebase |
 
 ---
@@ -242,27 +242,27 @@ Features that exist but do not work correctly.
 
 ## Follow-Up Ticket Summary
 
-| # | Title | Category | Priority | Size |
-|---|-------|----------|----------|------|
-| 1 | Wire pause/resume routes to lifecycle manager | Broken | P1 | S |
-| 2 | Implement content pipeline backend (Pulse) | Missing Backend | P2 | L |
-| 3 | Persist browser screenshots/events history | Broken | P2 | M |
-| 4 | Enforce grant access_level in channel auth guard | Partial | P2 | S |
-| 5 | Enforce token_budget / rate_limit on grants | Partial | P2 | M |
-| 6 | Populate capability_audit_log on tool binding changes | Partial | P2 | S |
-| 7 | Wire agent memory page to memory search API | Missing UI | P2 | S |
-| 8 | Implement memory sync endpoint | Missing Backend | P3 | M |
-| 9 | Add model selection UI per agent | Missing UI | P3 | S |
-| 10 | Add force-logout-all endpoint | Missing UI | P3 | S |
-| 11 | Add auth to feedback routes | Broken | P2 | S |
-| 12 | Complete or remove approval notification stubs | Dead Code | P3 | S |
-| 13 | Clean up unused service methods | Dead Code | P3 | S |
-| 14 | Fix chat job error detail swallowed | Broken | P2 | S |
-| 15 | Add logging to silent K8s cleanup catches | Partial | P3 | S |
-| 16 | Fix session cleanup startup silent catch | Broken | P3 | XS |
-| 17 | Remove or use agent.config column | Dead Code | P3 | XS |
-| 18 | Validate tool name regex on credential rotate | Partial | P3 | XS |
+| #   | Title                                                 | Category        | Priority | Size |
+| --- | ----------------------------------------------------- | --------------- | -------- | ---- |
+| 1   | Wire pause/resume routes to lifecycle manager         | Broken          | P1       | S    |
+| 2   | Implement content pipeline backend (Pulse)            | Missing Backend | P2       | L    |
+| 3   | Persist browser screenshots/events history            | Broken          | P2       | M    |
+| 4   | Enforce grant access_level in channel auth guard      | Partial         | P2       | S    |
+| 5   | Enforce token_budget / rate_limit on grants           | Partial         | P2       | M    |
+| 6   | Populate capability_audit_log on tool binding changes | Partial         | P2       | S    |
+| 7   | Wire agent memory page to memory search API           | Missing UI      | P2       | S    |
+| 8   | Implement memory sync endpoint                        | Missing Backend | P3       | M    |
+| 9   | Add model selection UI per agent                      | Missing UI      | P3       | S    |
+| 10  | Add force-logout-all endpoint                         | Missing UI      | P3       | S    |
+| 11  | Add auth to feedback routes                           | Broken          | P2       | S    |
+| 12  | Complete or remove approval notification stubs        | Dead Code       | P3       | S    |
+| 13  | Clean up unused service methods                       | Dead Code       | P3       | S    |
+| 14  | Fix chat job error detail swallowed                   | Broken          | P2       | S    |
+| 15  | Add logging to silent K8s cleanup catches             | Partial         | P3       | S    |
+| 16  | Fix session cleanup startup silent catch              | Broken          | P3       | XS   |
+| 17  | Remove or use agent.config column                     | Dead Code       | P3       | XS   |
+| 18  | Validate tool name regex on credential rotate         | Partial         | P3       | XS   |
 
 ---
 
-*Generated by spike #534 — full-stack gap audit*
+_Generated by spike #534 — full-stack gap audit_
