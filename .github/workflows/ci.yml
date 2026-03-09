@@ -26,7 +26,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm format:check
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
+      # ── Quality gates (#488) ──────────────────────────────────────
+      - name: Formatting
+        run: pnpm format:check
+
+      - name: Lint (includes error-handling rules)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Tests (unit + schema contract)
+        run: pnpm test
