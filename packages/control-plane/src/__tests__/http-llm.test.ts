@@ -1290,7 +1290,7 @@ describe("HttpLlmBackend — 401 token refresh retry", () => {
 // ---------------------------------------------------------------------------
 
 describe("HttpLlmBackend — credential provider routing", () => {
-  it("routes google-antigravity to Anthropic SDK with Vertex base URL and authToken", async () => {
+  it("routes google-antigravity to Anthropic SDK with CloudCode PA base URL and authToken", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1310,9 +1310,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    expect(client.baseURL).toBe(
-      "https://us-central1-aiplatform.googleapis.com/v1/projects/my-gcp-project-123/locations/us-central1/publishers/anthropic",
-    )
+    expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
     expect(client.authToken).toBe("gcp-oauth-token")
 
     await handle.cancel("test")
@@ -1374,7 +1372,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
     await handle.cancel("test")
   })
 
-  it("does not set Vertex base URL when accountId is missing", async () => {
+  it("uses CloudCode PA base URL even when accountId is missing", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1385,7 +1383,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
           provider: "google-antigravity",
           token: "gcp-oauth-token",
           credentialId: "cred-gcp-no-account",
-          // accountId omitted
+          // accountId omitted — not needed for cloudcode-pa
         },
       },
     })
@@ -1394,8 +1392,9 @@ describe("HttpLlmBackend — credential provider routing", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    // Without accountId, should fall back to default Anthropic base URL
-    expect(client.baseURL).toContain("api.anthropic.com")
+    // CloudCode PA proxy does not require accountId in the URL
+    expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
+    expect(client.authToken).toBe("gcp-oauth-token")
 
     await handle.cancel("test")
   })
