@@ -620,4 +620,280 @@ describe("ChannelAuthGuard", () => {
       expect(result.message).toBe("Code has expired")
     })
   })
+
+  // -----------------------------------------------------------------------
+  // authorize — channel allowlist gate
+  // -----------------------------------------------------------------------
+  describe("authorize — channel allowlist gate", () => {
+    it("denies when channel policy is allowlist and user is not allowed", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "open" }),
+        grant: null,
+      })
+      const allowlistService = {
+        getPolicy: vi.fn().mockResolvedValue("allowlist"),
+        isAllowed: vi.fn().mockResolvedValue(false),
+      }
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+        channelAllowlistService: allowlistService as never,
+      })
+
+      const decision = await guard.authorize({
+        ...baseParams,
+        channelConfigId: "channel-config-1",
+      })
+
+      expect(decision.allowed).toBe(false)
+      expect(decision.reason).toBe("channel_denied")
+      expect(decision.replyToUser).toContain("not authorized")
+      expect(allowlistService.getPolicy).toHaveBeenCalledWith("channel-config-1")
+      expect(allowlistService.isAllowed).toHaveBeenCalledWith("channel-config-1", "tg-12345")
+    })
+
+    it("allows when channel policy is allowlist and user IS allowed", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "open" }),
+        grant: null,
+      })
+      const allowlistService = {
+        getPolicy: vi.fn().mockResolvedValue("allowlist"),
+        isAllowed: vi.fn().mockResolvedValue(true),
+      }
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+        channelAllowlistService: allowlistService as never,
+      })
+
+      const decision = await guard.authorize({
+        ...baseParams,
+        channelConfigId: "channel-config-1",
+      })
+
+      // Should proceed to the auth model (open → auto_open)
+      expect(decision.allowed).toBe(true)
+      expect(decision.reason).toBe("auto_open")
+    })
+
+    it("skips allowlist check when no channelConfigId provided", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "open" }),
+        grant: null,
+      })
+      const allowlistService = {
+        getPolicy: vi.fn().mockResolvedValue("allowlist"),
+        isAllowed: vi.fn().mockResolvedValue(false),
+      }
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+        channelAllowlistService: allowlistService as never,
+      })
+
+      const decision = await guard.authorize(baseParams) // no channelConfigId
+
+      // Should skip allowlist gate entirely
+      expect(allowlistService.getPolicy).not.toHaveBeenCalled()
+      expect(decision.allowed).toBe(true)
+    })
+
+    it("skips allowlist check when channel policy is open", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "open" }),
+        grant: null,
+      })
+      const allowlistService = {
+        getPolicy: vi.fn().mockResolvedValue("open"),
+        isAllowed: vi.fn().mockResolvedValue(false),
+      }
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+        channelAllowlistService: allowlistService as never,
+      })
+
+      const decision = await guard.authorize({
+        ...baseParams,
+        channelConfigId: "channel-config-1",
+      })
+
+      // getPolicy was called but isAllowed should NOT be called for "open" policy
+      expect(allowlistService.getPolicy).toHaveBeenCalled()
+      expect(allowlistService.isAllowed).not.toHaveBeenCalled()
+      expect(decision.allowed).toBe(true)
+    })
+
+    it("channel deny takes precedence over agent grant", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "open" }),
+        grant: makeGrant(), // user has a grant
+      })
+      const allowlistService = {
+        getPolicy: vi.fn().mockResolvedValue("allowlist"),
+        isAllowed: vi.fn().mockResolvedValue(false), // but not on allowlist
+      }
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+        channelAllowlistService: allowlistService as never,
+      })
+
+      const decision = await guard.authorize({
+        ...baseParams,
+        channelConfigId: "channel-config-1",
+      })
+
+      // Channel deny takes precedence — blocks even with valid grant
+      expect(decision.allowed).toBe(false)
+      expect(decision.reason).toBe("channel_denied")
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // authorize — auth_model defaults to allowlist when null
+  // -----------------------------------------------------------------------
+  describe("authorize — default auth model", () => {
+    it("defaults to allowlist when agent.auth_model is null", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: null as never }),
+        grant: null,
+      })
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      const decision = await guard.authorize(baseParams)
+
+      // Default auth_model is "allowlist" → denied without grant
+      expect(decision.allowed).toBe(false)
+      expect(decision.reason).toBe("denied")
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // authorize — custom pending_message
+  // -----------------------------------------------------------------------
+  describe("authorize — custom messages", () => {
+    it("uses custom pending_message for approval_queue", async () => {
+      const customPendingMsg = "Hold tight, an admin will review your request shortly."
+      const accessRequestService = makeAccessRequestService()
+      const { db } = buildMockDb({
+        agent: makeAgent({
+          auth_model: "approval_queue",
+          channel_permissions: { pending_message: customPendingMsg },
+        }),
+        grant: null,
+      })
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService,
+      })
+
+      const decision = await guard.authorize(baseParams)
+
+      expect(decision.replyToUser).toBe(customPendingMsg)
+    })
+
+    it("uses custom rejection_message for team auth model", async () => {
+      const customMsg = "Only team members can use this agent."
+      const { db } = buildMockDb({
+        agent: makeAgent({
+          auth_model: "team",
+          channel_permissions: { rejection_message: customMsg },
+        }),
+        grant: null,
+        binding: null,
+      })
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      const decision = await guard.authorize(baseParams)
+
+      expect(decision.replyToUser).toBe(customMsg)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // upsertAutoGrant — concurrent request idempotency
+  // -----------------------------------------------------------------------
+  describe("concurrent auto-grant handling", () => {
+    it("returns existing grant on UNIQUE violation (auto_open)", async () => {
+      const uniqueErr = Object.assign(new Error("unique_violation"), { code: "23505" })
+      const insertChainMock = mockInsertChain(null)
+      insertChainMock.executeTakeFirstOrThrow.mockRejectedValue(uniqueErr)
+
+      let grantSelectCount = 0
+      const db = {
+        selectFrom: vi.fn().mockImplementation((table: string) => {
+          if (table === "channel_mapping") return mockSelectChain(makeChannelMapping())
+          if (table === "agent") return mockSelectChain(makeAgent({ auth_model: "open" }))
+          if (table === "agent_user_grant") {
+            grantSelectCount++
+            if (grantSelectCount === 1) {
+              // authorize() — no existing grant → triggers handleOpen
+              return mockSelectChain(null)
+            }
+            // upsertAutoGrant fallback after 23505 — return existing grant
+            return mockSelectChain({ id: "existing-grant-id" })
+          }
+          return mockSelectChain(null)
+        }),
+        insertInto: vi.fn().mockReturnValue(insertChainMock),
+      } as unknown as Kysely<Database>
+
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      const decision = await guard.authorize(baseParams)
+
+      expect(decision.allowed).toBe(true)
+      expect(decision.grantId).toBe("existing-grant-id")
+      expect(decision.reason).toBe("auto_open")
+    })
+
+    it("rethrows non-UNIQUE errors from auto-grant insert", async () => {
+      const otherErr = Object.assign(new Error("connection_refused"), { code: "08006" })
+      const insertChainMock = mockInsertChain(null)
+      insertChainMock.executeTakeFirstOrThrow.mockRejectedValue(otherErr)
+
+      let selectCallCount = 0
+      const db = {
+        selectFrom: vi.fn().mockImplementation((table: string) => {
+          if (table === "channel_mapping") return mockSelectChain(makeChannelMapping())
+          if (table === "agent") return mockSelectChain(makeAgent({ auth_model: "open" }))
+          if (table === "agent_user_grant") {
+            selectCallCount++
+            if (selectCallCount === 1) return mockSelectChain(null)
+            return mockSelectChain(null)
+          }
+          return mockSelectChain(null)
+        }),
+        insertInto: vi.fn().mockReturnValue(insertChainMock),
+      } as unknown as Kysely<Database>
+
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      await expect(guard.authorize(baseParams)).rejects.toThrow("connection_refused")
+    })
+  })
 })

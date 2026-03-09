@@ -9,6 +9,7 @@ import type pg from "pg"
 
 import { ApprovalService } from "./approval/service.js"
 import { AccessRequestService } from "./auth/access-request-service.js"
+import { ChannelAuthGuard } from "./auth/channel-auth-guard.js"
 import { CredentialService } from "./auth/credential-service.js"
 import { PairingService } from "./auth/pairing-service.js"
 import { SessionService } from "./auth/session-service.js"
@@ -356,6 +357,12 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   )
 
   // Register chat routes (REST-based chat endpoint)
+  const chatAuthGuard = new ChannelAuthGuard({
+    db,
+    pairingService,
+    accessRequestService,
+    channelAllowlistService,
+  })
   await app.register(
     chatRoutes({
       db,
@@ -364,6 +371,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
         await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
       },
       sessionService,
+      channelAuthGuard: chatAuthGuard,
     }),
   )
 

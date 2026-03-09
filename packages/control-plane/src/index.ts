@@ -5,7 +5,12 @@ import { initTracing, shutdownTracing } from "@cortex/shared/tracing"
 import { GatewayIntentBits } from "discord.js"
 
 import { buildApp } from "./app.js"
+import { AccessRequestService } from "./auth/access-request-service.js"
+import { ChannelAuthGuard } from "./auth/channel-auth-guard.js"
+import { PairingService } from "./auth/pairing-service.js"
+import { UserRateLimiter } from "./auth/user-rate-limiter.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
+import { ChannelAllowlistService } from "./channels/channel-allowlist-service.js"
 import { ChannelConfigService } from "./channels/channel-config-service.js"
 import { ChannelReloader } from "./channels/channel-reloader.js"
 import { createMessageDispatch } from "./channels/message-dispatch.js"
@@ -130,11 +135,26 @@ const routerDb = new KyselyRouterDb(db)
 const messageRouter = new MessageRouter(routerDb, adapterMap)
 
 const agentChannelService = new AgentChannelService(db)
+
+// Authorization services for channel-based chat
+const pairingService = new PairingService(db)
+const accessRequestService = new AccessRequestService(db)
+const channelAllowlistService = new ChannelAllowlistService(db)
+const channelAuthGuard = new ChannelAuthGuard({
+  db,
+  pairingService,
+  accessRequestService,
+  channelAllowlistService,
+})
+const userRateLimiter = new UserRateLimiter(db)
+
 const dispatch = createMessageDispatch({
   db,
   agentChannelService,
   router: messageRouter,
   enqueueJob: enqueueJobDeferred,
+  channelAuthGuard,
+  userRateLimiter,
 })
 messageRouter.onMessage(dispatch)
 messageRouter.bind()
