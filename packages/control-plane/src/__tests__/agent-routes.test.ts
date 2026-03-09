@@ -500,6 +500,54 @@ describe("POST /agents", () => {
     expect(body.name).toBe("Test Agent") // Returns mock data
   })
 
+  it("accepts model_config with model selection", async () => {
+    const created = makeAgent({ model_config: { model: "claude-sonnet-4-6" } })
+    const { app, db } = await buildTestApp({ insertedAgent: created })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents",
+      payload: {
+        name: "Agent With Model",
+        role: "assistant",
+        model_config: { model: "claude-sonnet-4-6" },
+      },
+    })
+
+    expect(res.statusCode).toBe(201)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.model_config).toEqual({ model: "claude-sonnet-4-6" })
+
+    // Verify db.insertInto was called with model_config
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.insertInto).toHaveBeenCalledWith("agent")
+  })
+
+  it("accepts model_config with model and systemPrompt", async () => {
+    const created = makeAgent({
+      model_config: { model: "gpt-4o", systemPrompt: "Be helpful" },
+    })
+    const { app } = await buildTestApp({ insertedAgent: created })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents",
+      payload: {
+        name: "GPT Agent",
+        role: "analyst",
+        model_config: { model: "gpt-4o", systemPrompt: "Be helpful" },
+      },
+    })
+
+    expect(res.statusCode).toBe(201)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.model_config).toEqual({ model: "gpt-4o", systemPrompt: "Be helpful" })
+  })
+
   it("validates required fields", async () => {
     const { app } = await buildTestApp()
 
