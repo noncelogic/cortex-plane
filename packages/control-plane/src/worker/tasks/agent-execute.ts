@@ -45,6 +45,7 @@ import type { McpToolRouter } from "../../mcp/tool-router.js"
 import { CostTracker } from "../../observability/cost-tracker.js"
 import type { AgentEventEmitter } from "../../observability/event-emitter.js"
 import type { ExecutionRegistry } from "../../observability/execution-registry.js"
+import { providersForModel } from "../../observability/model-providers.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
 import { classifyError, isConfigErrorCategory } from "../error-classifier.js"
@@ -366,7 +367,11 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         let tokenRefresher: TokenRefresher | undefined
         if (credentialService) {
           try {
-            const binding = await db
+            // Determine which providers can serve the agent's selected model
+            const modelId = typeof agentConfig.model === "string" ? agentConfig.model : undefined
+            const compatibleProviders = modelId ? providersForModel(modelId) : undefined
+
+            let baseQuery = db
               .selectFrom("agent_credential_binding")
               .innerJoin(
                 "provider_credential",
@@ -382,7 +387,13 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               .where("agent_credential_binding.agent_id", "=", agent.id)
               .where("provider_credential.credential_class", "=", "llm_provider")
               .where("provider_credential.status", "=", "active")
-              .executeTakeFirst()
+
+            // If we know which providers serve this model, prefer them
+            if (compatibleProviders && compatibleProviders.length > 0) {
+              baseQuery = baseQuery.where("provider_credential.provider", "in", compatibleProviders)
+            }
+
+            const binding = await baseQuery.executeTakeFirst()
 
             if (binding) {
               const result = await credentialService.getAccessToken(

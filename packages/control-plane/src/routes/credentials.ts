@@ -17,6 +17,7 @@ import { CredentialService, SUPPORTED_PROVIDERS } from "../auth/credential-servi
 import type { SessionService } from "../auth/session-service.js"
 import { createRequireAuth, createRequireRole, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
+import { modelsForProvider } from "../observability/model-providers.js"
 
 const TOOL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 
@@ -40,7 +41,13 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
      * GET /credentials/providers — list supported providers with metadata
      */
     app.get("/credentials/providers", () => {
-      return { providers: SUPPORTED_PROVIDERS }
+      const providers = SUPPORTED_PROVIDERS.map((p) => {
+        const models = modelsForProvider(p.id)
+        return models.length > 0
+          ? { ...p, models: models.map((m) => ({ id: m.id, label: m.label })) }
+          : p
+      })
+      return { providers }
     })
 
     /**

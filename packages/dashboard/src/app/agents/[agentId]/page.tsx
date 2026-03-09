@@ -280,7 +280,14 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           <SteerInput agentId={agentId} />
           <ModelConfigPanel agent={liveAgent} onSave={() => void refetch()} />
           <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
-          <CredentialBindingPanel agentId={agentId} />
+          <CredentialBindingPanel
+            agentId={agentId}
+            modelId={
+              typeof liveAgent.model_config?.model === "string"
+                ? liveAgent.model_config.model
+                : undefined
+            }
+          />
           <ChannelBindingTab agentId={agentId} />
           <LifecycleDetails transitions={transitions} currentState={currentState} />
         </div>
@@ -352,7 +359,14 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
             <SteerInput agentId={agentId} />
             <ModelConfigPanel agent={liveAgent} onSave={() => void refetch()} />
             <AgentConfigPanel agent={liveAgent} onSave={() => void refetch()} />
-            <CredentialBindingPanel agentId={agentId} />
+            <CredentialBindingPanel
+              agentId={agentId}
+              modelId={
+                typeof liveAgent.model_config?.model === "string"
+                  ? liveAgent.model_config.model
+                  : undefined
+              }
+            />
             <LifecycleDetails transitions={transitions} currentState={currentState} />
           </div>
         )}
@@ -364,7 +378,14 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         )}
         {mobileTab === "Credentials" && (
           <div className="flex flex-col gap-4">
-            <CredentialBindingPanel agentId={agentId} />
+            <CredentialBindingPanel
+              agentId={agentId}
+              modelId={
+                typeof liveAgent.model_config?.model === "string"
+                  ? liveAgent.model_config.model
+                  : undefined
+              }
+            />
           </div>
         )}
         {mobileTab === "Browser" && (

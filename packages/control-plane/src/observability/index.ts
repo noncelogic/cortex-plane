@@ -11,6 +11,8 @@ export { AgentEventEmitter } from "./event-emitter.js"
 export { ExecutionRegistry } from "./execution-registry.js"
 export type { ModelPricing } from "./model-pricing.js"
 export { DEFAULT_PRICING, estimateCost, MODEL_PRICING } from "./model-pricing.js"
+export type { ModelInfo } from "./model-providers.js"
+export { MODEL_CATALOGUE, modelsForProvider, providersForModel } from "./model-providers.js"
 export type {
   AgentEventInput,
   AgentEventRow,

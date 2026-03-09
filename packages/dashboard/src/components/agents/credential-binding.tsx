@@ -12,6 +12,8 @@ import {
   unbindAgentCredential,
 } from "@/lib/api-client"
 
+import { AVAILABLE_MODELS } from "./deploy-agent-modal"
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -320,12 +322,26 @@ function BindingRow({ binding, onUnbind }: BindingRowProps): React.JSX.Element {
 // Main export
 // ---------------------------------------------------------------------------
 
+/** Map a model ID → set of compatible provider credential IDs. */
+const MODEL_PROVIDER_MAP: Record<string, string[]> = {}
+for (const m of AVAILABLE_MODELS) {
+  // Each model's `provider` field is the primary provider. Also allow
+  // the OAuth variants (e.g. google-antigravity for anthropic models).
+  const providers: string[] = [m.provider]
+  if (m.provider === "anthropic") providers.push("google-antigravity")
+  if (m.provider === "openai") providers.push("openai-codex")
+  MODEL_PROVIDER_MAP[m.id] = providers
+}
+
 export interface CredentialBindingPanelProps {
   agentId: string
+  /** The model ID from agent.model_config.model (used for provider match warnings). */
+  modelId?: string
 }
 
 export function CredentialBindingPanel({
   agentId,
+  modelId,
 }: CredentialBindingPanelProps): React.JSX.Element {
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
@@ -403,6 +419,18 @@ export function CredentialBindingPanel({
 
   const boundIds = useMemo(() => new Set(bindings.map((b) => b.credentialId)), [bindings])
 
+  // Check if any bound LLM credential matches the agent's selected model provider
+  const providerMismatch = useMemo(() => {
+    if (!modelId) return null
+    const compatibleProviders = MODEL_PROVIDER_MAP[modelId]
+    if (!compatibleProviders) return null
+    const llmBindings = bindings.filter((b) => b.credentialClass === "llm_provider")
+    if (llmBindings.length === 0) return { missing: true, providers: compatibleProviders }
+    const hasMatch = llmBindings.some((b) => compatibleProviders.includes(b.provider))
+    if (hasMatch) return null
+    return { missing: false, providers: compatibleProviders }
+  }, [modelId, bindings])
+
   return (
     <div className="flex flex-col gap-4">
       {/* Panel header */}
@@ -428,6 +456,20 @@ export function CredentialBindingPanel({
         <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3">
           <span className="material-symbols-outlined text-lg text-red-400">error</span>
           <p className="text-sm text-red-400">{error}</p>
+        </div>
+      )}
+
+      {/* Provider-model mismatch warning */}
+      {providerMismatch && !loadingBindings && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+          <span className="material-symbols-outlined mt-px text-[16px] text-amber-500">
+            warning
+          </span>
+          <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+            {providerMismatch.missing
+              ? `No LLM credential bound. Model ${modelId} requires a credential from: ${providerMismatch.providers.join(", ")}.`
+              : `No bound credential matches model ${modelId}. Expected provider: ${providerMismatch.providers.join(", ")}.`}
+          </p>
         </div>
       )}
 

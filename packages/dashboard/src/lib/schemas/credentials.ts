@@ -1,11 +1,17 @@
 import { z } from "zod"
 
+export const ProviderModelSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+})
+
 export const ProviderInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
   authType: z.enum(["oauth", "api_key"]),
   description: z.string(),
   credentialClass: z.string().optional(),
+  models: z.array(ProviderModelSchema).optional(),
 })
 
 export const CredentialSchema = z.object({
