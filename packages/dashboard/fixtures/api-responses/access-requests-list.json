@@ -1,0 +1,17 @@
+{
+  "requests": [
+    {
+      "id": "ar-001",
+      "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "user_account_id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "channel_mapping_id": "cm-001",
+      "status": "pending",
+      "message_preview": "Hello, can I use this agent?",
+      "reviewed_by": null,
+      "reviewed_at": null,
+      "deny_reason": null,
+      "created_at": "2025-11-01T09:00:00.000Z"
+    }
+  ],
+  "total": 1
+}

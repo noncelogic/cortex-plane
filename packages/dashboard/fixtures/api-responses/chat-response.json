@@ -1,0 +1,8 @@
+{
+  "job_id": "job-chat-001",
+  "session_id": "sess-001",
+  "status": "RUNNING",
+  "response": null,
+  "message": "Job created",
+  "approval_needed": false
+}

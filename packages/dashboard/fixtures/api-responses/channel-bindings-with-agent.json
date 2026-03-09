@@ -1,0 +1,14 @@
+{
+  "bindings": [
+    {
+      "id": "acb-001",
+      "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "agent_name": "Research Agent",
+      "agent_slug": "research-agent",
+      "channel_type": "telegram",
+      "chat_id": "-100123456789",
+      "is_default": true,
+      "created_at": "2025-09-01T08:00:00.000Z"
+    }
+  ]
+}

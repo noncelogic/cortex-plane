@@ -1,0 +1,21 @@
+{
+  "summary": {
+    "totalUsd": 1.25,
+    "tokensIn": 45000,
+    "tokensOut": 12000
+  },
+  "breakdown": [
+    {
+      "costUsd": 0.85,
+      "tokensIn": 30000,
+      "tokensOut": 8000,
+      "model": "gpt-4"
+    },
+    {
+      "costUsd": 0.4,
+      "tokensIn": 15000,
+      "tokensOut": 4000,
+      "model": "gpt-3.5-turbo"
+    }
+  ]
+}

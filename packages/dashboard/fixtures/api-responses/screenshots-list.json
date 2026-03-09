@@ -1,0 +1,12 @@
+{
+  "screenshots": [
+    {
+      "id": "ss-001",
+      "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "timestamp": "2025-11-01T10:00:00.000Z",
+      "thumbnailUrl": "https://cdn.example.com/thumb/ss-001.jpg",
+      "fullUrl": "https://cdn.example.com/full/ss-001.png",
+      "dimensions": { "width": 1920, "height": 1080 }
+    }
+  ]
+}

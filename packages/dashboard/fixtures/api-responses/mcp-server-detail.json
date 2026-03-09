@@ -1,0 +1,32 @@
+{
+  "id": "mcp-001",
+  "name": "Web Tools",
+  "slug": "web-tools",
+  "transport": "streamable-http",
+  "connection": { "url": "https://mcp.example.com/tools" },
+  "agent_scope": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"],
+  "description": "Web browsing and search tools",
+  "status": "ACTIVE",
+  "protocol_version": "2025-01-01",
+  "server_info": { "name": "web-tools", "version": "1.0.0" },
+  "capabilities": { "tools": true },
+  "health_probe_interval_ms": 30000,
+  "last_healthy_at": "2025-11-01T10:00:00.000Z",
+  "error_message": null,
+  "created_at": "2025-09-01T08:00:00.000Z",
+  "updated_at": "2025-11-01T10:00:00.000Z",
+  "tools": [
+    {
+      "id": "tool-001",
+      "mcp_server_id": "mcp-001",
+      "name": "web_search",
+      "qualified_name": "web-tools/web_search",
+      "description": "Search the web",
+      "input_schema": { "type": "object", "properties": { "query": { "type": "string" } } },
+      "annotations": null,
+      "status": "active",
+      "created_at": "2025-09-01T08:00:00.000Z",
+      "updated_at": "2025-09-01T08:00:00.000Z"
+    }
+  ]
+}

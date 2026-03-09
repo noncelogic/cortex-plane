@@ -1,0 +1,14 @@
+{
+  "tools": [
+    {
+      "toolRef": "mcp-server-1/web_search",
+      "bindingId": "tb-001",
+      "approvalPolicy": "auto",
+      "approvalCondition": null,
+      "rateLimit": { "maxCalls": 10, "windowSeconds": 60 },
+      "costBudget": null,
+      "dataScope": null
+    }
+  ],
+  "assembledAt": "2025-11-01T10:00:00.000Z"
+}
