@@ -410,6 +410,115 @@ describe("GET /credentials?class=tool_specific", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Tests: GET /credentials — health fields
+// ---------------------------------------------------------------------------
+
+describe("GET /credentials — credential health fields", () => {
+  it("returns health fields for an active credential", async () => {
+    const healthyCred = makeSummary({
+      provider: "openai",
+      credentialType: "api_key",
+      credentialClass: "llm_provider",
+      status: "active",
+      errorCount: 0,
+      lastError: null,
+      lastUsedAt: "2026-03-09T10:00:00.000Z",
+      tokenExpiresAt: null,
+      lastRefreshAt: null,
+    })
+
+    const { app } = await buildTestApp({
+      credentialServiceOverrides: {
+        listCredentials: vi.fn().mockResolvedValue([healthyCred]),
+      },
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/credentials",
+      headers: withSession(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.credentials).toHaveLength(1)
+    const cred = body.credentials[0]
+    expect(cred.status).toBe("active")
+    expect(cred.errorCount).toBe(0)
+    expect(cred.lastError).toBeNull()
+    expect(cred.lastUsedAt).toBe("2026-03-09T10:00:00.000Z")
+  })
+
+  it("returns health fields for an errored credential", async () => {
+    const erroredCred = makeSummary({
+      provider: "anthropic",
+      credentialType: "oauth",
+      credentialClass: "llm_provider",
+      status: "error",
+      errorCount: 3,
+      lastError: "token refresh failed: invalid_grant",
+      lastUsedAt: "2026-03-08T14:00:00.000Z",
+      tokenExpiresAt: "2026-03-08T12:00:00.000Z",
+      lastRefreshAt: "2026-03-08T11:30:00.000Z",
+    })
+
+    const { app } = await buildTestApp({
+      credentialServiceOverrides: {
+        listCredentials: vi.fn().mockResolvedValue([erroredCred]),
+      },
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/credentials",
+      headers: withSession(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.credentials).toHaveLength(1)
+    const cred = body.credentials[0]
+    expect(cred.status).toBe("error")
+    expect(cred.errorCount).toBe(3)
+    expect(cred.lastError).toBe("token refresh failed: invalid_grant")
+    expect(cred.tokenExpiresAt).toBe("2026-03-08T12:00:00.000Z")
+    expect(cred.lastRefreshAt).toBe("2026-03-08T11:30:00.000Z")
+  })
+
+  it("returns health fields for an OAuth credential with upcoming expiry", async () => {
+    const oauthCred = makeSummary({
+      provider: "google-antigravity",
+      credentialType: "oauth",
+      credentialClass: "llm_provider",
+      status: "active",
+      errorCount: 0,
+      lastError: null,
+      tokenExpiresAt: "2026-03-10T12:00:00.000Z",
+      lastRefreshAt: "2026-03-09T11:00:00.000Z",
+    })
+
+    const { app } = await buildTestApp({
+      credentialServiceOverrides: {
+        listCredentials: vi.fn().mockResolvedValue([oauthCred]),
+      },
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/credentials",
+      headers: withSession(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    const cred = body.credentials[0]
+    expect(cred.tokenExpiresAt).toBe("2026-03-10T12:00:00.000Z")
+    expect(cred.lastRefreshAt).toBe("2026-03-09T11:00:00.000Z")
+    expect(cred.errorCount).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests: DELETE /credentials/:id
 // ---------------------------------------------------------------------------
 
