@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react"
 
+import { QuarantineBanner } from "@/components/agents/quarantine-banner"
 import { EmptyState } from "@/components/layout/empty-state"
 import { useToast } from "@/components/layout/toast"
 import { useApiQuery } from "@/hooks/use-api"
@@ -114,6 +115,8 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
         </div>
       </div>
 
+      {/* Quarantine banner */}
+      <QuarantineBanner agentId={agentId} />
       {/* Delete error banner */}
       {deleteError && (
         <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
