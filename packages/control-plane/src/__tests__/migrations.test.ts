@@ -289,16 +289,7 @@ describe("PostgreSQL migrations", () => {
         "conditional",
       ])
 
-      // effective_capabilities column on agent
-      const colResult = await client.query<{ exists: boolean }>(
-        `SELECT EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'agent'
-            AND column_name = 'effective_capabilities'
-            AND data_type = 'jsonb'
-        )`,
-      )
-      expect(colResult.rows[0]?.exists).toBe(true)
+      // effective_capabilities column removed in migration 034
 
       // Deprecation comment on mcp_server.agent_scope
       const commentResult = await client.query<{ description: string | null }>(
@@ -756,6 +747,22 @@ describe("PostgreSQL migrations", () => {
 
       // Clean up
       await client.query("DELETE FROM agent WHERE id = $1", [agent2Id])
+    } finally {
+      client.release()
+    }
+  })
+
+  it("migration 034: drops effective_capabilities column from agent", async () => {
+    const client = await pool.connect()
+    try {
+      const colResult = await client.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'agent'
+            AND column_name = 'effective_capabilities'
+        )`,
+      )
+      expect(colResult.rows[0]?.exists).toBe(false)
     } finally {
       client.release()
     }

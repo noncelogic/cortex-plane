@@ -156,12 +156,11 @@ Features that exist but do not work correctly.
 - **Severity**: MEDIUM
 - **Fix**: Emit audit events on tool binding changes, or remove table + route.
 
-### 4.6 Agent Config Column Unused
+### 4.6 ~~Agent Config Column Unused~~ effective_capabilities Column Unused
 
-- **DB column**: `agent.config` (JSONB)
-- **Status**: Written during agent creation but **never read** — `effective_capabilities` used instead.
+- **DB column**: `agent.effective_capabilities` (JSONB) — added in migration 018 but never read or written by application code.
+- **Status**: **RESOLVED** — column dropped in migration 034 (#557). Note: original audit incorrectly identified `agent.config` as unused; `config` is actively read for webhook tool definitions.
 - **Severity**: LOW
-- **Fix**: Remove column or use it as the source of truth for agent configuration.
 
 ### 4.7 Effective Tools Placeholder
 

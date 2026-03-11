@@ -92,11 +92,6 @@ export interface AgentTable {
     Record<string, unknown> | undefined,
     Record<string, unknown>
   >
-  effective_capabilities: ColumnType<
-    Record<string, unknown> | null,
-    Record<string, unknown> | null | undefined,
-    Record<string, unknown> | null
-  >
   auth_model: ColumnType<AgentAuthModel, AgentAuthModel | undefined, AgentAuthModel>
   status: ColumnType<AgentStatus, AgentStatus | undefined, AgentStatus>
   health_reset_at: ColumnType<Date | null, Date | null | undefined, Date | null>
