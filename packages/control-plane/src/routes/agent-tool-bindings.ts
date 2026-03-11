@@ -387,6 +387,18 @@ export function agentToolBindingRoutes(deps: AgentToolBindingRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Binding not found" })
         }
 
+        // Audit log
+        await db
+          .insertInto("capability_audit_log")
+          .values({
+            agent_id: agentId,
+            tool_ref: updated.tool_ref,
+            event_type: "binding_updated",
+            actor_user_id: principal.userId,
+            details: { binding_id: bindingId, changed_fields: Object.keys(updates) },
+          })
+          .execute()
+
         return reply.status(200).send({
           id: updated.id,
           agentId: updated.agent_id,
