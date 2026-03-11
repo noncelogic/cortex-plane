@@ -17,6 +17,7 @@ import { sql } from "kysely"
 
 import type { ContentService } from "../content/service.js"
 import type { Database } from "../db/types.js"
+import type { AgentNotFoundError, MemorySyncService } from "../memory/sync-service.js"
 import type { BrowserObservationService } from "../observation/service.js"
 
 interface ListJobsQuery {
@@ -75,6 +76,7 @@ export interface DashboardRouteDeps {
   enqueueJob: (jobId: string) => Promise<void>
   observationService: BrowserObservationService
   contentService: ContentService
+  memorySyncService?: MemorySyncService
 }
 
 function toIso(value: Date | string | null | undefined): string | undefined {
@@ -229,7 +231,7 @@ function synthesizeLogs(events: EventRow[]) {
 }
 
 export function dashboardRoutes(deps: DashboardRouteDeps) {
-  const { db, enqueueJob, observationService, contentService } = deps
+  const { db, enqueueJob, observationService, contentService, memorySyncService } = deps
 
   return function register(app: FastifyInstance): void {
     app.get<{ Querystring: ListJobsQuery }>(
@@ -767,11 +769,32 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
           },
         },
       },
-      async (_request, reply) => {
-        return reply.status(501).send({
-          error: "not_implemented",
-          message: "Memory sync is not yet implemented",
-        })
+      async (request, reply) => {
+        if (!memorySyncService) {
+          return reply.status(501).send({
+            error: "not_implemented",
+            message: "Memory sync is not yet implemented",
+          })
+        }
+
+        const { agentId } = request.body
+
+        try {
+          const stats = await memorySyncService.sync(agentId)
+          return reply.send({
+            sync_id: `sync_${agentId}_${Date.now()}`,
+            status: "completed",
+            stats,
+          })
+        } catch (err: unknown) {
+          if (err && (err as AgentNotFoundError).name === "AgentNotFoundError") {
+            return reply.status(404).send({
+              error: "not_found",
+              message: (err as Error).message,
+            })
+          }
+          throw err
+        }
       },
     )
 

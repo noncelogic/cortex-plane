@@ -169,6 +169,30 @@ async function buildTestApp(
   return { app }
 }
 
+async function buildTestAppWithSync(memorySyncService: { sync: ReturnType<typeof vi.fn> }) {
+  const app = Fastify({ logger: false })
+  const db = mockDb()
+
+  await app.register(
+    dashboardRoutes({
+      db,
+      enqueueJob: vi.fn().mockResolvedValue(undefined),
+      observationService: {
+        getStreamStatus: vi.fn().mockResolvedValue(null),
+        listTabs: vi.fn().mockResolvedValue(null),
+      } as never,
+      contentService: {
+        list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+        publish: vi.fn().mockResolvedValue(undefined),
+        archive: vi.fn().mockResolvedValue(undefined),
+      } as never,
+      memorySyncService: memorySyncService as never,
+    }),
+  )
+
+  return { app }
+}
+
 describe("dashboard routes", () => {
   it("lists jobs in dashboard schema shape", async () => {
     const { app } = await buildTestApp()
@@ -517,7 +541,7 @@ describe("dashboard routes", () => {
     expect(events.json()).toEqual({ events: [] })
   })
 
-  it("returns 501 for memory sync stub", async () => {
+  it("returns 501 for memory sync when service is not configured", async () => {
     const { app } = await buildTestApp()
 
     const sync = await app.inject({
@@ -529,6 +553,49 @@ describe("dashboard routes", () => {
     expect(sync.json()).toEqual({
       error: "not_implemented",
       message: "Memory sync is not yet implemented",
+    })
+  })
+
+  it("returns sync stats when memorySyncService is provided", async () => {
+    const mockSyncService = {
+      sync: vi.fn().mockResolvedValue({ upserted: 3, deleted: 1, unchanged: 5 }),
+    }
+    const { app } = await buildTestAppWithSync(mockSyncService)
+
+    const sync = await app.inject({
+      method: "POST",
+      url: "/memory/sync",
+      payload: { agentId: "agent-1" },
+    })
+    expect(sync.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = sync.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.status).toBe("completed")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.stats).toEqual({ upserted: 3, deleted: 1, unchanged: 5 })
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.sync_id).toMatch(/^sync_agent-1_\d+$/)
+    expect(mockSyncService.sync).toHaveBeenCalledWith("agent-1")
+  })
+
+  it("returns 404 when agent is not found during sync", async () => {
+    const err = new Error("Agent not found: bad-id")
+    err.name = "AgentNotFoundError"
+    const mockSyncService = {
+      sync: vi.fn().mockRejectedValue(err),
+    }
+    const { app } = await buildTestAppWithSync(mockSyncService)
+
+    const sync = await app.inject({
+      method: "POST",
+      url: "/memory/sync",
+      payload: { agentId: "bad-id" },
+    })
+    expect(sync.statusCode).toBe(404)
+    expect(sync.json()).toEqual({
+      error: "not_found",
+      message: "Agent not found: bad-id",
     })
   })
 })
