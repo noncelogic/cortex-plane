@@ -12,9 +12,10 @@ import type { Kysely } from "kysely"
 
 import type { ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { SessionService } from "../auth/session-service.js"
+import type { UserRateLimiter } from "../auth/user-rate-limiter.js"
 import { loadConversationHistory, watchJobCompletion } from "../channels/message-dispatch.js"
 import { mapJobErrorToUserMessage, runPreflight } from "../channels/preflight.js"
-import type { Database } from "../db/types.js"
+import type { Database, RateLimit, TokenBudget } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
   createRequireAuth,
@@ -52,10 +53,11 @@ export interface ChatRouteDeps {
   enqueueJob: (jobId: string) => Promise<void>
   sessionService?: SessionService
   channelAuthGuard?: ChannelAuthGuard
+  userRateLimiter?: UserRateLimiter
 }
 
 export function chatRoutes(deps: ChatRouteDeps) {
-  const { db, authConfig, enqueueJob, sessionService, channelAuthGuard } = deps
+  const { db, authConfig, enqueueJob, sessionService, channelAuthGuard, userRateLimiter } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -125,6 +127,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
         await ensureUserAccount(db, userAccountId, principal?.displayName ?? "api-user")
 
         // Per-agent authorization guard (operators own all agents — skip the gate)
+        let grantId: string | undefined
         if (channelAuthGuard && principal?.userRole !== "operator") {
           const decision = await channelAuthGuard.authorize({
             agentId,
@@ -140,6 +143,37 @@ export function chatRoutes(deps: ChatRouteDeps) {
               message: decision.replyToUser ?? "Access denied",
               reason: decision.reason,
             })
+          }
+
+          grantId = decision.grantId
+        }
+
+        // Per-user rate limit & token budget enforcement
+        if (userRateLimiter && grantId) {
+          const grant = await db
+            .selectFrom("agent_user_grant")
+            .select(["rate_limit", "token_budget"])
+            .where("id", "=", grantId)
+            .executeTakeFirst()
+
+          const grantRateLimit = grant?.rate_limit as RateLimit | null | undefined
+          const grantTokenBudget = grant?.token_budget as TokenBudget | null | undefined
+
+          const rateLimitDecision = await userRateLimiter.check(
+            userAccountId,
+            agentId,
+            grantRateLimit ?? undefined,
+            grantTokenBudget ?? undefined,
+          )
+
+          if (!rateLimitDecision.allowed) {
+            return reply
+              .status(429)
+              .header("Retry-After", String(rateLimitDecision.retryAfterSeconds ?? 60))
+              .send({
+                error: rateLimitDecision.reason,
+                message: rateLimitDecision.replyToUser ?? "Rate limit exceeded",
+              })
           }
         }
 

@@ -13,6 +13,7 @@ import { ChannelAuthGuard } from "./auth/channel-auth-guard.js"
 import { CredentialService } from "./auth/credential-service.js"
 import { PairingService } from "./auth/pairing-service.js"
 import { SessionService } from "./auth/session-service.js"
+import { UserRateLimiter } from "./auth/user-rate-limiter.js"
 import { ClaudeCodeBackend } from "./backends/claude-code.js"
 import { HttpLlmBackend } from "./backends/http-llm.js"
 import { AuthHandoffService } from "./browser/auth-handoff.js"
@@ -365,6 +366,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     accessRequestService,
     channelAllowlistService,
   })
+  const chatRateLimiter = new UserRateLimiter(db)
   await app.register(
     chatRoutes({
       db,
@@ -374,6 +376,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       },
       sessionService,
       channelAuthGuard: chatAuthGuard,
+      userRateLimiter: chatRateLimiter,
     }),
   )
 
