@@ -210,7 +210,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
 
   // Register approval routes (always available)
   await app.register(approvalRoutes({ approvalService, sseManager, authConfig, sessionService }))
-  await app.register(feedbackRoutes({ feedbackService }))
+  await app.register(feedbackRoutes({ feedbackService, authConfig, sessionService }))
 
   // Register agent CRUD + job routes
   await app.register(
