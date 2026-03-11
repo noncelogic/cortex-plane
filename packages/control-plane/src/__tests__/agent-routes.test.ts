@@ -569,7 +569,7 @@ describe("POST /agents", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /agents/:agentId/pause", () => {
-  it("returns pausing status", async () => {
+  it("returns 503 when lifecycle manager is not available", async () => {
     const { app } = await buildTestApp()
 
     const res = await app.inject({
@@ -578,16 +578,14 @@ describe("POST /agents/:agentId/pause", () => {
       payload: { reason: "manual", timeoutSeconds: 30 },
     })
 
-    expect(res.statusCode).toBe(202)
-    expect(res.json()).toEqual({
-      agentId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-      status: "pausing",
-    })
+    expect(res.statusCode).toBe(503)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(res.json().error).toBe("service_unavailable")
   })
 })
 
 describe("POST /agents/:agentId/resume", () => {
-  it("returns resuming status", async () => {
+  it("returns 503 when lifecycle manager is not available", async () => {
     const { app } = await buildTestApp()
 
     const res = await app.inject({
@@ -596,12 +594,9 @@ describe("POST /agents/:agentId/resume", () => {
       payload: { checkpointId: "chk-1" },
     })
 
-    expect(res.statusCode).toBe(202)
-    expect(res.json()).toEqual({
-      agentId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-      status: "resuming",
-      fromCheckpoint: "chk-1",
-    })
+    expect(res.statusCode).toBe(503)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(res.json().error).toBe("service_unavailable")
   })
 })
 

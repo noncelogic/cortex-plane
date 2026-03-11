@@ -21,6 +21,7 @@ import type { SessionService } from "../auth/session-service.js"
 import type { Database } from "../db/types.js"
 import { HeartbeatReceiver } from "../lifecycle/health.js"
 import { type HealthProbeDeps, probeAgentHealth } from "../lifecycle/health-probe.js"
+import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import {
   type AuthMiddlewareOptions,
   createRequireAuth,
@@ -153,12 +154,13 @@ export interface AgentRouteDeps {
   authConfig: AuthConfig
   enqueueJob: (jobId: string) => Promise<void>
   sessionService?: SessionService
+  lifecycleManager?: AgentLifecycleManager
   /** Partial deps for the health probe — db is shared from the top-level. */
   healthProbeDeps?: Omit<HealthProbeDeps, "db" | "lifecycleState">
 }
 
 export function agentRoutes(deps: AgentRouteDeps) {
-  const { db, authConfig, enqueueJob, sessionService } = deps
+  const { db, authConfig, enqueueJob, sessionService, lifecycleManager } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -497,6 +499,32 @@ export function agentRoutes(deps: AgentRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Agent not found" })
         }
 
+        if (!lifecycleManager) {
+          return reply.status(503).send({
+            error: "service_unavailable",
+            message: "Lifecycle manager is not available",
+          })
+        }
+
+        if (!lifecycleManager.getAgentContext(agentId)) {
+          return reply.status(409).send({
+            error: "conflict",
+            message: "Agent is not currently managed (not executing)",
+          })
+        }
+
+        try {
+          await lifecycleManager.pause(agentId)
+        } catch (err) {
+          if (err instanceof Error && err.message.includes("not in EXECUTING state")) {
+            return reply.status(409).send({
+              error: "conflict",
+              message: err.message,
+            })
+          }
+          throw err
+        }
+
         return reply.status(202).send({
           agentId,
           status: "pausing",
@@ -542,6 +570,32 @@ export function agentRoutes(deps: AgentRouteDeps) {
 
         if (!agent) {
           return reply.status(404).send({ error: "not_found", message: "Agent not found" })
+        }
+
+        if (!lifecycleManager) {
+          return reply.status(503).send({
+            error: "service_unavailable",
+            message: "Lifecycle manager is not available",
+          })
+        }
+
+        if (!lifecycleManager.getAgentContext(agentId)) {
+          return reply.status(409).send({
+            error: "conflict",
+            message: "Agent is not currently managed (not executing)",
+          })
+        }
+
+        try {
+          await lifecycleManager.resume(agentId)
+        } catch (err) {
+          if (err instanceof Error) {
+            return reply.status(409).send({
+              error: "conflict",
+              message: err.message,
+            })
+          }
+          throw err
         }
 
         return reply.status(202).send({
