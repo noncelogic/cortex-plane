@@ -353,19 +353,23 @@ export class AgentDeployer {
   async deleteAgent(agentName: string, namespace?: string): Promise<void> {
     const ns = namespace ?? this.defaultNamespace
 
+    const name = `agent-${agentName}`
+    const ignoreDeletionError = (resource: string) => (err: unknown) => {
+      console.debug(
+        `[agent-deployer] ignoring cleanup error for ${resource} '${name}' in '${ns}':`,
+        err,
+      )
+    }
+
     const deletions = [
-      this.coreApi
-        .deleteNamespacedPod({ name: `agent-${agentName}`, namespace: ns })
-        .catch(() => {}),
+      this.coreApi.deleteNamespacedPod({ name, namespace: ns }).catch(ignoreDeletionError("Pod")),
       this.rbacApi
-        .deleteNamespacedRoleBinding({ name: `agent-${agentName}`, namespace: ns })
-        .catch(() => {}),
-      this.rbacApi
-        .deleteNamespacedRole({ name: `agent-${agentName}`, namespace: ns })
-        .catch(() => {}),
+        .deleteNamespacedRoleBinding({ name, namespace: ns })
+        .catch(ignoreDeletionError("RoleBinding")),
+      this.rbacApi.deleteNamespacedRole({ name, namespace: ns }).catch(ignoreDeletionError("Role")),
       this.coreApi
-        .deleteNamespacedServiceAccount({ name: `agent-${agentName}`, namespace: ns })
-        .catch(() => {}),
+        .deleteNamespacedServiceAccount({ name, namespace: ns })
+        .catch(ignoreDeletionError("ServiceAccount")),
     ]
 
     await Promise.all(deletions)

@@ -271,10 +271,23 @@ export class McpServerDeployer {
     const ns = namespace ?? this.defaultNamespace
     const name = `mcp-server-${slug}`
 
+    const ignoreDeletionError = (resource: string) => (err: unknown) => {
+      console.debug(
+        `[k8s-deployer] ignoring cleanup error for ${resource} '${name}' in '${ns}':`,
+        err,
+      )
+    }
+
     await Promise.all([
-      this.appsApi.deleteNamespacedDeployment({ name, namespace: ns }).catch(() => {}),
-      this.coreApi.deleteNamespacedService({ name, namespace: ns }).catch(() => {}),
-      this.coreApi.deleteNamespacedServiceAccount({ name, namespace: ns }).catch(() => {}),
+      this.appsApi
+        .deleteNamespacedDeployment({ name, namespace: ns })
+        .catch(ignoreDeletionError("Deployment")),
+      this.coreApi
+        .deleteNamespacedService({ name, namespace: ns })
+        .catch(ignoreDeletionError("Service")),
+      this.coreApi
+        .deleteNamespacedServiceAccount({ name, namespace: ns })
+        .catch(ignoreDeletionError("ServiceAccount")),
     ])
   }
 

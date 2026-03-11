@@ -528,13 +528,20 @@ describe("AgentDeployer", () => {
       )
     })
 
-    it("ignores errors for already-deleted resources", async () => {
+    it("ignores errors for already-deleted resources and logs at debug level", async () => {
+      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+
       mockCoreApi.deleteNamespacedPod.mockRejectedValue(new Error("not found"))
       mockRbacApi.deleteNamespacedRoleBinding.mockRejectedValue(new Error("not found"))
       mockRbacApi.deleteNamespacedRole.mockRejectedValue(new Error("not found"))
       mockCoreApi.deleteNamespacedServiceAccount.mockRejectedValue(new Error("not found"))
 
       await expect(deployer.deleteAgent("devops-01")).resolves.toBeUndefined()
+
+      expect(debugSpy).toHaveBeenCalledTimes(4)
+      expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining("Pod"), expect.any(Error))
+
+      debugSpy.mockRestore()
     })
   })
 

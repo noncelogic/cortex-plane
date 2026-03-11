@@ -375,15 +375,21 @@ describe("McpServerDeployer", () => {
     )
   })
 
-  it("teardown() ignores delete errors (best-effort)", async () => {
+  it("teardown() ignores delete errors and logs at debug level", async () => {
     resetMocks()
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+
     mockAppsApi.deleteNamespacedDeployment.mockRejectedValue(new Error("not found"))
     mockCoreApi.deleteNamespacedService.mockRejectedValue(new Error("not found"))
     mockCoreApi.deleteNamespacedServiceAccount.mockRejectedValue(new Error("not found"))
 
     const deployer = new McpServerDeployer()
-    // Should not throw
     await expect(deployer.teardown("github")).resolves.toBeUndefined()
+
+    expect(debugSpy).toHaveBeenCalledTimes(3)
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining("Deployment"), expect.any(Error))
+
+    debugSpy.mockRestore()
   })
 
   it("waitForReady() resolves when deployment is ready", async () => {
