@@ -896,6 +896,42 @@ export type ChannelAllowlistAudit = Selectable<ChannelAllowlistAuditTable>
 export type NewChannelAllowlistAudit = Insertable<ChannelAllowlistAuditTable>
 
 // ---------------------------------------------------------------------------
+// Enum: content_status
+// ---------------------------------------------------------------------------
+export type ContentStatus = "DRAFT" | "IN_REVIEW" | "QUEUED" | "PUBLISHED" | "ARCHIVED"
+
+// ---------------------------------------------------------------------------
+// Enum: content_type
+// ---------------------------------------------------------------------------
+export type ContentItemType = "blog" | "social" | "newsletter" | "report"
+
+// ---------------------------------------------------------------------------
+// Table: content_item
+// ---------------------------------------------------------------------------
+export interface ContentItemTable {
+  id: Generated<string>
+  agent_id: string
+  title: string
+  body: ColumnType<string, string | undefined, string>
+  type: ColumnType<ContentItemType, ContentItemType | undefined, ContentItemType>
+  status: ColumnType<ContentStatus, ContentStatus | undefined, ContentStatus>
+  channel: string | null
+  metadata: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >
+  published_at: Date | null
+  archived_at: Date | null
+  created_at: ColumnType<Date, Date | undefined, never>
+  updated_at: ColumnType<Date, Date | undefined, Date>
+}
+
+export type ContentItem = Selectable<ContentItemTable>
+export type NewContentItem = Insertable<ContentItemTable>
+export type ContentItemUpdate = Updateable<ContentItemTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -931,4 +967,5 @@ export interface Database {
   channel_config: ChannelConfigTable
   channel_allowlist: ChannelAllowlistTable
   channel_allowlist_audit: ChannelAllowlistAuditTable
+  content_item: ContentItemTable
 }

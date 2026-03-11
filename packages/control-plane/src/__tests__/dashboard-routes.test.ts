@@ -144,6 +144,11 @@ async function buildTestApp(
           timestamp: new Date().toISOString(),
         }),
       } as never,
+      contentService: {
+        list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+        publish: vi.fn().mockResolvedValue(undefined),
+        archive: vi.fn().mockResolvedValue(undefined),
+      } as never,
     }),
   )
 
@@ -383,7 +388,7 @@ describe("dashboard routes", () => {
     })
   })
 
-  it("returns 501 for stub endpoints not yet implemented", async () => {
+  it("returns 404 for publish/archive on non-existent content", async () => {
     const { app } = await buildTestApp()
 
     const publish = await app.inject({
@@ -391,18 +396,22 @@ describe("dashboard routes", () => {
       url: "/content/c-1/publish",
       payload: { channel: "website" },
     })
-    expect(publish.statusCode).toBe(501)
+    expect(publish.statusCode).toBe(404)
     expect(publish.json()).toEqual({
-      error: "not_implemented",
-      message: "Content publishing is not yet implemented",
+      error: "not_found",
+      message: "Content item not found",
     })
 
     const archive = await app.inject({ method: "POST", url: "/content/c-1/archive" })
-    expect(archive.statusCode).toBe(501)
+    expect(archive.statusCode).toBe(404)
     expect(archive.json()).toEqual({
-      error: "not_implemented",
-      message: "Content archiving is not yet implemented",
+      error: "not_found",
+      message: "Content item not found",
     })
+  })
+
+  it("returns 501 for memory sync stub", async () => {
+    const { app } = await buildTestApp()
 
     const sync = await app.inject({
       method: "POST",

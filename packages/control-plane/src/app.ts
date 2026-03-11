@@ -23,6 +23,7 @@ import { ChannelAllowlistService } from "./channels/channel-allowlist-service.js
 import { ChannelConfigService } from "./channels/channel-config-service.js"
 import type { ChannelReloader } from "./channels/channel-reloader.js"
 import type { Config } from "./config.js"
+import { ContentService } from "./content/service.js"
 import type { Database } from "./db/types.js"
 import { FeedbackService } from "./feedback/service.js"
 import type { AgentLifecycleManager } from "./lifecycle/manager.js"
@@ -384,6 +385,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
         await workerUtils.addJob("agent_execute", { jobId }, { jobKey: `exec:${jobId}` })
       },
       observationService,
+      contentService: new ContentService({ db }),
     }),
   )
 
