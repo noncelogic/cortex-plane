@@ -190,6 +190,75 @@ describe("LLM credential injection", () => {
     await handle.cancel("test")
   })
 
+  it("uses Bearer auth (authToken) for Anthropic OAuth credentials", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "oauth-access-token",
+          credentialId: "cred-oauth",
+          credentialType: "oauth",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const useAuthToken = (handle as any).useAuthToken
+    expect(useAuthToken).toBe(true)
+    await handle.cancel("test")
+  })
+
+  it("uses x-api-key (apiKey) for Anthropic api_key credentials", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "sk-ant-api-key",
+          credentialId: "cred-apikey",
+          credentialType: "api_key",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const useAuthToken = (handle as any).useAuthToken
+    expect(useAuthToken).toBe(false)
+    await handle.cancel("test")
+  })
+
+  it("uses Bearer auth for google-antigravity even without credentialType", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "google-antigravity",
+          token: "goog-oauth-token",
+          credentialId: "cred-goog-2",
+          // No credentialType — Antigravity always uses Bearer
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const useAuthToken = (handle as any).useAuthToken
+    expect(useAuthToken).toBe(true)
+    await handle.cancel("test")
+  })
+
   it("falls back to global client when no llmCredential is set", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })

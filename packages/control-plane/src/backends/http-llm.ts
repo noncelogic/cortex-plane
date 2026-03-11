@@ -215,8 +215,11 @@ export class HttpLlmBackend implements ExecutionBackend {
         if (isAntigravity) {
           clientBaseUrl = resolveAntigravityBaseUrl(cred.baseUrl, cred.accountId)
         }
+        // OAuth tokens (Anthropic OAuth, Google Antigravity) use Bearer auth;
+        // API keys use the x-api-key header.
+        const useBearer = cred.credentialType === "oauth" || isAntigravity
         const client = new Anthropic({
-          ...(isAntigravity ? { authToken: cred.token, apiKey: null } : { apiKey: cred.token }),
+          ...(useBearer ? { authToken: cred.token, apiKey: null } : { apiKey: cred.token }),
           ...(clientBaseUrl ? { baseURL: clientBaseUrl } : {}),
         })
         return Promise.resolve(
@@ -224,7 +227,7 @@ export class HttpLlmBackend implements ExecutionBackend {
             tokenRefresher,
             credentialId: cred.credentialId,
             baseUrl: clientBaseUrl,
-            useAuthToken: !!isAntigravity,
+            useAuthToken: useBearer,
           }),
         )
       }

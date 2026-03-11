@@ -381,6 +381,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               .select([
                 "provider_credential.user_account_id",
                 "provider_credential.provider",
+                "provider_credential.credential_type",
                 "provider_credential.credential_class",
                 "provider_credential.account_id",
               ])
@@ -406,6 +407,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   token: result.token,
                   credentialId: result.credentialId,
                   accountId: binding.account_id,
+                  credentialType: binding.credential_type as "oauth" | "api_key",
                 }
 
                 // Build a token refresher for transparent 401 retry.
