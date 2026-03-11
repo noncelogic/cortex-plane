@@ -79,7 +79,6 @@ function createMockApprovalService() {
     }),
     getAuditTrail: vi.fn().mockResolvedValue([]),
     getPendingForJob: vi.fn().mockResolvedValue([]),
-    recordNotification: vi.fn().mockResolvedValue(undefined),
     expireStaleRequests: vi.fn().mockResolvedValue(0),
   } as unknown as ApprovalService
 }
