@@ -50,7 +50,7 @@ function applyFilters(
   })
 }
 
-export function useMemoryExplorer() {
+export function useMemoryExplorer(explicitAgentId?: string) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -61,9 +61,12 @@ export function useMemoryExplorer() {
     timeRange: "ALL",
   })
 
-  // Fetch agents to get a real agent ID for memory search
-  const { data: agentData } = useApiQuery(() => listAgents({ limit: 1 }), [])
-  const agentId = agentData?.agents?.[0]?.id ?? null
+  // Fetch agents to get a real agent ID for memory search (skipped when explicit ID provided)
+  const { data: agentData } = useApiQuery(
+    () => (explicitAgentId ? Promise.resolve(null) : listAgents({ limit: 1 })),
+    [explicitAgentId],
+  )
+  const agentId = explicitAgentId ?? agentData?.agents?.[0]?.id ?? null
 
   // Skip the API call when the query is empty or no agent is available
   const {
