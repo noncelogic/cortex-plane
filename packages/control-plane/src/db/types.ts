@@ -932,6 +932,53 @@ export type NewContentItem = Insertable<ContentItemTable>
 export type ContentItemUpdate = Updateable<ContentItemTable>
 
 // ---------------------------------------------------------------------------
+// Table: browser_screenshot
+// ---------------------------------------------------------------------------
+export type BrowserScreenshotEventType =
+  | "GET"
+  | "CLICK"
+  | "CONSOLE"
+  | "SNAPSHOT"
+  | "NAVIGATE"
+  | "ERROR"
+export type BrowserEventSeverity = "info" | "warn" | "error"
+
+export interface BrowserScreenshotTable {
+  id: Generated<string>
+  agent_id: string
+  thumbnail_url: string
+  full_url: string
+  width: number
+  height: number
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type BrowserScreenshot = Selectable<BrowserScreenshotTable>
+export type NewBrowserScreenshot = Insertable<BrowserScreenshotTable>
+
+// ---------------------------------------------------------------------------
+// Table: browser_event
+// ---------------------------------------------------------------------------
+export interface BrowserEventTable {
+  id: Generated<string>
+  agent_id: string
+  type: ColumnType<
+    BrowserScreenshotEventType,
+    BrowserScreenshotEventType,
+    BrowserScreenshotEventType
+  >
+  url: string | null
+  selector: string | null
+  message: string | null
+  duration_ms: number | null
+  severity: ColumnType<BrowserEventSeverity, BrowserEventSeverity | undefined, BrowserEventSeverity>
+  created_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type BrowserEvent = Selectable<BrowserEventTable>
+export type NewBrowserEvent = Insertable<BrowserEventTable>
+
+// ---------------------------------------------------------------------------
 // Database interface — register all tables here.
 // ---------------------------------------------------------------------------
 export interface Database {
@@ -968,4 +1015,6 @@ export interface Database {
   channel_allowlist: ChannelAllowlistTable
   channel_allowlist_audit: ChannelAllowlistAuditTable
   content_item: ContentItemTable
+  browser_screenshot: BrowserScreenshotTable
+  browser_event: BrowserEventTable
 }
