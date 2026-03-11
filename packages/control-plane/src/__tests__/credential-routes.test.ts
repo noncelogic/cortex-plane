@@ -358,6 +358,39 @@ describe("PUT /credentials/:id/rotate", () => {
     const body = res.json()
     expect(body.message).toContain("8 characters")
   })
+
+  it("rejects invalid toolName", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/credentials/${CRED_ID}/rotate`,
+      headers: withSession(),
+      payload: { apiKey: "BSA_new_key_1234", toolName: "INVALID!!!" },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body = res.json()
+    expect(body.message).toContain("toolName")
+  })
+
+  it("accepts valid toolName", async () => {
+    const { app, credentialService } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/credentials/${CRED_ID}/rotate`,
+      headers: withSession(),
+      payload: { apiKey: "BSA_new_key_1234", toolName: "my-tool-1" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(credentialService.rotateToolSecret).toHaveBeenCalledWith(
+      "user-1",
+      CRED_ID,
+      "BSA_new_key_1234",
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

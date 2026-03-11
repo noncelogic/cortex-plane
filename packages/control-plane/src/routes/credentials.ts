@@ -208,14 +208,14 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
      */
     app.put<{
       Params: { id: string }
-      Body: { apiKey: string }
+      Body: { apiKey: string; toolName?: string }
     }>(
       "/credentials/:id/rotate",
       { preHandler: [requireAuth, requireAdmin] },
       async (
         request: FastifyRequest<{
           Params: { id: string }
-          Body: { apiKey: string }
+          Body: { apiKey: string; toolName?: string }
         }>,
         reply: FastifyReply,
       ) => {
@@ -225,7 +225,16 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
           return
         }
 
-        const { apiKey } = request.body
+        const { apiKey, toolName } = request.body
+
+        if (toolName !== undefined && !TOOL_NAME_RE.test(toolName)) {
+          reply.status(400).send({
+            error: "bad_request",
+            message:
+              "toolName is required: 1-64 chars, lowercase alphanumeric + hyphens, must start with alphanumeric",
+          })
+          return
+        }
 
         if (!apiKey || apiKey.length < 8) {
           reply.status(400).send({
