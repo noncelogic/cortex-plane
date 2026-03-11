@@ -69,6 +69,8 @@ export interface Config {
   memoryExtractThreshold: number
   /** Qdrant REST URL */
   qdrantUrl: string
+  /** Root directory for agent data (memory files, etc.) */
+  dataDir: string
   /** OpenTelemetry tracing configuration */
   tracing: TracingConfig
   /** OAuth & dashboard authentication (optional — auth disabled if absent) */
@@ -127,6 +129,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     workerConcurrency: parseIntOr(env.GRAPHILE_WORKER_CONCURRENCY, 5),
     memoryExtractThreshold: parseIntOr(env.MEMORY_EXTRACT_THRESHOLD, 50),
     qdrantUrl: env.QDRANT_URL ?? "http://localhost:6333",
+    dataDir: env.DATA_DIR ?? "/var/lib/cortex",
     tracing: {
       enabled: env.OTEL_TRACING_ENABLED === "true",
       endpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "http://localhost:4318/v1/traces",

@@ -32,6 +32,7 @@ import { McpClientPool } from "./mcp/client-pool.js"
 import { McpHealthSupervisor } from "./mcp/health-supervisor.js"
 import { McpServerDeployer } from "./mcp/k8s-deployer.js"
 import { McpToolRouter } from "./mcp/tool-router.js"
+import { MemorySyncService } from "./memory/sync-service.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { AgentEventEmitter } from "./observability/event-emitter.js"
 import { ExecutionRegistry } from "./observability/execution-registry.js"
@@ -380,6 +381,31 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     }),
   )
 
+  // Build memory sync service when an embedding provider is available
+  let memorySyncService: MemorySyncService | undefined
+  const openaiApiKey = process.env.OPENAI_API_KEY
+  if (openaiApiKey) {
+    memorySyncService = new MemorySyncService({
+      db,
+      dataDir: config.dataDir,
+      qdrantUrl: config.qdrantUrl,
+      embeddingFn: async (texts: string[]) => {
+        const res = await fetch("https://api.openai.com/v1/embeddings", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openaiApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ model: "text-embedding-3-small", input: texts }),
+          signal: AbortSignal.timeout(30_000),
+        })
+        if (!res.ok) throw new Error(`OpenAI embeddings failed: ${res.status}`)
+        const json = (await res.json()) as { data: Array<{ embedding: number[] }> }
+        return json.data.map((d) => d.embedding)
+      },
+    })
+  }
+
   // Register dashboard compatibility endpoints that map to existing services/tables.
   await app.register(
     dashboardRoutes({
@@ -389,6 +415,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       },
       observationService,
       contentService: new ContentService({ db }),
+      memorySyncService,
     }),
   )
 

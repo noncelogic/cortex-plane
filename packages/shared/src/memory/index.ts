@@ -19,3 +19,5 @@ export { calculateDecay, calculateUtility, rankMemories, scoreMemory } from "./s
 export type { MemoryServiceOptions, MemoryStore, StoreOutcome, StoreResult } from "./service.js"
 export { factToRecord, MemoryService } from "./service.js"
 export type { Importance, MemoryRecord, MemoryType, ScoredMemoryRecord } from "./types.js"
+export type { EmbeddingFn, SyncConfig, SyncResult } from "./sync/sync.js"
+export { batchImport, syncFile } from "./sync/sync.js"

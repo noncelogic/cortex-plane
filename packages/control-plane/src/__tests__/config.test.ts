@@ -18,6 +18,7 @@ describe("loadConfig", () => {
       workerConcurrency: 5,
       memoryExtractThreshold: 50,
       qdrantUrl: "http://localhost:6333",
+      dataDir: "/var/lib/cortex",
       auth: undefined,
       channels: {},
       tracing: {
