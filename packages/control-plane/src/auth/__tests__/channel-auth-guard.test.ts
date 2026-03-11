@@ -521,6 +521,85 @@ describe("ChannelAuthGuard", () => {
   })
 
   // -----------------------------------------------------------------------
+  // authorize — access_level enforcement
+  // -----------------------------------------------------------------------
+  describe("authorize — access_level enforcement", () => {
+    it("denies write intent when grant has read-only access", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "allowlist" }),
+        grant: makeGrant({ access_level: "read" }),
+      })
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      const decision = await guard.authorize({ ...baseParams, intent: "write" })
+
+      expect(decision.allowed).toBe(false)
+      expect(decision.reason).toBe("read_only")
+      expect(decision.accessLevel).toBe("read")
+      expect(decision.grantId).toBe(GRANT_ID)
+      expect(decision.replyToUser).toContain("read-only")
+    })
+
+    it("allows read intent when grant has read-only access", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "allowlist" }),
+        grant: makeGrant({ access_level: "read" }),
+      })
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      const decision = await guard.authorize({ ...baseParams, intent: "read" })
+
+      expect(decision.allowed).toBe(true)
+      expect(decision.reason).toBe("granted")
+      expect(decision.accessLevel).toBe("read")
+    })
+
+    it("allows write intent when grant has write access", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "allowlist" }),
+        grant: makeGrant({ access_level: "write" }),
+      })
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      const decision = await guard.authorize({ ...baseParams, intent: "write" })
+
+      expect(decision.allowed).toBe(true)
+      expect(decision.reason).toBe("granted")
+      expect(decision.accessLevel).toBe("write")
+    })
+
+    it("defaults intent to write (backward compat)", async () => {
+      const { db } = buildMockDb({
+        agent: makeAgent({ auth_model: "allowlist" }),
+        grant: makeGrant({ access_level: "read" }),
+      })
+      const guard = new ChannelAuthGuard({
+        db,
+        pairingService: makePairingService(),
+        accessRequestService: makeAccessRequestService(),
+      })
+
+      // No intent specified — should default to "write" and deny read-only
+      const decision = await guard.authorize(baseParams)
+
+      expect(decision.allowed).toBe(false)
+      expect(decision.reason).toBe("read_only")
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // authorize — revoked / expired grants
   // -----------------------------------------------------------------------
   describe("authorize — revoked grant", () => {

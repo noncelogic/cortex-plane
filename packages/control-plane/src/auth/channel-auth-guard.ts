@@ -16,6 +16,8 @@ export interface AuthorizeParams {
   chatId: string
   messageText?: string
   channelConfigId?: string
+  /** Whether the caller intends to read or write. Defaults to "write". */
+  intent?: "read" | "write"
 }
 
 export type AuthDecisionReason =
@@ -29,12 +31,14 @@ export type AuthDecisionReason =
   | "budget_exceeded"
   | "revoked"
   | "expired"
+  | "read_only"
 
 export interface AuthDecision {
   allowed: boolean
   userId: string
   grantId?: string
   reason: AuthDecisionReason
+  accessLevel?: "read" | "write"
   replyToUser?: string
 }
 
@@ -84,7 +88,15 @@ export class ChannelAuthGuard {
    * checks for an existing grant, and applies the appropriate policy.
    */
   async authorize(params: AuthorizeParams): Promise<AuthDecision> {
-    const { agentId, channelType, channelUserId, chatId, messageText, channelConfigId } = params
+    const {
+      agentId,
+      channelType,
+      channelUserId,
+      chatId,
+      messageText,
+      channelConfigId,
+      intent = "write",
+    } = params
 
     // 1. Resolve or create identity
     const { userAccountId, channelMappingId } = await this.resolveOrCreateIdentity(
@@ -156,12 +168,25 @@ export class ChannelAuthGuard {
         }
       }
 
-      // Valid grant exists — allowed
+      // Valid grant exists — check access_level vs intent
+      const grantLevel = grant.access_level ?? "write"
+      if (intent === "write" && grantLevel === "read") {
+        return {
+          allowed: false,
+          userId: userAccountId,
+          grantId: grant.id,
+          reason: "read_only",
+          accessLevel: "read",
+          replyToUser: "You have read-only access to this agent.",
+        }
+      }
+
       return {
         allowed: true,
         userId: userAccountId,
         grantId: grant.id,
         reason: "granted",
+        accessLevel: grantLevel,
       }
     }
 
