@@ -7,6 +7,7 @@
  *   GET  /auth/callback/:provider — OAuth callback handler
  *   GET  /auth/session           — get current session user
  *   POST /auth/logout            — destroy session
+ *   POST /auth/logout-all        — destroy all sessions for user
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -261,6 +262,37 @@ export function authRoutes(deps: AuthRouteDeps) {
         const cookie = SessionService.clearCookie(isSecure)
         reply.header("Set-Cookie", cookie)
         return { ok: true }
+      },
+    )
+
+    /**
+     * POST /auth/logout-all — destroy all sessions for the authenticated user
+     */
+    app.post(
+      "/auth/logout-all",
+      { preHandler: [requireAuth] },
+      async (request: FastifyRequest, reply: FastifyReply) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (!principal) {
+          reply.status(401).send({ error: "unauthorized" })
+          return
+        }
+
+        const deleted = await sessionService.deleteUserSessions(principal.userId)
+
+        await db
+          .insertInto("credential_audit_log")
+          .values({
+            user_account_id: principal.userId,
+            event_type: "logout_all",
+            details: { ip: request.ip, sessionsDeleted: deleted },
+            ip_address: request.ip,
+          })
+          .execute()
+
+        const cookie = SessionService.clearCookie(isSecure)
+        reply.header("Set-Cookie", cookie)
+        return { ok: true, sessionsDeleted: deleted }
       },
     )
 
