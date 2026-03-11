@@ -60,9 +60,9 @@ describe("ModelConfigPanel in agent detail page", () => {
     expect(content).toContain("<select")
   })
 
-  it("includes AVAILABLE_MODELS options in dropdown", () => {
-    expect(content).toContain("AVAILABLE_MODELS.map")
-    expect(content).toContain("import { AVAILABLE_MODELS }")
+  it("uses useModels hook for model list in dropdown", () => {
+    expect(content).toContain("availableModels.map")
+    expect(content).toContain("useModels")
   })
 
   it("offers a Custom option in the model dropdown", () => {
@@ -109,12 +109,12 @@ describe("ModelConfigPanel in agent detail page", () => {
 
   it("displays model label for known models in view mode", () => {
     expect(content).toContain("modelLabel")
-    expect(content).toContain("AVAILABLE_MODELS.find")
+    expect(content).toContain("availableModels.find")
   })
 
-  it("pre-selects Custom when current model is not in AVAILABLE_MODELS", () => {
+  it("pre-selects Custom when current model is not in availableModels", () => {
     expect(content).toContain("isKnownModel")
-    expect(content).toContain("AVAILABLE_MODELS.some")
+    expect(content).toContain("availableModels.some")
   })
 })
 
@@ -309,6 +309,58 @@ describe("custom model resolution", () => {
 
   it("returns empty string when custom is selected but no value entered", () => {
     expect(resolveModel(CUSTOM_MODEL_VALUE, "")).toBe("")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// API client: listModels fetches the model catalogue
+// ---------------------------------------------------------------------------
+
+describe("listModels", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it("fetches models from GET /models", async () => {
+    const catalogue = [
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", providers: ["anthropic"] },
+      { id: "gpt-4o", label: "GPT-4o", providers: ["openai"] },
+    ]
+    mockFetchResponse({ models: catalogue })
+
+    const { listModels } = await import("@/lib/api-client")
+    const result = await listModels()
+
+    expect(result.models).toHaveLength(2)
+    expect(result.models[0]!.id).toBe("claude-sonnet-4-6")
+
+    const fetchMock = vi.mocked(globalThis.fetch)
+    const [url] = fetchMock.mock.calls[0]!
+    expect(url).toContain("/models")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Static analysis: useModels hook
+// ---------------------------------------------------------------------------
+
+describe("useModels hook", () => {
+  const content = readSrc("hooks/use-models.ts")
+
+  it("imports listModels from api-client", () => {
+    expect(content).toContain("listModels")
+  })
+
+  it("provides fallback models", () => {
+    expect(content).toContain("FALLBACK_MODELS")
+    expect(content).toContain("claude-sonnet-4-6")
+  })
+
+  it("returns models and isLoading", () => {
+    expect(content).toContain("models")
+    expect(content).toContain("isLoading")
   })
 })
 

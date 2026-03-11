@@ -3,10 +3,14 @@
 import { useCallback, useState } from "react"
 
 import { useToast } from "@/components/layout/toast"
+import { useModels } from "@/hooks/use-models"
 import { createAgent, type CreateAgentRequest } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
-// Available models — keep in sync with control-plane MODEL_PRICING
+// Available models — keep in sync with control-plane MODEL_CATALOGUE.
+// Retained as a static export for backward compatibility (credential-binding,
+// tests). Components should prefer the useModels() hook which fetches from
+// the GET /models API endpoint.
 // ---------------------------------------------------------------------------
 
 export const AVAILABLE_MODELS = [
@@ -28,6 +32,7 @@ export function DeployAgentModal({
   onClose,
   onSuccess,
 }: DeployAgentModalProps): React.JSX.Element | null {
+  const { models } = useModels()
   const [name, setName] = useState("")
   const [role, setRole] = useState("")
   const [description, setDescription] = useState("")
@@ -185,7 +190,7 @@ export function DeployAgentModal({
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             >
               <option value="">Select a model...</option>
-              {AVAILABLE_MODELS.map((m) => (
+              {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}
                 </option>
