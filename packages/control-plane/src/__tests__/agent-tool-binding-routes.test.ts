@@ -414,6 +414,20 @@ describe("PUT /agents/:agentId/tool-bindings/:bindingId", () => {
     expect(res.statusCode).toBe(404)
   })
 
+  it("writes audit log on successful update", async () => {
+    const updated = makeBinding({ approval_policy: "always_approve" })
+    const { app, auditInsertValues } = await buildTestApp({ updatedBinding: updated })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/agents/${AGENT_ID}/tool-bindings/${BINDING_ID}`,
+      payload: { approvalPolicy: "always_approve" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(auditInsertValues).toHaveBeenCalled()
+  })
+
   it("returns 400 when no fields provided", async () => {
     const { app } = await buildTestApp()
 
