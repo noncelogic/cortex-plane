@@ -182,8 +182,8 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     sessionService = new SessionService(db, config.auth.sessionMaxAge)
 
     // Clean up expired sessions on startup
-    sessionService.cleanupExpired().catch(() => {
-      // Non-critical, log and continue
+    sessionService.cleanupExpired().catch((err: unknown) => {
+      app.log.warn({ err }, "session cleanup failed on startup")
     })
   }
 
