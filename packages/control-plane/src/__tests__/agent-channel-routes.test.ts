@@ -30,7 +30,6 @@ function mockService(overrides: Partial<AgentChannelService> = {}): AgentChannel
   return {
     resolveAgent: vi.fn().mockResolvedValue("agent-id"),
     bindChannel: vi.fn().mockResolvedValue(undefined),
-    unbindChannel: vi.fn().mockResolvedValue(undefined),
     unbindById: vi.fn().mockResolvedValue(true),
     listBindings: vi.fn().mockResolvedValue([makeBinding()]),
     setDefault: vi.fn().mockResolvedValue(undefined),

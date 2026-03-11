@@ -66,18 +66,6 @@ export class AgentChannelService {
   }
 
   /**
-   * Unbind a chat from an agent.
-   */
-  async unbindChannel(agentId: string, channelType: string, chatId: string): Promise<void> {
-    await this.db
-      .deleteFrom("agent_channel_binding")
-      .where("agent_id", "=", agentId)
-      .where("channel_type", "=", channelType)
-      .where("chat_id", "=", chatId)
-      .execute()
-  }
-
-  /**
    * Remove a binding by its ID.
    */
   async unbindById(agentId: string, bindingId: string): Promise<boolean> {

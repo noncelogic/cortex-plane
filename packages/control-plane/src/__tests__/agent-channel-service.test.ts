@@ -146,22 +146,6 @@ describe("AgentChannelService", () => {
   })
 
   // ---------------------------------------------------------------------------
-  // Tests: unbindChannel
-  // ---------------------------------------------------------------------------
-
-  describe("unbindChannel", () => {
-    it("deletes the binding", async () => {
-      const db = mockDb()
-      const service = new AgentChannelService(db)
-
-      await service.unbindChannel("agent-1", "telegram", "12345")
-
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(db.deleteFrom).toHaveBeenCalledWith("agent_channel_binding")
-    })
-  })
-
-  // ---------------------------------------------------------------------------
   // Tests: unbindById
   // ---------------------------------------------------------------------------
 

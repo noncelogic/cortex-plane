@@ -314,60 +314,6 @@ describe("AccessRequestService", () => {
   })
 
   // -----------------------------------------------------------------------
-  // listPending
-  // -----------------------------------------------------------------------
-  describe("listPending", () => {
-    it("returns pending requests with total count", async () => {
-      const requests = [makeRequestRow(), makeRequestRow({ id: "other-id" })]
-      // baseQuery is one selectFrom call — both branches share the chain.
-      // execute() returns request rows; executeTakeFirstOrThrow() returns count.
-      const chain = mockSelectChain(requests)
-      chain.executeTakeFirstOrThrow.mockResolvedValue({ total: "2" })
-      const db = {
-        selectFrom: vi.fn().mockReturnValue(chain),
-      } as unknown as Kysely<Database>
-
-      const svc = new AccessRequestService(db)
-      const result = await svc.listPending(AGENT_ID)
-
-      expect(result.requests).toHaveLength(2)
-      expect(result.total).toBe(2)
-    })
-
-    it("uses default pagination values", async () => {
-      const chain = mockSelectChain([])
-      chain.executeTakeFirstOrThrow.mockResolvedValue({ total: "0" })
-      const db = {
-        selectFrom: vi.fn().mockReturnValue(chain),
-      } as unknown as Kysely<Database>
-
-      const svc = new AccessRequestService(db)
-      const result = await svc.listPending(AGENT_ID)
-
-      expect(result.requests).toEqual([])
-      expect(result.total).toBe(0)
-      expect(chain.limit).toHaveBeenCalledWith(20)
-      expect(chain.offset).toHaveBeenCalledWith(0)
-    })
-
-    it("respects custom pagination", async () => {
-      const chain = mockSelectChain([makeRequestRow()])
-      chain.executeTakeFirstOrThrow.mockResolvedValue({ total: "5" })
-      const db = {
-        selectFrom: vi.fn().mockReturnValue(chain),
-      } as unknown as Kysely<Database>
-
-      const svc = new AccessRequestService(db)
-      const result = await svc.listPending(AGENT_ID, { limit: 10, offset: 2 })
-
-      expect(result.requests).toHaveLength(1)
-      expect(result.total).toBe(5)
-      expect(chain.limit).toHaveBeenCalledWith(10)
-      expect(chain.offset).toHaveBeenCalledWith(2)
-    })
-  })
-
-  // -----------------------------------------------------------------------
   // pendingCounts
   // -----------------------------------------------------------------------
   describe("pendingCounts", () => {

@@ -268,7 +268,6 @@ function mockAccessRequestService() {
     create: vi.fn().mockResolvedValue(makeAccessRequest()),
     approve: vi.fn().mockResolvedValue(makeGrant({ origin: "approval" })),
     deny: vi.fn().mockResolvedValue(undefined),
-    listPending: vi.fn().mockResolvedValue({ requests: [makeAccessRequest()], total: 1 }),
     pendingCounts: vi.fn().mockResolvedValue(new Map([[AGENT_ID, 3]])),
   }
 }

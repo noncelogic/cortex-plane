@@ -277,38 +277,6 @@ export class ApprovalService {
     return this.decide(request.id, decision, decidedBy, channel, reason, actorMetadata)
   }
 
-  async resumeApproval(
-    approvalRequestId: string,
-  ): Promise<{ proposal: ApprovalRequest; resumePayload: Record<string, unknown> | null } | null> {
-    const request = await this.getRequest(approvalRequestId)
-    if (!request || request.status !== "APPROVED") return null
-
-    await this.db
-      .updateTable("approval_request")
-      .set({ resumed_at: new Date() })
-      .where("id", "=", approvalRequestId)
-      .execute()
-
-    return {
-      proposal: request,
-      resumePayload: request.resume_payload ?? null,
-    }
-  }
-
-  async recordExecution(
-    approvalRequestId: string,
-    executionResult: Record<string, unknown>,
-  ): Promise<void> {
-    await this.db
-      .updateTable("approval_request")
-      .set({
-        executed_at: new Date(),
-        execution_result: executionResult,
-      })
-      .where("id", "=", approvalRequestId)
-      .execute()
-  }
-
   async expireStaleRequests(): Promise<number> {
     const now = new Date()
     const expiredRequests = await this.db
@@ -359,16 +327,6 @@ export class ApprovalService {
       .selectAll()
       .where("id", "=", approvalRequestId)
       .executeTakeFirst()
-  }
-
-  async getPendingForJob(jobId: string): Promise<ApprovalRequest[]> {
-    return this.db
-      .selectFrom("approval_request")
-      .selectAll()
-      .where("job_id", "=", jobId)
-      .where("status", "=", "PENDING")
-      .orderBy("requested_at", "desc")
-      .execute()
   }
 
   async list(filters?: {
