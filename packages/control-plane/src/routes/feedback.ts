@@ -9,7 +9,14 @@ import type {
 } from "@cortex/shared"
 import type { FastifyInstance } from "fastify"
 
+import type { SessionService } from "../auth/session-service.js"
 import type { FeedbackService } from "../feedback/service.js"
+import {
+  type AuthMiddlewareOptions,
+  createRequireAuth,
+  type PreHandler,
+} from "../middleware/auth.js"
+import type { AuthConfig } from "../middleware/types.js"
 
 interface CreateFeedbackBody {
   runId?: string
@@ -47,31 +54,49 @@ interface AddActionBody {
 
 export interface FeedbackRouteDeps {
   feedbackService: FeedbackService
+  authConfig: AuthConfig
+  sessionService?: SessionService
 }
 
 export function feedbackRoutes(deps: FeedbackRouteDeps) {
-  const { feedbackService } = deps
+  const { feedbackService, authConfig, sessionService } = deps
+
+  const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
+  const requireAuth: PreHandler = createRequireAuth(authOpts)
 
   return function register(app: FastifyInstance): void {
-    app.get<{ Querystring: ListFeedbackQuery }>("/api/feedback", async (request, reply) => {
-      const items = await feedbackService.listFeedback(request.query)
-      return reply.status(200).send({ feedback: items })
-    })
+    app.get<{ Querystring: ListFeedbackQuery }>(
+      "/api/feedback",
+      { preHandler: [requireAuth] },
+      async (request, reply) => {
+        const items = await feedbackService.listFeedback(request.query)
+        return reply.status(200).send({ feedback: items })
+      },
+    )
 
-    app.post<{ Body: CreateFeedbackBody }>("/api/feedback", async (request, reply) => {
-      const created = await feedbackService.createFeedback(request.body)
-      return reply.status(201).send(created)
-    })
+    app.post<{ Body: CreateFeedbackBody }>(
+      "/api/feedback",
+      { preHandler: [requireAuth] },
+      async (request, reply) => {
+        const created = await feedbackService.createFeedback(request.body)
+        return reply.status(201).send(created)
+      },
+    )
 
-    app.get<{ Params: { id: string } }>("/api/feedback/:id", async (request, reply) => {
-      const item = await feedbackService.getFeedback(request.params.id)
-      if (!item) return reply.status(404).send({ error: "not_found" })
-      const actions = await feedbackService.getActions(request.params.id)
-      return reply.status(200).send({ ...item, actions })
-    })
+    app.get<{ Params: { id: string } }>(
+      "/api/feedback/:id",
+      { preHandler: [requireAuth] },
+      async (request, reply) => {
+        const item = await feedbackService.getFeedback(request.params.id)
+        if (!item) return reply.status(404).send({ error: "not_found" })
+        const actions = await feedbackService.getActions(request.params.id)
+        return reply.status(200).send({ ...item, actions })
+      },
+    )
 
     app.patch<{ Params: { id: string }; Body: UpdateFeedbackBody }>(
       "/api/feedback/:id",
+      { preHandler: [requireAuth] },
       async (request, reply) => {
         const resolvedAt =
           request.body.resolvedAt === undefined
@@ -93,6 +118,7 @@ export function feedbackRoutes(deps: FeedbackRouteDeps) {
 
     app.post<{ Params: { id: string }; Body: AddActionBody }>(
       "/api/feedback/:id/actions",
+      { preHandler: [requireAuth] },
       async (request, reply) => {
         const parent = await feedbackService.getFeedback(request.params.id)
         if (!parent) return reply.status(404).send({ error: "not_found" })
