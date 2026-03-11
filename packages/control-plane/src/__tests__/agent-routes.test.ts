@@ -579,6 +579,7 @@ describe("POST /agents/:agentId/pause", () => {
     })
 
     expect(res.statusCode).toBe(503)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(res.json().error).toBe("service_unavailable")
   })
 })
@@ -594,6 +595,7 @@ describe("POST /agents/:agentId/resume", () => {
     })
 
     expect(res.statusCode).toBe(503)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(res.json().error).toBe("service_unavailable")
   })
 })
