@@ -803,15 +803,58 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
 
     app.get<{ Params: AgentParams; Querystring: BrowserScreenshotsQuery }>(
       "/agents/:agentId/browser/screenshots",
-      async (_request, reply) => {
-        return reply.send({ screenshots: [] })
+      async (request, reply) => {
+        const { agentId } = request.params
+        const limit = Math.min(Number(request.query.limit) || 50, 200)
+
+        const rows = await db
+          .selectFrom("browser_screenshot")
+          .selectAll()
+          .where("agent_id", "=", agentId)
+          .orderBy("created_at", "desc")
+          .limit(limit)
+          .execute()
+
+        const screenshots = rows.map((r) => ({
+          id: r.id,
+          agentId: r.agent_id,
+          timestamp: new Date(r.created_at).toISOString(),
+          thumbnailUrl: r.thumbnail_url,
+          fullUrl: r.full_url,
+          dimensions: { width: r.width, height: r.height },
+        }))
+
+        return reply.send({ screenshots })
       },
     )
 
     app.get<{ Params: AgentParams; Querystring: BrowserEventsQuery }>(
       "/agents/:agentId/browser/events",
-      async (_request, reply) => {
-        return reply.send({ events: [] })
+      async (request, reply) => {
+        const { agentId } = request.params
+        const limit = Math.min(Number(request.query.limit) || 50, 200)
+        const typeFilter = request.query.types?.split(",").filter(Boolean)
+
+        let query = db.selectFrom("browser_event").selectAll().where("agent_id", "=", agentId)
+
+        if (typeFilter && typeFilter.length > 0) {
+          query = query.where("type", "in", typeFilter as never)
+        }
+
+        const rows = await query.orderBy("created_at", "desc").limit(limit).execute()
+
+        const events = rows.map((r) => ({
+          id: r.id,
+          type: r.type,
+          timestamp: new Date(r.created_at).toISOString(),
+          ...(r.url != null && { url: r.url }),
+          ...(r.selector != null && { selector: r.selector }),
+          ...(r.message != null && { message: r.message }),
+          ...(r.duration_ms != null && { durationMs: r.duration_ms }),
+          ...(r.severity != null && { severity: r.severity }),
+        }))
+
+        return reply.send({ events })
       },
     )
 

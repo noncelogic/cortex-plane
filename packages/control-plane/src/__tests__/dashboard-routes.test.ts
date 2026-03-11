@@ -7,6 +7,8 @@ import { dashboardRoutes } from "../routes/dashboard.js"
 
 const JOB_UUID = "00000000-0000-4000-8000-000000000001"
 const AGENT_UUID = "00000000-0000-4000-8000-000000000002"
+const SCREENSHOT_UUID = "00000000-0000-4000-8000-000000000010"
+const EVENT_UUID = "00000000-0000-4000-8000-000000000011"
 
 function makeJob(overrides: Record<string, unknown> = {}) {
   return {
@@ -45,8 +47,14 @@ function makeJob(overrides: Record<string, unknown> = {}) {
 function mockDb(
   jobOverrides: Record<string, unknown> = {},
   agentEventRows: Record<string, unknown>[] = [],
+  opts: {
+    screenshotRows?: Record<string, unknown>[]
+    browserEventRows?: Record<string, unknown>[]
+  } = {},
 ) {
   const jobs = [makeJob(jobOverrides)]
+  const screenshotRows = opts.screenshotRows ?? []
+  const browserEventRows = opts.browserEventRows ?? []
   const memoryRows = [
     {
       id: "mem-1",
@@ -106,6 +114,8 @@ function mockDb(
       if (table === "agent_event") return selectChain(agentEventRows)
       if (table === "memory_extract_message") return selectChain(memoryRows)
       if (table === "approval_request") return selectChain([{ count: 0 }])
+      if (table === "browser_screenshot") return selectChain(screenshotRows)
+      if (table === "browser_event") return selectChain(browserEventRows)
       return selectChain([])
     }),
     updateTable: vi.fn().mockImplementation((table: string) => {
@@ -118,9 +128,13 @@ function mockDb(
 async function buildTestApp(
   jobOverrides: Record<string, unknown> = {},
   agentEventRows: Record<string, unknown>[] = [],
+  opts: {
+    screenshotRows?: Record<string, unknown>[]
+    browserEventRows?: Record<string, unknown>[]
+  } = {},
 ) {
   const app = Fastify({ logger: false })
-  const db = mockDb(jobOverrides, agentEventRows)
+  const db = mockDb(jobOverrides, agentEventRows, opts)
 
   await app.register(
     dashboardRoutes({
@@ -408,6 +422,99 @@ describe("dashboard routes", () => {
       error: "not_found",
       message: "Content item not found",
     })
+  })
+
+  it("returns persisted screenshots from database", async () => {
+    const { app } = await buildTestApp({}, [], {
+      screenshotRows: [
+        {
+          id: SCREENSHOT_UUID,
+          agent_id: AGENT_UUID,
+          thumbnail_url: "/thumbs/shot1.jpg",
+          full_url: "/shots/shot1.png",
+          width: 1920,
+          height: 1080,
+          created_at: new Date("2026-03-10T12:00:00.000Z"),
+        },
+      ],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/${AGENT_UUID}/browser/screenshots`,
+    })
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.screenshots).toHaveLength(1)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.screenshots[0]).toMatchObject({
+      id: SCREENSHOT_UUID,
+      agentId: AGENT_UUID,
+      thumbnailUrl: "/thumbs/shot1.jpg",
+      fullUrl: "/shots/shot1.png",
+      dimensions: { width: 1920, height: 1080 },
+    })
+  })
+
+  it("returns persisted browser events from database", async () => {
+    const { app } = await buildTestApp({}, [], {
+      browserEventRows: [
+        {
+          id: EVENT_UUID,
+          agent_id: AGENT_UUID,
+          type: "NAVIGATE",
+          url: "https://example.com",
+          selector: null,
+          message: null,
+          duration_ms: 120,
+          severity: "info",
+          created_at: new Date("2026-03-10T12:01:00.000Z"),
+        },
+      ],
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/agents/${AGENT_UUID}/browser/events`,
+    })
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.events).toHaveLength(1)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.events[0]).toMatchObject({
+      id: EVENT_UUID,
+      type: "NAVIGATE",
+      url: "https://example.com",
+      durationMs: 120,
+      severity: "info",
+    })
+    // null fields should be omitted
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.events[0].selector).toBeUndefined()
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.events[0].message).toBeUndefined()
+  })
+
+  it("returns empty arrays when no browser data exists", async () => {
+    const { app } = await buildTestApp()
+
+    const screenshots = await app.inject({
+      method: "GET",
+      url: `/agents/${AGENT_UUID}/browser/screenshots`,
+    })
+    expect(screenshots.statusCode).toBe(200)
+    expect(screenshots.json()).toEqual({ screenshots: [] })
+
+    const events = await app.inject({
+      method: "GET",
+      url: `/agents/${AGENT_UUID}/browser/events`,
+    })
+    expect(events.statusCode).toBe(200)
+    expect(events.json()).toEqual({ events: [] })
   })
 
   it("returns 501 for memory sync stub", async () => {
