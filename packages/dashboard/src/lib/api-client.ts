@@ -61,6 +61,7 @@ import {
   McpServerSchema,
 } from "./schemas/mcp-servers"
 import { MemorySearchResponseSchema } from "./schemas/memory"
+import { ModelListResponseSchema } from "./schemas/models"
 import {
   AgentCostResponseSchema,
   AgentEventListResponseSchema,
@@ -772,6 +773,18 @@ export async function stopTrace(
     method: "POST",
     schema: TraceStopResponseSchema,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Model catalogue
+// ---------------------------------------------------------------------------
+
+export type { ModelInfo } from "./schemas/models"
+
+export async function listModels(): Promise<{
+  models: import("./schemas/models").ModelInfo[]
+}> {
+  return apiFetch("/models", { schema: ModelListResponseSchema })
 }
 
 // ---------------------------------------------------------------------------

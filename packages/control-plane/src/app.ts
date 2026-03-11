@@ -55,6 +55,7 @@ import { dashboardRoutes } from "./routes/dashboard.js"
 import { feedbackRoutes } from "./routes/feedback.js"
 import { healthRoutes } from "./routes/health.js"
 import { mcpServerRoutes } from "./routes/mcp-servers.js"
+import { modelRoutes } from "./routes/models.js"
 import { observationRoutes } from "./routes/observation.js"
 import { operatorEventRoutes } from "./routes/operator-events.js"
 import { sessionRoutes } from "./routes/sessions.js"
@@ -426,6 +427,9 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     )
     await app.register(credentialRoutes({ credentialService, sessionService }))
   }
+
+  // Register model catalogue route (public, no auth required)
+  await app.register(modelRoutes())
 
   // Always register streaming + observation routes
   // (lifecycleManager is optional — routes handle its absence gracefully)

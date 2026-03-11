@@ -8,7 +8,6 @@ import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
 import { ChannelBindingTab } from "@/components/agents/channel-binding-tab"
 import { ChatPanel } from "@/components/agents/chat-panel"
 import { CredentialBindingPanel } from "@/components/agents/credential-binding"
-import { AVAILABLE_MODELS } from "@/components/agents/deploy-agent-modal"
 import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifecycle-timeline"
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
 import { SteerInput } from "@/components/agents/steer-input"
@@ -16,6 +15,7 @@ import { Skeleton } from "@/components/layout/skeleton"
 import { useToast } from "@/components/layout/toast"
 import { type AgentEventPayload, useAgentStream } from "@/hooks/use-agent-stream"
 import { useApiQuery } from "@/hooks/use-api"
+import { useModels } from "@/hooks/use-models"
 import {
   type AgentDetail,
   type AgentLifecycleState,
@@ -442,6 +442,7 @@ function ModelConfigPanel({
   agent: AgentDetail
   onSave: () => void
 }): React.JSX.Element {
+  const { models: availableModels } = useModels()
   const modelConfig: Record<string, unknown> = agent.model_config ?? {}
   const currentModel = typeof modelConfig.model === "string" ? modelConfig.model : ""
   const currentPrompt = typeof modelConfig.systemPrompt === "string" ? modelConfig.systemPrompt : ""
@@ -454,7 +455,7 @@ function ModelConfigPanel({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  const isKnownModel = AVAILABLE_MODELS.some((m) => m.id === currentModel)
+  const isKnownModel = availableModels.some((m) => m.id === currentModel)
 
   const handleEdit = useCallback(() => {
     if (isKnownModel || !currentModel) {
@@ -513,7 +514,7 @@ function ModelConfigPanel({
   }, [])
 
   // Find the display label for the current model
-  const modelLabel = AVAILABLE_MODELS.find((m) => m.id === currentModel)?.label
+  const modelLabel = availableModels.find((m) => m.id === currentModel)?.label
 
   return (
     <div
@@ -560,7 +561,7 @@ function ModelConfigPanel({
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             >
               <option value="">Select a model...</option>
-              {AVAILABLE_MODELS.map((m) => (
+              {availableModels.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}
                 </option>
