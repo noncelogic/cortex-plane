@@ -1290,7 +1290,7 @@ describe("HttpLlmBackend — 401 token refresh retry", () => {
 // ---------------------------------------------------------------------------
 
 describe("HttpLlmBackend — credential provider routing", () => {
-  it("routes google-antigravity to Anthropic SDK with Vertex AI base URL and authToken", async () => {
+  it("routes google-antigravity to Vertex AI client with path rewriting and authToken", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1309,11 +1309,18 @@ describe("HttpLlmBackend — credential provider routing", () => {
     const handle = await backend.executeTask(task)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    expect(client.baseURL).toBe(
-      "https://us-east5-aiplatform.googleapis.com/v1/projects/my-gcp-project-123/locations/us-east5/publishers/anthropic",
-    )
+    const client = (handle as any).client as {
+      baseURL: string
+      authToken: string | null
+      vertexProjectId: string
+      vertexRegion: string
+    }
+    // Vertex AI base URL does NOT include the project path — path rewriting
+    // appends /projects/{project}/locations/{region}/publishers/anthropic/models/{model}:rawPredict
+    expect(client.baseURL).toBe("https://us-east5-aiplatform.googleapis.com/v1")
     expect(client.authToken).toBe("gcp-oauth-token")
+    expect(client.vertexProjectId).toBe("my-gcp-project-123")
+    expect(client.vertexRegion).toBe("us-east5")
 
     await handle.cancel("test")
   })
@@ -1393,11 +1400,14 @@ describe("HttpLlmBackend — credential provider routing", () => {
     const handle = await backend.executeTask(task)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    // Without accountId, uses the default project in the Vertex AI URL
-    expect(client.baseURL).toBe(
-      "https://us-east5-aiplatform.googleapis.com/v1/projects/anthropic-cortex-default/locations/us-east5/publishers/anthropic",
-    )
+    const client = (handle as any).client as {
+      baseURL: string
+      authToken: string | null
+      vertexProjectId: string
+    }
+    // Without accountId, Vertex client stores default project internally
+    expect(client.baseURL).toBe("https://us-east5-aiplatform.googleapis.com/v1")
+    expect(client.vertexProjectId).toBe("anthropic-cortex-default")
     expect(client.authToken).toBe("gcp-oauth-token")
 
     await handle.cancel("test")
@@ -1464,5 +1474,52 @@ describe("HttpLlmBackend — credential provider routing", () => {
         process.env.ANTIGRAVITY_BASE_URL = originalEnv
       }
     }
+  })
+
+  it("rewrites /v1/messages path to Vertex AI rawPredict format", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "google-antigravity",
+          token: "gcp-oauth-token",
+          credentialId: "cred-gcp-rewrite",
+          accountId: "my-project-42",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    const client = (handle as any).client as unknown as {
+      baseURL: string
+      buildRequest(opts: Record<string, unknown>): Promise<{ url: string }>
+    }
+    // Verify the base URL no longer embeds the project path — path rewriting
+    // in buildRequest produces the correct Vertex AI endpoint at call time.
+    expect(client.baseURL).toBe("https://us-east5-aiplatform.googleapis.com/v1")
+
+    // Verify buildRequest rewrites the path correctly
+    const reqOpts = await client.buildRequest({
+      path: "/v1/messages",
+      method: "post",
+      body: {
+        model: "claude-sonnet-4-5-20250929",
+        stream: true,
+        messages: [{ role: "user", content: "test" }],
+      },
+    })
+
+    const reqUrl = reqOpts.url
+    expect(reqUrl).toContain("/projects/my-project-42/locations/us-east5/publishers/anthropic")
+    expect(reqUrl).toContain("/models/claude-sonnet-4-5-20250929:streamRawPredict")
+    // Must NOT contain the old double-/v1 pattern
+    expect(reqUrl).not.toContain("/publishers/anthropic/v1/messages")
+
+    await handle.cancel("test")
   })
 })
