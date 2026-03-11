@@ -100,6 +100,12 @@ export interface LlmCredentialRef {
    * When set, overrides any URL the backend would derive from the provider.
    */
   baseUrl?: string | null
+  /**
+   * Credential type determines how the token is sent to the LLM provider.
+   * OAuth tokens use Bearer auth; API keys use provider-specific headers
+   * (e.g. x-api-key for Anthropic).
+   */
+  credentialType?: "oauth" | "api_key"
 }
 
 /**
