@@ -15,6 +15,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 import { sql } from "kysely"
 
+import type { ContentService } from "../content/service.js"
 import type { Database } from "../db/types.js"
 import type { BrowserObservationService } from "../observation/service.js"
 
@@ -73,6 +74,7 @@ export interface DashboardRouteDeps {
   db: Kysely<Database>
   enqueueJob: (jobId: string) => Promise<void>
   observationService: BrowserObservationService
+  contentService: ContentService
 }
 
 function toIso(value: Date | string | null | undefined): string | undefined {
@@ -227,7 +229,7 @@ function synthesizeLogs(events: EventRow[]) {
 }
 
 export function dashboardRoutes(deps: DashboardRouteDeps) {
-  const { db, enqueueJob, observationService } = deps
+  const { db, enqueueJob, observationService, contentService } = deps
 
   return function register(app: FastifyInstance): void {
     app.get<{ Querystring: ListJobsQuery }>(
@@ -636,14 +638,28 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         },
       },
       async (request, reply) => {
-        const { limit = 50, offset = 0 } = request.query
+        const { status, type, agentId, limit = 50, offset = 0 } = request.query
+        const { items, total } = await contentService.list({ status, type, agentId, limit, offset })
         return reply.send({
-          content: [],
+          content: items.map((item) => ({
+            id: item.id,
+            agentId: item.agent_id,
+            title: item.title,
+            body: item.body,
+            type: item.type,
+            status: item.status,
+            channel: item.channel,
+            metadata: item.metadata,
+            publishedAt: item.published_at ? new Date(item.published_at).toISOString() : null,
+            archivedAt: item.archived_at ? new Date(item.archived_at).toISOString() : null,
+            createdAt: new Date(item.created_at).toISOString(),
+            updatedAt: new Date(item.updated_at).toISOString(),
+          })),
           pagination: {
-            total: offset,
+            total,
             limit,
             offset,
-            hasMore: false,
+            hasMore: offset + limit < total,
           },
         })
       },
@@ -651,18 +667,31 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
 
     app.post<{ Params: ContentParams; Body: PublishContentBody }>(
       "/content/:id/publish",
-      async (_request, reply) => {
-        return reply.status(501).send({
-          error: "not_implemented",
-          message: "Content publishing is not yet implemented",
+      async (request, reply) => {
+        const { id } = request.params
+        const { channel } = request.body ?? {}
+        const item = await contentService.publish(id, channel)
+        if (!item) {
+          return reply.status(404).send({ error: "not_found", message: "Content item not found" })
+        }
+        return reply.send({
+          id: item.id,
+          status: item.status,
+          publishedAt: item.published_at ? new Date(item.published_at).toISOString() : null,
         })
       },
     )
 
-    app.post<{ Params: ContentParams }>("/content/:id/archive", async (_request, reply) => {
-      return reply.status(501).send({
-        error: "not_implemented",
-        message: "Content archiving is not yet implemented",
+    app.post<{ Params: ContentParams }>("/content/:id/archive", async (request, reply) => {
+      const { id } = request.params
+      const item = await contentService.archive(id)
+      if (!item) {
+        return reply.status(404).send({ error: "not_found", message: "Content item not found" })
+      }
+      return reply.send({
+        id: item.id,
+        status: item.status,
+        archivedAt: item.archived_at ? new Date(item.archived_at).toISOString() : null,
       })
     })
 
