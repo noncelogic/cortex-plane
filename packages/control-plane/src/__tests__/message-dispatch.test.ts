@@ -47,7 +47,6 @@ function mockAgentChannelService(agentId: string | null = "agent-aaa") {
   return {
     resolveAgent: vi.fn().mockResolvedValue(agentId),
     bindChannel: vi.fn(),
-    unbindChannel: vi.fn(),
     unbindById: vi.fn(),
     listBindings: vi.fn(),
     setDefault: vi.fn(),

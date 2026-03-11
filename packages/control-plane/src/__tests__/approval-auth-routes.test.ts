@@ -78,7 +78,6 @@ function createMockApprovalService() {
       executeTakeFirstOrThrow: vi.fn().mockResolvedValue({ total: 0 }),
     }),
     getAuditTrail: vi.fn().mockResolvedValue([]),
-    getPendingForJob: vi.fn().mockResolvedValue([]),
     expireStaleRequests: vi.fn().mockResolvedValue(0),
   } as unknown as ApprovalService
 }

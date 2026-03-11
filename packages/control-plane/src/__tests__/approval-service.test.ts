@@ -303,22 +303,6 @@ describe("ApprovalService", () => {
     })
   })
 
-  describe("resumeApproval", () => {
-    it("returns proposal and payload for approved requests", async () => {
-      db._mockResult.executeTakeFirst
-        .mockResolvedValueOnce({
-          id: "approval-1",
-          status: "APPROVED",
-          resume_payload: { step: "continue" },
-        })
-        .mockResolvedValueOnce(undefined)
-
-      const result = await service.resumeApproval("approval-1")
-      expect(result?.proposal.id).toBe("approval-1")
-      expect(result?.resumePayload).toEqual({ step: "continue" })
-    })
-  })
-
   describe("decideByToken", () => {
     it("returns invalid_token_format for bad tokens", async () => {
       const result = await service.decideByToken("not_a_valid_token", "APPROVED", "user-1", "api")

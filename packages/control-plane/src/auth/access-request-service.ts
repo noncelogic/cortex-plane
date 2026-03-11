@@ -139,28 +139,6 @@ export class AccessRequestService {
   }
 
   /**
-   * List pending requests for a given agent with pagination.
-   */
-  async listPending(
-    agentId: string,
-    pagination: { limit?: number; offset?: number } = {},
-  ): Promise<{ requests: AccessRequest[]; total: number }> {
-    const { limit = 20, offset = 0 } = pagination
-
-    const baseQuery = this.db
-      .selectFrom("access_request")
-      .where("agent_id", "=", agentId)
-      .where("status", "=", "pending")
-
-    const [requests, countResult] = await Promise.all([
-      baseQuery.selectAll().orderBy("created_at", "desc").limit(limit).offset(offset).execute(),
-      baseQuery.select((eb) => eb.fn.countAll<string>().as("total")).executeTakeFirstOrThrow(),
-    ])
-
-    return { requests, total: Number(countResult.total) }
-  }
-
-  /**
    * Return per-agent pending-request counts.
    */
   async pendingCounts(): Promise<Map<string, number>> {

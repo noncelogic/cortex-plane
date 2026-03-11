@@ -123,7 +123,6 @@ function makeAccessRequestService(): AccessRequestService {
     create: vi.fn(),
     approve: vi.fn(),
     deny: vi.fn(),
-    listPending: vi.fn(),
     pendingCounts: vi.fn(),
   } as unknown as AccessRequestService
 }

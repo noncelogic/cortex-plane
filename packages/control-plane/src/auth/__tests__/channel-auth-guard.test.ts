@@ -157,7 +157,6 @@ function makeAccessRequestService(
     }),
     approve: vi.fn(),
     deny: vi.fn(),
-    listPending: vi.fn(),
     pendingCounts: vi.fn(),
     ...overrides,
   } as unknown as AccessRequestService
