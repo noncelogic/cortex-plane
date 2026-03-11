@@ -14,7 +14,6 @@
 import {
   type ApprovalAuditEventType,
   type ApprovalDecisionResult,
-  type ApprovalNotificationRecord,
   type ApprovalStatus,
   type CreateApprovalRequest,
   MAX_APPROVAL_TTL_SECONDS,
@@ -352,52 +351,6 @@ export class ApprovalService {
     }
 
     return expiredRequests.length
-  }
-
-  async recordNotification(
-    approvalRequestId: string,
-    notification: ApprovalNotificationRecord,
-  ): Promise<void> {
-    const request = await this.db
-      .selectFrom("approval_request")
-      .select(["id", "job_id", "notification_channels"])
-      .where("id", "=", approvalRequestId)
-      .executeTakeFirst()
-
-    if (!request) return
-
-    const channels = Array.isArray(request.notification_channels)
-      ? [...request.notification_channels, notification]
-      : [notification]
-
-    await this.db
-      .updateTable("approval_request")
-      .set({ notification_channels: channels as Record<string, unknown>[] })
-      .where("id", "=", approvalRequestId)
-      .execute()
-
-    await this.writeAuditLog({
-      approvalRequestId,
-      jobId: request.job_id,
-      eventType: "notification_sent",
-      details: {
-        channel_type: notification.channel_type,
-        channel_user_id: notification.channel_user_id,
-        chat_id: notification.chat_id,
-        message_id: notification.message_id,
-      },
-    })
-  }
-
-  async shouldNotify(approvalRequestId: string): Promise<boolean> {
-    const req = await this.db
-      .selectFrom("approval_request")
-      .select(["risk_level"])
-      .where("id", "=", approvalRequestId)
-      .executeTakeFirst()
-    if (!req) return false
-    if (req.risk_level === "P3") return false
-    return true
   }
 
   async getRequest(approvalRequestId: string): Promise<ApprovalRequest | undefined> {
