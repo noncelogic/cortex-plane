@@ -9,9 +9,21 @@ import { listModels, type ModelInfo } from "@/lib/api-client"
  * Keep in sync with control-plane MODEL_CATALOGUE.
  */
 const FALLBACK_MODELS: ModelInfo[] = [
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", providers: ["anthropic", "google-antigravity"] },
-  { id: "claude-opus-4-6", label: "Claude Opus 4.6", providers: ["anthropic", "google-antigravity"] },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", providers: ["anthropic", "google-antigravity"] },
+  {
+    id: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    providers: ["anthropic", "google-antigravity"],
+  },
+  {
+    id: "claude-opus-4-6",
+    label: "Claude Opus 4.6",
+    providers: ["anthropic", "google-antigravity"],
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
+    providers: ["anthropic", "google-antigravity"],
+  },
   { id: "gpt-4o", label: "GPT-4o", providers: ["openai", "openai-codex"] },
   { id: "gpt-4o-mini", label: "GPT-4o Mini", providers: ["openai", "openai-codex"] },
 ]
