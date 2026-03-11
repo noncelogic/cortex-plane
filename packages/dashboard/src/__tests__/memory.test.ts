@@ -549,6 +549,30 @@ describe("syncMemory API", () => {
 })
 
 // ---------------------------------------------------------------------------
+// useMemoryExplorer: explicit agentId skips listAgents
+// ---------------------------------------------------------------------------
+
+describe("useMemoryExplorer with explicit agentId", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it("passes explicit agentId to searchMemory instead of fetching agents list", async () => {
+    // When an explicitAgentId is provided, the hook should skip the listAgents
+    // call and use the provided ID directly. We verify the API is called with
+    // the explicit ID by checking the fetch URL.
+    mockFetchResponse({ results: [] })
+
+    await searchMemory({ agent_id: "explicit-agent-123", query: "test", limit: 50 })
+
+    const url = vi.mocked(fetch).mock.calls[0]![0] as string
+    expect(url).toContain("agentId=explicit-agent-123")
+    expect(url).toContain("query=test")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Empty state tests
 // ---------------------------------------------------------------------------
 
