@@ -242,7 +242,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
         }
 
         // Synchronous wait: poll for completion and return the response inline
-        const result = await waitForJob(db, job.id, timeout)
+        const result = await waitForJob(db, job.id, timeout, request.log)
 
         if (!result) {
           return reply.status(202).send({
@@ -498,6 +498,7 @@ function waitForJob(
   db: Kysely<Database>,
   jobId: string,
   timeoutMs: number,
+  log: { warn: (obj: Record<string, unknown>, msg: string) => void },
 ): Promise<WaitForJobResult | null> {
   return new Promise((resolve) => {
     const deadline = Date.now() + timeoutMs
@@ -522,11 +523,12 @@ function waitForJob(
                 error: (row?.error as Record<string, unknown>) ?? null,
               })
             })
-            .catch(() => {
+            .catch((fetchErr: unknown) => {
+              log.warn({ err: fetchErr, jobId }, "Failed to fetch error column for completed job")
               resolve({
                 status,
                 result: (_result as Record<string, unknown>) ?? {},
-                error: null,
+                error: { message: "Job failed but error details could not be retrieved." },
               })
             })
         }

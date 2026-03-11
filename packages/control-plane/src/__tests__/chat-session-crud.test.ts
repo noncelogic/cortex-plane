@@ -726,3 +726,101 @@ describe("Dashboard reflects session state changes", () => {
     expect(enqueueJob).toHaveBeenCalledWith("job-async-1")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Sync wait: error detail propagation (#554)
+// ---------------------------------------------------------------------------
+
+describe("Sync wait propagates job error details (#554)", () => {
+  it("returns error message from job error column on FAILED job", async () => {
+    const jobError = { category: "LLM_ERROR", message: "Rate limit exceeded" }
+
+    // Make watchJobCompletion invoke the callback immediately with FAILED status
+    mockWatchJobCompletion.mockImplementation(
+      (_db: unknown, _jobId: string, cb: (result: unknown, status: string) => Promise<void>) => {
+        void cb(null, "FAILED")
+      },
+    )
+
+    // Build db where job-table selectFrom returns the error column
+    const { db: baseDb } = mockDb({ job: { id: "job-fail-1" } })
+    const { db: fallbackDb } = mockDb({ job: { id: "job-fail-1" } })
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const baseSelectFrom = vi.mocked(baseDb.selectFrom)
+    baseSelectFrom.mockImplementation((table: string) => {
+      if (table === "job") {
+        const executeTakeFirst = vi.fn().mockResolvedValue({ error: jobError })
+        const whereFn: ReturnType<typeof vi.fn> = vi.fn()
+        whereFn.mockReturnValue({ where: whereFn, executeTakeFirst })
+        const select = vi.fn().mockReturnValue({ where: whereFn, executeTakeFirst })
+        return { select } as never
+      }
+      return (fallbackDb.selectFrom as ReturnType<typeof vi.fn>)(table) as never
+    })
+    const db = baseDb
+
+    mockMapJobErrorToUserMessage.mockReturnValue("Rate limit exceeded")
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const app = await buildApp(db, enqueueJob)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/chat?wait=true&timeout=5000`,
+      payload: { text: "Fail test" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    expect(body.status).toBe("FAILED")
+    expect(body.error).toBeDefined()
+    expect(body.error.message).toBe("Rate limit exceeded")
+    expect(body.error.code).toBe("job_failed")
+  })
+
+  it("returns fallback error message when error column fetch fails", async () => {
+    // Make watchJobCompletion invoke the callback immediately with FAILED status
+    mockWatchJobCompletion.mockImplementation(
+      (_db: unknown, _jobId: string, cb: (result: unknown, status: string) => Promise<void>) => {
+        void cb(null, "FAILED")
+      },
+    )
+
+    // Build db where job-table selectFrom rejects (simulates connection failure)
+    const { db: baseDb } = mockDb({ job: { id: "job-fail-2" } })
+    const { db: fallbackDb } = mockDb({ job: { id: "job-fail-2" } })
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const baseSelectFrom = vi.mocked(baseDb.selectFrom)
+    baseSelectFrom.mockImplementation((table: string) => {
+      if (table === "job") {
+        const executeTakeFirst = vi.fn().mockRejectedValue(new Error("connection lost"))
+        const whereFn: ReturnType<typeof vi.fn> = vi.fn()
+        whereFn.mockReturnValue({ where: whereFn, executeTakeFirst })
+        const select = vi.fn().mockReturnValue({ where: whereFn, executeTakeFirst })
+        return { select } as never
+      }
+      return (fallbackDb.selectFrom as ReturnType<typeof vi.fn>)(table) as never
+    })
+    const db = baseDb
+
+    mockMapJobErrorToUserMessage.mockReturnValue(
+      "Job failed but error details could not be retrieved.",
+    )
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const app = await buildApp(db, enqueueJob)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/chat?wait=true&timeout=5000`,
+      payload: { text: "Fail test 2" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const body = res.json()
+    expect(body.status).toBe("FAILED")
+    expect(body.error).toBeDefined()
+    expect(body.error.message).toBe("Job failed but error details could not be retrieved.")
+    expect(body.error.code).toBe("job_failed")
+  })
+})
