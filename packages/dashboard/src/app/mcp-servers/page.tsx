@@ -5,12 +5,13 @@ import { useCallback, useMemo, useState } from "react"
 import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { EmptyState } from "@/components/layout/empty-state"
 import { Skeleton } from "@/components/layout/skeleton"
+import { useToast } from "@/components/layout/toast"
 import { McpHealthBadge } from "@/components/mcp/McpHealthBadge"
 import { McpServerCard } from "@/components/mcp/McpServerCard"
 import { McpServerForm } from "@/components/mcp/McpServerForm"
 import { useApiQuery } from "@/hooks/use-api"
 import type { McpServer, McpServerStatus } from "@/lib/api-client"
-import { listMcpServers } from "@/lib/api-client"
+import { listMcpServers, updateMcpServer } from "@/lib/api-client"
 
 const STATUS_FILTERS: { label: string; value: McpServerStatus | "ALL" }[] = [
   { label: "All Statuses", value: "ALL" },
@@ -25,6 +26,9 @@ export default function McpServersPage(): React.JSX.Element {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<McpServerStatus | "ALL">("ALL")
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+
+  const { addToast } = useToast()
 
   const { data, isLoading, error, errorCode, refetch } = useApiQuery(
     () => listMcpServers({ limit: 100 }),
@@ -49,6 +53,7 @@ export default function McpServersPage(): React.JSX.Element {
   }, [servers, search, statusFilter])
 
   const activeCount = servers.filter((s) => s.status === "ACTIVE").length
+  const errorCount = servers.filter((s) => s.status === "ERROR").length
 
   const handleRefresh = useCallback(() => {
     void refetch()
@@ -58,6 +63,25 @@ export default function McpServersPage(): React.JSX.Element {
     setRegisterOpen(false)
     void refetch()
   }, [refetch])
+
+  const handleToggleStatus = useCallback(
+    async (id: string, newStatus: "DISABLED" | "PENDING") => {
+      setTogglingId(id)
+      try {
+        await updateMcpServer(id, { status: newStatus })
+        await refetch()
+        addToast(
+          newStatus === "DISABLED" ? "Server disabled" : "Server re-enabled — probing...",
+          "success",
+        )
+      } catch {
+        addToast("Failed to update server status", "error")
+      } finally {
+        setTogglingId(null)
+      }
+    },
+    [refetch, addToast],
+  )
 
   // Loading skeleton
   if (isLoading && servers.length === 0) {
@@ -154,9 +178,16 @@ export default function McpServersPage(): React.JSX.Element {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Active count */}
+          {/* Status summary badges */}
           <McpHealthBadge status="ACTIVE" />
-          <span className="text-xs font-bold text-slate-500">{activeCount} active</span>
+          <span className="text-xs font-bold text-slate-500">{activeCount}</span>
+
+          {errorCount > 0 && (
+            <>
+              <McpHealthBadge status="ERROR" />
+              <span className="text-xs font-bold text-slate-500">{errorCount}</span>
+            </>
+          )}
 
           {/* Refresh */}
           <button
@@ -200,7 +231,12 @@ export default function McpServersPage(): React.JSX.Element {
           {/* Server grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((server) => (
-              <McpServerCard key={server.id} server={server} />
+              <McpServerCard
+                key={server.id}
+                server={server}
+                onToggleStatus={(id, status) => void handleToggleStatus(id, status)}
+                toggling={togglingId === server.id}
+              />
             ))}
           </div>
         </>

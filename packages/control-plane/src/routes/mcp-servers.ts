@@ -301,7 +301,16 @@ export function mcpServerRoutes(deps: McpServerRouteDeps) {
       ) => {
         const { status, limit = 50, offset = 0 } = request.query
 
-        let query = db.selectFrom("mcp_server").selectAll()
+        let query = db
+          .selectFrom("mcp_server")
+          .selectAll("mcp_server")
+          .select((eb) =>
+            eb
+              .selectFrom("mcp_server_tool")
+              .select(eb.fn.countAll<number>().as("cnt"))
+              .whereRef("mcp_server_tool.mcp_server_id", "=", "mcp_server.id")
+              .as("tool_count"),
+          )
         let countQuery = db.selectFrom("mcp_server").select(db.fn.countAll<number>().as("total"))
 
         if (status) {
@@ -316,12 +325,13 @@ export function mcpServerRoutes(deps: McpServerRouteDeps) {
 
         const total = Number(countResult.total)
 
-        const items = encryptionKey
-          ? servers.map((s) => ({
-              ...s,
-              connection: decryptConnectionHeaders(s.connection, encryptionKey),
-            }))
-          : servers
+        const items = servers.map((s) => ({
+          ...s,
+          tool_count: Number(s.tool_count ?? 0),
+          connection: encryptionKey
+            ? decryptConnectionHeaders(s.connection, encryptionKey)
+            : s.connection,
+        }))
 
         return reply.status(200).send({
           servers: items,

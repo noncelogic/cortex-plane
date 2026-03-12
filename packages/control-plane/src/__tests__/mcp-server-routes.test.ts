@@ -89,9 +89,16 @@ function mockDb(
       offset,
       ...terminal,
     })
-    const selectAll = vi
-      .fn()
-      .mockReturnValue({ where: whereFn, orderBy, limit, offset, ...terminal })
+    const selectAllResult: Record<string, unknown> = {
+      where: whereFn,
+      orderBy,
+      limit,
+      offset,
+      ...terminal,
+    }
+    // .select() chained after .selectAll() (e.g. for subquery columns) returns the same builder
+    selectAllResult.select = vi.fn().mockReturnValue(selectAllResult)
+    const selectAll = vi.fn().mockReturnValue(selectAllResult)
     const countResult = { total: rows.length }
     const selectTerminal = {
       executeTakeFirst,
