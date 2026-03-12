@@ -263,6 +263,24 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
     )
 
     /**
+     * POST /credentials/:id/test — test a credential by pinging the provider
+     */
+    app.post<{ Params: { id: string } }>(
+      "/credentials/:id/test",
+      { preHandler: [requireAuth] },
+      async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (!principal) {
+          reply.status(401).send({ error: "unauthorized" })
+          return
+        }
+
+        const result = await credentialService.testCredential(principal.userId, request.params.id)
+        return result
+      },
+    )
+
+    /**
      * DELETE /credentials/:id — delete a credential
      */
     app.delete<{ Params: { id: string } }>(
