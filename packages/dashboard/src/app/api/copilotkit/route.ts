@@ -1,8 +1,8 @@
 import {
   CopilotRuntime,
-  copilotRuntimeNextJSAppRouterEndpoint,
   type CopilotRuntimeChatCompletionRequest,
   type CopilotRuntimeChatCompletionResponse,
+  copilotRuntimeNextJSAppRouterEndpoint,
   type CopilotServiceAdapter,
 } from "@copilotkit/runtime"
 
@@ -33,10 +33,11 @@ class CortexChatAdapter implements CopilotServiceAdapter {
     const { eventSource, messages } = request
 
     // Find the latest user TextMessage
-    const userTextMessages = messages.filter((m) => m.isTextMessage() && m.role === "user")
+    const userTextMessages = messages.filter((m) => m.isTextMessage() && String(m.role) === "user")
     const lastUserMessage = userTextMessages[userTextMessages.length - 1]
 
     if (!lastUserMessage || !lastUserMessage.isTextMessage()) {
+      // eslint-disable-next-line @typescript-eslint/require-await
       await eventSource.stream(async (eventStream$) => {
         const msgId = `msg-${Date.now()}`
         eventStream$.sendTextMessage(msgId, "No message to process.")
@@ -47,6 +48,7 @@ class CortexChatAdapter implements CopilotServiceAdapter {
     const textContent = lastUserMessage.content ?? ""
 
     if (!textContent) {
+      // eslint-disable-next-line @typescript-eslint/require-await
       await eventSource.stream(async (eventStream$) => {
         const msgId = `msg-${Date.now()}`
         eventStream$.sendTextMessage(msgId, "Empty message received.")
@@ -67,6 +69,7 @@ class CortexChatAdapter implements CopilotServiceAdapter {
 
     if (!sendRes.ok) {
       const errorText = await sendRes.text().catch(() => "Unknown error")
+      // eslint-disable-next-line @typescript-eslint/require-await
       await eventSource.stream(async (eventStream$) => {
         const msgId = `msg-${Date.now()}`
         eventStream$.sendTextMessage(msgId, `Error sending message: ${errorText}`)
@@ -84,6 +87,7 @@ class CortexChatAdapter implements CopilotServiceAdapter {
     const response = await this.pollJob(sendResult.job_id)
 
     // Stream the response back through CopilotKit's event system
+    // eslint-disable-next-line @typescript-eslint/require-await
     await eventSource.stream(async (eventStream$) => {
       const msgId = `msg-${Date.now()}`
       eventStream$.sendTextMessage(msgId, response)
