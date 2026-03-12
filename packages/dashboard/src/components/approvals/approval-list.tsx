@@ -14,6 +14,8 @@ interface ApprovalListProps {
   onRequestContext?: (id: string) => void
   filter?: ApprovalStatus | "ALL"
   riskFilter?: string
+  bulkSelectedIds?: Set<string>
+  onBulkToggle?: (id: string) => void
 }
 
 export function ApprovalList({
@@ -25,6 +27,8 @@ export function ApprovalList({
   onRequestContext,
   filter = "ALL",
   riskFilter = "ALL",
+  bulkSelectedIds,
+  onBulkToggle,
 }: ApprovalListProps): React.JSX.Element {
   const filtered = approvals.filter((a) => {
     if (filter !== "ALL" && a.status !== filter) return false
@@ -80,6 +84,8 @@ export function ApprovalList({
           onApprove={onApprove}
           onReject={onReject}
           onRequestContext={onRequestContext}
+          bulkSelected={bulkSelectedIds?.has(approval.id)}
+          onBulkToggle={onBulkToggle}
         />
       ))}
     </div>
