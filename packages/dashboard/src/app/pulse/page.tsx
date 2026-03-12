@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react"
 import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { EmptyState } from "@/components/layout/empty-state"
 import { PhantomFeatureBanner } from "@/components/layout/phantom-feature-banner"
+import { Skeleton } from "@/components/layout/skeleton"
 import { ContentFilters } from "@/components/pulse/content-filters"
 import { PipelineBoard } from "@/components/pulse/pipeline-board"
 import { PipelineStats } from "@/components/pulse/pipeline-stats"
@@ -280,6 +281,7 @@ export default function PulsePage(): React.JSX.Element {
     errorCode,
     isLoading,
     pieces,
+    refetch,
   } = usePulsePipeline()
 
   const onCardClick = useCallback(
@@ -302,6 +304,49 @@ export default function PulsePage(): React.JSX.Element {
     },
     [setArchivingId],
   )
+
+  // Loading skeleton
+  if (isLoading && pieces.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-9 w-40" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        {/* Stats skeleton */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="min-h-[88px] rounded-xl border border-surface-border bg-surface-light p-4 space-y-2"
+            >
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-7 w-12" />
+            </div>
+          ))}
+        </div>
+        {/* Board skeleton */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-3">
+              <Skeleton className="h-5 w-24" />
+              {Array.from({ length: 2 }).map((__, j) => (
+                <div
+                  key={j}
+                  className="rounded-xl border border-surface-border bg-surface-light p-4 space-y-2"
+                >
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -337,7 +382,9 @@ export default function PulsePage(): React.JSX.Element {
       />
 
       {/* Error */}
-      {error && <ApiErrorBanner error={error} errorCode={errorCode} />}
+      {error && (
+        <ApiErrorBanner error={error} errorCode={errorCode} onRetry={() => void refetch()} />
+      )}
 
       {/* Empty state */}
       {!isLoading && !error && pieces.length === 0 ? (
