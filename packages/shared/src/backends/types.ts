@@ -102,8 +102,8 @@ export interface LlmCredentialRef {
   baseUrl?: string | null
   /**
    * Credential type determines how the token is sent to the LLM provider.
-   * OAuth tokens use Bearer auth; API keys use provider-specific headers
-   * (e.g. x-api-key for Anthropic).
+   * Most OAuth tokens use Bearer auth, but provider-specific rules apply
+   * (e.g. Anthropic OAuth uses x-api-key, not Bearer).
    */
   credentialType?: "oauth" | "api_key"
 }

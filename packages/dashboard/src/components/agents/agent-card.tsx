@@ -146,14 +146,14 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
             <span className="material-symbols-outlined text-lg leading-none">launch</span>
           </Link>
           <Link
-            href={`/agents/${agent.id}`}
+            href={`/agents/${agent.id}?tab=Output`}
             className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
             title="Stream"
           >
             <span className="material-symbols-outlined text-lg leading-none">terminal</span>
           </Link>
           <Link
-            href={`/agents/${agent.id}`}
+            href={`/agents/${agent.id}?tab=Browser`}
             className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
             title="Observe"
           >
@@ -186,7 +186,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
                 </div>
               </Link>
               <Link
-                href={`/agents/${agent.id}`}
+                href={`/agents/${agent.id}?tab=Output`}
                 className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-primary/5"
               >
                 <span className="material-symbols-outlined text-emerald-500">stream</span>
@@ -196,7 +196,7 @@ export function AgentCard({ agent, metrics }: AgentCardProps): React.JSX.Element
                 </div>
               </Link>
               <Link
-                href={`/agents/${agent.id}`}
+                href={`/agents/${agent.id}?tab=Browser`}
                 className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-primary/5"
               >
                 <span className="material-symbols-outlined text-amber-500">monitoring</span>
