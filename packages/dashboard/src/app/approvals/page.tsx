@@ -288,6 +288,7 @@ export default function ApprovalsPage(): React.JSX.Element {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("ALL")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirmState, setConfirmState] = useState<CardConfirmState | null>(null)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
 
   // Fetch approvals from API — wire status filter to query params
   const { data, isLoading, error, errorCode, refetch } = useApiQuery(
@@ -471,6 +472,55 @@ export default function ApprovalsPage(): React.JSX.Element {
     setSelectedId(null)
   }, [refetch])
 
+  // Auto-refresh fallback: poll every 15s when SSE is disconnected
+  useEffect(() => {
+    if (connected) return
+    const interval = setInterval(() => void refetch(), 15_000)
+    return () => clearInterval(interval)
+  }, [connected, refetch])
+
+  // Bulk selection handlers
+  const handleBulkToggle = useCallback((id: string) => {
+    setBulkSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const pendingApprovals = useMemo(
+    () => approvals.filter((a) => a.status === "PENDING"),
+    [approvals],
+  )
+
+  const handleBulkSelectAll = useCallback(() => {
+    setBulkSelectedIds(new Set(pendingApprovals.map((a) => a.id)))
+  }, [pendingApprovals])
+
+  const handleBulkDeselectAll = useCallback(() => {
+    setBulkSelectedIds(new Set())
+  }, [])
+
+  const [bulkDeciding, setBulkDeciding] = useState(false)
+
+  const handleBulkDecision = useCallback(
+    async (decision: "APPROVED" | "REJECTED") => {
+      if (bulkSelectedIds.size === 0) return
+      setBulkDeciding(true)
+      try {
+        await Promise.all(
+          Array.from(bulkSelectedIds).map((id) => decide(id, decision, "dashboard-user")),
+        )
+        setBulkSelectedIds(new Set())
+        void refetch()
+      } finally {
+        setBulkDeciding(false)
+      }
+    },
+    [bulkSelectedIds, decide, refetch],
+  )
+
   const selectedApproval = approvals.find((a) => a.id === selectedId)
 
   // Use per-approval audit entries when selected, otherwise global
@@ -554,6 +604,53 @@ export default function ApprovalsPage(): React.JSX.Element {
           </div>
         </header>
 
+        {/* Bulk action bar */}
+        {bulkSelectedIds.size > 0 && (
+          <div className="flex-shrink-0 border-b border-slate-200 bg-blue-50 px-6 py-3 dark:border-slate-800 dark:bg-blue-950/30">
+            <div className="mx-auto flex max-w-4xl items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-text-main">
+                  {bulkSelectedIds.size} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={handleBulkSelectAll}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Select all pending ({pendingApprovals.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDeselectAll}
+                  className="text-xs font-medium text-text-muted hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={bulkDeciding}
+                  onClick={() => void handleBulkDecision("REJECTED")}
+                  className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-5 py-2 text-sm font-bold text-red-600 transition-all hover:bg-red-100 active:scale-95 disabled:opacity-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+                >
+                  <span className="material-symbols-outlined text-[18px]">block</span>
+                  Deny All
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkDeciding}
+                  onClick={() => void handleBulkDecision("APPROVED")}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                  Approve All
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Card list */}
         <div className="flex-1 overflow-y-auto p-6 pb-24 scrollbar-hide lg:pb-6">
           <div className="mx-auto max-w-4xl">
@@ -577,6 +674,8 @@ export default function ApprovalsPage(): React.JSX.Element {
                 onRequestContext={(id) => setSelectedId(id)}
                 filter={statusFilter}
                 riskFilter={riskFilter}
+                bulkSelectedIds={bulkSelectedIds}
+                onBulkToggle={handleBulkToggle}
               />
             )}
           </div>

@@ -12,21 +12,32 @@ import { EmptyState } from "@/components/layout/empty-state"
 import { Skeleton } from "@/components/layout/skeleton"
 import { useApiQuery } from "@/hooks/use-api"
 import { useSSE } from "@/hooks/use-sse"
-import type { AgentLifecycleState, AgentSummary } from "@/lib/api-client"
+import type { AgentStatus, AgentSummary } from "@/lib/api-client"
 import { listAgents } from "@/lib/api-client"
 import { resolveSSEUrl } from "@/lib/sse-client"
 
 // ---------------------------------------------------------------------------
-// Status filter options
+// Status filter options (maps to AgentSummary.status)
 // ---------------------------------------------------------------------------
 
-const STATUS_FILTERS: { label: string; value: AgentLifecycleState | "ALL" }[] = [
+const STATUS_OPTIONS: { label: string; value: AgentStatus | "ALL" }[] = [
   { label: "All Statuses", value: "ALL" },
-  { label: "Ready", value: "READY" },
-  { label: "Executing", value: "EXECUTING" },
-  { label: "Draining", value: "DRAINING" },
-  { label: "Terminated", value: "TERMINATED" },
-  { label: "Booting", value: "BOOTING" },
+  { label: "Active", value: "ACTIVE" },
+  { label: "Disabled", value: "DISABLED" },
+  { label: "Archived", value: "ARCHIVED" },
+  { label: "Quarantined", value: "QUARANTINED" },
+]
+
+// ---------------------------------------------------------------------------
+// Sort options
+// ---------------------------------------------------------------------------
+
+type SortKey = "name" | "updated_at" | "status"
+
+const SORT_OPTIONS: { label: string; value: SortKey }[] = [
+  { label: "Name", value: "name" },
+  { label: "Last Active", value: "updated_at" },
+  { label: "Status", value: "status" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -58,7 +69,8 @@ function parseAgentStateEvent(
 export default function AgentsPage(): React.JSX.Element {
   const [viewMode, setViewMode] = useState<ViewMode>("table")
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<AgentLifecycleState | "ALL">("ALL")
+  const [statusFilter, setStatusFilter] = useState<AgentStatus | "ALL">("ALL")
+  const [sortBy, setSortBy] = useState<SortKey>("name")
   const [metricsMap, setMetricsMap] = useState<Record<string, AgentMetrics>>({})
   const [deployOpen, setDeployOpen] = useState(false)
 
@@ -104,10 +116,10 @@ export default function AgentsPage(): React.JSX.Element {
 
   const agents: AgentSummary[] = data?.agents ?? []
 
-  // Filter by search + status
+  // Filter by search + status, then sort
   const filtered = useMemo(() => {
-    return agents.filter((a) => {
-      if (statusFilter !== "ALL" && a.lifecycle_state !== statusFilter) return false
+    const list = agents.filter((a) => {
+      if (statusFilter !== "ALL" && a.status !== statusFilter) return false
       if (search) {
         const q = search.toLowerCase()
         return (
@@ -118,7 +130,20 @@ export default function AgentsPage(): React.JSX.Element {
       }
       return true
     })
-  }, [agents, search, statusFilter])
+    list.sort((a, b) => {
+      switch (sortBy) {
+        case "name":
+          return a.name.localeCompare(b.name)
+        case "updated_at":
+          return (b.updated_at ?? b.created_at).localeCompare(a.updated_at ?? a.created_at)
+        case "status":
+          return a.status.localeCompare(b.status)
+        default:
+          return 0
+      }
+    })
+    return list
+  }, [agents, search, statusFilter, sortBy])
 
   // Count online agents
   const onlineCount = agents.filter(
@@ -234,12 +259,30 @@ export default function AgentsPage(): React.JSX.Element {
             </span>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as AgentLifecycleState | "ALL")}
+              onChange={(e) => setStatusFilter(e.target.value as AgentStatus | "ALL")}
               className="cursor-pointer appearance-none rounded-lg border-none bg-slate-100 py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50 dark:bg-slate-800"
             >
-              {STATUS_FILTERS.map((f) => (
+              {STATUS_OPTIONS.map((f) => (
                 <option key={f.value} value={f.value}>
                   {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sort */}
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-slate-400">
+              sort
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortKey)}
+              className="cursor-pointer appearance-none rounded-lg border-none bg-slate-100 py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50 dark:bg-slate-800"
+            >
+              {SORT_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </select>
@@ -299,13 +342,25 @@ export default function AgentsPage(): React.JSX.Element {
 
       {/* Empty state */}
       {!isLoading && !error && agents.length === 0 ? (
-        <EmptyState
-          icon="smart_toy"
-          title="No agents configured"
-          description="Deploy your first autonomous agent to get started."
-          actionLabel="Deploy New Agent"
-          onAction={() => setDeployOpen(true)}
-        />
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900/30">
+          <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-primary/10">
+            <span className="material-symbols-outlined text-5xl text-primary">smart_toy</span>
+          </div>
+          <h2 className="mb-2 text-xl font-bold text-text-main dark:text-white">
+            Deploy your first agent
+          </h2>
+          <p className="mb-6 max-w-md text-slate-500 dark:text-slate-400">
+            Agents are autonomous AI workloads that execute tasks on your behalf. Deploy one to get
+            started with automated workflows.
+          </p>
+          <button
+            onClick={() => setDeployOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
+          >
+            <span className="material-symbols-outlined text-lg">add</span>
+            Deploy New Agent
+          </button>
+        </div>
       ) : (
         <>
           {/* Count */}
@@ -317,19 +372,30 @@ export default function AgentsPage(): React.JSX.Element {
           </div>
 
           {/* Agent Views */}
-          {/* Desktop: table or grid based on toggle */}
-          <div className="hidden md:block">
-            {viewMode === "table" ? (
-              <AgentTable agents={filtered} metricsMap={metricsMap} />
-            ) : (
-              <AgentGrid agents={filtered} metricsMap={metricsMap} />
-            )}
-          </div>
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon="search_off"
+              title="No matching agents"
+              description="Try adjusting your search or filter criteria."
+              compact
+            />
+          ) : (
+            <>
+              {/* Desktop: table or grid based on toggle */}
+              <div className="hidden md:block">
+                {viewMode === "table" ? (
+                  <AgentTable agents={filtered} metricsMap={metricsMap} />
+                ) : (
+                  <AgentGrid agents={filtered} metricsMap={metricsMap} />
+                )}
+              </div>
 
-          {/* Mobile: always card grid */}
-          <div className="md:hidden">
-            <AgentGrid agents={filtered} metricsMap={metricsMap} />
-          </div>
+              {/* Mobile: always card grid */}
+              <div className="md:hidden">
+                <AgentGrid agents={filtered} metricsMap={metricsMap} />
+              </div>
+            </>
+          )}
         </>
       )}
 
