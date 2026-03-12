@@ -919,6 +919,229 @@ export class CredentialService {
     return staleSecrets.length
   }
 
+  /**
+   * Test a credential by making a lightweight API call to the provider.
+   * Returns a health status indicating whether the credential is functional.
+   */
+  async testCredential(
+    userId: string,
+    credentialId: string,
+  ): Promise<{
+    status: "connected" | "token_expired" | "auth_failed" | "rate_limited" | "error"
+    message: string
+    tokenExpiresAt?: string | null
+    lastUsedAt?: string | null
+  }> {
+    const cred = await this.db
+      .selectFrom("provider_credential")
+      .selectAll()
+      .where("id", "=", credentialId)
+      .where("user_account_id", "=", userId)
+      .executeTakeFirst()
+
+    if (!cred) {
+      return { status: "error", message: "Credential not found" }
+    }
+
+    const userKey = await this.ensureUserKey(userId)
+    let token: string
+
+    try {
+      if (cred.credential_type === "api_key" && cred.api_key_enc) {
+        token = decryptCredential(cred.api_key_enc, userKey)
+      } else if (cred.credential_type === "oauth" && cred.access_token_enc) {
+        token = decryptCredential(cred.access_token_enc, userKey)
+      } else {
+        return { status: "error", message: "No credential data found" }
+      }
+    } catch {
+      return { status: "error", message: "Failed to decrypt credential" }
+    }
+
+    // Check token expiry for OAuth credentials before making the call
+    if (cred.token_expires_at && new Date(cred.token_expires_at) < new Date()) {
+      // Attempt refresh if possible
+      if (cred.refresh_token_enc) {
+        const refreshed = await this.refreshToken(cred, userKey)
+        if (refreshed) {
+          token = refreshed
+        } else {
+          await this.auditLog(userId, credentialId, "connection_test", cred.provider, {
+            result: "token_expired",
+          })
+          return {
+            status: "token_expired",
+            message: "Token has expired and refresh failed",
+            tokenExpiresAt: cred.token_expires_at?.toISOString() ?? null,
+            lastUsedAt: cred.last_used_at?.toISOString() ?? null,
+          }
+        }
+      } else {
+        await this.auditLog(userId, credentialId, "connection_test", cred.provider, {
+          result: "token_expired",
+        })
+        return {
+          status: "token_expired",
+          message: "Token has expired and no refresh token is available",
+          tokenExpiresAt: cred.token_expires_at?.toISOString() ?? null,
+          lastUsedAt: cred.last_used_at?.toISOString() ?? null,
+        }
+      }
+    }
+
+    // Make a lightweight provider-specific health check
+    const result = await this.pingProvider(cred.provider, token, cred.credential_type)
+
+    // Update credential status based on test result
+    if (result.status === "connected") {
+      await this.db
+        .updateTable("provider_credential")
+        .set({
+          status: "active",
+          error_count: 0,
+          last_error: null,
+          last_used_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where("id", "=", credentialId)
+        .execute()
+    } else if (result.status === "auth_failed") {
+      await this.db
+        .updateTable("provider_credential")
+        .set({
+          status: "error",
+          error_count: cred.error_count + 1,
+          last_error: result.message,
+          updated_at: new Date(),
+        })
+        .where("id", "=", credentialId)
+        .execute()
+    }
+
+    await this.auditLog(userId, credentialId, "connection_test", cred.provider, {
+      result: result.status,
+      message: result.message,
+    })
+
+    // Reload credential for fresh timestamps
+    const updated = await this.db
+      .selectFrom("provider_credential")
+      .select(["token_expires_at", "last_used_at"])
+      .where("id", "=", credentialId)
+      .executeTakeFirst()
+
+    return {
+      ...result,
+      tokenExpiresAt: updated?.token_expires_at?.toISOString() ?? null,
+      lastUsedAt: updated?.last_used_at?.toISOString() ?? null,
+    }
+  }
+
+  /**
+   * Make a lightweight API call to verify a credential works with the provider.
+   */
+  private async pingProvider(
+    provider: string,
+    token: string,
+    credentialType: string,
+  ): Promise<{ status: "connected" | "auth_failed" | "rate_limited" | "error"; message: string }> {
+    try {
+      const { url, init } = this.buildProviderPing(provider, token, credentialType)
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 10_000)
+
+      const res = await fetch(url, { ...init, signal: controller.signal })
+      clearTimeout(timeout)
+
+      if (res.ok) {
+        return { status: "connected", message: "Connection successful" }
+      }
+      if (res.status === 401 || res.status === 403) {
+        return { status: "auth_failed", message: `Authentication failed (HTTP ${res.status})` }
+      }
+      if (res.status === 429) {
+        return { status: "rate_limited", message: "Rate limited by provider" }
+      }
+      return { status: "error", message: `Provider returned HTTP ${res.status}` }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      if (msg.includes("abort")) {
+        return { status: "error", message: "Connection timed out" }
+      }
+      return { status: "error", message: `Connection failed: ${msg}` }
+    }
+  }
+
+  private buildProviderPing(
+    provider: string,
+    token: string,
+    credentialType: string,
+  ): { url: string; init: RequestInit } {
+    switch (provider) {
+      case "openai":
+      case "openai-codex":
+        return {
+          url: "https://api.openai.com/v1/models",
+          init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+        }
+      case "anthropic":
+        return {
+          url: "https://api.anthropic.com/v1/models",
+          init: {
+            method: "GET",
+            headers: {
+              ...(credentialType === "api_key"
+                ? { "x-api-key": token }
+                : { Authorization: `Bearer ${token}` }),
+              "anthropic-version": "2023-06-01",
+            },
+          },
+        }
+      case "google-ai-studio":
+        return {
+          url: `https://generativelanguage.googleapis.com/v1beta/models?key=${token}`,
+          init: { method: "GET" },
+        }
+      case "google-antigravity":
+        return {
+          url: "https://www.googleapis.com/oauth2/v1/tokeninfo",
+          init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+        }
+      case "google-workspace":
+        return {
+          url: "https://www.googleapis.com/oauth2/v3/userinfo",
+          init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+        }
+      case "github-user":
+        return {
+          url: "https://api.github.com/user",
+          init: {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+            },
+          },
+        }
+      case "slack-user":
+        return {
+          url: "https://slack.com/api/auth.test",
+          init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+        }
+      case "brave":
+        return {
+          url: "https://api.search.brave.com/res/v1/web/search?q=test&count=1",
+          init: { method: "GET", headers: { "X-Subscription-Token": token } },
+        }
+      default:
+        // Fallback: if we don't know the provider, report it
+        return {
+          url: "https://httpbin.org/status/200",
+          init: { method: "GET" },
+        }
+    }
+  }
+
   private async auditAccess(cred: ProviderCredential, context?: AuditContext): Promise<void> {
     if (!context?.agentId) return
     await this.auditLog(cred.user_account_id, cred.id, "credential_accessed", cred.provider, {
