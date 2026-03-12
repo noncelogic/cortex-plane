@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
+import { NotificationBell } from "@/components/layout/notification-bell"
 import { UserMenu } from "@/components/layout/user-menu"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
 
@@ -125,14 +126,8 @@ function TopNav() {
 
       {/* Right actions */}
       <div className="flex items-center gap-2">
-        {/* Notifications placeholder */}
-        <button
-          type="button"
-          className="flex size-8 items-center justify-center rounded-lg text-text-muted hover:bg-secondary hover:text-primary transition-colors"
-          aria-label="Notifications"
-        >
-          <NavIcon name="notifications" />
-        </button>
+        {/* Notifications */}
+        <NotificationBell />
 
         {/* User menu with theme toggle */}
         <UserMenu />
