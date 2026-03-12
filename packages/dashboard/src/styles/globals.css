@@ -15,7 +15,7 @@
   --color-bg-light: #f6f6f8;
   --color-bg-dark: #101022;
   --color-surface-light: #ffffff;
-  --color-surface-dark: #1a1a2e;
+  --color-surface-dark: #e8e8f0;
   --color-secondary: #f0f0f4;
 
   /* ── Text ────────────────────────────────────────── */
@@ -49,15 +49,15 @@
     monospace;
 
   /* ── Console ────────────────────────────────────── */
-  --color-console-bg: #0a0a18;
-  --color-surface-border: #282839;
+  --color-console-bg: #f0f0f4;
+  --color-surface-border: #d8d8e0;
 
   /* ── Chrome (browser observation surfaces) ─────── */
-  --color-chrome-bg: #1c1c27;
-  --color-chrome-border: #2d2d3b;
-  --color-chrome-deep: #0a0a12;
-  --color-chrome-code-header: #161b22;
-  --color-chrome-code-bg: #0d1117;
+  --color-chrome-bg: #f4f4f8;
+  --color-chrome-border: #d8d8e0;
+  --color-chrome-deep: #eaeaf0;
+  --color-chrome-code-header: #e8e8f0;
+  --color-chrome-code-bg: #f0f0f6;
 
   /* ── Animations ──────────────────────────────────── */
   --animate-pulse-ring: pulse-ring 2s infinite;
@@ -86,6 +86,14 @@
   --color-secondary: #1e1e32;
   --color-text-main: #e8e8ef;
   --color-text-muted: #9494b8;
+  --color-surface-dark: #1a1a2e;
+  --color-console-bg: #0a0a18;
+  --color-surface-border: #282839;
+  --color-chrome-bg: #1c1c27;
+  --color-chrome-border: #2d2d3b;
+  --color-chrome-deep: #0a0a12;
+  --color-chrome-code-header: #161b22;
+  --color-chrome-code-bg: #0d1117;
 }
 
 /* ── Utilities ───────────────────────────────────────── */

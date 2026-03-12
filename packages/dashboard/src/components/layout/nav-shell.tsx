@@ -217,7 +217,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
 
   if (guardState.shouldShowLoading || guardState.shouldRedirectToLogin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-dark">
+      <div className="flex min-h-screen items-center justify-center bg-bg-light">
         <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     )
@@ -225,7 +225,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
 
   if (guardState.shouldShowUnverified) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-dark px-4">
+      <div className="flex min-h-screen items-center justify-center bg-bg-light px-4">
         <div className="max-w-md rounded-xl border border-surface-border bg-surface-light p-6 text-center">
           <p className="text-sm font-semibold text-text-main">Unable to verify your session</p>
           <p className="mt-2 text-sm text-text-muted">
@@ -243,7 +243,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => router.replace("/login")}
-              className="rounded-lg border border-surface-border bg-surface-dark px-4 py-2 text-sm font-semibold text-text-main transition-colors hover:bg-secondary"
+              className="rounded-lg border border-surface-border bg-secondary px-4 py-2 text-sm font-semibold text-text-main transition-colors hover:bg-bg-light"
             >
               Go to sign in
             </button>
