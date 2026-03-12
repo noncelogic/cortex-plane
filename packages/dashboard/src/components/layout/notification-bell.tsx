@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
-import { useNotifications, type NotificationItem } from "@/hooks/use-notifications"
+import { type NotificationItem, useNotifications } from "@/hooks/use-notifications"
 
 /* ── Icon helper (mirrors nav-shell) ───────────────── */
 function Icon({ name, className }: { name: string; className?: string }) {
