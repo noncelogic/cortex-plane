@@ -6,7 +6,7 @@ import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
 import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
 import { ChannelBindingTab } from "@/components/agents/channel-binding-tab"
-import { ChatPanel } from "@/components/agents/chat-panel"
+import { CopilotChatPanel } from "@/components/agents/copilot-chat-panel"
 import { CredentialBindingPanel } from "@/components/agents/credential-binding"
 import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifecycle-timeline"
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
@@ -324,7 +324,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           {desktopCenter === "console" ? (
             <AgentConsole agentId={agentId} />
           ) : (
-            <ChatPanel agentId={agentId} />
+            <CopilotChatPanel agentId={agentId} />
           )}
         </div>
 
@@ -354,7 +354,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         )}
         {mobileTab === "Chat" && (
           <div className="flex flex-1 flex-col">
-            <ChatPanel agentId={agentId} />
+            <CopilotChatPanel agentId={agentId} />
           </div>
         )}
         {mobileTab === "Details" && (
