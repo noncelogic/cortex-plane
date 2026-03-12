@@ -207,10 +207,7 @@ export function buildAuthorizeUrl(params: AuthorizeUrlParams): string {
       }
       break
     case "openai-codex":
-      url.searchParams.set(
-        "scope",
-        scopes?.join(" ") ?? "openid profile email offline_access model.request",
-      )
+      url.searchParams.set("scope", scopes?.join(" ") ?? "openid profile email offline_access")
       if (codeChallenge) {
         url.searchParams.set("code_challenge", codeChallenge)
         url.searchParams.set("code_challenge_method", "S256")

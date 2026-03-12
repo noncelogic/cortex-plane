@@ -211,9 +211,11 @@ export class HttpLlmBackend implements ExecutionBackend {
         // Google Antigravity routes through Vertex AI with Bearer auth.
         // cloudcode-pa.googleapis.com is only for quota queries, NOT message routing.
         const isAntigravity = cred.provider === "google-antigravity"
-        // OAuth tokens (Anthropic OAuth, Google Antigravity) use Bearer auth;
-        // API keys use the x-api-key header.
-        const useBearer = cred.credentialType === "oauth" || isAntigravity
+        // Antigravity: Bearer auth (Google Vertex AI requires it)
+        // Anthropic OAuth: x-api-key header (Anthropic requires it, NOT Bearer)
+        // Other OAuth: Bearer auth
+        const isAnthropicOAuth = cred.provider === "anthropic" && cred.credentialType === "oauth"
+        const useBearer = (cred.credentialType === "oauth" || isAntigravity) && !isAnthropicOAuth
 
         let client: Anthropic
         let clientBaseUrl = baseUrl

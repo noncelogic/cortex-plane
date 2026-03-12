@@ -46,6 +46,7 @@ import {
 import { ContentListResponseSchema } from "./schemas/content"
 import {
   CredentialListResponseSchema,
+  CredentialTestResultSchema,
   OAuthInitResultSchema,
   ProviderListResponseSchema,
 } from "./schemas/credentials"
@@ -791,7 +792,12 @@ export async function listModels(): Promise<{
 // Credential & provider-connect endpoint functions
 // ---------------------------------------------------------------------------
 
-export type { Credential, OAuthInitResult, ProviderInfo } from "./schemas/credentials"
+export type {
+  Credential,
+  CredentialTestResult,
+  OAuthInitResult,
+  ProviderInfo,
+} from "./schemas/credentials"
 
 export async function listProviders(): Promise<{
   providers: import("./schemas/credentials").ProviderInfo[]
@@ -832,6 +838,15 @@ export async function saveProviderApiKey(body: {
 
 export async function deleteCredential(id: string): Promise<unknown> {
   return apiFetch(`/credentials/${id}`, { method: "DELETE", schema: z.unknown() })
+}
+
+export async function testCredential(
+  id: string,
+): Promise<import("./schemas/credentials").CredentialTestResult> {
+  return apiFetch(`/credentials/${id}/test`, {
+    method: "POST",
+    schema: CredentialTestResultSchema,
+  })
 }
 
 // ---------------------------------------------------------------------------
