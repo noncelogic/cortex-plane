@@ -1,7 +1,7 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { use, useCallback, useMemo, useState } from "react"
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
@@ -46,6 +46,20 @@ const MOBILE_TABS = [
   "Memory",
 ] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
+
+/** Tabs always visible in the mobile bar */
+const PRIORITY_TABS: readonly MobileTab[] = ["Output", "Chat", "Details"] as const
+
+/** Tabs hidden behind the "More" overflow menu on mobile */
+const OVERFLOW_TABS: readonly MobileTab[] = [
+  "Jobs",
+  "Operations",
+  "Channels",
+  "Credentials",
+  "Users",
+  "Browser",
+  "Memory",
+] as const
 
 // ---------------------------------------------------------------------------
 // Resource mock helpers (will be replaced by real telemetry SSE)
@@ -266,24 +280,8 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
       {/* Lifecycle timeline (desktop only) */}
       <LifecycleTimeline currentState={currentState} transitions={transitions} />
 
-      {/* Mobile tabs */}
-      <div className="sticky top-0 z-40 -mx-4 border-b border-surface-border bg-bg-dark/50 backdrop-blur lg:hidden">
-        <div className="flex">
-          {MOBILE_TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setMobileTab(tab)}
-              className={`flex-1 py-4 text-sm font-medium transition-colors ${
-                mobileTab === tab
-                  ? "border-b-2 border-primary text-primary"
-                  : "border-b-2 border-transparent text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Mobile tabs — priority tabs inline + overflow "More" menu */}
+      <MobileTabBar mobileTab={mobileTab} onTabChange={setMobileTab} />
 
       {/* Desktop: 3-column layout */}
       <div className="hidden flex-1 gap-6 lg:flex">
@@ -428,6 +426,96 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
 
       {/* Mobile steering input (fixed bottom) */}
       <MobileSteerBar agentId={agentId} />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Mobile tab bar with priority tabs + overflow menu
+// ---------------------------------------------------------------------------
+
+function MobileTabBar({
+  mobileTab,
+  onTabChange,
+}: {
+  mobileTab: MobileTab
+  onTabChange: (tab: MobileTab) => void
+}): React.JSX.Element {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  const isOverflowActive = OVERFLOW_TABS.includes(mobileTab)
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener("pointerdown", handleClick)
+    return () => document.removeEventListener("pointerdown", handleClick)
+  }, [menuOpen])
+
+  return (
+    <div className="sticky top-0 z-40 -mx-4 border-b border-surface-border bg-bg-dark/50 backdrop-blur lg:hidden">
+      <div className="flex">
+        {PRIORITY_TABS.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => {
+              onTabChange(tab)
+              setMenuOpen(false)
+            }}
+            className={`min-h-[44px] flex-1 px-2 text-sm font-medium transition-colors ${
+              mobileTab === tab
+                ? "border-b-2 border-primary text-primary"
+                : "border-b-2 border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+
+        {/* More button + dropdown */}
+        <div ref={menuRef} className="relative flex-1">
+          <button
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className={`flex min-h-[44px] w-full items-center justify-center gap-1 px-2 text-sm font-medium transition-colors ${
+              isOverflowActive
+                ? "border-b-2 border-primary text-primary"
+                : "border-b-2 border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {isOverflowActive ? mobileTab : "More"}
+            <span className="material-symbols-outlined text-base">
+              {menuOpen ? "expand_less" : "expand_more"}
+            </span>
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 min-w-[180px] overflow-hidden rounded-lg border border-surface-border bg-slate-900 shadow-xl">
+              {OVERFLOW_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    onTabChange(tab)
+                    setMenuOpen(false)
+                  }}
+                  className={`flex min-h-[44px] w-full items-center px-4 text-sm font-medium transition-colors ${
+                    mobileTab === tab
+                      ? "bg-primary/10 text-primary"
+                      : "text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

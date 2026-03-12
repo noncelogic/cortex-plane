@@ -414,10 +414,10 @@ function SettingsInner() {
             return (
               <div
                 key={p.id}
-                className="flex items-center justify-between rounded-lg border border-surface-border p-4"
+                className="flex flex-col gap-3 rounded-lg border border-surface-border p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-text-main">{p.name}</span>
                     {cred ? (
                       <span
@@ -439,11 +439,13 @@ function SettingsInner() {
                   </div>
                   <p className="text-xs text-text-muted">{p.description}</p>
                   {cred?.maskedKey && (
-                    <p className="mt-1 font-mono text-xs text-text-muted">{cred.maskedKey}</p>
+                    <p className="mt-1 break-all font-mono text-xs text-text-muted">
+                      {cred.maskedKey}
+                    </p>
                   )}
                   {cred?.accountId && (
                     <p className="mt-1 text-xs text-text-muted">
-                      Project: <span className="font-mono">{cred.accountId}</span>
+                      Project: <span className="break-all font-mono">{cred.accountId}</span>
                     </p>
                   )}
                   {cred && (
@@ -473,7 +475,7 @@ function SettingsInner() {
                         type="button"
                         onClick={() => void handleTestConnection(cred.id)}
                         disabled={testingId === cred.id}
-                        className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-text-main hover:bg-secondary disabled:opacity-50 transition-colors"
+                        className="min-h-[44px] rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-text-main hover:bg-secondary disabled:opacity-50 transition-colors"
                       >
                         {testingId === cred.id ? "Testing..." : "Test Connection"}
                       </button>
@@ -485,7 +487,7 @@ function SettingsInner() {
                             label: credentialLabel(cred, providers),
                           })
                         }
-                        className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                        className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
                       >
                         Disconnect
                       </button>
@@ -494,7 +496,7 @@ function SettingsInner() {
                     <button
                       type="button"
                       onClick={() => void startPopupFlow(p.id)}
-                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
+                      className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                     >
                       Connect
                     </button>
@@ -502,7 +504,7 @@ function SettingsInner() {
                     <button
                       type="button"
                       onClick={() => connectOAuth(p.id)}
-                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
+                      className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                     >
                       Connect
                     </button>
@@ -510,7 +512,7 @@ function SettingsInner() {
                     <button
                       type="button"
                       onClick={() => setApiKeyForm({ provider: p.id, key: "", label: "" })}
-                      className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
+                      className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                     >
                       Add Key
                     </button>
@@ -542,10 +544,10 @@ function SettingsInner() {
               return (
                 <div
                   key={p.id}
-                  className="flex items-center justify-between rounded-lg border border-surface-border p-4"
+                  className="flex flex-col gap-3 rounded-lg border border-surface-border p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-semibold text-text-main">{p.name}</span>
                       {cred ? (
                         <span
@@ -581,7 +583,7 @@ function SettingsInner() {
                           type="button"
                           onClick={() => void handleTestConnection(cred.id)}
                           disabled={testingId === cred.id}
-                          className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-text-main hover:bg-secondary disabled:opacity-50 transition-colors"
+                          className="min-h-[44px] rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-text-main hover:bg-secondary disabled:opacity-50 transition-colors"
                         >
                           {testingId === cred.id ? "Testing..." : "Test Connection"}
                         </button>
@@ -593,7 +595,7 @@ function SettingsInner() {
                               label: credentialLabel(cred, providers),
                             })
                           }
-                          className="rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                          className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
                         >
                           Disconnect
                         </button>
@@ -602,7 +604,7 @@ function SettingsInner() {
                       <button
                         type="button"
                         onClick={() => connectOAuth(p.id)}
-                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
+                        className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                       >
                         Connect
                       </button>
