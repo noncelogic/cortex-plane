@@ -5,6 +5,7 @@ import { use, useCallback, useMemo, useState } from "react"
 import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
 import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
+import { AgentOperationsTab } from "@/components/agents/agent-operations-tab"
 import { ChannelBindingTab } from "@/components/agents/channel-binding-tab"
 import { ChatPanel } from "@/components/agents/chat-panel"
 import { CredentialBindingPanel } from "@/components/agents/credential-binding"
@@ -35,6 +36,7 @@ const MOBILE_TABS = [
   "Chat",
   "Details",
   "Jobs",
+  "Operations",
   "Channels",
   "Credentials",
   "Browser",
@@ -374,6 +376,13 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           </div>
         )}
         {mobileTab === "Jobs" && <AgentJobsTab agentId={agentId} />}
+        {mobileTab === "Operations" && (
+          <AgentOperationsTab
+            agentId={agentId}
+            agentStatus={liveAgent.status ?? "ACTIVE"}
+            onRefresh={() => void refetch()}
+          />
+        )}
         {mobileTab === "Channels" && (
           <div className="flex flex-col gap-4">
             <ChannelBindingTab agentId={agentId} />
