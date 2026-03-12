@@ -5,12 +5,20 @@ import { useCallback, useMemo } from "react"
 import { useApiQuery } from "@/hooks/use-api"
 import type { ApiErrorCode, JobStatus } from "@/lib/api-client"
 import { getDashboardActivity, getDashboardSummary } from "@/lib/api-client"
+import type { ActivityEvent } from "@/lib/schemas/jobs"
 
 export interface DashboardStats {
   totalAgents: number
   activeJobs: number
   pendingApprovals: number
   memoryRecords: number
+}
+
+export interface DashboardTrends {
+  totalAgents24h: number
+  activeJobs24h: number
+  pendingApprovals24h: number
+  memoryRecords24h: number
 }
 
 export interface RecentJob {
@@ -23,7 +31,9 @@ export interface RecentJob {
 
 export interface DashboardData {
   stats: DashboardStats
+  trends: DashboardTrends
   recentJobs: RecentJob[]
+  activityEvents: ActivityEvent[]
   isLoading: boolean
   error: string | null
   errorCode: ApiErrorCode | null
@@ -45,7 +55,7 @@ export function useDashboard(): DashboardData {
     error: activityError,
     errorCode: activityErrorCode,
     refetch: refetchActivity,
-  } = useApiQuery(() => getDashboardActivity({ limit: 5 }), [])
+  } = useApiQuery(() => getDashboardActivity({ limit: 10 }), [])
 
   const isLoading = summaryLoading || activityLoading
   const error = summaryError || activityError
@@ -60,6 +70,15 @@ export function useDashboard(): DashboardData {
     }
   }, [summaryData])
 
+  const trends = useMemo<DashboardTrends>(() => {
+    return {
+      totalAgents24h: summaryData?.trends?.totalAgents24h ?? 0,
+      activeJobs24h: summaryData?.trends?.activeJobs24h ?? 0,
+      pendingApprovals24h: summaryData?.trends?.pendingApprovals24h ?? 0,
+      memoryRecords24h: summaryData?.trends?.memoryRecords24h ?? 0,
+    }
+  }, [summaryData])
+
   const recentJobs = useMemo<RecentJob[]>(() => {
     if (!activityData?.activity || activityData.activity.length === 0) return []
     return activityData.activity.map((j) => ({
@@ -71,10 +90,14 @@ export function useDashboard(): DashboardData {
     }))
   }, [activityData])
 
+  const activityEvents = useMemo<ActivityEvent[]>(() => {
+    return activityData?.events ?? []
+  }, [activityData])
+
   const refetch = useCallback(() => {
     void refetchSummary()
     void refetchActivity()
   }, [refetchSummary, refetchActivity])
 
-  return { stats, recentJobs, isLoading, error, errorCode, refetch }
+  return { stats, trends, recentJobs, activityEvents, isLoading, error, errorCode, refetch }
 }
