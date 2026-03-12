@@ -29,6 +29,7 @@ export default function MemoryPage(): React.JSX.Element {
     agentId,
     allRecords,
     syncError,
+    refetch,
   } = useMemoryExplorer()
 
   // Loading skeleton
@@ -82,7 +83,9 @@ export default function MemoryPage(): React.JSX.Element {
       <MemorySearch onSearch={handleSearch} isLoading={isLoading} />
 
       {/* Error */}
-      {error && <ApiErrorBanner error={error} errorCode={errorCode} />}
+      {error && (
+        <ApiErrorBanner error={error} errorCode={errorCode} onRetry={() => void refetch()} />
+      )}
       {syncError && <ApiErrorBanner error={syncError} errorCode={null} />}
 
       {/* Empty state */}
