@@ -1,5 +1,6 @@
 "use client"
 
+import { useSearchParams } from "next/navigation"
 import { use, useCallback, useMemo, useState } from "react"
 
 import { AgentConsole } from "@/components/agents/agent-console"
@@ -122,7 +123,11 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   const { addToast } = useToast()
   const { data: agent, isLoading, refetch } = useApiQuery(() => getAgent(agentId), [agentId])
   const { events } = useAgentStream(agentId)
-  const [mobileTab, setMobileTab] = useState<MobileTab>("Output")
+  const searchParams = useSearchParams()
+  const initialTab = MOBILE_TABS.includes(searchParams.get("tab") as MobileTab)
+    ? (searchParams.get("tab") as MobileTab)
+    : "Output"
+  const [mobileTab, setMobileTab] = useState<MobileTab>(initialTab)
   const [desktopCenter, setDesktopCenter] = useState<"console" | "chat">("console")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
