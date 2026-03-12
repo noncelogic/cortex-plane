@@ -20,6 +20,8 @@ interface ApprovalCardProps {
   onApprove?: (id: string) => void
   onReject?: (id: string) => void
   onRequestContext?: (id: string) => void
+  bulkSelected?: boolean
+  onBulkToggle?: (id: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -159,12 +161,22 @@ export function ApprovalCard({
   onApprove,
   onReject,
   onRequestContext,
+  bulkSelected,
+  onBulkToggle,
 }: ApprovalCardProps): React.JSX.Element {
   const risk = classifyRisk(approval)
   const { display: countdown, expired, urgent } = useCountdown(approval.expires_at)
   const tags = deriveTags(approval)
   const isPending = approval.status === "PENDING"
   const agentName = approval.requested_by_agent_id ?? "Unknown Agent"
+  const detail = approval.action_detail ?? {}
+
+  // Extract context fields from action_detail for inline preview
+  const toolName = typeof detail.tool_name === "string" ? detail.tool_name : null
+  const parameters =
+    typeof detail.parameters === "object" && detail.parameters !== null
+      ? (detail.parameters as Record<string, unknown>)
+      : null
 
   return (
     <div
@@ -183,6 +195,23 @@ export function ApprovalCard({
 
       {/* Card body */}
       <div className="flex gap-5 p-5 pl-6">
+        {/* Bulk select checkbox (pending only) */}
+        {isPending && onBulkToggle && (
+          <div className="mt-1 flex-shrink-0">
+            <input
+              type="checkbox"
+              checked={bulkSelected ?? false}
+              onChange={(e) => {
+                e.stopPropagation()
+                onBulkToggle(approval.id)
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="size-5 cursor-pointer rounded border-slate-300 text-primary accent-primary"
+              aria-label={`Select approval ${approval.id.slice(0, 8)}`}
+            />
+          </div>
+        )}
+
         {/* Risk icon circle */}
         <div className="mt-1 flex-shrink-0">
           <div
@@ -237,10 +266,32 @@ export function ApprovalCard({
           <h3 className="truncate text-lg font-bold text-text-main">{approval.action_summary}</h3>
 
           {/* Description */}
-          {typeof approval.action_detail?.description === "string" && (
+          {typeof detail.description === "string" && (
             <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-text-muted">
-              {approval.action_detail.description}
+              {detail.description}
             </p>
+          )}
+
+          {/* Inline context preview: tool call + parameters */}
+          {(toolName || parameters) && (
+            <div className="mt-2 rounded-lg border border-surface-border bg-bg-light p-3">
+              {toolName && (
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[14px] text-text-muted">
+                    terminal
+                  </span>
+                  <span className="text-xs font-medium text-text-muted">Tool call:</span>
+                  <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs font-semibold text-text-main">
+                    {toolName}
+                  </code>
+                </div>
+              )}
+              {parameters && (
+                <pre className="mt-1.5 max-h-24 overflow-auto font-mono text-[11px] leading-relaxed text-text-muted">
+                  {JSON.stringify(parameters, null, 2)}
+                </pre>
+              )}
+            </div>
           )}
 
           {/* Tags */}
@@ -258,30 +309,43 @@ export function ApprovalCard({
             ))}
           </div>
 
-          {/* Requester / Agent */}
-          <div className="mt-3 flex items-center gap-2">
-            <div className="flex size-6 items-center justify-center rounded-full bg-blue-500/10 ring-2 ring-surface-light">
-              <span className="text-[10px] font-bold text-primary">{getInitials(agentName)}</span>
+          {/* Requester / Agent + Job context */}
+          <div className="mt-3 flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex size-6 items-center justify-center rounded-full bg-blue-500/10 ring-2 ring-surface-light">
+                <span className="text-[10px] font-bold text-primary">{getInitials(agentName)}</span>
+              </div>
+              <span className="text-xs text-text-muted">
+                {approval.requested_by_agent_id ? (
+                  <Link
+                    href={`/agents/${approval.requested_by_agent_id}`}
+                    className="font-medium text-text-main hover:text-primary"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {agentName}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-text-main">{agentName}</span>
+                )}
+              </span>
             </div>
-            <span className="text-xs text-text-muted">
-              Requested by{" "}
-              {approval.requested_by_agent_id ? (
+            {approval.job_id && (
+              <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                <span className="material-symbols-outlined text-[14px]">work</span>
                 <Link
-                  href={`/agents/${approval.requested_by_agent_id}`}
-                  className="font-medium text-text-main hover:text-primary"
+                  href={`/jobs/${approval.job_id}`}
+                  className="font-mono font-medium text-text-main hover:text-primary"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {agentName}
+                  Job #{approval.job_id.slice(0, 8)}
                 </Link>
-              ) : (
-                <span className="font-medium text-text-main">{agentName}</span>
-              )}
-            </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Card footer with actions */}
+      {/* Card footer with prominent actions */}
       {isPending && (
         <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-surface-border bg-surface-light/90 px-5 py-3 backdrop-blur-md">
           <button
@@ -294,16 +358,17 @@ export function ApprovalCard({
           >
             Request Context
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onReject?.(approval.id)
               }}
-              className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-500 transition-colors hover:bg-red-500/10"
+              className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-bold text-red-600 transition-all hover:bg-red-100 active:scale-95 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
             >
-              Reject
+              <span className="material-symbols-outlined text-[18px]">block</span>
+              Deny
             </button>
             <button
               type="button"
@@ -311,9 +376,9 @@ export function ApprovalCard({
                 e.stopPropagation()
                 onApprove?.(approval.id)
               }}
-              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95"
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition-all hover:bg-emerald-700 active:scale-95"
             >
-              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              <span className="material-symbols-outlined text-[18px]">check_circle</span>
               Approve
             </button>
           </div>
