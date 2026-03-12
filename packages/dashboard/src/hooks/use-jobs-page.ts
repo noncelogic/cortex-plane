@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useApiQuery } from "@/hooks/use-api"
 import { useJobStream } from "@/hooks/use-job-stream"
 import type { JobStatus, JobSummary } from "@/lib/api-client"
-import { listJobs } from "@/lib/api-client"
+import { listAgents, listJobs } from "@/lib/api-client"
+
+const PAGE_SIZE = 25
 
 function statusCounts(jobs: JobSummary[]): { running: number; failed: number; completed: number } {
   let running = 0
@@ -22,6 +24,27 @@ function statusCounts(jobs: JobSummary[]): { running: number; failed: number; co
 export function useJobsPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<JobStatus | "ALL">("ALL")
+  const [agentFilter, setAgentFilter] = useState<string>("ALL")
+  const [page, setPage] = useState(0)
+
+  // Reset page when filters change
+  const handleStatusFilter = useCallback((status: JobStatus | "ALL") => {
+    setStatusFilter(status)
+    setPage(0)
+  }, [])
+
+  const handleAgentFilter = useCallback((agentId: string) => {
+    setAgentFilter(agentId)
+    setPage(0)
+  }, [])
+
+  // Fetch agents for the agent filter dropdown
+  const { data: agentsData } = useApiQuery(() => listAgents({ limit: 200 }), [])
+
+  const agents = useMemo(() => {
+    if (!agentsData?.agents) return []
+    return agentsData.agents.map((a) => ({ id: a.id, name: a.name }))
+  }, [agentsData])
 
   const {
     data,
@@ -33,9 +56,11 @@ export function useJobsPage() {
     () =>
       listJobs({
         status: statusFilter !== "ALL" ? statusFilter : undefined,
-        limit: 100,
+        agent_id: agentFilter !== "ALL" ? agentFilter : undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
       }),
-    [statusFilter],
+    [statusFilter, agentFilter, page],
   )
 
   // SSE: auto-refresh when jobs change status
@@ -58,6 +83,13 @@ export function useJobsPage() {
     return []
   }, [data])
 
+  const pagination = useMemo(() => {
+    if (data?.pagination) return data.pagination
+    return { total: 0, limit: PAGE_SIZE, offset: 0, hasMore: false }
+  }, [data])
+
+  const totalPages = Math.max(1, Math.ceil(pagination.total / PAGE_SIZE))
+
   const counts = useMemo(() => statusCounts(jobs), [jobs])
 
   const handleRefresh = useCallback(() => {
@@ -77,7 +109,16 @@ export function useJobsPage() {
         mimeType = "application/json"
         filename = "jobs.json"
       } else {
-        const headers = ["id", "agentId", "status", "type", "createdAt", "updatedAt", "error"]
+        const headers = [
+          "id",
+          "agentId",
+          "status",
+          "type",
+          "createdAt",
+          "updatedAt",
+          "costUsd",
+          "error",
+        ]
         const rows = jobs.map((j) =>
           headers.map((h) => {
             const val = j[h as keyof JobSummary] ?? ""
@@ -106,10 +147,17 @@ export function useJobsPage() {
   return {
     jobs,
     counts,
+    agents,
     selectedJobId,
     setSelectedJobId,
     statusFilter,
-    setStatusFilter,
+    setStatusFilter: handleStatusFilter,
+    agentFilter,
+    setAgentFilter: handleAgentFilter,
+    page,
+    setPage,
+    totalPages,
+    pagination,
     isLoading,
     error,
     errorCode,

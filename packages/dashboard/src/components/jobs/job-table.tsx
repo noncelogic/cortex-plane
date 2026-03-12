@@ -13,16 +13,29 @@ import { JobStatusBadge } from "./job-status-badge"
 // Types
 // ---------------------------------------------------------------------------
 
+interface AgentOption {
+  id: string
+  name: string
+}
+
 interface JobTableProps {
   jobs: JobSummary[]
   onSelectJob?: (jobId: string) => void
   onRetried?: () => void
-  /** Controlled status filter — when provided, the dropdown drives server-side filtering */
+  /** Controlled status filter — drives server-side filtering */
   statusFilter?: JobStatus | "ALL"
   onStatusFilterChange?: (status: JobStatus | "ALL") => void
+  /** Controlled agent filter — drives server-side filtering */
+  agentFilter?: string
+  onAgentFilterChange?: (agentId: string) => void
+  /** Agent options for the dropdown */
+  agents?: AgentOption[]
+  /** Server-side pagination */
+  page?: number
+  totalPages?: number
+  totalJobs?: number
+  onPageChange?: (page: number) => void
 }
-
-const PAGE_SIZE = 15
 
 const STATUS_OPTIONS: { label: string; value: JobStatus | "ALL" }[] = [
   { label: "All Statuses", value: "ALL" },
@@ -49,17 +62,30 @@ export function JobTable({
   onRetried,
   statusFilter: controlledStatus,
   onStatusFilterChange,
+  agentFilter: controlledAgent,
+  onAgentFilterChange,
+  agents = [],
+  page: controlledPage,
+  totalPages: controlledTotalPages,
+  totalJobs,
+  onPageChange,
 }: JobTableProps): React.JSX.Element {
   const [search, setSearch] = useState("")
   const [localStatus, setLocalStatus] = useState<JobStatus | "ALL">("ALL")
   const [typeFilter, setTypeFilter] = useState<string>("ALL")
-  const [page, setPage] = useState(0)
 
   // Use controlled status filter when provided (server-side filtering)
   const statusFilter = controlledStatus ?? localStatus
   const setStatusFilter = onStatusFilterChange ?? setLocalStatus
 
-  // Filter — skip status filtering when controlled (already filtered server-side)
+  // Use controlled agent filter when provided
+  const agentFilter = controlledAgent ?? "ALL"
+  const setAgentFilter = onAgentFilterChange ?? (() => {})
+
+  // Server-side pagination takes precedence
+  const isServerPaginated = controlledPage !== undefined && onPageChange !== undefined
+
+  // Client-side filter — only search and type (status + agent are server-side)
   const filtered = useMemo(() => {
     return jobs.filter((j) => {
       if (!controlledStatus && statusFilter !== "ALL" && j.status !== statusFilter) return false
@@ -69,6 +95,7 @@ export function JobTable({
         return (
           j.id.toLowerCase().includes(q) ||
           j.agentId.toLowerCase().includes(q) ||
+          (j.agentName?.toLowerCase().includes(q) ?? false) ||
           j.type.toLowerCase().includes(q)
         )
       }
@@ -76,16 +103,15 @@ export function JobTable({
     })
   }, [jobs, search, controlledStatus, statusFilter, typeFilter])
 
-  // Paginate
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages - 1)
-  const paginated = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+  const displayJobs = filtered
+  const page = controlledPage ?? 0
+  const totalPages = controlledTotalPages ?? 1
 
   const canRetry = (status: JobStatus) =>
     status === "FAILED" || status === "TIMED_OUT" || status === "DEAD_LETTER"
 
   // Empty state
-  if (jobs.length === 0) {
+  if (jobs.length === 0 && !search && statusFilter === "ALL" && agentFilter === "ALL") {
     return (
       <EmptyState
         icon="work_history"
@@ -110,10 +136,7 @@ export function JobTable({
           <input
             type="text"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setPage(0)
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search jobs..."
             className="rounded-lg border-none bg-secondary py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/50"
           />
@@ -126,10 +149,7 @@ export function JobTable({
           </span>
           <select
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as JobStatus | "ALL")
-              setPage(0)
-            }}
+            onChange={(e) => setStatusFilter(e.target.value as JobStatus | "ALL")}
             className="cursor-pointer appearance-none rounded-lg border-none bg-secondary py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50"
           >
             {STATUS_OPTIONS.map((f) => (
@@ -140,6 +160,27 @@ export function JobTable({
           </select>
         </div>
 
+        {/* Agent Filter */}
+        {agents.length > 0 && (
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-text-muted">
+              smart_toy
+            </span>
+            <select
+              value={agentFilter}
+              onChange={(e) => setAgentFilter(e.target.value)}
+              className="cursor-pointer appearance-none rounded-lg border-none bg-secondary py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50"
+            >
+              <option value="ALL">All Agents</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Type Filter */}
         <div className="relative">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-text-muted">
@@ -147,10 +188,7 @@ export function JobTable({
           </span>
           <select
             value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value)
-              setPage(0)
-            }}
+            onChange={(e) => setTypeFilter(e.target.value)}
             className="cursor-pointer appearance-none rounded-lg border-none bg-secondary py-2 pl-10 pr-8 text-sm focus:ring-2 focus:ring-primary/50"
           >
             {TYPE_OPTIONS.map((t) => (
@@ -163,8 +201,8 @@ export function JobTable({
 
         {/* Result count */}
         <div className="ml-auto text-sm text-text-muted">
-          <span className="font-bold text-text-main">{filtered.length}</span>{" "}
-          {filtered.length === 1 ? "job" : "jobs"}
+          <span className="font-bold text-text-main">{totalJobs ?? filtered.length}</span>{" "}
+          {(totalJobs ?? filtered.length) === 1 ? "job" : "jobs"}
         </div>
       </div>
 
@@ -189,6 +227,9 @@ export function JobTable({
                 Duration
               </th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">
+                Cost
+              </th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">
                 Started
               </th>
               <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-text-muted">
@@ -197,14 +238,14 @@ export function JobTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-border">
-            {paginated.length === 0 ? (
+            {displayJobs.length === 0 ? (
               <tr>
-                <td className="px-6 py-12 text-center text-sm text-text-muted" colSpan={7}>
+                <td className="px-6 py-12 text-center text-sm text-text-muted" colSpan={8}>
                   No jobs match the current filters.
                 </td>
               </tr>
             ) : (
-              paginated.map((job) => {
+              displayJobs.map((job) => {
                 const isTerminal =
                   job.status === "COMPLETED" ||
                   job.status === "FAILED" ||
@@ -259,6 +300,13 @@ export function JobTable({
                       </span>
                     </td>
 
+                    {/* Cost */}
+                    <td className="px-6 py-4">
+                      <span className="font-mono text-sm text-text-muted">
+                        {job.costUsd != null ? `$${job.costUsd.toFixed(4)}` : "—"}
+                      </span>
+                    </td>
+
                     {/* Started */}
                     <td className="px-6 py-4">
                       <span className="text-sm text-text-muted">{relativeTime(job.createdAt)}</span>
@@ -297,33 +345,54 @@ export function JobTable({
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <span className="text-xs text-text-muted">
-            Page {safePage + 1} of {totalPages}
+            Page {page + 1} of {totalPages}
           </span>
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={safePage === 0}
+              onClick={() => {
+                if (isServerPaginated) onPageChange(Math.max(0, page - 1))
+              }}
+              disabled={page === 0}
               className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary disabled:opacity-30"
             >
               <span className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setPage(i)}
-                className={`size-8 rounded-lg text-xs font-bold transition-colors ${
-                  i === safePage ? "bg-primary text-white" : "text-text-muted hover:bg-secondary"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              // Show pages around the current page for large page counts
+              let pageNum: number
+              if (totalPages <= 7) {
+                pageNum = i
+              } else if (page < 4) {
+                pageNum = i
+              } else if (page > totalPages - 5) {
+                pageNum = totalPages - 7 + i
+              } else {
+                pageNum = page - 3 + i
+              }
+              return (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => {
+                    if (isServerPaginated) onPageChange(pageNum)
+                  }}
+                  className={`size-8 rounded-lg text-xs font-bold transition-colors ${
+                    pageNum === page
+                      ? "bg-primary text-white"
+                      : "text-text-muted hover:bg-secondary"
+                  }`}
+                >
+                  {pageNum + 1}
+                </button>
+              )
+            })}
             <button
               type="button"
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={safePage >= totalPages - 1}
+              onClick={() => {
+                if (isServerPaginated) onPageChange(Math.min(totalPages - 1, page + 1))
+              }}
+              disabled={page >= totalPages - 1}
               className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary disabled:opacity-30"
             >
               <span className="material-symbols-outlined text-lg">chevron_right</span>

@@ -20,16 +20,25 @@ const sizeClasses: Record<ButtonSize, string> = {
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: ButtonSize
+  /** Show a spinner and disable the button while an async action is in progress. */
+  loading?: boolean
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "secondary", size = "md", className = "", children, ...props }, ref) => (
+  (
+    { variant = "secondary", size = "md", className = "", loading, children, disabled, ...props },
+    ref,
+  ) => (
     <button
       ref={ref}
       type="button"
+      disabled={disabled || loading}
       className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     >
+      {loading && (
+        <span className="material-symbols-outlined animate-spin text-[1em]">progress_activity</span>
+      )}
       {children}
     </button>
   ),

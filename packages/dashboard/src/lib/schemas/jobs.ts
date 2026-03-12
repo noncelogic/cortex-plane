@@ -25,6 +25,7 @@ export const JobSummarySchema = z.object({
   completedAt: z.string().optional(),
   error: z.string().optional(),
   errorCategory: z.string().nullish(),
+  costUsd: z.number().nullish(),
 })
 
 export const JobStepSchema = z.object({
