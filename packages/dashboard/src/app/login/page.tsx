@@ -146,9 +146,7 @@ function LoginInner() {
                   ) : (
                     <ProviderIcon provider={p.id} />
                   )}
-                  <span>
-                    {isRedirecting ? "Redirecting\u2026" : `Continue with ${p.name}`}
-                  </span>
+                  <span>{isRedirecting ? "Redirecting\u2026" : `Continue with ${p.name}`}</span>
                 </button>
               )
             })
