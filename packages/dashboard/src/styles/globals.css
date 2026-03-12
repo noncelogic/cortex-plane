@@ -118,3 +118,147 @@
     color: var(--color-text-main);
   }
 }
+
+/* ── CopilotKit dark theme overrides ────────────────── */
+.dark .copilot-chat-panel {
+  --copilot-kit-primary-color: #2b2bee;
+  --copilot-kit-contrast-color: #ffffff;
+  --copilot-kit-secondary-color: #1a1a2e;
+  --copilot-kit-background-color: #101022;
+  --copilot-kit-muted-color: #9494b8;
+  --copilot-kit-response-button-background-color: #1e1e32;
+  --copilot-kit-response-button-color: #e8e8ef;
+}
+
+.copilot-chat-panel .copilotKitChat,
+.copilot-chat-panel [class*="copilotKit"] {
+  font-family: var(--font-body);
+}
+
+.dark .copilot-chat-panel .copilotKitChat {
+  background-color: transparent;
+  color: #e8e8ef;
+}
+
+.dark .copilot-chat-panel .copilotKitHeader {
+  display: none;
+}
+
+.copilot-chat-panel .copilotKitHeader {
+  display: none;
+}
+
+.dark .copilot-chat-panel .copilotKitMessages {
+  background-color: transparent;
+}
+
+.dark .copilot-chat-panel .copilotKitMessage {
+  color: #e8e8ef;
+}
+
+.dark .copilot-chat-panel .copilotKitUserMessage {
+  background-color: #2b2bee;
+  color: #ffffff;
+}
+
+.dark .copilot-chat-panel .copilotKitAssistantMessage {
+  background-color: #1a1a2e;
+  color: #e8e8ef;
+}
+
+.dark .copilot-chat-panel .copilotKitInput,
+.dark .copilot-chat-panel .copilotKitInputControls {
+  background-color: #1a1a2e;
+  border-color: #282839;
+}
+
+.dark .copilot-chat-panel .copilotKitInput textarea {
+  background-color: transparent;
+  color: #e8e8ef;
+}
+
+.dark .copilot-chat-panel .copilotKitInput textarea::placeholder {
+  color: #616189;
+}
+
+.dark .copilot-chat-panel .copilotKitInputControls button {
+  background-color: #2b2bee;
+  color: #ffffff;
+}
+
+.dark .copilot-chat-panel .copilotKitInputControls button:hover {
+  background-color: #2424cc;
+}
+
+/* Responsive: full-height on mobile */
+.copilot-chat-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.copilot-chat-inner > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* CopilotKit chat fills available space */
+.copilot-chat-panel .copilotKitChat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.copilot-chat-panel .copilotKitMessages {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Ensure markdown content in chat renders with readable styles */
+.dark .copilot-chat-panel .copilotKitMarkdown {
+  color: #e8e8ef;
+}
+
+.dark .copilot-chat-panel .copilotKitMarkdown code {
+  background-color: #282839;
+  color: #e8e8ef;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.dark .copilot-chat-panel .copilotKitMarkdown pre {
+  background-color: #0a0a18;
+  border: 1px solid #282839;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.dark .copilot-chat-panel .copilotKitMarkdown pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+/* Activity indicator */
+.dark .copilot-chat-panel .copilotKitActivityDot,
+.dark .copilot-chat-panel [class*="ActivityDot"] {
+  background-color: #2b2bee;
+}
+
+/* Suggestion buttons */
+.dark .copilot-chat-panel .copilotKitSuggestion,
+.dark .copilot-chat-panel [class*="Suggestion"] button {
+  background-color: #1e1e32;
+  color: #9494b8;
+  border-color: #282839;
+}
+
+.dark .copilot-chat-panel .copilotKitSuggestion:hover,
+.dark .copilot-chat-panel [class*="Suggestion"] button:hover {
+  background-color: #282839;
+  color: #e8e8ef;
+}

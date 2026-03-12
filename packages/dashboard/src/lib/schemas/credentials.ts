@@ -48,6 +48,14 @@ export const OAuthInitResultSchema = z.object({
   state: z.string(),
 })
 
+export const CredentialTestResultSchema = z.object({
+  status: z.enum(["connected", "token_expired", "auth_failed", "rate_limited", "error"]),
+  message: z.string(),
+  tokenExpiresAt: z.string().nullable().optional(),
+  lastUsedAt: z.string().nullable().optional(),
+})
+
 export type ProviderInfo = z.infer<typeof ProviderInfoSchema>
 export type Credential = z.infer<typeof CredentialSchema>
 export type OAuthInitResult = z.infer<typeof OAuthInitResultSchema>
+export type CredentialTestResult = z.infer<typeof CredentialTestResultSchema>
