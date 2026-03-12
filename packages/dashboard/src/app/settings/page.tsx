@@ -97,8 +97,8 @@ function CredentialHealthDetails({
   )
 }
 
-/** Code-paste providers that use the init/exchange flow. */
-const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
+/** Code-paste providers that use the init/exchange flow (Anthropic only — device code). */
+const CODE_PASTE_PROVIDER_IDS = new Set(["anthropic"])
 
 /**
  * Providers that display a device code instead of redirecting to localhost.
