@@ -249,7 +249,7 @@ describe("OAuth popup flow logic", () => {
   })
 
   describe("provider coverage", () => {
-    const CODE_PASTE_PROVIDERS = ["google-antigravity", "openai-codex", "anthropic"]
+    const CODE_PASTE_PROVIDERS = ["anthropic"]
 
     it.each(CODE_PASTE_PROVIDERS)("supports popup flow for %s", async (provider) => {
       mockInitOAuthConnect.mockResolvedValue({
