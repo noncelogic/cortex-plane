@@ -1140,6 +1140,48 @@ describe("HttpLlmBackend — 401 token refresh retry", () => {
     expect(callCount).toBe(2)
   })
 
+  it("retries on 401 and succeeds with refreshed Anthropic OAuth token (uses apiKey)", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const refresher = vi.fn().mockResolvedValue("refreshed-oauth-token")
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "expired-oauth-token",
+          credentialId: "cred-anthropic-oauth-refresh",
+          credentialType: "oauth",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task, undefined, refresher)
+
+    let callCount = 0
+    interceptAnthropicClient(handle, () => {
+      callCount++
+      if (callCount === 1) {
+        const err = new Error("Invalid API key") as Error & { status: number }
+        err.status = 401
+        throw err
+      }
+      return createMockAnthropicStream({
+        textContent: "OAuth refresh success!",
+        stopReason: "end_turn",
+      })
+    })
+
+    await collectEvents(handle)
+    const result = await handle.result()
+
+    expect(refresher).toHaveBeenCalledWith("cred-anthropic-oauth-refresh")
+    expect(result.status).toBe("completed")
+    expect(callCount).toBe(2)
+  })
+
   it("fails when refresher returns null (cannot refresh)", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
