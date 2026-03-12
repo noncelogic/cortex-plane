@@ -82,19 +82,20 @@ export function ChannelBindingTab({ agentId }: ChannelBindingTabProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-text-main">Channel Bindings</h3>
-          <p className="text-xs text-text-muted">
-            Bind this agent to chat channels so it receives messages.
-          </p>
+    <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-primary/10 dark:bg-primary/5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary">forum</span>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            Channel Bindings
+          </h3>
         </div>
         <button
           type="button"
           onClick={() => setShowAdd(true)}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
         >
+          <span className="material-symbols-outlined text-sm">add_link</span>
           Bind Channel
         </button>
       </div>
@@ -104,15 +105,17 @@ export function ChannelBindingTab({ agentId }: ChannelBindingTabProps) {
         {bindings.map((b) => (
           <div
             key={b.id}
-            className="flex items-center justify-between rounded-lg border border-surface-border p-3"
+            className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/50"
           >
-            <div className="flex items-center gap-2">
-              <span className="inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-text-muted">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                 {b.channel_type}
               </span>
-              <span className="font-mono text-sm text-text-main">{b.chat_id}</span>
+              <span className="truncate font-mono text-sm text-slate-900 dark:text-white">
+                {b.chat_id}
+              </span>
               {b.is_default && (
-                <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+                <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 ring-1 ring-emerald-500/20">
                   Default
                 </span>
               )}
@@ -120,17 +123,22 @@ export function ChannelBindingTab({ agentId }: ChannelBindingTabProps) {
             <button
               type="button"
               onClick={() => void handleUnbind(b.id)}
-              className="rounded-lg px-3 py-1 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+              title="Unbind channel"
+              className="flex size-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
             >
-              Unbind
+              <span className="material-symbols-outlined text-lg">link_off</span>
             </button>
           </div>
         ))}
 
         {bindings.length === 0 && (
-          <p className="py-4 text-center text-sm text-text-muted">
-            No channels bound. Bind a channel to start receiving messages.
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-10 dark:border-slate-700">
+            <span className="material-symbols-outlined mb-3 text-3xl text-slate-500">forum</span>
+            <p className="mb-1 text-sm font-medium text-slate-400">No channels bound</p>
+            <p className="text-xs text-slate-500">
+              Bind a channel so this agent receives messages.
+            </p>
+          </div>
         )}
       </div>
 
