@@ -30,17 +30,15 @@ import {
 // Mobile tabs
 // ---------------------------------------------------------------------------
 
-const MOBILE_TABS = [
-  "Output",
-  "Chat",
-  "Details",
-  "Jobs",
-  "Channels",
-  "Credentials",
-  "Browser",
-  "Memory",
-] as const
-type MobileTab = (typeof MOBILE_TABS)[number]
+type MobileTab =
+  | "Output"
+  | "Chat"
+  | "Details"
+  | "Jobs"
+  | "Channels"
+  | "Credentials"
+  | "Browser"
+  | "Memory"
 
 const PRIORITY_TABS: MobileTab[] = ["Output", "Chat", "Details"]
 const OVERFLOW_TABS: MobileTab[] = ["Jobs", "Channels", "Credentials", "Browser", "Memory"]
