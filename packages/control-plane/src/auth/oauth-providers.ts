@@ -72,7 +72,7 @@ export const CODE_PASTE_PROVIDERS: Record<string, CodePasteProviderConfig> = {
     redirectUri: "http://localhost:1455/auth/callback",
     authUrl: "https://auth.openai.com/oauth/authorize",
     tokenUrl: "https://auth.openai.com/oauth/token",
-    scopes: ["openid", "profile", "email", "offline_access", "model.request"],
+    scopes: ["openid", "profile", "email", "offline_access"],
     usePkce: true,
   },
 
