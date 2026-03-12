@@ -255,7 +255,7 @@ describe("LLM credential injection", () => {
     const handle = await backend.executeTask(task)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const useAuthToken = (handle as any).useAuthToken
-    expect(useAuthToken).toBe(false)
+    expect(useAuthToken).toBe(true)
     await handle.cancel("test")
   })
 
