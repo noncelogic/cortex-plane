@@ -341,7 +341,7 @@ export function JobDetailDrawer({
                 document.body.removeChild(a)
                 URL.revokeObjectURL(url)
               }}
-              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-bold text-text-main transition-colors hover:bg-surface-border"
+              className="flex min-h-[44px] items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-bold text-text-main transition-colors hover:bg-surface-border"
             >
               <span className="material-symbols-outlined text-lg">download</span>
               Download Logs

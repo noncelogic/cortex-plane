@@ -220,14 +220,14 @@ export default function AgentsPage(): React.JSX.Element {
           <button
             onClick={handleExport}
             disabled={agents.length === 0}
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 disabled:opacity-50 dark:bg-slate-800 dark:hover:bg-slate-700"
+            className="flex min-h-[44px] items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 disabled:opacity-50 dark:bg-slate-800 dark:hover:bg-slate-700"
           >
             <span className="material-symbols-outlined text-lg">download</span>
             Export
           </button>
           <button
             onClick={() => setDeployOpen(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
+            className="flex min-h-[44px] items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
           >
             <span className="material-symbols-outlined text-lg">add</span>
             Deploy New Agent
@@ -236,8 +236,8 @@ export default function AgentsPage(): React.JSX.Element {
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/40">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/40 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           {/* Search */}
           <div className="relative">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-slate-400">
@@ -248,7 +248,7 @@ export default function AgentsPage(): React.JSX.Element {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search agents..."
-              className="rounded-lg border-none bg-slate-100 py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/50 dark:bg-slate-800"
+              className="w-full rounded-lg border-none bg-slate-100 py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/50 dark:bg-slate-800 sm:w-auto"
             />
           </div>
 
@@ -304,9 +304,9 @@ export default function AgentsPage(): React.JSX.Element {
             </span>
           </div>
 
-          {/* SSE status */}
+          {/* SSE status — hidden on very small screens */}
           <div
-            className={`flex items-center gap-1.5 rounded-full border px-2 py-1 ${
+            className={`hidden items-center gap-1.5 rounded-full border px-2 py-1 sm:flex ${
               connected
                 ? "border-emerald-500/20 bg-emerald-500/10"
                 : "border-slate-500/20 bg-slate-500/10"
