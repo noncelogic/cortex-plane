@@ -73,15 +73,35 @@ export const JobListResponseSchema = z.object({
   pagination: PaginationSchema,
 })
 
+export const DashboardTrendsSchema = z.object({
+  totalAgents24h: z.number(),
+  activeJobs24h: z.number(),
+  pendingApprovals24h: z.number(),
+  memoryRecords24h: z.number(),
+})
+
 export const DashboardSummarySchema = z.object({
   totalAgents: z.number(),
   activeJobs: z.number(),
   pendingApprovals: z.number(),
   memoryRecords: z.number(),
+  trends: DashboardTrendsSchema.optional(),
+})
+
+export const ActivityEventSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["job", "approval", "event"]),
+  title: z.string(),
+  description: z.string(),
+  icon: z.string(),
+  status: z.string(),
+  agentName: z.string().nullable(),
+  timestamp: z.string(),
 })
 
 export const DashboardActivitySchema = z.object({
   activity: z.array(JobSummarySchema),
+  events: z.array(ActivityEventSchema).optional(),
 })
 
 export type JobStatus = z.infer<typeof JobStatusSchema>
@@ -91,5 +111,7 @@ export type JobLogEntry = z.infer<typeof JobLogEntrySchema>
 export type FailureReason = z.infer<typeof FailureReasonSchema>
 export type TokenUsage = z.infer<typeof TokenUsageSchema>
 export type JobDetail = z.infer<typeof JobDetailSchema>
+export type DashboardTrends = z.infer<typeof DashboardTrendsSchema>
 export type DashboardSummary = z.infer<typeof DashboardSummarySchema>
+export type ActivityEvent = z.infer<typeof ActivityEventSchema>
 export type DashboardActivity = z.infer<typeof DashboardActivitySchema>
