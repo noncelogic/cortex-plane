@@ -55,6 +55,11 @@ describe("oauth-providers registry", () => {
     }
   })
 
+  it("openai-codex scopes include model.request for API access", () => {
+    const codex = getCodePasteProvider("openai-codex")!
+    expect(codex.scopes).toContain("model.request")
+  })
+
   it("anthropic is the only codePasteOnly provider", () => {
     const codePasteOnly = listCodePasteProviders().filter((p) => p.codePasteOnly)
     expect(codePasteOnly).toHaveLength(1)
