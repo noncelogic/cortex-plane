@@ -55,7 +55,6 @@ describe("oauth-providers registry", () => {
     }
   })
 
-
   it("anthropic is the only codePasteOnly provider", () => {
     const codePasteOnly = listCodePasteProviders().filter((p) => p.codePasteOnly)
     expect(codePasteOnly).toHaveLength(1)
