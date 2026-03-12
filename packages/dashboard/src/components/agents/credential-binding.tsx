@@ -290,8 +290,8 @@ interface BindingRowProps {
 
 function BindingRow({ binding, onUnbind }: BindingRowProps): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-primary/10 dark:bg-primary/5">
-      <div className="flex min-w-0 items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/50">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
           <span className="material-symbols-outlined text-base text-primary">
             {classIcon(binding.credentialClass)}
@@ -304,7 +304,7 @@ function BindingRow({ binding, onUnbind }: BindingRowProps): React.JSX.Element {
           <p className="text-xs text-slate-500">{binding.provider}</p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex items-center gap-2">
         <CredentialClassBadge credClass={binding.credentialClass} />
         <StatusBadge status={binding.status} />
         <button
@@ -437,9 +437,9 @@ export function CredentialBindingPanel({
   }, [modelId, bindings])
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-primary/10 dark:bg-primary/5">
       {/* Panel header */}
-      <div className="flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-primary">lock</span>
           <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
@@ -466,7 +466,7 @@ export function CredentialBindingPanel({
 
       {/* Provider-model mismatch warning */}
       {providerMismatch && !loadingBindings && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
           <span className="material-symbols-outlined mt-px text-[16px] text-amber-500">
             warning
           </span>

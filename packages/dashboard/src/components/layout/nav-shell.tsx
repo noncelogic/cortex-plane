@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { UserMenu } from "@/components/layout/user-menu"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
@@ -75,12 +75,15 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               key={href}
               href={href}
               title={collapsed ? label : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-primary/10 text-primary border border-primary/20"
+                  ? "bg-primary/15 text-primary border border-primary/30 shadow-sm shadow-primary/10"
                   : "text-text-muted hover:bg-secondary border border-transparent"
               }`}
             >
+              {active && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-r-full bg-primary" />
+              )}
               <NavIcon name={icon} filled={active} />
               {!collapsed && <span>{label}</span>}
             </Link>
@@ -170,11 +173,36 @@ function BottomTabs() {
   )
 }
 
+const SIDEBAR_KEY = "cortex-plane:sidebar-collapsed"
+
 /* ── Shell ────────────────────────────────────────────── */
 export function NavShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false
+    return localStorage.getItem(SIDEBAR_KEY) === "true"
+  })
   const guardState = useAuthGuard()
+
+  const toggleSidebar = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem(SIDEBAR_KEY, String(next))
+      return next
+    })
+  }, [])
+
+  /* Cmd/Ctrl + B keyboard shortcut */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+        e.preventDefault()
+        toggleSidebar()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [toggleSidebar])
 
   useEffect(() => {
     if (guardState.shouldRedirectToLogin) {
@@ -189,7 +217,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
 
   if (guardState.shouldShowLoading || guardState.shouldRedirectToLogin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-dark">
+      <div className="flex min-h-screen items-center justify-center bg-bg-light">
         <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     )
@@ -197,7 +225,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
 
   if (guardState.shouldShowUnverified) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-dark px-4">
+      <div className="flex min-h-screen items-center justify-center bg-bg-light px-4">
         <div className="max-w-md rounded-xl border border-surface-border bg-surface-light p-6 text-center">
           <p className="text-sm font-semibold text-text-main">Unable to verify your session</p>
           <p className="mt-2 text-sm text-text-muted">
@@ -215,7 +243,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => router.replace("/login")}
-              className="rounded-lg border border-surface-border bg-surface-dark px-4 py-2 text-sm font-semibold text-text-main transition-colors hover:bg-secondary"
+              className="rounded-lg border border-surface-border bg-secondary px-4 py-2 text-sm font-semibold text-text-main transition-colors hover:bg-bg-light"
             >
               Go to sign in
             </button>
@@ -227,7 +255,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopNav />

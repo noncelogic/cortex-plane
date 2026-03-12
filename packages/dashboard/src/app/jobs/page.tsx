@@ -18,10 +18,17 @@ export default function JobsPage(): React.JSX.Element {
   const {
     jobs,
     counts,
+    agents,
     selectedJobId,
     setSelectedJobId,
     statusFilter,
     setStatusFilter,
+    agentFilter,
+    setAgentFilter,
+    page,
+    setPage,
+    totalPages,
+    pagination,
     isLoading,
     error,
     errorCode,
@@ -68,7 +75,7 @@ export default function JobsPage(): React.JSX.Element {
             <button
               type="button"
               onClick={() => setShowExportMenu((v) => !v)}
-              className="flex min-h-[44px] items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
+              className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
             >
               <span className="material-symbols-outlined text-lg">download</span>
               Export
@@ -83,7 +90,7 @@ export default function JobsPage(): React.JSX.Element {
                       exportJobs("csv")
                       setShowExportMenu(false)
                     }}
-                    className="flex w-full min-h-[44px] items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
                   >
                     <span className="material-symbols-outlined text-base text-text-muted">
                       table_chart
@@ -96,7 +103,7 @@ export default function JobsPage(): React.JSX.Element {
                       exportJobs("json")
                       setShowExportMenu(false)
                     }}
-                    className="flex w-full min-h-[44px] items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
                   >
                     <span className="material-symbols-outlined text-base text-text-muted">
                       data_object
@@ -110,10 +117,15 @@ export default function JobsPage(): React.JSX.Element {
           <button
             type="button"
             onClick={handleRefresh}
-            className="flex min-h-[44px] items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-bold text-primary transition-all hover:bg-primary/20"
+            disabled={isLoading}
+            className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-bold text-primary transition-all hover:bg-primary/20 disabled:opacity-50"
           >
-            <span className="material-symbols-outlined text-lg">refresh</span>
-            Refresh
+            <span
+              className={`material-symbols-outlined text-lg ${isLoading ? "animate-spin" : ""}`}
+            >
+              {isLoading ? "progress_activity" : "refresh"}
+            </span>
+            {isLoading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </div>
@@ -148,7 +160,11 @@ export default function JobsPage(): React.JSX.Element {
       {error && <ApiErrorBanner error={error} errorCode={errorCode} onRetry={handleRefresh} />}
 
       {/* Empty state */}
-      {!isLoading && !error && jobs.length === 0 ? (
+      {!isLoading &&
+      !error &&
+      jobs.length === 0 &&
+      statusFilter === "ALL" &&
+      agentFilter === "ALL" ? (
         <EmptyState
           icon="list_alt"
           title="No jobs yet"
@@ -166,6 +182,13 @@ export default function JobsPage(): React.JSX.Element {
               onRetried={handleRefresh}
               statusFilter={statusFilter}
               onStatusFilterChange={setStatusFilter}
+              agentFilter={agentFilter}
+              onAgentFilterChange={setAgentFilter}
+              agents={agents}
+              page={page}
+              totalPages={totalPages}
+              totalJobs={pagination.total}
+              onPageChange={setPage}
             />
           </div>
 
@@ -174,6 +197,30 @@ export default function JobsPage(): React.JSX.Element {
             {jobs.map((job) => (
               <JobCard key={job.id} job={job} onSelect={setSelectedJobId} />
             ))}
+            {/* Mobile pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between py-2">
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.max(0, page - 1))}
+                  disabled={page === 0}
+                  className="rounded-lg px-4 py-2 text-sm font-bold text-primary transition-colors hover:bg-secondary disabled:opacity-30"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-text-muted">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="rounded-lg px-4 py-2 text-sm font-bold text-primary transition-colors hover:bg-secondary disabled:opacity-30"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Detail Drawer */}

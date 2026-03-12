@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
+import { Skeleton } from "@/components/layout/skeleton"
 import { useToast } from "@/components/layout/toast"
 import { ChannelConfigSection } from "@/components/settings/channel-config-section"
 import { useOAuthPopup } from "@/hooks/use-oauth-popup"
@@ -293,8 +294,43 @@ function SettingsInner() {
 
   if (authStatus === "loading" || loading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="space-y-8">
+        {/* Header skeleton */}
+        <div>
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="mt-1 h-4 w-64" />
+        </div>
+
+        {/* Account card skeleton */}
+        <div className="rounded-xl border border-surface-border bg-surface-light p-6 space-y-3">
+          <Skeleton className="h-5 w-24" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+
+        {/* Provider section skeleton */}
+        <div className="rounded-xl border border-surface-border bg-surface-light p-6 space-y-4">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-4 w-72" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between rounded-lg border border-surface-border p-4"
+            >
+              <div className="space-y-2 flex-1">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-48" />
+              </div>
+              <Skeleton className="h-8 w-20 rounded-lg" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -825,8 +861,18 @@ export default function SettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex justify-center py-12">
-          <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="space-y-8">
+          <div>
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="mt-1 h-4 w-64" />
+          </div>
+          <div className="rounded-xl border border-surface-border bg-surface-light p-6 space-y-3">
+            <Skeleton className="h-5 w-24" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-4 w-56" />
+            </div>
+          </div>
         </div>
       }
     >
