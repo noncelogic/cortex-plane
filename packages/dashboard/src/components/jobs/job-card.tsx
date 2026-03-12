@@ -50,11 +50,16 @@ export function JobCard({ job, onSelect }: JobCardProps): React.JSX.Element {
         </span>
       </div>
 
-      {/* Footer: Duration + Time */}
+      {/* Footer: Duration + Cost + Time */}
       <div className="flex items-center justify-between border-t border-surface-border pt-3">
-        <span className="font-mono text-xs text-text-muted">
-          {isTerminal && durationMs !== null ? duration(durationMs) : "—"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-xs text-text-muted">
+            {isTerminal && durationMs !== null ? duration(durationMs) : "—"}
+          </span>
+          {job.costUsd != null && (
+            <span className="font-mono text-xs text-text-muted">${job.costUsd.toFixed(4)}</span>
+          )}
+        </div>
         <span className="text-xs text-text-muted">{relativeTime(job.createdAt)}</span>
       </div>
 
