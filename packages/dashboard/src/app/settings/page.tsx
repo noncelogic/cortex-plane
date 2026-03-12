@@ -9,12 +9,14 @@ import { ChannelConfigSection } from "@/components/settings/channel-config-secti
 import { useOAuthPopup } from "@/hooks/use-oauth-popup"
 import {
   type Credential,
+  type CredentialTestResult,
   deleteCredential as apiDeleteCredential,
   exchangeOAuthConnect,
   listCredentials,
   listProviders,
   type ProviderInfo,
   saveProviderApiKey,
+  testCredential as apiTestCredential,
 } from "@/lib/api-client"
 import { errorSummary, refreshStatus, tokenExpiry } from "@/lib/credential-health"
 
@@ -24,17 +26,50 @@ function credentialLabel(cred: Credential, providers: ProviderInfo[]): string {
   return providers.find((p) => p.id === cred.provider)?.name ?? cred.provider
 }
 
-/** Render credential health details (errors, token expiry, refresh status). */
-function CredentialHealthDetails({ cred }: { cred: Credential }) {
+/** Map test result status to a human-readable badge label. */
+const TEST_STATUS_LABELS: Record<CredentialTestResult["status"], string> = {
+  connected: "Connected",
+  token_expired: "Token Expired",
+  auth_failed: "Auth Failed",
+  rate_limited: "Rate Limited",
+  error: "Error",
+}
+
+const TEST_STATUS_STYLES: Record<CredentialTestResult["status"], string> = {
+  connected: "bg-success/10 text-success",
+  token_expired: "bg-warning/10 text-warning",
+  auth_failed: "bg-danger/10 text-danger",
+  rate_limited: "bg-warning/10 text-warning",
+  error: "bg-danger/10 text-danger",
+}
+
+/** Render credential health details (errors, token expiry, refresh status, test result). */
+function CredentialHealthDetails({
+  cred,
+  testResult,
+}: {
+  cred: Credential
+  testResult?: CredentialTestResult | null
+}) {
   const err = errorSummary(cred)
   const expiry = tokenExpiry(cred)
   const refresh = refreshStatus(cred)
 
-  const hasDetails = err || expiry || refresh || cred.lastUsedAt
+  const hasDetails = err || expiry || refresh || cred.lastUsedAt || testResult
   if (!hasDetails) return null
 
   return (
     <div className="mt-1.5 space-y-0.5 text-xs">
+      {testResult && (
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${TEST_STATUS_STYLES[testResult.status]}`}
+          >
+            {TEST_STATUS_LABELS[testResult.status]}
+          </span>
+          <span className="text-text-muted">{testResult.message}</span>
+        </div>
+      )}
       {cred.lastUsedAt && (
         <p className="text-text-muted">Last used: {new Date(cred.lastUsedAt).toLocaleString()}</p>
       )}
@@ -62,8 +97,8 @@ function CredentialHealthDetails({ cred }: { cred: Credential }) {
   )
 }
 
-/** Code-paste providers that use the init/exchange flow. */
-const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
+/** Code-paste providers that use the init/exchange flow (Anthropic only — device code). */
+const CODE_PASTE_PROVIDER_IDS = new Set(["anthropic"])
 
 /**
  * Providers that display a device code instead of redirecting to localhost.
@@ -99,6 +134,10 @@ function SettingsInner() {
     label: string
   } | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
+
+  // Connection test state: credentialId → result
+  const [testResults, setTestResults] = useState<Record<string, CredentialTestResult>>({})
+  const [testingId, setTestingId] = useState<string | null>(null)
 
   // Code-paste fallback state (shown when popup cannot read the redirect URL)
   const [popupProvider, setPopupProvider] = useState<string | null>(null)
@@ -228,6 +267,30 @@ function SettingsInner() {
     [fetchData, addToast],
   )
 
+  // Test a credential connection
+  const handleTestConnection = useCallback(
+    async (credentialId: string) => {
+      setTestingId(credentialId)
+      try {
+        const result = await apiTestCredential(credentialId)
+        setTestResults((prev) => ({ ...prev, [credentialId]: result }))
+        if (result.status === "connected") {
+          addToast("Connection successful", "success")
+        } else {
+          addToast(`Connection test: ${TEST_STATUS_LABELS[result.status]}`, "error")
+        }
+        // Refresh credentials to get updated status/timestamps
+        void fetchData()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Connection test failed"
+        addToast(msg, "error")
+      } finally {
+        setTestingId(null)
+      }
+    },
+    [fetchData, addToast],
+  )
+
   if (authStatus === "loading" || loading) {
     return (
       <div className="flex justify-center py-12">
@@ -349,7 +412,12 @@ function SettingsInner() {
                       Project: <span className="break-all font-mono">{cred.accountId}</span>
                     </p>
                   )}
-                  {cred && <CredentialHealthDetails cred={cred} />}
+                  {cred && (
+                    <CredentialHealthDetails
+                      cred={cred}
+                      testResult={testResults[cred.id] ?? null}
+                    />
+                  )}
                   {p.models && p.models.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {p.models.map((m) => (
@@ -366,18 +434,28 @@ function SettingsInner() {
 
                 <div className="flex items-center gap-2">
                   {cred ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDisconnectConfirm({
-                          id: cred.id,
-                          label: credentialLabel(cred, providers),
-                        })
-                      }
-                      className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
-                    >
-                      Disconnect
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleTestConnection(cred.id)}
+                        disabled={testingId === cred.id}
+                        className="min-h-[44px] rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-text-main hover:bg-secondary disabled:opacity-50 transition-colors"
+                      >
+                        {testingId === cred.id ? "Testing..." : "Test Connection"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDisconnectConfirm({
+                            id: cred.id,
+                            label: credentialLabel(cred, providers),
+                          })
+                        }
+                        className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                      >
+                        Disconnect
+                      </button>
+                    </>
                   ) : isOAuth && isCodePaste ? (
                     <button
                       type="button"
@@ -454,23 +532,38 @@ function SettingsInner() {
                       )}
                     </div>
                     <p className="text-xs text-text-muted">{p.description}</p>
-                    {cred && <CredentialHealthDetails cred={cred} />}
+                    {cred && (
+                      <CredentialHealthDetails
+                        cred={cred}
+                        testResult={testResults[cred.id] ?? null}
+                      />
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
                     {cred ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDisconnectConfirm({
-                            id: cred.id,
-                            label: credentialLabel(cred, providers),
-                          })
-                        }
-                        className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
-                      >
-                        Disconnect
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void handleTestConnection(cred.id)}
+                          disabled={testingId === cred.id}
+                          className="min-h-[44px] rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-text-main hover:bg-secondary disabled:opacity-50 transition-colors"
+                        >
+                          {testingId === cred.id ? "Testing..." : "Test Connection"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDisconnectConfirm({
+                              id: cred.id,
+                              label: credentialLabel(cred, providers),
+                            })
+                          }
+                          className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </>
                     ) : (
                       <button
                         type="button"
