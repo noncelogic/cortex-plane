@@ -190,7 +190,7 @@ describe("LLM credential injection", () => {
     await handle.cancel("test")
   })
 
-  it("uses Bearer auth (authToken) for Anthropic OAuth credentials", async () => {
+  it("uses x-api-key (apiKey) for Anthropic OAuth credentials (not Bearer)", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -209,7 +209,7 @@ describe("LLM credential injection", () => {
     const handle = await backend.executeTask(task)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const useAuthToken = (handle as any).useAuthToken
-    expect(useAuthToken).toBe(true)
+    expect(useAuthToken).toBe(false)
     await handle.cancel("test")
   })
 
@@ -255,7 +255,7 @@ describe("LLM credential injection", () => {
     const handle = await backend.executeTask(task)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const useAuthToken = (handle as any).useAuthToken
-    expect(useAuthToken).toBe(true)
+    expect(useAuthToken).toBe(false)
     await handle.cancel("test")
   })
 
