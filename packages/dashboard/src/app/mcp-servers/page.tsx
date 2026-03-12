@@ -161,10 +161,15 @@ export default function McpServersPage(): React.JSX.Element {
           {/* Refresh */}
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-bold text-primary transition-all hover:bg-primary/20"
+            disabled={isLoading}
+            className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-bold text-primary transition-all hover:bg-primary/20 disabled:opacity-50"
           >
-            <span className="material-symbols-outlined text-lg">refresh</span>
-            Refresh
+            <span
+              className={`material-symbols-outlined text-lg ${isLoading ? "animate-spin" : ""}`}
+            >
+              {isLoading ? "progress_activity" : "refresh"}
+            </span>
+            {isLoading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </div>
