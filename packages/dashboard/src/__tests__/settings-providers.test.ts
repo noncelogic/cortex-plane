@@ -7,7 +7,7 @@ import type { Credential, ProviderInfo } from "@/lib/api-client"
  * Validates the static mapping is correct without requiring React rendering.
  */
 
-const CODE_PASTE_PROVIDER_IDS = new Set(["google-antigravity", "openai-codex", "anthropic"])
+const CODE_PASTE_PROVIDER_IDS = new Set(["anthropic"])
 const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic"])
 
 /**
@@ -20,26 +20,20 @@ function credentialLabel(cred: Credential, providers: ProviderInfo[]): string {
 }
 
 describe("settings page code-paste providers", () => {
-  it("identifies google-antigravity as a code-paste provider", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.has("google-antigravity")).toBe(true)
-  })
-
-  it("identifies openai-codex as a code-paste provider", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.has("openai-codex")).toBe(true)
-  })
-
   it("identifies anthropic as a code-paste provider", () => {
     expect(CODE_PASTE_PROVIDER_IDS.has("anthropic")).toBe(true)
   })
 
-  it("does not identify non-code-paste providers", () => {
+  it("does not identify redirect-flow providers as code-paste", () => {
+    expect(CODE_PASTE_PROVIDER_IDS.has("google-antigravity")).toBe(false)
+    expect(CODE_PASTE_PROVIDER_IDS.has("openai-codex")).toBe(false)
     expect(CODE_PASTE_PROVIDER_IDS.has("openai")).toBe(false)
     expect(CODE_PASTE_PROVIDER_IDS.has("google-ai-studio")).toBe(false)
     expect(CODE_PASTE_PROVIDER_IDS.has("github")).toBe(false)
   })
 
-  it("contains exactly 3 providers", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.size).toBe(3)
+  it("contains exactly 1 provider", () => {
+    expect(CODE_PASTE_PROVIDER_IDS.size).toBe(1)
   })
 })
 
@@ -48,7 +42,7 @@ describe("settings page code-paste-only providers", () => {
     expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("anthropic")).toBe(true)
   })
 
-  it("does not mark other code-paste providers as code-paste-only", () => {
+  it("does not mark redirect-flow providers as code-paste-only", () => {
     expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("google-antigravity")).toBe(false)
     expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("openai-codex")).toBe(false)
   })
