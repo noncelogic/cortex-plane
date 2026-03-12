@@ -47,6 +47,20 @@ const MOBILE_TABS = [
 ] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 
+/** Tabs always visible in the mobile bar */
+const PRIORITY_TABS: readonly MobileTab[] = ["Output", "Chat", "Details"] as const
+
+/** Tabs hidden behind the "More" overflow menu on mobile */
+const OVERFLOW_TABS: readonly MobileTab[] = [
+  "Jobs",
+  "Operations",
+  "Channels",
+  "Credentials",
+  "Users",
+  "Browser",
+  "Memory",
+] as const
+
 // ---------------------------------------------------------------------------
 // Resource mock helpers (will be replaced by real telemetry SSE)
 // ---------------------------------------------------------------------------
