@@ -188,7 +188,7 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                       </span>
                     </Link>
                     <Link
-                      href={`/agents/${agent.id}`}
+                      href={`/agents/${agent.id}?tab=Output`}
                       className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
                       title="Terminal"
                     >
@@ -197,12 +197,12 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
                       </span>
                     </Link>
                     <Link
-                      href={`/agents/${agent.id}`}
+                      href={`/agents/${agent.id}?tab=Browser`}
                       className="rounded-lg p-2 text-text-muted transition-colors hover:bg-secondary hover:text-primary"
-                      title="More"
+                      title="Browser"
                     >
                       <span className="material-symbols-outlined text-xl leading-none">
-                        more_vert
+                        monitoring
                       </span>
                     </Link>
                   </div>
