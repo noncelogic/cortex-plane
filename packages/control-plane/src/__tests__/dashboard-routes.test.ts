@@ -113,7 +113,17 @@ function mockDb(
       if (table === "agent") return selectChain([{ id: AGENT_UUID, name: "Agent One", count: 1 }])
       if (table === "agent_event") return selectChain(agentEventRows)
       if (table === "memory_extract_message") return selectChain(memoryRows)
-      if (table === "approval_request") return selectChain([{ count: 0 }])
+      if (table === "approval_request")
+        return selectChain([
+          {
+            count: 0,
+            id: "ar-1",
+            approval_status: "PENDING",
+            action_type: "tool_call",
+            requested_at: new Date("2026-02-26T00:00:00.000Z"),
+            agent_name: null,
+          },
+        ])
       if (table === "browser_screenshot") return selectChain(screenshotRows)
       if (table === "browser_event") return selectChain(browserEventRows)
       return selectChain([])
@@ -406,6 +416,12 @@ describe("dashboard routes", () => {
       activeJobs: 1,
       pendingApprovals: 0,
       memoryRecords: 0,
+      trends: {
+        totalAgents24h: 1,
+        activeJobs24h: 1,
+        pendingApprovals24h: 0,
+        memoryRecords24h: 0,
+      },
     })
   })
 
