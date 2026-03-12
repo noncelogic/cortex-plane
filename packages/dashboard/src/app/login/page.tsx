@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
 
@@ -28,6 +28,7 @@ function LoginInner() {
   const router = useRouter()
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([])
   const [loadingProviders, setLoadingProviders] = useState(true)
+  const [redirectingProvider, setRedirectingProvider] = useState<string | null>(null)
 
   const error = searchParams.get("error")
 
@@ -49,6 +50,18 @@ function LoginInner() {
       .catch(() => setLoadingProviders(false))
   }, [])
 
+  const handleLogin = useCallback(
+    (providerId: string) => {
+      setRedirectingProvider(providerId)
+      login(providerId)
+    },
+    [login],
+  )
+
+  const handleRetry = useCallback(() => {
+    router.replace("/login")
+  }, [router])
+
   if (authStatus === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-dark">
@@ -62,26 +75,44 @@ function LoginInner() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="mb-8 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary">
-            <span className="text-lg font-bold text-primary-content">CP</span>
+          <div className="mx-auto flex size-14 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+            <span className="material-symbols-outlined text-3xl text-primary">neurology</span>
           </div>
           <h1 className="mt-4 font-display text-2xl font-bold text-text-main">Cortex Plane</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Sign in to the agent orchestration dashboard
-          </p>
+          <p className="mt-1 text-sm text-text-muted">Agent orchestration dashboard</p>
         </div>
 
         {/* Error message */}
         {error && (
-          <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-            {ERROR_MESSAGES[error] ?? `Authentication error: ${error}`}
+          <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
+            <p className="text-sm text-danger">
+              {ERROR_MESSAGES[error] ?? `Authentication error: ${error}`}
+            </p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="mt-2 text-xs font-medium text-danger underline underline-offset-2 hover:text-danger/80"
+            >
+              Try again
+            </button>
           </div>
         )}
         {authStatus === "unverified" && (
-          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
-            Session verification is unstable. Please retry sign in once the control-plane is
-            reachable.
-            {authError ? <span className="block text-xs opacity-80">{authError}</span> : null}
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <p className="text-sm text-amber-400">
+              Session verification is unstable. Please retry sign in once the control-plane is
+              reachable.
+            </p>
+            {authError ? (
+              <span className="block text-xs text-amber-400/80">{authError}</span>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="mt-2 text-xs font-medium text-amber-400 underline underline-offset-2 hover:text-amber-300"
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -100,17 +131,25 @@ function LoginInner() {
               </p>
             </div>
           ) : (
-            providers.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => login(p.id)}
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-surface-border bg-surface-light px-4 py-3 text-sm font-medium text-text-main transition-colors hover:bg-secondary"
-              >
-                <ProviderIcon provider={p.id} />
-                <span>Continue with {p.name}</span>
-              </button>
-            ))
+            providers.map((p) => {
+              const isRedirecting = redirectingProvider === p.id
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={redirectingProvider !== null}
+                  onClick={() => handleLogin(p.id)}
+                  className="flex w-full items-center justify-center gap-3 rounded-lg border border-surface-border bg-surface-light px-4 py-3 text-sm font-medium text-text-main transition-colors hover:bg-secondary disabled:pointer-events-none disabled:opacity-60"
+                >
+                  {isRedirecting ? (
+                    <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <ProviderIcon provider={p.id} />
+                  )}
+                  <span>{isRedirecting ? "Redirecting\u2026" : `Continue with ${p.name}`}</span>
+                </button>
+              )
+            })
           )}
         </div>
 
