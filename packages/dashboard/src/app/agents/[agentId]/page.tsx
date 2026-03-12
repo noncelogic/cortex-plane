@@ -6,6 +6,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
 import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
+import { AgentOperationsTab } from "@/components/agents/agent-operations-tab"
 import { AgentUsersTab } from "@/components/agents/agent-users-tab"
 import { ChannelBindingTab } from "@/components/agents/channel-binding-tab"
 import { CopilotChatPanel } from "@/components/agents/copilot-chat-panel"
@@ -32,20 +33,19 @@ import {
 // Mobile tabs
 // ---------------------------------------------------------------------------
 
-type MobileTab =
-  | "Output"
-  | "Chat"
-  | "Details"
-  | "Jobs"
-  | "Channels"
-  | "Credentials"
-  | "Users"
-  | "Browser"
-  | "Memory"
-
-const PRIORITY_TABS: MobileTab[] = ["Output", "Chat", "Details"]
-const OVERFLOW_TABS: MobileTab[] = ["Jobs", "Channels", "Credentials", "Users", "Browser", "Memory"]
-const MOBILE_TABS: MobileTab[] = [...PRIORITY_TABS, ...OVERFLOW_TABS]
+const MOBILE_TABS = [
+  "Output",
+  "Chat",
+  "Details",
+  "Jobs",
+  "Operations",
+  "Channels",
+  "Credentials",
+  "Users",
+  "Browser",
+  "Memory",
+] as const
+type MobileTab = (typeof MOBILE_TABS)[number]
 
 // ---------------------------------------------------------------------------
 // Resource mock helpers (will be replaced by real telemetry SSE)
@@ -367,6 +367,13 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           </div>
         )}
         {mobileTab === "Jobs" && <AgentJobsTab agentId={agentId} />}
+        {mobileTab === "Operations" && (
+          <AgentOperationsTab
+            agentId={agentId}
+            agentStatus={liveAgent.status ?? "ACTIVE"}
+            onRefresh={() => void refetch()}
+          />
+        )}
         {mobileTab === "Channels" && (
           <div className="flex flex-col gap-4">
             <ChannelBindingTab agentId={agentId} />
