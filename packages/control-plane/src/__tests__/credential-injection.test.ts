@@ -236,7 +236,7 @@ describe("LLM credential injection", () => {
     await handle.cancel("test")
   })
 
-  it("uses Bearer auth for google-antigravity even without credentialType", async () => {
+  it("uses Bearer auth (authToken) for google-antigravity even without credentialType", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
