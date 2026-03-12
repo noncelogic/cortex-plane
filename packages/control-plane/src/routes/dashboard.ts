@@ -886,27 +886,52 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
     // -----------------------------------------------------------------------
 
     app.get("/dashboard/summary", async (_request, reply) => {
-      const [agentCount, jobCount, approvalCount] = await Promise.all([
-        db
-          .selectFrom("agent")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .executeTakeFirstOrThrow(),
-        db
-          .selectFrom("job")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .executeTakeFirstOrThrow(),
-        db
-          .selectFrom("approval_request")
-          .where("status", "=", "PENDING")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .executeTakeFirstOrThrow(),
-      ])
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+      const [agentCount, jobCount, approvalCount, agentCount24h, jobCount24h, approvalCount24h] =
+        await Promise.all([
+          db
+            .selectFrom("agent")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .executeTakeFirstOrThrow(),
+          db
+            .selectFrom("job")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .executeTakeFirstOrThrow(),
+          db
+            .selectFrom("approval_request")
+            .where("status", "=", "PENDING")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .executeTakeFirstOrThrow(),
+          db
+            .selectFrom("agent")
+            .where("created_at", ">=", yesterday)
+            .select(sql<number>`count(*)::int`.as("count"))
+            .executeTakeFirstOrThrow(),
+          db
+            .selectFrom("job")
+            .where("created_at", ">=", yesterday)
+            .select(sql<number>`count(*)::int`.as("count"))
+            .executeTakeFirstOrThrow(),
+          db
+            .selectFrom("approval_request")
+            .where("status", "=", "PENDING")
+            .where("requested_at", ">=", yesterday)
+            .select(sql<number>`count(*)::int`.as("count"))
+            .executeTakeFirstOrThrow(),
+        ])
 
       return reply.send({
         totalAgents: agentCount.count,
         activeJobs: jobCount.count,
         pendingApprovals: approvalCount.count,
         memoryRecords: 0,
+        trends: {
+          totalAgents24h: agentCount24h.count,
+          activeJobs24h: jobCount24h.count,
+          pendingApprovals24h: approvalCount24h.count,
+          memoryRecords24h: 0,
+        },
       })
     })
 
@@ -925,15 +950,125 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
       async (request, reply) => {
         const limit = request.query.limit ?? 10
 
-        const rows = await db
-          .selectFrom("job")
-          .selectAll()
-          .orderBy("created_at", "desc")
-          .limit(limit)
-          .execute()
+        const [jobRows, approvalRows, eventRows] = await Promise.all([
+          db
+            .selectFrom("job")
+            .leftJoin("agent", "agent.id", "job.agent_id")
+            .select([
+              "job.id",
+              "job.agent_id",
+              "job.status",
+              "job.payload",
+              "job.created_at",
+              "job.updated_at",
+              "job.completed_at",
+              "job.error",
+              "agent.name as agent_name",
+            ])
+            .orderBy("job.created_at", "desc")
+            .limit(limit)
+            .execute(),
+          db
+            .selectFrom("approval_request")
+            .leftJoin("agent", "agent.id", "approval_request.requested_by_agent_id")
+            .select([
+              "approval_request.id",
+              "approval_request.status as approval_status",
+              "approval_request.action_type",
+              "approval_request.requested_at",
+              "agent.name as agent_name",
+            ])
+            .orderBy("approval_request.requested_at", "desc")
+            .limit(limit)
+            .execute(),
+          db
+            .selectFrom("agent_event")
+            .leftJoin("agent", "agent.id", "agent_event.agent_id")
+            .select([
+              "agent_event.id",
+              "agent_event.event_type",
+              "agent_event.payload",
+              "agent_event.created_at",
+              "agent.name as agent_name",
+            ])
+            .where("agent_event.event_type", "in", [
+              "error",
+              "state_transition",
+              "tool_denied",
+              "cost_alert",
+            ])
+            .orderBy("agent_event.created_at", "desc")
+            .limit(limit)
+            .execute(),
+        ])
 
-        const jobs = rows.map((job) => toJobSummary(job))
-        return reply.send({ activity: jobs })
+        const jobs = jobRows.map((job) => toJobSummary(job, job.agent_name ?? undefined))
+
+        type ActivityEvent = {
+          id: string
+          kind: "job" | "approval" | "event"
+          title: string
+          description: string
+          icon: string
+          status: string
+          agentName: string | null
+          timestamp: string
+        }
+
+        const activityEvents: ActivityEvent[] = []
+
+        for (const job of jobRows) {
+          const payloadType =
+            typeof job.payload.goal_type === "string" ? job.payload.goal_type : "task"
+          activityEvents.push({
+            id: `job-${job.id}`,
+            kind: "job",
+            title: `Job ${job.status.toLowerCase().replace(/_/g, " ")}`,
+            description: `${job.agent_name ?? "Agent"} — ${payloadType}`,
+            icon: "list_alt",
+            status: job.status,
+            agentName: job.agent_name ?? null,
+            timestamp: toIso(job.created_at) ?? new Date().toISOString(),
+          })
+        }
+
+        for (const ar of approvalRows) {
+          activityEvents.push({
+            id: `approval-${ar.id}`,
+            kind: "approval",
+            title: `Approval ${ar.approval_status.toLowerCase()}`,
+            description: `${ar.agent_name ?? "Agent"} — ${ar.action_type ?? "action"}`,
+            icon: "verified_user",
+            status: ar.approval_status,
+            agentName: ar.agent_name ?? null,
+            timestamp: toIso(ar.requested_at) ?? new Date().toISOString(),
+          })
+        }
+
+        for (const evt of eventRows) {
+          const message =
+            typeof evt.payload === "object" &&
+            evt.payload !== null &&
+            typeof evt.payload.message === "string"
+              ? evt.payload.message
+              : evt.event_type.replace(/_/g, " ")
+          activityEvents.push({
+            id: `event-${evt.id}`,
+            kind: "event",
+            title: evt.event_type.replace(/_/g, " "),
+            description: `${evt.agent_name ?? "Agent"} — ${message}`,
+            icon: evt.event_type === "error" ? "error" : "info",
+            status: evt.event_type,
+            agentName: evt.agent_name ?? null,
+            timestamp: toIso(evt.created_at) ?? new Date().toISOString(),
+          })
+        }
+
+        // Sort all events by timestamp descending and take the limit
+        activityEvents.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+        const trimmed = activityEvents.slice(0, limit)
+
+        return reply.send({ activity: jobs, events: trimmed })
       },
     )
 
