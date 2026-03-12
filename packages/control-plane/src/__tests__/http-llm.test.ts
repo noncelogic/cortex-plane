@@ -1356,6 +1356,37 @@ describe("HttpLlmBackend — credential provider routing", () => {
     await handle.cancel("test")
   })
 
+  it("routes anthropic oauth credential with apiKey (not authToken)", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        llmCredential: {
+          provider: "anthropic",
+          token: "anthropic-oauth-access-token",
+          credentialId: "cred-anthropic-oauth",
+          credentialType: "oauth",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    const client = (handle as any).client as {
+      baseURL: string
+      authToken: string | null
+      apiKey: string
+    }
+    // Anthropic OAuth tokens must be sent via x-api-key, not Bearer
+    expect(client.apiKey).toBe("anthropic-oauth-access-token")
+    expect(client.authToken).toBeNull()
+
+    await handle.cancel("test")
+  })
+
   it("routes openai-codex credential to OpenAI SDK", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
