@@ -1,12 +1,14 @@
 "use client"
 
+import { useSearchParams } from "next/navigation"
 import { use, useCallback, useMemo, useState } from "react"
 
 import { AgentConsole } from "@/components/agents/agent-console"
 import { AgentHeader } from "@/components/agents/agent-header"
 import { AgentJobsTab } from "@/components/agents/agent-jobs-tab"
+import { AgentUsersTab } from "@/components/agents/agent-users-tab"
 import { ChannelBindingTab } from "@/components/agents/channel-binding-tab"
-import { ChatPanel } from "@/components/agents/chat-panel"
+import { CopilotChatPanel } from "@/components/agents/copilot-chat-panel"
 import { CredentialBindingPanel } from "@/components/agents/credential-binding"
 import { type LifecycleStep, LifecycleTimeline } from "@/components/agents/lifecycle-timeline"
 import { ResourceSparklines } from "@/components/agents/resource-sparklines"
@@ -37,6 +39,7 @@ const MOBILE_TABS = [
   "Jobs",
   "Channels",
   "Credentials",
+  "Users",
   "Browser",
   "Memory",
 ] as const
@@ -122,7 +125,11 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
   const { addToast } = useToast()
   const { data: agent, isLoading, refetch } = useApiQuery(() => getAgent(agentId), [agentId])
   const { events } = useAgentStream(agentId)
-  const [mobileTab, setMobileTab] = useState<MobileTab>("Output")
+  const searchParams = useSearchParams()
+  const initialTab = MOBILE_TABS.includes(searchParams.get("tab") as MobileTab)
+    ? (searchParams.get("tab") as MobileTab)
+    : "Output"
+  const [mobileTab, setMobileTab] = useState<MobileTab>(initialTab)
   const [desktopCenter, setDesktopCenter] = useState<"console" | "chat">("console")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -324,7 +331,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           {desktopCenter === "console" ? (
             <AgentConsole agentId={agentId} />
           ) : (
-            <ChatPanel agentId={agentId} />
+            <CopilotChatPanel agentId={agentId} />
           )}
         </div>
 
@@ -354,7 +361,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         )}
         {mobileTab === "Chat" && (
           <div className="flex flex-1 flex-col">
-            <ChatPanel agentId={agentId} />
+            <CopilotChatPanel agentId={agentId} />
           </div>
         )}
         {mobileTab === "Details" && (
@@ -391,6 +398,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
             />
           </div>
         )}
+        {mobileTab === "Users" && <AgentUsersTab agentId={agentId} />}
         {mobileTab === "Browser" && (
           <div className="flex flex-1 items-center justify-center rounded-xl border border-surface-border bg-surface-dark p-8">
             <div className="text-center">
