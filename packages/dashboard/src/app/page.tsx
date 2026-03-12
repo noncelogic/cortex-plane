@@ -122,7 +122,7 @@ export default function DashboardPage(): React.JSX.Element {
               <Link
                 key={href}
                 href={href}
-                className="flex items-center gap-3 rounded-xl border border-surface-border bg-surface-light px-4 py-3 text-sm font-medium text-text-main transition-shadow hover:shadow-md"
+                className="flex min-h-[44px] items-center gap-3 rounded-xl border border-surface-border bg-surface-light px-4 py-3 text-sm font-medium text-text-main transition-shadow hover:shadow-md"
               >
                 <span className="material-symbols-outlined text-[18px] text-primary">{icon}</span>
                 {label}

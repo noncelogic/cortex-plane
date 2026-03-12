@@ -146,14 +146,14 @@ function BottomTabs() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-between border-t border-surface-border bg-surface-light/95 backdrop-blur-md px-6 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center overflow-x-auto border-t border-surface-border bg-surface-light/95 backdrop-blur-md px-2 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] scrollbar-hide lg:hidden">
       {navItems.map(({ href, label, icon }) => {
         const active = isActive(pathname, href)
         return (
           <Link
             key={href}
             href={href}
-            className={`group flex flex-col items-center gap-1 ${
+            className={`group flex min-h-[44px] min-w-[44px] flex-1 flex-col items-center justify-center gap-0.5 ${
               active ? "text-primary" : "text-text-muted hover:text-primary"
             } transition-colors`}
           >
@@ -162,7 +162,7 @@ function BottomTabs() {
               filled={active}
               className="group-hover:scale-110 transition-transform"
             />
-            <span className="text-[10px] font-bold">{label}</span>
+            <span className="text-[9px] font-bold leading-tight">{label}</span>
           </Link>
         )
       })}

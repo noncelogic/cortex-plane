@@ -481,14 +481,14 @@ export default function ApprovalsPage(): React.JSX.Element {
       {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex-shrink-0 border-b border-slate-200 bg-surface-light px-6 py-4 dark:border-slate-800 dark:bg-surface-dark">
+        <header className="flex-shrink-0 border-b border-slate-200 bg-surface-light px-4 py-4 dark:border-slate-800 dark:bg-surface-dark sm:px-6">
           <div className="mx-auto max-w-4xl">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <h1 className="font-display text-xl font-bold text-text-main dark:text-white">
                   Approvals Queue
                 </h1>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <StatusPill count={riskCounts.critical} label="Critical" variant="critical" />
                   <StatusPill count={riskCounts.medium} label="Warning" variant="warning" />
                   <StatusPill count={riskCounts.low} label="Low" variant="info" />
@@ -516,7 +516,7 @@ export default function ApprovalsPage(): React.JSX.Element {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                className="rounded-lg border border-slate-200 bg-surface-light px-3 py-2 text-sm font-medium text-text-main transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-surface-dark dark:text-white"
+                className="min-h-[44px] rounded-lg border border-slate-200 bg-surface-light px-3 py-2 text-sm font-medium text-text-main transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-surface-dark dark:text-white"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -528,7 +528,7 @@ export default function ApprovalsPage(): React.JSX.Element {
               <select
                 value={riskFilter}
                 onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
-                className="rounded-lg border border-slate-200 bg-surface-light px-3 py-2 text-sm font-medium text-text-main transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-surface-dark dark:text-white"
+                className="min-h-[44px] rounded-lg border border-slate-200 bg-surface-light px-3 py-2 text-sm font-medium text-text-main transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-surface-dark dark:text-white"
               >
                 {RISK_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -540,7 +540,7 @@ export default function ApprovalsPage(): React.JSX.Element {
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm shadow-primary/30 transition-colors hover:bg-primary/90"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm shadow-primary/30 transition-colors hover:bg-primary/90"
               >
                 <span className="material-symbols-outlined text-[16px]">refresh</span>
                 Refresh
@@ -550,7 +550,7 @@ export default function ApprovalsPage(): React.JSX.Element {
         </header>
 
         {/* Card list */}
-        <div className="flex-1 overflow-y-auto p-6 pb-24 scrollbar-hide lg:pb-6">
+        <div className="flex-1 overflow-y-auto p-4 pb-24 scrollbar-hide sm:p-6 lg:pb-6">
           <div className="mx-auto max-w-4xl">
             {isLoading ? (
               <LoadingSkeleton />

@@ -68,7 +68,7 @@ export default function JobsPage(): React.JSX.Element {
             <button
               type="button"
               onClick={() => setShowExportMenu((v) => !v)}
-              className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
+              className="flex min-h-[44px] items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold transition-all hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
             >
               <span className="material-symbols-outlined text-lg">download</span>
               Export
@@ -83,7 +83,7 @@ export default function JobsPage(): React.JSX.Element {
                       exportJobs("csv")
                       setShowExportMenu(false)
                     }}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
+                    className="flex w-full min-h-[44px] items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
                   >
                     <span className="material-symbols-outlined text-base text-text-muted">
                       table_chart
@@ -96,7 +96,7 @@ export default function JobsPage(): React.JSX.Element {
                       exportJobs("json")
                       setShowExportMenu(false)
                     }}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
+                    className="flex w-full min-h-[44px] items-center gap-2 px-4 py-2.5 text-sm text-text-main transition-colors hover:bg-secondary"
                   >
                     <span className="material-symbols-outlined text-base text-text-muted">
                       data_object
@@ -110,7 +110,7 @@ export default function JobsPage(): React.JSX.Element {
           <button
             type="button"
             onClick={handleRefresh}
-            className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-bold text-primary transition-all hover:bg-primary/20"
+            className="flex min-h-[44px] items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-bold text-primary transition-all hover:bg-primary/20"
           >
             <span className="material-symbols-outlined text-lg">refresh</span>
             Refresh

@@ -77,8 +77,8 @@ export function AgentTable({ agents, metricsMap }: AgentTableProps): React.JSX.E
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-light shadow-sm">
-      <table className="w-full border-collapse text-left">
+    <div className="overflow-x-auto rounded-xl border border-surface-border bg-surface-light shadow-sm">
+      <table className="w-full min-w-[700px] border-collapse text-left">
         <thead>
           <tr className="border-b border-surface-border bg-secondary">
             <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">

@@ -193,11 +193,11 @@ export function McpServerForm({
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className="fixed inset-0 z-50 m-auto w-full max-w-lg rounded-xl border border-surface-border bg-surface-light p-0 shadow-2xl backdrop:bg-black/50 dark:bg-surface-dark"
+      className="fixed inset-0 z-50 m-0 w-full max-w-full border border-surface-border bg-surface-light p-0 shadow-2xl backdrop:bg-black/50 dark:bg-surface-dark sm:m-auto sm:max-w-lg sm:rounded-xl"
     >
-      <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col">
+      <form onSubmit={(e) => void handleSubmit(e)} className="flex max-h-[100dvh] flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-border px-6 py-4">
+        <div className="flex items-center justify-between border-b border-surface-border px-4 py-4 sm:px-6">
           <h2 className="font-display text-lg font-bold text-text-main dark:text-white">
             {isEdit ? "Edit MCP Server" : "Register MCP Server"}
           </h2>
@@ -211,7 +211,10 @@ export function McpServerForm({
         </div>
 
         {/* Body */}
-        <div className="space-y-4 overflow-y-auto px-6 py-5" style={{ maxHeight: "60vh" }}>
+        <div
+          className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6"
+          style={{ maxHeight: "70vh" }}
+        >
           {/* Name */}
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-text-muted">Name</label>
@@ -372,7 +375,7 @@ export function McpServerForm({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-surface-border px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-surface-border px-4 py-4 sm:px-6">
           <button
             type="button"
             onClick={onClose}
