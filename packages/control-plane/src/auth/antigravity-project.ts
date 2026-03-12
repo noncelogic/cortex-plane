@@ -8,13 +8,8 @@
 
 const PROD_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
 const SANDBOX_ENDPOINT =
-  "https://staging-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist"
-const DEFAULT_PROJECT = "anthropic-cortex-default"
-
-interface CodeAssistResponse {
-  projectId?: string
-  project?: string
-}
+  "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist"
+const DEFAULT_PROJECT = "rising-fact-p41fc"
 
 /**
  * Discover the user's GCP project ID for Antigravity.
@@ -39,14 +34,38 @@ async function tryLoadCodeAssist(endpoint: string, accessToken: string): Promise
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
+        "User-Agent": "google-api-nodejs-client/9.15.1",
+        "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+        "Client-Metadata": JSON.stringify({
+          ideType: "IDE_UNSPECIFIED",
+          platform: "PLATFORM_UNSPECIFIED",
+          pluginType: "GEMINI",
+        }),
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        metadata: {
+          ideType: "IDE_UNSPECIFIED",
+          platform: "PLATFORM_UNSPECIFIED",
+          pluginType: "GEMINI",
+        },
+      }),
     })
 
     if (!res.ok) return null
 
-    const data = (await res.json()) as CodeAssistResponse
-    return data.projectId ?? data.project ?? null
+    const data = (await res.json()) as Record<string, unknown>
+    // Handle both string and object formats for cloudaicompanionProject
+    if (typeof data.cloudaicompanionProject === "string" && data.cloudaicompanionProject) {
+      return data.cloudaicompanionProject
+    }
+    if (
+      data.cloudaicompanionProject &&
+      typeof data.cloudaicompanionProject === "object" &&
+      (data.cloudaicompanionProject as { id?: string }).id
+    ) {
+      return (data.cloudaicompanionProject as { id: string }).id
+    }
+    return null
   } catch {
     return null
   }
