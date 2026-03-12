@@ -540,10 +540,15 @@ export default function ApprovalsPage(): React.JSX.Element {
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm shadow-primary/30 transition-colors hover:bg-primary/90"
+                disabled={isLoading}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm shadow-primary/30 transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-[16px]">refresh</span>
-                Refresh
+                <span
+                  className={`material-symbols-outlined text-[16px] ${isLoading ? "animate-spin" : ""}`}
+                >
+                  {isLoading ? "progress_activity" : "refresh"}
+                </span>
+                {isLoading ? "Refreshing…" : "Refresh"}
               </button>
             </div>
           </div>

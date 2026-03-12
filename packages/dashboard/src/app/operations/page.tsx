@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useMemo, useRef } from "react"
 
 import { ActivityStream } from "@/components/activity-stream"
+import { ApiErrorBanner } from "@/components/layout/api-error-banner"
 import { EmptyState } from "@/components/layout/empty-state"
 import { PageHeader } from "@/components/layout/page-header"
 import { Skeleton } from "@/components/layout/skeleton"
@@ -60,7 +61,13 @@ function AgentOverviewCard({ agent }: { agent: AgentSummary }): React.JSX.Elemen
 // ---------------------------------------------------------------------------
 
 export default function OperationsPage(): React.JSX.Element {
-  const { data: agentData, isLoading: agentsLoading, refetch } = useApiQuery(() => listAgents(), [])
+  const {
+    data: agentData,
+    isLoading: agentsLoading,
+    error: agentsError,
+    errorCode: agentsErrorCode,
+    refetch,
+  } = useApiQuery(() => listAgents(), [])
   const agents = agentData?.agents ?? []
 
   const { events, connected } = useActivityStream()
@@ -119,6 +126,15 @@ export default function OperationsPage(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Operations" />
+
+      {/* Error */}
+      {agentsError && (
+        <ApiErrorBanner
+          error={agentsError}
+          errorCode={agentsErrorCode}
+          onRetry={() => void refetch()}
+        />
+      )}
 
       {/* Fleet stats */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

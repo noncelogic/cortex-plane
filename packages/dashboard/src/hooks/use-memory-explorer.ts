@@ -149,5 +149,6 @@ export function useMemoryExplorer(explicitAgentId?: string) {
     errorCode: errorCode,
     syncError,
     agentId: agentId ?? "",
+    refetch,
   }
 }
