@@ -183,6 +183,19 @@ describe("buildAuthorizeUrl — user service providers", () => {
     expect(parsed.searchParams.get("user_scope")).toContain("users:read")
   })
 
+  it("builds OpenAI Codex OAuth URL with model.request scope", () => {
+    const url = buildAuthorizeUrl({
+      provider: "openai-codex",
+      config: mockConfig,
+      callbackUrl: "http://localhost:1455/auth/callback",
+      state: "test-state",
+    })
+
+    const parsed = new URL(url)
+    expect(parsed.searchParams.get("scope")).toContain("model.request")
+    expect(parsed.searchParams.get("scope")).toContain("offline_access")
+  })
+
   it("allows custom scopes to override defaults", () => {
     const url = buildAuthorizeUrl({
       provider: "google-workspace",
