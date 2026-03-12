@@ -34,6 +34,7 @@ export const McpServerSchema = z.object({
   health_probe_interval_ms: z.number(),
   last_healthy_at: z.string().optional().nullable(),
   error_message: z.string().optional().nullable(),
+  tool_count: z.number().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 })
