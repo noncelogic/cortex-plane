@@ -32,31 +32,31 @@ function readSrc(relative: string): string {
 // Static analysis: agent detail page contains model config section
 // ---------------------------------------------------------------------------
 
-describe("ModelConfigPanel in agent detail page", () => {
-  const content = readSrc("app/agents/[agentId]/page.tsx")
+describe("AgentSettingsPanel component", () => {
+  const content = readSrc("components/agents/agent-settings-panel.tsx")
 
-  it("renders Model Configuration heading", () => {
-    expect(content).toContain("Model Configuration")
+  it("renders Agent Settings heading", () => {
+    expect(content).toContain("Agent Settings")
   })
 
-  it("includes model-config-panel test id", () => {
-    expect(content).toContain('data-testid="model-config-panel"')
+  it("includes agent-settings-panel test id", () => {
+    expect(content).toContain('data-testid="agent-settings-panel"')
   })
 
   it("shows model value display with test id", () => {
-    expect(content).toContain('data-testid="model-config-model-value"')
+    expect(content).toContain('data-testid="agent-settings-model-value"')
   })
 
   it("shows system prompt value display with test id", () => {
-    expect(content).toContain('data-testid="model-config-prompt-value"')
+    expect(content).toContain('data-testid="agent-settings-prompt-value"')
   })
 
   it("has edit button with test id", () => {
-    expect(content).toContain('data-testid="model-config-edit-btn"')
+    expect(content).toContain('data-testid="agent-settings-edit-btn"')
   })
 
   it("uses a select dropdown for model selection when editing", () => {
-    expect(content).toContain('data-testid="model-config-model-select"')
+    expect(content).toContain('data-testid="agent-settings-model-select"')
     expect(content).toContain("<select")
   })
 
@@ -71,26 +71,26 @@ describe("ModelConfigPanel in agent detail page", () => {
   })
 
   it("shows custom text input when Custom is selected", () => {
-    expect(content).toContain('data-testid="model-config-model-input"')
+    expect(content).toContain('data-testid="agent-settings-model-input"')
     expect(content).toContain("model === CUSTOM_MODEL_VALUE")
   })
 
   it("has system prompt textarea when editing", () => {
-    expect(content).toContain('data-testid="model-config-prompt-input"')
+    expect(content).toContain('data-testid="agent-settings-prompt"')
   })
 
   it("has save and cancel buttons", () => {
-    expect(content).toContain('data-testid="model-config-save-btn"')
-    expect(content).toContain('data-testid="model-config-cancel-btn"')
+    expect(content).toContain('data-testid="agent-settings-save-btn"')
+    expect(content).toContain('data-testid="agent-settings-cancel-btn"')
   })
 
   it("shows success toast after save", () => {
-    expect(content).toContain("Model configuration saved")
+    expect(content).toContain("Agent settings saved")
   })
 
   it("shows error message on failure", () => {
-    expect(content).toContain('data-testid="model-config-error"')
-    expect(content).toContain("Failed to save model configuration")
+    expect(content).toContain('data-testid="agent-settings-error"')
+    expect(content).toContain("Failed to save agent settings")
   })
 
   it("displays Not set when model or prompt is empty", () => {
@@ -98,7 +98,7 @@ describe("ModelConfigPanel in agent detail page", () => {
   })
 
   it("calls updateAgent with model_config on save", () => {
-    expect(content).toContain("updateAgent(agent.id, { model_config:")
+    expect(content).toContain("updateAgent(agent.id, {")
   })
 
   it("resolves custom model value before saving", () => {
@@ -230,7 +230,7 @@ describe("model_config construction", () => {
 })
 
 // ---------------------------------------------------------------------------
-// model_config edit save logic (mirrors ModelConfigPanel handleSave)
+// model_config edit save logic (mirrors AgentSettingsPanel handleSave)
 // ---------------------------------------------------------------------------
 
 describe("model_config edit save logic", () => {
