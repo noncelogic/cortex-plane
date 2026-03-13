@@ -120,6 +120,8 @@ if (!registry.get("discord") && config.channels.discord) {
   )
 }
 
+await registry.startAll()
+
 // Deferred enqueueJob — resolved after buildApp() creates workerUtils
 // eslint-disable-next-line prefer-const
 let _enqueueJob: ((jobId: string) => Promise<void>) | undefined

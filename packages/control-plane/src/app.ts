@@ -428,8 +428,8 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     await app.register(credentialRoutes({ credentialService, sessionService }))
   }
 
-  // Register model catalogue route (public, no auth required)
-  await app.register(modelRoutes())
+  // Register model catalogue route (public, optionally credential-aware)
+  await app.register(modelRoutes({ credentialService, sessionService }))
 
   // Always register streaming + observation routes
   // (lifecycleManager is optional — routes handle its absence gracefully)

@@ -19,6 +19,9 @@ export const AVAILABLE_MODELS = [
   { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", provider: "anthropic" },
   { id: "gpt-4o", label: "GPT-4o", provider: "openai" },
   { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "openai" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "google-ai-studio" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google-ai-studio" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", provider: "google-ai-studio" },
 ] as const
 
 interface DeployAgentModalProps {
@@ -32,7 +35,7 @@ export function DeployAgentModal({
   onClose,
   onSuccess,
 }: DeployAgentModalProps): React.JSX.Element | null {
-  const { models } = useModels()
+  const { models } = useModels({ credentialAware: true })
   const [name, setName] = useState("")
   const [role, setRole] = useState("")
   const [description, setDescription] = useState("")
@@ -169,20 +172,36 @@ export function DeployAgentModal({
             <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
               Model <span className="text-red-500">*</span>
             </label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={submitting}
-              data-testid="deploy-model-select"
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-            >
-              <option value="">Select a model...</option>
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            {models.length === 0 ? (
+              <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <span className="material-symbols-outlined text-[16px]">info</span>
+                <span>
+                  No models available.{" "}
+                  <a
+                    href="/settings"
+                    className="font-medium text-primary underline hover:text-primary/80"
+                  >
+                    Connect a provider
+                  </a>{" "}
+                  to get started.
+                </span>
+              </div>
+            ) : (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={submitting}
+                data-testid="deploy-model-select"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="">Select a model...</option>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Credential warning */}

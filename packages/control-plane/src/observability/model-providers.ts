@@ -53,6 +53,21 @@ export const MODEL_CATALOGUE: ModelInfo[] = [
     label: "GPT-4o Mini",
     providers: ["openai", "openai-codex"],
   },
+  {
+    id: "gemini-2.5-pro",
+    label: "Gemini 2.5 Pro",
+    providers: ["google-antigravity", "google-ai-studio"],
+  },
+  {
+    id: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    providers: ["google-antigravity", "google-ai-studio"],
+  },
+  {
+    id: "gemini-2.0-flash",
+    label: "Gemini 2.0 Flash",
+    providers: ["google-antigravity", "google-ai-studio"],
+  },
 ]
 
 // ---------------------------------------------------------------------------
