@@ -36,6 +36,40 @@ describe("tokenExpiry", () => {
     expect(tokenExpiry(makeCred({ tokenExpiresAt: null }), now)).toBeNull()
   })
 
+  it("returns Auto-renewing for active OAuth credentials", () => {
+    const cred = makeCred({
+      credentialType: "oauth",
+      status: "active",
+      tokenExpiresAt: "2026-03-09T12:15:00.000Z",
+    })
+    const result = tokenExpiry(cred, now)!
+    expect(result.label).toBe("Auto-renewing")
+    expect(result.severity).toBe("ok")
+  })
+
+  it("returns expiry countdown for non-active OAuth credentials", () => {
+    const cred = makeCred({
+      credentialType: "oauth",
+      status: "error",
+      tokenExpiresAt: "2026-03-09T11:00:00.000Z",
+    })
+    const result = tokenExpiry(cred, now)!
+    expect(result.severity).toBe("danger")
+    expect(result.label).toMatch(/^Expired/)
+  })
+
+  it("returns expiry countdown for API key credentials", () => {
+    const cred = makeCred({
+      credentialType: "api_key",
+      status: "active",
+      tokenExpiresAt: "2026-03-09T18:00:00.000Z",
+    })
+    const result = tokenExpiry(cred, now)!
+    expect(result.severity).toBe("warning")
+    expect(result.label).toMatch(/^Expires in/)
+    expect(result.label).toContain("6h")
+  })
+
   it("returns danger when token is already expired", () => {
     const cred = makeCred({ tokenExpiresAt: "2026-03-09T11:00:00.000Z" })
     const result = tokenExpiry(cred, now)!

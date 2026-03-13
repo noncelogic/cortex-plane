@@ -12,18 +12,28 @@ import type { Credential } from "./api-client"
 // ---------------------------------------------------------------------------
 
 export interface ExpiryInfo {
-  /** Human-readable label, e.g. "Expires in 2h 15m" or "Expired 3d ago" */
+  /** Human-readable label, e.g. "Expires in 2h 15m", "Expired 3d ago", or "Auto-renewing" */
   label: string
-  /** Severity for styling: "ok" (>24h), "warning" (<24h), "danger" (expired) */
+  /** Severity for styling: "ok" (>24h or auto-renewing), "warning" (<24h), "danger" (expired) */
   severity: "ok" | "warning" | "danger"
 }
 
 /**
- * Compute a human-readable expiry summary for an OAuth credential.
+ * Compute a human-readable expiry summary for a credential.
  * Returns null for credentials without a tokenExpiresAt timestamp.
+ *
+ * Active OAuth credentials are auto-refreshed server-side, so we show
+ * "Auto-renewing" instead of a raw countdown that goes stale immediately.
  */
 export function tokenExpiry(cred: Credential, now: Date = new Date()): ExpiryInfo | null {
   if (!cred.tokenExpiresAt) return null
+
+  // Active OAuth credentials are refreshed automatically by the server.
+  // Showing a countdown is misleading because the token will be renewed
+  // before it actually expires.
+  if (cred.credentialType === "oauth" && cred.status === "active") {
+    return { label: "Auto-renewing", severity: "ok" }
+  }
 
   const expiresAt = new Date(cred.tokenExpiresAt)
   const diffMs = expiresAt.getTime() - now.getTime()
