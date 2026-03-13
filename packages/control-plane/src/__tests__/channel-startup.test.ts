@@ -39,7 +39,9 @@ describe("channel startup wiring", () => {
     expect(registry.get("discord")).toBe(discord)
 
     // Adapters are started on register
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(telegram.start).toHaveBeenCalledOnce()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(discord.start).toHaveBeenCalledOnce()
 
     const supervisor = new ChannelSupervisor(registry, {
