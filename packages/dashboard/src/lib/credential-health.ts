@@ -30,9 +30,14 @@ export function tokenExpiry(cred: Credential, now: Date = new Date()): ExpiryInf
 
   // Active OAuth credentials are refreshed automatically by the server.
   // Showing a countdown is misleading because the token will be renewed
-  // before it actually expires.
+  // before it actually expires — unless the refresh has failed, in which
+  // case we fall through and show the real expiry/error state.
   if (cred.credentialType === "oauth" && cred.status === "active") {
-    return { label: "Auto-renewing", severity: "ok" }
+    const expired = new Date(cred.tokenExpiresAt).getTime() <= now.getTime()
+    const hasError = (cred.errorCount != null && cred.errorCount > 0) || !!cred.lastError
+    if (!(expired && hasError)) {
+      return { label: "Auto-renewing", severity: "ok" }
+    }
   }
 
   const expiresAt = new Date(cred.tokenExpiresAt)
