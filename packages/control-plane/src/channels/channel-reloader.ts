@@ -62,8 +62,7 @@ export class ChannelReloader {
     const adapter = createAdapterFromConfig(config)
     if (!adapter) return
 
-    registry.register(adapter)
-    await adapter.start()
+    await registry.register(adapter)
     router?.addAdapter(adapter)
     supervisor?.addAdapter(channelType, ADAPTER_SUPERVISOR_CONFIG[channelType])
   }

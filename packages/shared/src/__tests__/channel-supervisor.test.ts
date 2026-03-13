@@ -52,8 +52,8 @@ describe("ChannelSupervisor", () => {
     const registry = new ChannelAdapterRegistry()
     const telegram = createAdapter("telegram")
     const discord = createAdapter("discord")
-    registry.register(telegram)
-    registry.register(discord)
+    await registry.register(telegram)
+    await registry.register(discord)
 
     const supervisor = new ChannelSupervisor(
       registry,
@@ -75,7 +75,6 @@ describe("ChannelSupervisor", () => {
     expect(telegram.stopSpy).toHaveBeenCalled()
     expect(telegram.startSpy).toHaveBeenCalled()
     expect(discord.stopSpy).not.toHaveBeenCalled()
-    expect(discord.startSpy).not.toHaveBeenCalled()
 
     supervisor.stop()
   })
@@ -83,7 +82,7 @@ describe("ChannelSupervisor", () => {
   it("marks long-poll adapters as stale and recovers when heartbeat is too old", async () => {
     const registry = new ChannelAdapterRegistry()
     const telegram = createAdapter("telegram")
-    registry.register(telegram)
+    await registry.register(telegram)
     telegram.setLastHeartbeatAt(new Date("2026-02-26T23:58:00.000Z"))
 
     const supervisor = new ChannelSupervisor(
@@ -122,8 +121,9 @@ describe("ChannelSupervisor", () => {
   it("uses exponential backoff and opens circuit after repeated failures", async () => {
     const registry = new ChannelAdapterRegistry()
     const telegram = createAdapter("telegram")
+    await registry.register(telegram)
+    // Mock start to reject *after* initial register (which calls start successfully)
     ;(telegram.start as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("boom"))
-    registry.register(telegram)
 
     const supervisor = new ChannelSupervisor(
       registry,
@@ -155,7 +155,7 @@ describe("ChannelSupervisor", () => {
   })
 
   describe("addAdapter", () => {
-    it("creates a health status for a dynamically added adapter", () => {
+    it("creates a health status for a dynamically added adapter", async () => {
       const registry = new ChannelAdapterRegistry()
       const supervisor = new ChannelSupervisor(registry, {}, { probeIntervalMs: 10_000 })
 
@@ -166,7 +166,7 @@ describe("ChannelSupervisor", () => {
 
       // Add a new adapter to the registry and notify the supervisor
       const telegram = createAdapter("telegram")
-      registry.register(telegram)
+      await registry.register(telegram)
       supervisor.addAdapter("telegram", { connectionMode: "long-poll" })
 
       // Status should now exist
@@ -177,12 +177,12 @@ describe("ChannelSupervisor", () => {
       supervisor.stop()
     })
 
-    it("emits to listeners when a new adapter is added", () => {
+    it("emits to listeners when a new adapter is added", async () => {
       const registry = new ChannelAdapterRegistry()
       const supervisor = new ChannelSupervisor(registry, {}, { probeIntervalMs: 10_000 })
 
       const telegram = createAdapter("telegram")
-      registry.register(telegram)
+      await registry.register(telegram)
 
       const listener = vi.fn()
       supervisor.subscribe(listener)
@@ -203,7 +203,7 @@ describe("ChannelSupervisor", () => {
     it("clears health status for a removed adapter", async () => {
       const registry = new ChannelAdapterRegistry()
       const telegram = createAdapter("telegram")
-      registry.register(telegram)
+      await registry.register(telegram)
 
       const supervisor = new ChannelSupervisor(
         registry,
@@ -225,7 +225,7 @@ describe("ChannelSupervisor", () => {
     it("emits to listeners when an adapter is removed", async () => {
       const registry = new ChannelAdapterRegistry()
       const telegram = createAdapter("telegram")
-      registry.register(telegram)
+      await registry.register(telegram)
 
       const supervisor = new ChannelSupervisor(
         registry,

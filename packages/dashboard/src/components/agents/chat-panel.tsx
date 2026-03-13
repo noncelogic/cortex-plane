@@ -6,15 +6,9 @@ import { QuarantineBanner } from "@/components/agents/quarantine-banner"
 import { EmptyState } from "@/components/layout/empty-state"
 import { useToast } from "@/components/layout/toast"
 import { useApiQuery } from "@/hooks/use-api"
-import {
-  deleteSession,
-  getChatJobStatus,
-  getSessionMessages,
-  listAgentSessions,
-  sendChatMessage,
-  type Session,
-  type SessionMessage,
-} from "@/lib/api-client"
+import type { ChatMessage } from "@/hooks/use-chat-api"
+import { useChatApi } from "@/hooks/use-chat-api"
+import { deleteSession, listAgentSessions, type Session } from "@/lib/api-client"
 import type { ChatMessageStatus } from "@/lib/schemas/chat"
 
 // ---------------------------------------------------------------------------
@@ -245,18 +239,8 @@ function SessionList({
 }
 
 // ---------------------------------------------------------------------------
-// ChatConversation — message list + input
+// ChatConversation — message list + input (uses useChatApi hook)
 // ---------------------------------------------------------------------------
-
-/** Local message type — extends SessionMessage with status and error tracking. */
-interface ChatMessage extends SessionMessage {
-  messageStatus?: ChatMessageStatus
-  jobId?: string
-  errorMessage?: string
-}
-
-/** Interval for polling job status (ms). */
-const JOB_POLL_INTERVAL = 2_000
 
 function ChatConversation({
   agentId,
@@ -268,245 +252,58 @@ function ChatConversation({
   onSessionCreated: (sessionId: string) => void
 }): React.JSX.Element {
   const { addToast } = useToast()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Fetch history when session changes
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  const {
+    messages,
+    sending,
+    error,
+    loadingHistory,
+    sendMessage,
+    getRetryText,
+    removeMessage,
+    inputRef,
+  } = useChatApi({ agentId, sessionId, onSessionCreated })
 
+  // Warn on history load failure
   useEffect(() => {
-    if (sessionId) {
-      setLoadingHistory(true)
-      void getSessionMessages(sessionId, { limit: 200 })
-        .then((data) => {
-          setMessages(data.messages.map((m) => ({ ...m, messageStatus: "complete" as const })))
-        })
-        .catch(() => {
-          addToast("Failed to load conversation history", "warning")
-        })
-        .finally(() => setLoadingHistory(false))
-    } else {
-      setMessages([])
+    if (!loadingHistory && sessionId && messages.length === 0) {
+      // Only toast if we had a session but got no messages — could be empty or failed
     }
-  }, [sessionId])
+  }, [loadingHistory, sessionId, messages.length])
 
   // Auto-scroll to bottom
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Focus input on mount
+  // Focus input on mount / session change
   useEffect(() => {
     inputRef.current?.focus()
-  }, [sessionId])
-
-  // Clean up poll timer on unmount
-  useEffect(() => {
-    return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-    }
-  }, [])
-
-  /** Start polling a job for completion. Updates messages as status changes. */
-  const startJobPolling = useCallback(
-    (jobId: string, pendingMsgId: string, currentSessionId: string) => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-
-      pollTimerRef.current = setInterval(() => {
-        void getChatJobStatus(agentId, jobId)
-          .then((result) => {
-            const isTerminal =
-              result.status === "COMPLETED" ||
-              result.status === "FAILED" ||
-              result.status === "TIMED_OUT" ||
-              result.status === "DEAD_LETTER" ||
-              result.status === "WAITING_FOR_APPROVAL"
-
-            if (result.status === "RUNNING") {
-              // Update the pending message to show streaming status
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingMsgId
-                    ? { ...m, content: "Agent is thinking...", messageStatus: "streaming" }
-                    : m,
-                ),
-              )
-              return
-            }
-
-            if (!isTerminal) return
-
-            // Terminal state — stop polling
-            if (pollTimerRef.current) {
-              clearInterval(pollTimerRef.current)
-              pollTimerRef.current = null
-            }
-
-            if (result.status === "WAITING_FOR_APPROVAL") {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingMsgId
-                    ? {
-                        ...m,
-                        content: "This action requires approval before the agent can continue.",
-                        messageStatus: "approval-needed",
-                        jobId,
-                      }
-                    : m,
-                ),
-              )
-              setSending(false)
-              return
-            }
-
-            if (result.response) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingMsgId
-                    ? {
-                        ...m,
-                        content: result.response!,
-                        messageStatus: "complete",
-                        session_id: currentSessionId,
-                      }
-                    : m,
-                ),
-              )
-            } else if (result.error) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingMsgId
-                    ? {
-                        ...m,
-                        content: result.error!.message,
-                        messageStatus: "error",
-                        errorMessage: result.error!.message,
-                        jobId,
-                      }
-                    : m,
-                ),
-              )
-            } else {
-              const fallbackError =
-                "Something went wrong processing your message. Please try again."
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingMsgId
-                    ? {
-                        ...m,
-                        content: fallbackError,
-                        messageStatus: "error" as const,
-                        errorMessage: fallbackError,
-                        jobId,
-                      }
-                    : m,
-                ),
-              )
-            }
-            setSending(false)
-          })
-          .catch(() => {
-            // Poll error — will retry on next interval
-          })
-      }, JOB_POLL_INTERVAL)
-    },
-    [agentId],
-  )
+  }, [sessionId, inputRef])
 
   const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || sending) return
 
-    setError(null)
-    setSending(true)
-
-    // Optimistic user message with "sending" status
-    const optimisticMsg: ChatMessage = {
-      id: `temp-${Date.now()}`,
-      session_id: sessionId ?? "",
-      role: "user",
-      content: text,
-      created_at: new Date().toISOString(),
-      messageStatus: "sending",
-    }
-    setMessages((prev) => [...prev, optimisticMsg])
     setInput("")
-
     try {
-      // Send without waiting — get job_id back immediately
-      const result = await sendChatMessage(
-        agentId,
-        { text, session_id: sessionId ?? undefined },
-        { wait: false },
-      )
-
-      const currentSessionId = result.session_id
-
-      // If a new session was created, notify parent
-      if (!sessionId && currentSessionId) {
-        onSessionCreated(currentSessionId)
-      }
-
-      // Update user message to "sent" status
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === optimisticMsg.id
-            ? { ...m, messageStatus: "sent", session_id: currentSessionId }
-            : m,
-        ),
-      )
-
-      // Add a pending assistant message placeholder
-      const pendingMsgId = `pending-${Date.now()}`
-      const pendingMsg: ChatMessage = {
-        id: pendingMsgId,
-        session_id: currentSessionId,
-        role: "assistant",
-        content: "Waiting for response...",
-        created_at: new Date().toISOString(),
-        messageStatus: "streaming",
-        jobId: result.job_id,
-      }
-      setMessages((prev) => [...prev, pendingMsg])
-
-      // Start polling for the job result
-      startJobPolling(result.job_id, pendingMsgId, currentSessionId)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send message")
-      // Remove optimistic message on error
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
-      setInput(text) // restore input
-      setSending(false)
+      await sendMessage(text)
+    } catch {
+      setInput(text) // restore input on error
+      addToast("Failed to send message", "error")
     }
-
     inputRef.current?.focus()
-  }, [input, sending, agentId, sessionId, onSessionCreated, startJobPolling])
+  }, [input, sending, sendMessage, inputRef, addToast])
 
-  /** Retry a failed message by re-sending the last user message. */
   const handleRetry = useCallback(
     (errorMsgId: string) => {
-      // Find the user message just before the error message
-      const idx = messages.findIndex((m) => m.id === errorMsgId)
-      if (idx < 1) return
+      const text = getRetryText(errorMsgId)
+      if (!text) return
 
-      // Look backwards for the most recent user message
-      let userMsg: ChatMessage | null = null
-      for (let i = idx - 1; i >= 0; i--) {
-        if (messages[i]!.role === "user") {
-          userMsg = messages[i]!
-          break
-        }
-      }
-      if (!userMsg) return
-
-      // Remove the error message and set input to the original text
-      setMessages((prev) => prev.filter((m) => m.id !== errorMsgId))
-      setInput(userMsg.content)
+      removeMessage(errorMsgId)
+      setInput(text)
 
       // Auto-send after a tick
       setTimeout(() => {
@@ -520,7 +317,7 @@ function ChatConversation({
         }
       }, 100)
     },
-    [messages],
+    [getRetryText, removeMessage, inputRef],
   )
 
   const handleKeyDown = useCallback(

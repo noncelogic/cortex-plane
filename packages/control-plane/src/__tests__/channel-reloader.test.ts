@@ -130,7 +130,7 @@ describe("ChannelReloader", () => {
       sendApprovalRequest: vi.fn().mockResolvedValue("msg-2"),
       onMessage: vi.fn(),
     }
-    registry.register(oldAdapter)
+    await registry.register(oldAdapter)
     router.addAdapter(oldAdapter)
     supervisor.addAdapter("telegram")
 
@@ -174,7 +174,7 @@ describe("ChannelReloader", () => {
       sendApprovalRequest: vi.fn().mockResolvedValue("msg-2"),
       onMessage: vi.fn(),
     }
-    registry.register(adapter)
+    await registry.register(adapter)
     router.addAdapter(adapter)
     supervisor.addAdapter("telegram")
 
