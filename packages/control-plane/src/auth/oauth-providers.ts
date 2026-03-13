@@ -1,16 +1,13 @@
 /**
- * Hardcoded OAuth provider registry for code-paste flow.
+ * OAuth provider registry for code-paste flow.
  *
  * These use the same client IDs and redirect URIs as OpenClaw CLI.
  * Since we can't register custom redirect URIs on apps we don't own,
  * the dashboard uses a code-paste flow: the user opens the OAuth URL,
  * authorizes, then pastes the redirect URL back into the dashboard.
  *
- * Credentials are base64-encoded (same pattern as @mariozechner/pi-ai)
- * to avoid triggering secret scanning.
+ * Credentials are read from environment variables — never hardcoded.
  */
-
-const decode = (s: string): string => Buffer.from(s, "base64").toString("utf-8")
 
 export interface CodePasteProviderConfig {
   id: string
@@ -37,63 +34,97 @@ export interface CodePasteProviderConfig {
   codePasteOnly?: boolean
 }
 
-export const CODE_PASTE_PROVIDERS: Record<string, CodePasteProviderConfig> = {
-  "google-antigravity": {
-    id: "google-antigravity",
-    name: "Google Antigravity",
-    description: "Claude/Gemini via Google Cloud Antigravity",
-    clientId: decode(
-      "MTA3MTAwNjA2MDU5MS10bWhzc2luMmgyMWxjcmUyMzV2dG9sb2poNGc0MDNlcC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbQ==",
-    ),
-    clientSecret: decode("R09DU1BYLUs1OEZXUjQ4NkxkTEoxbUxCOHNYQzR6NnFEQWY="),
-    redirectUri: "http://localhost:51121/oauth-callback",
-    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: [
-      "https://www.googleapis.com/auth/cloud-platform",
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-      "https://www.googleapis.com/auth/cclog",
-      "https://www.googleapis.com/auth/experimentsandconfigs",
-    ],
-    extraAuthParams: {
-      access_type: "offline",
-      prompt: "consent",
-    },
-    usePkce: true,
-  },
+function buildCodePasteProviders(): Record<string, CodePasteProviderConfig> {
+  const providers: Record<string, CodePasteProviderConfig> = {}
 
-  "openai-codex": {
-    id: "openai-codex",
-    name: "OpenAI Codex",
-    description: "GPT models via ChatGPT subscription",
-    clientId: decode("YXBwX0VNb2FtRUVaNzNmMENrWGFYcDdocmFubg=="),
-    clientSecret: "",
-    redirectUri: "http://localhost:1455/auth/callback",
-    authUrl: "https://auth.openai.com/oauth/authorize",
-    tokenUrl: "https://auth.openai.com/oauth/token",
-    scopes: ["openid", "profile", "email", "offline_access"],
-    usePkce: true,
-  },
+  // Google Antigravity
+  if (process.env.OAUTH_GOOGLE_ANTIGRAVITY_CLIENT_ID) {
+    providers["google-antigravity"] = {
+      id: "google-antigravity",
+      name: "Google Antigravity",
+      description: "Claude/Gemini via Google Cloud Antigravity",
+      clientId: process.env.OAUTH_GOOGLE_ANTIGRAVITY_CLIENT_ID,
+      clientSecret: process.env.OAUTH_GOOGLE_ANTIGRAVITY_CLIENT_SECRET ?? "",
+      redirectUri: "http://localhost:51121/oauth-callback",
+      authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      scopes: [
+        "https://www.googleapis.com/auth/cloud-platform",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/cclog",
+        "https://www.googleapis.com/auth/experimentsandconfigs",
+      ],
+      extraAuthParams: {
+        access_type: "offline",
+        prompt: "consent",
+      },
+      usePkce: true,
+    }
+  }
 
-  anthropic: {
-    id: "anthropic",
-    name: "Anthropic",
-    description: "Claude models via OAuth",
-    clientId: decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl"),
-    clientSecret: "",
-    redirectUri: "https://console.anthropic.com/oauth/code/callback",
-    authUrl: "https://claude.ai/oauth/authorize",
-    tokenUrl: "https://console.anthropic.com/v1/oauth/token",
-    scopes: ["org:create_api_key", "user:profile", "user:inference"],
-    extraAuthParams: {
-      code: "true",
-    },
-    usePkce: true,
-    useJsonTokenExchange: true,
-    codePasteOnly: true,
-  },
+  // Google Gemini CLI
+  if (process.env.OAUTH_GEMINI_CLI_CLIENT_ID) {
+    providers["google-gemini-cli"] = {
+      id: "google-gemini-cli",
+      name: "Google Gemini CLI",
+      description: "Gemini models via Google Gemini CLI OAuth",
+      clientId: process.env.OAUTH_GEMINI_CLI_CLIENT_ID,
+      clientSecret: process.env.OAUTH_GEMINI_CLI_CLIENT_SECRET ?? "",
+      redirectUri: "http://localhost:8085",
+      authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      scopes: [
+        "https://www.googleapis.com/auth/cloud-platform",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+      ],
+      usePkce: true,
+    }
+  }
+
+  // OpenAI Codex
+  if (process.env.OAUTH_OPENAI_CODEX_CLIENT_ID) {
+    providers["openai-codex"] = {
+      id: "openai-codex",
+      name: "OpenAI Codex",
+      description: "GPT models via ChatGPT subscription",
+      clientId: process.env.OAUTH_OPENAI_CODEX_CLIENT_ID,
+      clientSecret: process.env.OAUTH_OPENAI_CODEX_CLIENT_SECRET ?? "",
+      redirectUri: "http://localhost:1455/auth/callback",
+      authUrl: "https://auth.openai.com/oauth/authorize",
+      tokenUrl: "https://auth.openai.com/oauth/token",
+      scopes: ["openid", "profile", "email", "offline_access"],
+      usePkce: true,
+    }
+  }
+
+  // Anthropic
+  if (process.env.OAUTH_ANTHROPIC_CLIENT_ID) {
+    providers["anthropic"] = {
+      id: "anthropic",
+      name: "Anthropic",
+      description: "Claude models via OAuth",
+      clientId: process.env.OAUTH_ANTHROPIC_CLIENT_ID,
+      clientSecret: process.env.OAUTH_ANTHROPIC_CLIENT_SECRET ?? "",
+      redirectUri: "https://console.anthropic.com/oauth/code/callback",
+      authUrl: "https://claude.ai/oauth/authorize",
+      tokenUrl: "https://console.anthropic.com/v1/oauth/token",
+      scopes: ["org:create_api_key", "user:profile", "user:inference"],
+      extraAuthParams: {
+        code: "true",
+      },
+      usePkce: true,
+      useJsonTokenExchange: true,
+      codePasteOnly: true,
+    }
+  }
+
+  return providers
 }
+
+export const CODE_PASTE_PROVIDERS: Record<string, CodePasteProviderConfig> =
+  buildCodePasteProviders()
 
 export function getCodePasteProvider(providerId: string): CodePasteProviderConfig | undefined {
   return CODE_PASTE_PROVIDERS[providerId]
