@@ -3,50 +3,11 @@ import path from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { AVAILABLE_MODELS } from "@/components/agents/deploy-agent-modal"
-
 const SRC_DIR = path.resolve(__dirname, "..")
 
 function readSrc(relative: string): string {
   return readFileSync(path.join(SRC_DIR, relative), "utf-8")
 }
-
-// ---------------------------------------------------------------------------
-// AVAILABLE_MODELS constant
-// ---------------------------------------------------------------------------
-
-describe("AVAILABLE_MODELS", () => {
-  it("contains at least one model", () => {
-    expect(AVAILABLE_MODELS.length).toBeGreaterThan(0)
-  })
-
-  it("every entry has id, label, and provider", () => {
-    for (const m of AVAILABLE_MODELS) {
-      expect(typeof m.id).toBe("string")
-      expect(m.id.length).toBeGreaterThan(0)
-      expect(typeof m.label).toBe("string")
-      expect(m.label.length).toBeGreaterThan(0)
-      expect(typeof m.provider).toBe("string")
-      expect(m.provider.length).toBeGreaterThan(0)
-    }
-  })
-
-  it("has unique model ids", () => {
-    const ids = AVAILABLE_MODELS.map((m) => m.id)
-    expect(new Set(ids).size).toBe(ids.length)
-  })
-
-  it("includes the default fallback model (claude-sonnet-4-6)", () => {
-    const ids = AVAILABLE_MODELS.map((m) => m.id)
-    expect(ids).toContain("claude-sonnet-4-6")
-  })
-
-  it("includes anthropic and openai providers", () => {
-    const providers = new Set(AVAILABLE_MODELS.map((m) => m.provider))
-    expect(providers.has("anthropic")).toBe(true)
-    expect(providers.has("openai")).toBe(true)
-  })
-})
 
 // ---------------------------------------------------------------------------
 // model_config construction (mirrors deploy-agent-modal handleSubmit logic)
@@ -106,9 +67,14 @@ describe("Deploy modal structure", () => {
     expect(content).toContain('data-testid="deploy-model-select"')
   })
 
-  it("exports AVAILABLE_MODELS list", () => {
-    expect(content).toContain("AVAILABLE_MODELS")
-    expect(content).toContain("claude-sonnet-4-6")
+  it("uses useModels hook for dynamic model fetching", () => {
+    expect(content).toContain("useModels")
+    expect(content).toContain("models")
+  })
+
+  it("shows empty state when no models available", () => {
+    expect(content).toContain("No models available")
+    expect(content).toContain("Connect a provider")
   })
 
   it("includes model in model_config when building request body", () => {

@@ -1,9 +1,31 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import Fastify from "fastify"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import type { CredentialSummary } from "../auth/credential-service.js"
+import { modelDiscoveryService } from "../observability/model-providers.js"
 import { credentialRoutes } from "../routes/credentials.js"
+
+// Seed discovery cache so modelsForProvider returns data in tests
+beforeAll(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cache = (modelDiscoveryService as any).cache as Map<string, unknown>
+  cache.set("anthropic", {
+    models: [
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", providers: ["anthropic"] },
+      { id: "claude-opus-4-6", label: "Claude Opus 4.6", providers: ["anthropic"] },
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", providers: ["anthropic"] },
+    ],
+    expiresAt: Date.now() + 60 * 60 * 1000,
+  })
+  cache.set("openai", {
+    models: [
+      { id: "gpt-4o", label: "GPT-4o", providers: ["openai"] },
+      { id: "gpt-4o-mini", label: "GPT-4o Mini", providers: ["openai"] },
+    ],
+    expiresAt: Date.now() + 60 * 60 * 1000,
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Helpers

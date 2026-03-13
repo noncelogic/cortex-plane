@@ -3,7 +3,6 @@ import path from "node:path"
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { AVAILABLE_MODELS } from "@/components/agents/deploy-agent-modal"
 import { updateAgent } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -138,9 +137,14 @@ describe("Deploy modal model selector", () => {
     expect(content).toContain('data-testid="deploy-model-select"')
   })
 
-  it("exports AVAILABLE_MODELS list", () => {
-    expect(content).toContain("AVAILABLE_MODELS")
-    expect(content).toContain("claude-sonnet-4-6")
+  it("uses useModels hook for dynamic model list", () => {
+    expect(content).toContain("useModels")
+    expect(content).toContain("models")
+  })
+
+  it("shows empty state when no models available", () => {
+    expect(content).toContain("No models available")
+    expect(content).toContain("Connect a provider")
   })
 
   it("includes model in model_config when building request body", () => {
@@ -157,37 +161,6 @@ describe("Deploy modal model selector", () => {
 
   it("requires model for form submission", () => {
     expect(content).toContain("!model.trim()")
-  })
-})
-
-// ---------------------------------------------------------------------------
-// AVAILABLE_MODELS constant validation
-// ---------------------------------------------------------------------------
-
-describe("AVAILABLE_MODELS", () => {
-  it("contains at least one model", () => {
-    expect(AVAILABLE_MODELS.length).toBeGreaterThan(0)
-  })
-
-  it("every entry has id, label, and provider", () => {
-    for (const m of AVAILABLE_MODELS) {
-      expect(typeof m.id).toBe("string")
-      expect(m.id.length).toBeGreaterThan(0)
-      expect(typeof m.label).toBe("string")
-      expect(m.label.length).toBeGreaterThan(0)
-      expect(typeof m.provider).toBe("string")
-      expect(m.provider.length).toBeGreaterThan(0)
-    }
-  })
-
-  it("has unique model ids", () => {
-    const ids = AVAILABLE_MODELS.map((m) => m.id)
-    expect(new Set(ids).size).toBe(ids.length)
-  })
-
-  it("includes the default fallback model (claude-sonnet-4-6)", () => {
-    const ids = AVAILABLE_MODELS.map((m) => m.id)
-    expect(ids).toContain("claude-sonnet-4-6")
   })
 })
 
@@ -353,9 +326,8 @@ describe("useModels hook", () => {
     expect(content).toContain("listModels")
   })
 
-  it("provides fallback models", () => {
-    expect(content).toContain("FALLBACK_MODELS")
-    expect(content).toContain("claude-sonnet-4-6")
+  it("starts with empty model list", () => {
+    expect(content).toContain("useState<ModelInfo[]>([])")
   })
 
   it("returns models and isLoading", () => {
