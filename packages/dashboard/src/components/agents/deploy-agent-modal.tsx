@@ -1,10 +1,16 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { useToast } from "@/components/layout/toast"
 import { useModels } from "@/hooks/use-models"
-import { createAgent, type CreateAgentRequest } from "@/lib/api-client"
+import {
+  bindAgentCredential,
+  createAgent,
+  type CreateAgentRequest,
+  type Credential,
+  listCredentials,
+} from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
 // Available models — keep in sync with control-plane MODEL_CATALOGUE.
@@ -41,10 +47,20 @@ export function DeployAgentModal({
   const [description, setDescription] = useState("")
   const [model, setModel] = useState("")
   const [systemPrompt, setSystemPrompt] = useState("")
+  const [credentialId, setCredentialId] = useState("")
+  const [credentials, setCredentials] = useState<Credential[]>([])
 
   const { addToast } = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Fetch available credentials when modal opens
+  useEffect(() => {
+    if (!open) return
+    void listCredentials()
+      .then((res) => setCredentials(res.credentials))
+      .catch(() => setCredentials([]))
+  }, [open])
 
   const resetForm = useCallback(() => {
     setName("")
@@ -52,6 +68,7 @@ export function DeployAgentModal({
     setDescription("")
     setModel("")
     setSystemPrompt("")
+    setCredentialId("")
     setError(null)
   }, [])
 
@@ -80,7 +97,18 @@ export function DeployAgentModal({
           description: description.trim() || undefined,
           model_config: Object.keys(modelConfig).length > 0 ? modelConfig : undefined,
         }
-        await createAgent(body)
+        const created = await createAgent(body)
+
+        // Bind credential if one was selected
+        if (credentialId && created.id) {
+          try {
+            await bindAgentCredential(created.id, credentialId)
+          } catch {
+            // Agent was created but binding failed — still consider it a success
+            addToast("Agent deployed but credential binding failed. Bind it manually.", "error")
+          }
+        }
+
         resetForm()
         addToast("Agent deployed successfully", "success")
         onSuccess()
@@ -90,7 +118,18 @@ export function DeployAgentModal({
         setSubmitting(false)
       }
     },
-    [name, role, description, model, systemPrompt, submitting, resetForm, onSuccess],
+    [
+      name,
+      role,
+      description,
+      model,
+      systemPrompt,
+      credentialId,
+      submitting,
+      resetForm,
+      onSuccess,
+      addToast,
+    ],
   )
 
   if (!open) return null
@@ -204,16 +243,42 @@ export function DeployAgentModal({
             )}
           </div>
 
-          {/* Credential warning */}
-          {model && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-600 dark:text-amber-400">
-              <span className="material-symbols-outlined mt-px text-[16px]">warning</span>
-              <span>
-                The agent will need a provider credential bound after deployment for the model to
-                work. You can bind credentials from the agent detail page.
-              </span>
-            </div>
-          )}
+          {/* Credential binding */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Credential
+            </label>
+            {credentials.length === 0 ? (
+              <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <span className="material-symbols-outlined text-[16px]">info</span>
+                <span>
+                  No credentials available.{" "}
+                  <a
+                    href="/settings"
+                    className="font-medium text-primary underline hover:text-primary/80"
+                  >
+                    Add one in Settings
+                  </a>{" "}
+                  or bind after deployment.
+                </span>
+              </div>
+            ) : (
+              <select
+                value={credentialId}
+                onChange={(e) => setCredentialId(e.target.value)}
+                disabled={submitting}
+                data-testid="deploy-credential-select"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="">Bind after deployment...</option>
+                {credentials.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.displayLabel ?? c.provider} ({c.provider})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {/* System Prompt */}
           <div>
