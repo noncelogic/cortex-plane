@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/components/layout/toast"
+import { useModels } from "@/hooks/use-models"
 import {
   type AgentCredentialBinding,
   bindAgentCredential,
@@ -12,8 +13,6 @@ import {
   listCredentials,
   unbindAgentCredential,
 } from "@/lib/api-client"
-
-import { AVAILABLE_MODELS } from "./deploy-agent-modal"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -323,17 +322,6 @@ function BindingRow({ binding, onUnbind }: BindingRowProps): React.JSX.Element {
 // Main export
 // ---------------------------------------------------------------------------
 
-/** Map a model ID → set of compatible provider credential IDs. */
-const MODEL_PROVIDER_MAP: Record<string, string[]> = {}
-for (const m of AVAILABLE_MODELS) {
-  // Each model's `provider` field is the primary provider. Also allow
-  // the OAuth variants (e.g. google-antigravity for anthropic models).
-  const providers: string[] = [m.provider]
-  if (m.provider === "anthropic") providers.push("google-antigravity")
-  if (m.provider === "openai") providers.push("openai-codex")
-  MODEL_PROVIDER_MAP[m.id] = providers
-}
-
 export interface CredentialBindingPanelProps {
   agentId: string
   /** The model ID from agent.model_config.model (used for provider match warnings). */
@@ -346,6 +334,7 @@ export function CredentialBindingPanel({
 }: CredentialBindingPanelProps): React.JSX.Element {
   const { user } = useAuth()
   const { addToast } = useToast()
+  const { models: availableModels } = useModels()
   const isAdmin = user?.role === "admin"
 
   const [bindings, setBindings] = useState<AgentCredentialBinding[]>([])
@@ -358,6 +347,15 @@ export function CredentialBindingPanel({
   const [bindingInProgress, setBindingInProgress] = useState(false)
   const [unbindTarget, setUnbindTarget] = useState<AgentCredentialBinding | null>(null)
   const [unbindingInProgress, setUnbindingInProgress] = useState(false)
+
+  // Build model → providers map from dynamic model list
+  const modelProviderMap = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    for (const m of availableModels) {
+      map[m.id] = m.providers
+    }
+    return map
+  }, [availableModels])
 
   const fetchBindings = useCallback(async () => {
     setLoadingBindings(true)
@@ -427,14 +425,14 @@ export function CredentialBindingPanel({
   // Check if any bound LLM credential matches the agent's selected model provider
   const providerMismatch = useMemo(() => {
     if (!modelId) return null
-    const compatibleProviders = MODEL_PROVIDER_MAP[modelId]
+    const compatibleProviders = modelProviderMap[modelId]
     if (!compatibleProviders) return null
     const llmBindings = bindings.filter((b) => b.credentialClass === "llm_provider")
     if (llmBindings.length === 0) return { missing: true, providers: compatibleProviders }
     const hasMatch = llmBindings.some((b) => compatibleProviders.includes(b.provider))
     if (hasMatch) return null
     return { missing: false, providers: compatibleProviders }
-  }, [modelId, bindings])
+  }, [modelId, bindings, modelProviderMap])
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-primary/10 dark:bg-primary/5">

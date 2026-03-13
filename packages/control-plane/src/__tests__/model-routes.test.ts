@@ -1,17 +1,53 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 import Fastify from "fastify"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { MODEL_CATALOGUE } from "../observability/model-providers.js"
+import { ModelDiscoveryService } from "../auth/model-discovery.js"
 import { modelRoutes } from "../routes/models.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function buildTestApp() {
+function seedDiscovery(svc: ModelDiscoveryService): void {
+  const providers: Record<string, { id: string; label: string; providers: string[] }[]> = {
+    anthropic: [
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", providers: ["anthropic"] },
+      { id: "claude-opus-4-6", label: "Claude Opus 4.6", providers: ["anthropic"] },
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", providers: ["anthropic"] },
+    ],
+    openai: [
+      { id: "gpt-4o", label: "GPT-4o", providers: ["openai"] },
+      { id: "gpt-4o-mini", label: "GPT-4o Mini", providers: ["openai"] },
+    ],
+    "google-ai-studio": [
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", providers: ["google-ai-studio"] },
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", providers: ["google-ai-studio"] },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", providers: ["google-ai-studio"] },
+    ],
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cache = (svc as any).cache as Map<string, unknown>
+  for (const [providerId, models] of Object.entries(providers)) {
+    cache.set(providerId, { models, expiresAt: Date.now() + 60 * 60 * 1000 })
+  }
+}
+
+let discovery: ModelDiscoveryService
+
+beforeEach(() => {
+  discovery = new ModelDiscoveryService()
+  seedDiscovery(discovery)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+async function buildTestApp(deps?: Parameters<typeof modelRoutes>[0]) {
   const app = Fastify({ logger: false })
-  await app.register(modelRoutes())
+  await app.register(modelRoutes({ ...deps, discoveryService: discovery }))
   return app
 }
 
@@ -20,18 +56,15 @@ async function buildTestApp() {
 // ---------------------------------------------------------------------------
 
 describe("GET /models", () => {
-  it("returns the full model catalogue", async () => {
+  it("returns discovered models", async () => {
     const app = await buildTestApp()
 
-    const res = await app.inject({
-      method: "GET",
-      url: "/models",
-    })
+    const res = await app.inject({ method: "GET", url: "/models" })
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.models).toBeDefined()
-    expect(body.models).toEqual(MODEL_CATALOGUE)
+    expect(body.models.length).toBeGreaterThan(0)
   })
 
   it("includes at least one Anthropic and one OpenAI model", async () => {
@@ -88,8 +121,22 @@ describe("GET /models", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("returns full catalogue when credentialAware=true but no deps provided", async () => {
-    const app = await buildTestApp()
+  it("returns empty array when cache is empty", async () => {
+    const emptyDiscovery = new ModelDiscoveryService()
+    const app = Fastify({ logger: false })
+    await app.register(modelRoutes({ discoveryService: emptyDiscovery }))
+
+    const res = await app.inject({ method: "GET", url: "/models" })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.models).toEqual([])
+  })
+
+  it("returns empty when credentialAware=true but no deps provided", async () => {
+    const emptyDiscovery = new ModelDiscoveryService()
+    const app = Fastify({ logger: false })
+    await app.register(modelRoutes({ discoveryService: emptyDiscovery }))
 
     const res = await app.inject({
       method: "GET",
@@ -98,7 +145,7 @@ describe("GET /models", () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.models).toEqual(MODEL_CATALOGUE)
+    expect(body.models).toEqual([])
   })
 
   it("filters models when credentialAware=true and user has credentials", async () => {
@@ -123,6 +170,7 @@ describe("GET /models", () => {
       modelRoutes({
         credentialService: mockCredentialService as never,
         sessionService: mockSessionService as never,
+        discoveryService: discovery,
       }),
     )
 
@@ -157,6 +205,7 @@ describe("GET /models", () => {
       modelRoutes({
         credentialService: mockCredentialService as never,
         sessionService: mockSessionService as never,
+        discoveryService: discovery,
       }),
     )
 
@@ -167,6 +216,6 @@ describe("GET /models", () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.models).toEqual(MODEL_CATALOGUE)
+    expect(body.models.length).toBeGreaterThan(0)
   })
 })

@@ -12,24 +12,6 @@ import {
   listCredentials,
 } from "@/lib/api-client"
 
-// ---------------------------------------------------------------------------
-// Available models — keep in sync with control-plane MODEL_CATALOGUE.
-// Retained as a static export for backward compatibility (credential-binding,
-// tests). Components should prefer the useModels() hook which fetches from
-// the GET /models API endpoint.
-// ---------------------------------------------------------------------------
-
-export const AVAILABLE_MODELS = [
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "anthropic" },
-  { id: "claude-opus-4-6", label: "Claude Opus 4.6", provider: "anthropic" },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", provider: "anthropic" },
-  { id: "gpt-4o", label: "GPT-4o", provider: "openai" },
-  { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "openai" },
-  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "google-ai-studio" },
-  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google-ai-studio" },
-  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", provider: "google-ai-studio" },
-] as const
-
 interface DeployAgentModalProps {
   open: boolean
   onClose: () => void

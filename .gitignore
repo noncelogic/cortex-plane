@@ -41,3 +41,4 @@ qdrant_data/
 deploy/k8s/overlays/dev/secrets.yaml
 .test-pgdata-*/
 TASK.md
+deploy/k8s/**/secrets.yaml
