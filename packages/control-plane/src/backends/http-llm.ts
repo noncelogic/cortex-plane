@@ -208,8 +208,7 @@ export class HttpLlmBackend implements ExecutionBackend {
     if (cred) {
       const credProvider = mapCredentialProvider(cred.provider)
       if (credProvider === "anthropic") {
-        // Google Antigravity routes through Vertex AI with Bearer auth.
-        // cloudcode-pa.googleapis.com is only for quota queries, NOT message routing.
+        // Google Antigravity routes through the Antigravity proxy with Bearer auth.
         const isAntigravity = cred.provider === "google-antigravity"
         // Antigravity: Bearer auth (Google Vertex AI requires it)
         // Anthropic OAuth: x-api-key header (Anthropic requires it, NOT Bearer)
@@ -219,28 +218,16 @@ export class HttpLlmBackend implements ExecutionBackend {
 
         let client: Anthropic
         let clientBaseUrl = baseUrl
-        let antigravityInfo: { projectId: string; region: string } | undefined
 
         if (isAntigravity) {
           const routing = resolveAntigravityRouting(cred.baseUrl, cred.accountId)
           clientBaseUrl = routing.baseUrl
-          if (routing.type === "vertex") {
-            // Native Vertex AI — needs path rewriting from /v1/messages
-            // to /models/{model}:streamRawPredict
-            antigravityInfo = { projectId: routing.projectId, region: routing.region }
-            client = new AntigravityAnthropicClient({
-              authToken: cred.token,
-              projectId: routing.projectId,
-              region: routing.region,
-            })
-          } else {
-            // Custom proxy that accepts standard Anthropic API format
-            client = new Anthropic({
-              authToken: cred.token,
-              apiKey: null as unknown as string,
-              baseURL: routing.baseUrl,
-            })
-          }
+          // Proxy accepts standard Anthropic API format — no path rewriting needed
+          client = new Anthropic({
+            authToken: cred.token,
+            apiKey: null as unknown as string,
+            baseURL: routing.baseUrl,
+          })
         } else {
           client = new Anthropic({
             ...(useBearer ? { authToken: cred.token, apiKey: null } : { apiKey: cred.token }),
@@ -254,7 +241,6 @@ export class HttpLlmBackend implements ExecutionBackend {
             credentialId: cred.credentialId,
             baseUrl: clientBaseUrl,
             useAuthToken: useBearer,
-            antigravity: antigravityInfo,
           }),
         )
       }
@@ -349,8 +335,6 @@ interface RefreshOpts {
   baseUrl?: string
   /** When true, use Bearer auth (`authToken`) instead of `apiKey` for the Anthropic SDK. */
   useAuthToken?: boolean
-  /** Vertex AI project/region for Antigravity clients (requires path rewriting). */
-  antigravity?: { projectId: string; region: string }
 }
 
 /** Returns true if the error is a 401 authentication error from an LLM SDK. */
@@ -395,99 +379,28 @@ function mapCredentialProvider(provider: string): LlmProvider {
  *   1. Explicit `baseUrl` on the credential ref (set by provider config) — assumed
  *      to be a custom proxy that accepts standard Anthropic API format.
  *   2. `ANTIGRAVITY_BASE_URL` env var — same assumption.
- *   3. Native Vertex AI endpoint — requires path rewriting from /v1/messages to
- *      /models/{model}:streamRawPredict (the standard Anthropic SDK path is not
- *      a valid Vertex AI endpoint).
- *
- * Returns either:
- *   - `{ type: "proxy", baseUrl }` for cases 1/2 (custom proxy, no rewrite needed)
- *   - `{ type: "vertex", baseUrl, projectId, region }` for case 3 (needs rewrite)
+ *   3. Default Antigravity proxy — accepts standard Anthropic `/v1/messages` format.
+ *      Consumer OAuth tokens cannot access Vertex AI directly (401/403).
  */
-type AntigravityRouting =
-  | { type: "proxy"; baseUrl: string }
-  | { type: "vertex"; baseUrl: string; projectId: string; region: string }
+interface AntigravityRouting {
+  type: "proxy"
+  baseUrl: string
+}
 
 function resolveAntigravityRouting(
   credBaseUrl?: string | null,
-  accountId?: string | null,
+  _accountId?: string | null,
 ): AntigravityRouting {
   if (credBaseUrl) return { type: "proxy", baseUrl: credBaseUrl }
 
   const envUrl = process.env.ANTIGRAVITY_BASE_URL
   if (envUrl) return { type: "proxy", baseUrl: envUrl }
 
-  const region = process.env.ANTIGRAVITY_REGION ?? "us-east5"
-  const projectId = accountId ?? process.env.ANTIGRAVITY_PROJECT ?? "anthropic-cortex-default"
+  // Default: use the Antigravity proxy (not direct Vertex AI)
   return {
-    type: "vertex",
-    baseUrl: `https://${region}-aiplatform.googleapis.com/v1`,
-    projectId,
-    region,
+    type: "proxy",
+    baseUrl: "https://daily-cloudcode-pa.sandbox.googleapis.com",
   }
-}
-
-// ---------------------------------------------------------------------------
-// Antigravity Vertex AI client
-// ---------------------------------------------------------------------------
-
-/**
- * Anthropic SDK client that rewrites /v1/messages paths to the Vertex AI
- * rawPredict endpoint format.
- *
- * Google Vertex AI does not serve a /v1/messages endpoint. The official
- * @anthropic-ai/vertex-sdk rewrites the path to:
- *   /projects/{project}/locations/{region}/publishers/anthropic/models/{model}:{specifier}
- *
- * This class replicates that behaviour so we can use the standard Anthropic SDK
- * (with our own OAuth token management) against Vertex AI.
- */
-const VERTEX_ANTHROPIC_VERSION = "vertex-2023-10-16"
-const VERTEX_MESSAGE_ENDPOINTS = new Set(["/v1/messages", "/v1/messages?beta=true"])
-
-interface AntigravityClientOpts {
-  authToken: string
-  projectId: string
-  region: string
-}
-
-class AntigravityAnthropicClient extends Anthropic {
-  private readonly vertexProjectId: string
-  private readonly vertexRegion: string
-
-  constructor(opts: AntigravityClientOpts) {
-    super({
-      authToken: opts.authToken,
-      apiKey: null as unknown as string,
-      baseURL: `https://${opts.region}-aiplatform.googleapis.com/v1`,
-    })
-    this.vertexProjectId = opts.projectId
-    this.vertexRegion = opts.region
-  }
-
-  /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
-  override async buildRequest(options: any): Promise<any> {
-    // Inject Vertex anthropic_version into the body (required by Vertex AI)
-    if (
-      typeof options.body === "object" &&
-      options.body !== null &&
-      !options.body.anthropic_version
-    ) {
-      options.body.anthropic_version = VERTEX_ANTHROPIC_VERSION
-    }
-
-    // Rewrite /v1/messages → Vertex AI rawPredict / streamRawPredict
-    if (VERTEX_MESSAGE_ENDPOINTS.has(options.path as string) && options.method === "post") {
-      const body = options.body as Record<string, unknown>
-      const model = body.model as string
-      body.model = undefined
-      const stream = (body.stream as boolean) ?? false
-      const specifier = stream ? "streamRawPredict" : "rawPredict"
-      options.path = `/projects/${this.vertexProjectId}/locations/${this.vertexRegion}/publishers/anthropic/models/${model}:${specifier}`
-    }
-
-    return super.buildRequest(options)
-  }
-  /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
 }
 
 function toOpenAITools(defs: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
@@ -518,7 +431,6 @@ class AnthropicHandle implements ExecutionHandle {
   private readonly credentialId?: string
   private readonly baseUrl?: string
   private readonly useAuthToken: boolean
-  private readonly antigravity?: { projectId: string; region: string }
 
   constructor(
     private readonly task: ExecutionTask,
@@ -536,7 +448,6 @@ class AnthropicHandle implements ExecutionHandle {
     this.credentialId = refreshOpts?.credentialId
     this.baseUrl = refreshOpts?.baseUrl
     this.useAuthToken = refreshOpts?.useAuthToken ?? false
-    this.antigravity = refreshOpts?.antigravity
   }
 
   async *events(): AsyncIterable<OutputEvent> {
@@ -662,18 +573,12 @@ class AnthropicHandle implements ExecutionHandle {
             lastRetryTurn = turn
             const newToken = await this.tokenRefresher(this.credentialId)
             if (newToken) {
-              this.client = this.antigravity
-                ? new AntigravityAnthropicClient({
-                    authToken: newToken,
-                    projectId: this.antigravity.projectId,
-                    region: this.antigravity.region,
-                  })
-                : new Anthropic({
-                    ...(this.useAuthToken
-                      ? { authToken: newToken, apiKey: null }
-                      : { apiKey: newToken }),
-                    ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
-                  })
+              this.client = new Anthropic({
+                ...(this.useAuthToken
+                  ? { authToken: newToken, apiKey: null }
+                  : { apiKey: newToken }),
+                ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+              })
               turn-- // retry this turn
               continue
             }
