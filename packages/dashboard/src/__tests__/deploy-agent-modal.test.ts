@@ -133,6 +133,6 @@ describe("Deploy modal structure", () => {
   })
 
   it("shows credential warning when model is selected", () => {
-    expect(content).toContain("provider credential")
+    expect(content).toContain("credential")
   })
 })

@@ -498,8 +498,14 @@ export interface CreateAgentJobRequest {
   payload?: Record<string, unknown>
 }
 
-export async function createAgent(body: CreateAgentRequest): Promise<unknown> {
-  return apiFetch("/agents", { method: "POST", body, schema: z.unknown() })
+export async function createAgent(
+  body: CreateAgentRequest,
+): Promise<{ id: string; [key: string]: unknown }> {
+  return apiFetch("/agents", {
+    method: "POST",
+    body,
+    schema: z.object({ id: z.string() }).passthrough(),
+  })
 }
 
 export async function updateAgent(agentId: string, body: UpdateAgentRequest): Promise<unknown> {
