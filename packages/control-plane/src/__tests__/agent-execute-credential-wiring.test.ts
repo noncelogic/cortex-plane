@@ -210,6 +210,7 @@ describe("agent-execute credential wiring (#444)", () => {
       credentialBinding: {
         user_account_id: "user-owner-1",
         provider: "google-antigravity",
+        credential_type: "oauth",
         credential_class: "llm_provider",
         account_id: "my-gcp-project",
       },
@@ -240,6 +241,7 @@ describe("agent-execute credential wiring (#444)", () => {
       token: "resolved-oauth-token",
       credentialId: "cred-abc",
       accountId: "my-gcp-project",
+      credentialType: "oauth",
     })
   })
 
@@ -273,6 +275,7 @@ describe("agent-execute credential wiring (#444)", () => {
       credentialBinding: {
         user_account_id: "user-owner-1",
         provider: "google-antigravity",
+        credential_type: "oauth",
         credential_class: "llm_provider",
       },
     })
@@ -316,6 +319,7 @@ describe("agent-execute credential wiring (#444)", () => {
       credentialBinding: {
         user_account_id: "user-owner-1",
         provider: "anthropic",
+        credential_type: "oauth",
         credential_class: "llm_provider",
         account_id: null,
       },
@@ -349,6 +353,45 @@ describe("agent-execute credential wiring (#444)", () => {
       token: "resolved-oauth-token",
       credentialId: "cred-abc",
       accountId: null,
+      credentialType: "oauth",
+    })
+  })
+
+  it("resolves api_key credential with credentialType 'api_key' for direct-key providers", async () => {
+    const db = makeMockDb({
+      credentialBinding: {
+        user_account_id: "user-owner-1",
+        provider: "openai",
+        credential_type: "api_key",
+        credential_class: "llm_provider",
+        account_id: null,
+      },
+    })
+    const { registry, executeTaskSpy } = makeMockRegistry()
+    const credentialService = makeMockCredentialService({
+      token: "sk-openai-key-12345678",
+      credentialId: "cred-apikey-1",
+    })
+
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+      credentialService,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(credentialService.getAccessToken).toHaveBeenCalledWith("user-owner-1", "openai")
+
+    expect(executeTaskSpy).toHaveBeenCalled()
+    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
+    expect(executedTask.constraints.llmCredential).toEqual({
+      provider: "openai",
+      token: "sk-openai-key-12345678",
+      credentialId: "cred-apikey-1",
+      accountId: null,
+      credentialType: "api_key",
     })
   })
 

@@ -537,6 +537,68 @@ describe("backward compatibility", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Tests: API key end-to-end (store → getAccessToken)
+// ---------------------------------------------------------------------------
+
+describe("API key credential flow end-to-end", () => {
+  it("storeApiKeyCredential → getAccessToken returns decrypted key", async () => {
+    const apiKey = "sk-openai-live-key-12345678"
+    const storedCred = makeCredRow({
+      credential_class: "llm_provider",
+      credential_type: "api_key",
+      provider: "openai",
+      api_key_enc: encryptCredential(apiKey, USER_KEY),
+      access_token_enc: null,
+      refresh_token_enc: null,
+    })
+
+    // Phase 1: store — mock insert path
+    const { db: storeDb } = buildMockDb({ existingCred: null, insertedCred: storedCred })
+    const storeService = new CredentialService(storeDb, AUTH_CONFIG)
+    const summary = await storeService.storeApiKeyCredential(ADMIN_USER_ID, "openai", apiKey)
+
+    expect(summary.credentialType).toBe("api_key")
+    expect(summary.credentialClass).toBe("llm_provider")
+    expect(summary.provider).toBe("openai")
+    expect(summary.maskedKey).toMatch(/\*+5678$/)
+
+    // Phase 2: resolve — mock the row that was "stored" as existing
+    const { db: resolveDb, auditValues } = buildMockDb({ existingCred: storedCred })
+    const resolveService = new CredentialService(resolveDb, AUTH_CONFIG)
+    const result = await resolveService.getAccessToken(ADMIN_USER_ID, "openai", {
+      agentId: "agent-1",
+      jobId: "job-1",
+    })
+
+    expect(result).not.toBeNull()
+    expect(result!.token).toBe(apiKey)
+    expect(result!.credentialId).toBe(CRED_ID)
+
+    // Verify audit log was written for agent context
+    expect(auditValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: "credential_accessed",
+        provider: "openai",
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        details: expect.objectContaining({
+          flow: "injection",
+          agent_id: "agent-1",
+          job_id: "job-1",
+        }),
+      }),
+    )
+  })
+
+  it("getAccessToken returns null for non-existent api_key credential", async () => {
+    const { db } = buildMockDb({ existingCred: null })
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    const result = await service.getAccessToken(ADMIN_USER_ID, "openai")
+    expect(result).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Tests: SUPPORTED_PROVIDERS extensions
 // ---------------------------------------------------------------------------
 
