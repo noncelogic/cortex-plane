@@ -611,11 +611,19 @@ function getConnectProviderConfig(
   provider: string,
   authConfig: AuthOAuthConfig,
 ): OAuthProviderConfig | undefined {
+  // LLM providers: use code-paste registry as single source of truth
+  const codePaste = getCodePasteProvider(provider)
+  if (codePaste) {
+    return {
+      clientId: codePaste.clientId,
+      clientSecret: codePaste.clientSecret,
+      authUrl: codePaste.authUrl,
+      tokenUrl: codePaste.tokenUrl,
+    }
+  }
+
+  // User service providers: use authConfig (redirect-based OAuth)
   switch (provider) {
-    case "google-antigravity":
-      return authConfig.googleAntigravity
-    case "openai-codex":
-      return authConfig.openaiCodex
     case "google-workspace":
       return authConfig.googleWorkspace
     case "github-user":

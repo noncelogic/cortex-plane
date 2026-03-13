@@ -166,11 +166,10 @@ function parseOAuthProvider(
   prefix: string,
 ): OAuthProviderConfig | undefined {
   const clientId = env[`OAUTH_${prefix}_CLIENT_ID`]
-  const clientSecret = env[`OAUTH_${prefix}_CLIENT_SECRET`]
-  if (!clientId || !clientSecret) return undefined
+  if (!clientId) return undefined
   return {
     clientId,
-    clientSecret,
+    clientSecret: env[`OAUTH_${prefix}_CLIENT_SECRET`] ?? "",
     authUrl: env[`OAUTH_${prefix}_AUTH_URL`],
     tokenUrl: env[`OAUTH_${prefix}_TOKEN_URL`],
   }
