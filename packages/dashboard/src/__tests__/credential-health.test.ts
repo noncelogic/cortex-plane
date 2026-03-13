@@ -47,6 +47,32 @@ describe("tokenExpiry", () => {
     expect(result.severity).toBe("ok")
   })
 
+  it("returns Auto-renewing for active OAuth with errors but token not yet expired", () => {
+    const cred = makeCred({
+      credentialType: "oauth",
+      status: "active",
+      tokenExpiresAt: "2026-03-09T13:00:00.000Z",
+      errorCount: 2,
+      lastError: "rate_limited",
+    })
+    const result = tokenExpiry(cred, now)!
+    expect(result.label).toBe("Auto-renewing")
+    expect(result.severity).toBe("ok")
+  })
+
+  it("shows expiry when active OAuth token expired and refresh failed", () => {
+    const cred = makeCred({
+      credentialType: "oauth",
+      status: "active",
+      tokenExpiresAt: "2026-03-09T11:00:00.000Z",
+      errorCount: 3,
+      lastError: "token refresh failed: invalid_grant",
+    })
+    const result = tokenExpiry(cred, now)!
+    expect(result.severity).toBe("danger")
+    expect(result.label).toMatch(/^Expired/)
+  })
+
   it("returns expiry countdown for non-active OAuth credentials", () => {
     const cred = makeCred({
       credentialType: "oauth",
