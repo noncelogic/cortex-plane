@@ -98,14 +98,12 @@ function CredentialHealthDetails({
   )
 }
 
-/** Code-paste providers that use the init/exchange flow (Anthropic only — device code). */
-const CODE_PASTE_PROVIDER_IDS = new Set(["anthropic"])
-
 /**
- * Providers that display a device code instead of redirecting to localhost.
- * For these, we skip the popup entirely and show a code-paste input immediately.
+ * All OAuth LLM providers use the code-paste flow with embedded client credentials.
+ * These providers redirect to localhost which is unreachable from a remote dashboard,
+ * so we skip the popup entirely and show a code-paste input immediately.
  */
-const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic"])
+const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic", "google-antigravity", "openai-codex"])
 
 // ---------------------------------------------------------------------------
 // Settings page inner (wrapped in Suspense)
@@ -217,11 +215,6 @@ function SettingsInner() {
       setCodePasteSubmitting(false)
     }
   }, [popup, popupProvider, codePastePastedUrl, fetchData])
-
-  // Connect OAuth provider (redirect-based, for providers with registered callbacks)
-  const connectOAuth = useCallback((provider: string) => {
-    window.location.href = `/api/auth/connect/${provider}`
-  }, [])
 
   // Save API key
   const saveApiKey = useCallback(async () => {
@@ -409,7 +402,6 @@ function SettingsInner() {
           {llmProviders.map((p) => {
             const cred = getCredentialForProvider(p.id)
             const isOAuth = p.authType === "oauth"
-            const isCodePaste = CODE_PASTE_PROVIDER_IDS.has(p.id)
 
             return (
               <div
@@ -492,18 +484,10 @@ function SettingsInner() {
                         Disconnect
                       </button>
                     </>
-                  ) : isOAuth && isCodePaste ? (
-                    <button
-                      type="button"
-                      onClick={() => void startPopupFlow(p.id)}
-                      className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
-                    >
-                      Connect
-                    </button>
                   ) : isOAuth ? (
                     <button
                       type="button"
-                      onClick={() => connectOAuth(p.id)}
+                      onClick={() => void startPopupFlow(p.id)}
                       className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                     >
                       Connect
@@ -603,7 +587,9 @@ function SettingsInner() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => connectOAuth(p.id)}
+                        onClick={() => {
+                          window.location.href = `/api/auth/connect/${p.id}`
+                        }}
                         className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                       >
                         Connect

@@ -7,8 +7,8 @@ import type { Credential, ProviderInfo } from "@/lib/api-client"
  * Validates the static mapping is correct without requiring React rendering.
  */
 
-const CODE_PASTE_PROVIDER_IDS = new Set(["anthropic"])
-const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic"])
+const CODE_PASTE_PROVIDER_IDS = new Set(["anthropic", "google-antigravity", "openai-codex"])
+const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic", "google-antigravity", "openai-codex"])
 
 /**
  * credentialLabel — mirrors the helper in settings/page.tsx.
@@ -24,16 +24,22 @@ describe("settings page code-paste providers", () => {
     expect(CODE_PASTE_PROVIDER_IDS.has("anthropic")).toBe(true)
   })
 
-  it("does not identify redirect-flow providers as code-paste", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.has("google-antigravity")).toBe(false)
-    expect(CODE_PASTE_PROVIDER_IDS.has("openai-codex")).toBe(false)
+  it("identifies google-antigravity as a code-paste provider", () => {
+    expect(CODE_PASTE_PROVIDER_IDS.has("google-antigravity")).toBe(true)
+  })
+
+  it("identifies openai-codex as a code-paste provider", () => {
+    expect(CODE_PASTE_PROVIDER_IDS.has("openai-codex")).toBe(true)
+  })
+
+  it("does not identify non-OAuth providers as code-paste", () => {
     expect(CODE_PASTE_PROVIDER_IDS.has("openai")).toBe(false)
     expect(CODE_PASTE_PROVIDER_IDS.has("google-ai-studio")).toBe(false)
     expect(CODE_PASTE_PROVIDER_IDS.has("github")).toBe(false)
   })
 
-  it("contains exactly 1 provider", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.size).toBe(1)
+  it("contains exactly 3 providers", () => {
+    expect(CODE_PASTE_PROVIDER_IDS.size).toBe(3)
   })
 })
 
@@ -42,9 +48,12 @@ describe("settings page code-paste-only providers", () => {
     expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("anthropic")).toBe(true)
   })
 
-  it("does not mark redirect-flow providers as code-paste-only", () => {
-    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("google-antigravity")).toBe(false)
-    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("openai-codex")).toBe(false)
+  it("identifies google-antigravity as code-paste-only", () => {
+    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("google-antigravity")).toBe(true)
+  })
+
+  it("identifies openai-codex as code-paste-only", () => {
+    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("openai-codex")).toBe(true)
   })
 
   it("all code-paste-only providers are also code-paste providers", () => {
@@ -53,8 +62,8 @@ describe("settings page code-paste-only providers", () => {
     }
   })
 
-  it("contains exactly 1 provider", () => {
-    expect(CODE_PASTE_ONLY_PROVIDER_IDS.size).toBe(1)
+  it("contains exactly 3 providers", () => {
+    expect(CODE_PASTE_ONLY_PROVIDER_IDS.size).toBe(3)
   })
 })
 
