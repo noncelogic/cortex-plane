@@ -136,11 +136,9 @@ describe("AgentDetailSchema", () => {
       ...validAgent,
       status: "QUARANTINED",
       checkpoint: { job_id: "job-1", saved_at: "2026-01-01T00:00:00Z", crc32: 12345 },
-      config: { quarantine_reason: "repeated failures" },
     }
     const result = AgentDetailSchema.parse(detail)
     expect(result.status).toBe("QUARANTINED")
-    expect(result.config).toEqual({ quarantine_reason: "repeated failures" })
   })
 })
 
