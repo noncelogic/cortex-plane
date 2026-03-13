@@ -26,17 +26,23 @@ function mockAdapter(channelType: string): ChannelAdapter {
 // ---------------------------------------------------------------------------
 
 describe("channel startup wiring", () => {
-  it("registers adapters and creates supervisor", () => {
+  it("registers adapters (starting them) and creates supervisor", async () => {
     const registry = new ChannelAdapterRegistry()
     const telegram = mockAdapter("telegram")
     const discord = mockAdapter("discord")
 
-    registry.register(telegram)
-    registry.register(discord)
+    await registry.register(telegram)
+    await registry.register(discord)
 
     expect(registry.getAll()).toHaveLength(2)
     expect(registry.get("telegram")).toBe(telegram)
     expect(registry.get("discord")).toBe(discord)
+
+    // Adapters are started on register
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(telegram.start).toHaveBeenCalledOnce()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(discord.start).toHaveBeenCalledOnce()
 
     const supervisor = new ChannelSupervisor(registry, {
       telegram: { connectionMode: "long-poll" },
@@ -51,10 +57,10 @@ describe("channel startup wiring", () => {
     supervisor.stop()
   })
 
-  it("creates message router and binds to adapters", () => {
+  it("creates message router and binds to adapters", async () => {
     const registry = new ChannelAdapterRegistry()
     const telegram = mockAdapter("telegram")
-    registry.register(telegram)
+    await registry.register(telegram)
 
     const adapterMap = new Map(registry.getAll().map((a) => [a.channelType, a]))
     const db = {} as Parameters<typeof KyselyRouterDb.prototype.resolveUser>[0]
@@ -80,10 +86,10 @@ describe("channel startup wiring", () => {
     supervisor.stop()
   })
 
-  it("supervisor emits health updates via subscribe", () => {
+  it("supervisor emits health updates via subscribe", async () => {
     const registry = new ChannelAdapterRegistry()
     const telegram = mockAdapter("telegram")
-    registry.register(telegram)
+    await registry.register(telegram)
 
     const supervisor = new ChannelSupervisor(registry, {
       telegram: { connectionMode: "long-poll" },

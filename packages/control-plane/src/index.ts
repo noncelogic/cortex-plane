@@ -58,7 +58,7 @@ if (config.auth?.credentialMasterKey) {
           : [],
       )
 
-      registry.register(
+      await registry.register(
         new TelegramAdapter({
           botToken,
           allowedUsers,
@@ -75,7 +75,7 @@ if (config.auth?.credentialMasterKey) {
         ? channel.config.guildIds.map((g) => String(g)).filter((g) => g.length > 0)
         : []
 
-      registry.register(
+      await registry.register(
         new DiscordAdapter({
           botToken: token,
           applicationId: process.env.CHANNEL_DISCORD_APPLICATION_ID ?? "",
@@ -96,7 +96,7 @@ if (config.auth?.credentialMasterKey) {
 // that specific type.  This allows DB-driven telegram + env-driven discord
 // (or vice versa) to coexist.  Fixes #430.
 if (!registry.get("telegram") && config.channels.telegram) {
-  registry.register(
+  await registry.register(
     new TelegramAdapter({
       botToken: config.channels.telegram.botToken,
       allowedUsers: config.channels.telegram.allowedUsers,
@@ -105,7 +105,7 @@ if (!registry.get("telegram") && config.channels.telegram) {
 }
 
 if (!registry.get("discord") && config.channels.discord) {
-  registry.register(
+  await registry.register(
     new DiscordAdapter({
       botToken: config.channels.discord.token,
       applicationId: process.env.CHANNEL_DISCORD_APPLICATION_ID ?? "",
@@ -119,8 +119,6 @@ if (!registry.get("discord") && config.channels.discord) {
     }),
   )
 }
-
-await registry.startAll()
 
 // Deferred enqueueJob — resolved after buildApp() creates workerUtils
 // eslint-disable-next-line prefer-const

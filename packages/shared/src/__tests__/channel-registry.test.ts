@@ -15,13 +15,22 @@ function createMockAdapter(type: string, healthy = true) {
 }
 
 describe("ChannelAdapterRegistry", () => {
-  it("registers and retrieves an adapter", () => {
+  it("registers and retrieves an adapter", async () => {
     const registry = new ChannelAdapterRegistry()
     const adapter = createMockAdapter("telegram")
 
-    registry.register(adapter)
+    await registry.register(adapter)
 
     expect(registry.get("telegram")).toBe(adapter)
+  })
+
+  it("calls adapter.start() when registering", async () => {
+    const registry = new ChannelAdapterRegistry()
+    const adapter = createMockAdapter("telegram")
+
+    await registry.register(adapter)
+
+    expect(adapter.start).toHaveBeenCalledOnce()
   })
 
   it("returns undefined for unregistered adapter", () => {
@@ -29,20 +38,22 @@ describe("ChannelAdapterRegistry", () => {
     expect(registry.get("whatsapp")).toBeUndefined()
   })
 
-  it("throws when registering a duplicate channelType", () => {
+  it("throws when registering a duplicate channelType", async () => {
     const registry = new ChannelAdapterRegistry()
-    registry.register(createMockAdapter("telegram"))
+    await registry.register(createMockAdapter("telegram"))
 
-    expect(() => registry.register(createMockAdapter("telegram"))).toThrow("already registered")
+    await expect(registry.register(createMockAdapter("telegram"))).rejects.toThrow(
+      "already registered",
+    )
   })
 
-  it("getAll returns all registered adapters", () => {
+  it("getAll returns all registered adapters", async () => {
     const registry = new ChannelAdapterRegistry()
     const tg = createMockAdapter("telegram")
     const dc = createMockAdapter("discord")
 
-    registry.register(tg)
-    registry.register(dc)
+    await registry.register(tg)
+    await registry.register(dc)
 
     const all = registry.getAll()
     expect(all).toHaveLength(2)
@@ -50,18 +61,22 @@ describe("ChannelAdapterRegistry", () => {
     expect(all).toContain(dc)
   })
 
-  it("startAll calls start() on every adapter", async () => {
+  it("startAll is a safe no-op (adapters already started on register)", async () => {
     const registry = new ChannelAdapterRegistry()
     const tg = createMockAdapter("telegram")
     const dc = createMockAdapter("discord")
 
-    registry.register(tg)
-    registry.register(dc)
+    await registry.register(tg)
+    await registry.register(dc)
+
+    // Reset start mocks to verify startAll does NOT call start again
+    tg.start.mockClear()
+    dc.start.mockClear()
 
     await registry.startAll()
 
-    expect(tg.start).toHaveBeenCalledOnce()
-    expect(dc.start).toHaveBeenCalledOnce()
+    expect(tg.start).not.toHaveBeenCalled()
+    expect(dc.start).not.toHaveBeenCalled()
   })
 
   it("stopAll calls stop() on every adapter (graceful — uses allSettled)", async () => {
@@ -70,8 +85,8 @@ describe("ChannelAdapterRegistry", () => {
     const dc = createMockAdapter("discord")
     dc.stop.mockRejectedValue(new Error("boom"))
 
-    registry.register(tg)
-    registry.register(dc)
+    await registry.register(tg)
+    await registry.register(dc)
 
     // Should not throw even though discord.stop rejects
     await registry.stopAll()
@@ -82,8 +97,8 @@ describe("ChannelAdapterRegistry", () => {
 
   it("healthCheckAll returns a map of channelType → boolean", async () => {
     const registry = new ChannelAdapterRegistry()
-    registry.register(createMockAdapter("telegram", true))
-    registry.register(createMockAdapter("discord", false))
+    await registry.register(createMockAdapter("telegram", true))
+    await registry.register(createMockAdapter("discord", false))
 
     const results = await registry.healthCheckAll()
 
@@ -96,23 +111,24 @@ describe("ChannelAdapterRegistry", () => {
     const broken = createMockAdapter("telegram")
     broken.healthCheck.mockRejectedValue(new Error("connection lost"))
 
-    registry.register(broken)
+    await registry.register(broken)
 
     const results = await registry.healthCheckAll()
     expect(results.get("telegram")).toBe(false)
   })
 
   describe("replace", () => {
-    it("replaces an existing adapter and stops the old one", async () => {
+    it("replaces an existing adapter, stops the old one, and starts the new one", async () => {
       const registry = new ChannelAdapterRegistry()
       const old = createMockAdapter("telegram")
       const replacement = createMockAdapter("telegram")
 
-      registry.register(old)
+      await registry.register(old)
       const returned = await registry.replace(replacement)
 
       expect(returned).toBe(old)
       expect(old.stop).toHaveBeenCalledOnce()
+      expect(replacement.start).toHaveBeenCalledOnce()
       expect(registry.get("telegram")).toBe(replacement)
     })
 
@@ -123,6 +139,7 @@ describe("ChannelAdapterRegistry", () => {
       const returned = await registry.replace(adapter)
 
       expect(returned).toBeUndefined()
+      expect(adapter.start).toHaveBeenCalledOnce()
       expect(registry.get("telegram")).toBe(adapter)
     })
   })
@@ -131,7 +148,7 @@ describe("ChannelAdapterRegistry", () => {
     it("removes and stops an existing adapter", async () => {
       const registry = new ChannelAdapterRegistry()
       const adapter = createMockAdapter("telegram")
-      registry.register(adapter)
+      await registry.register(adapter)
 
       const removed = await registry.remove("telegram")
 

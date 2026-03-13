@@ -12,20 +12,22 @@ import type { ChannelAdapter } from "./types.js"
 export class ChannelAdapterRegistry {
   private readonly adapters = new Map<string, ChannelAdapter>()
 
-  /** Register a channel adapter. Throws if the channelType is already registered. */
-  register(adapter: ChannelAdapter): void {
+  /** Register a channel adapter, starting it before adding to the registry. Throws if the channelType is already registered. */
+  async register(adapter: ChannelAdapter): Promise<void> {
     if (this.adapters.has(adapter.channelType)) {
       throw new Error(`Channel adapter '${adapter.channelType}' already registered`)
     }
+    await adapter.start()
     this.adapters.set(adapter.channelType, adapter)
   }
 
-  /** Replace an existing adapter or register a new one. Stops the old adapter before replacing. */
+  /** Replace an existing adapter or register a new one. Stops the old adapter, starts the new one. */
   async replace(adapter: ChannelAdapter): Promise<ChannelAdapter | undefined> {
     const existing = this.adapters.get(adapter.channelType)
     if (existing) {
       await existing.stop()
     }
+    await adapter.start()
     this.adapters.set(adapter.channelType, adapter)
     return existing
   }
@@ -50,10 +52,9 @@ export class ChannelAdapterRegistry {
     return [...this.adapters.values()]
   }
 
-  /** Start all registered adapters. */
+  /** @deprecated No-op — adapters are now started on register(). Kept for backward compatibility. */
   async startAll(): Promise<void> {
-    const starts = this.getAll().map((a) => a.start())
-    await Promise.all(starts)
+    // No-op: each adapter is started inside register() / replace().
   }
 
   /** Graceful shutdown — stop all registered adapters. */
