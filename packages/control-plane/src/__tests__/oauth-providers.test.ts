@@ -8,6 +8,8 @@ beforeAll(() => {
   process.env.OAUTH_GEMINI_CLI_CLIENT_SECRET = "test-gemini-cli-client-secret"
   process.env.OAUTH_OPENAI_CODEX_CLIENT_ID = "test-openai-codex-client-id"
   process.env.OAUTH_OPENAI_CODEX_CLIENT_SECRET = "test-openai-codex-client-secret"
+  process.env.OAUTH_GITHUB_COPILOT_CLIENT_ID = "test-github-copilot-client-id"
+  process.env.OAUTH_GITHUB_COPILOT_CLIENT_SECRET = "test-github-copilot-client-secret"
   process.env.OAUTH_ANTHROPIC_CLIENT_ID = "test-anthropic-client-id"
   process.env.OAUTH_ANTHROPIC_CLIENT_SECRET = "test-anthropic-client-secret"
 })
@@ -18,12 +20,13 @@ async function loadProviders() {
 }
 
 describe("oauth-providers registry", () => {
-  it("contains google-antigravity, google-gemini-cli, openai-codex, and anthropic", async () => {
+  it("contains google-antigravity, google-gemini-cli, openai-codex, github-copilot, and anthropic", async () => {
     const { CODE_PASTE_PROVIDERS } = await loadProviders()
     const ids = Object.keys(CODE_PASTE_PROVIDERS)
     expect(ids).toContain("google-antigravity")
     expect(ids).toContain("google-gemini-cli")
     expect(ids).toContain("openai-codex")
+    expect(ids).toContain("github-copilot")
     expect(ids).toContain("anthropic")
   })
 
@@ -45,6 +48,11 @@ describe("oauth-providers registry", () => {
     expect(codex).toBeDefined()
     expect(codex!.authUrl).toContain("openai.com")
 
+    const copilot = getCodePasteProvider("github-copilot")
+    expect(copilot).toBeDefined()
+    expect(copilot!.clientId).toBe("test-github-copilot-client-id")
+    expect(copilot!.authUrl).toContain("github.com")
+
     const anth = getCodePasteProvider("anthropic")
     expect(anth).toBeDefined()
     expect(anth!.authUrl).toContain("claude.ai")
@@ -59,19 +67,24 @@ describe("oauth-providers registry", () => {
   it("listCodePasteProviders returns all providers", async () => {
     const { listCodePasteProviders } = await loadProviders()
     const list = listCodePasteProviders()
-    expect(list.length).toBe(4)
+    expect(list.length).toBe(5)
     expect(list.map((p) => p.id).sort()).toEqual([
       "anthropic",
+      "github-copilot",
       "google-antigravity",
       "google-gemini-cli",
       "openai-codex",
     ])
   })
 
-  it("all providers have usePkce enabled", async () => {
+  it("all providers except github-copilot have usePkce enabled", async () => {
     const { listCodePasteProviders } = await loadProviders()
     for (const provider of listCodePasteProviders()) {
-      expect(provider.usePkce).toBe(true)
+      if (provider.id === "github-copilot") {
+        expect(provider.usePkce).toBe(false)
+      } else {
+        expect(provider.usePkce).toBe(true)
+      }
     }
   })
 
@@ -109,6 +122,18 @@ describe("oauth-providers registry", () => {
     expect(gemini.scopes).toContain("https://www.googleapis.com/auth/userinfo.profile")
     expect(gemini.usePkce).toBe(true)
     expect(gemini.redirectUri).toBe("http://localhost:8085")
+  })
+
+  it("github-copilot has correct OAuth config", async () => {
+    const { getCodePasteProvider } = await loadProviders()
+    const copilot = getCodePasteProvider("github-copilot")!
+    expect(copilot.authUrl).toBe("https://github.com/login/oauth/authorize")
+    expect(copilot.tokenUrl).toBe("https://github.com/login/oauth/access_token")
+    expect(copilot.scopes).toEqual(["read:user"])
+    expect(copilot.usePkce).toBe(false)
+    expect(copilot.redirectUri).toBe("http://localhost:1234")
+    expect(copilot.clientId).toBe("test-github-copilot-client-id")
+    expect(copilot.clientSecret).toBe("test-github-copilot-client-secret")
   })
 })
 
@@ -219,6 +244,7 @@ describe("user-service-providers registry", () => {
     const { getUserServiceProvider } = await loadProviders()
     expect(getUserServiceProvider("google-antigravity")).toBeUndefined()
     expect(getUserServiceProvider("openai-codex")).toBeUndefined()
+    expect(getUserServiceProvider("github-copilot")).toBeUndefined()
   })
 
   it("listUserServiceProviders returns all user service providers", async () => {
@@ -235,6 +261,7 @@ describe("user-service-providers registry", () => {
     expect(isUserServiceProvider("slack-user")).toBe(true)
     expect(isUserServiceProvider("google-antigravity")).toBe(false)
     expect(isUserServiceProvider("openai-codex")).toBe(false)
+    expect(isUserServiceProvider("github-copilot")).toBe(false)
     expect(isUserServiceProvider("unknown")).toBe(false)
   })
 

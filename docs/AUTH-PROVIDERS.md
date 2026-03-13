@@ -26,6 +26,7 @@ These use embedded client credentials from `CODE_PASTE_PROVIDERS` in `oauth-prov
 | -------------------- | ------------------ | ---------------- | ---------------------------------- |
 | `google-antigravity` | Google Antigravity | OpenClaw `pi-ai` | Google OAuth2 + PKCE, Bearer token |
 | `openai-codex`       | OpenAI Codex       | OpenClaw `pi-ai` | OpenAI OAuth2 + PKCE               |
+| `github-copilot`     | GitHub Copilot     | GitHub OAuth     | GitHub OAuth2, no PKCE             |
 | `anthropic`          | Anthropic          | OpenClaw `pi-ai` | Code-paste only (device code)      |
 
 ### Code-Paste Flow
@@ -60,7 +61,7 @@ API keys are encrypted with `CREDENTIAL_MASTER_KEY` (AES-256-GCM) before storage
 | `anthropic`          | ✅ `CODE_PASTE_PROVIDERS` | Working (code-paste only)                  |
 | `google-antigravity` | ✅ `CODE_PASTE_PROVIDERS` | ⚠️ Settings UI routes to wrong flow (#640) |
 | `openai-codex`       | ✅ `CODE_PASTE_PROVIDERS` | ⚠️ Settings UI routes to wrong flow (#640) |
-| `github-copilot`     | ❌ Not added              | Tracked in #642                            |
+| `github-copilot`     | ✅ `CODE_PASTE_PROVIDERS` | GitHub OAuth2, no PKCE                     |
 | `google-gemini-cli`  | ❌ Not added              | Tracked in #643                            |
 | API key (any)        | ✅ Settings UI            | Needs e2e verification (#644)              |
 
