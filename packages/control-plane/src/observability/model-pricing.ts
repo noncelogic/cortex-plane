@@ -55,6 +55,20 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     inputPerMToken: 0.15,
     outputPerMToken: 0.6,
   },
+
+  // Gemini
+  "gemini-2.5-pro": {
+    inputPerMToken: 1.25,
+    outputPerMToken: 10.0,
+  },
+  "gemini-2.5-flash": {
+    inputPerMToken: 0.15,
+    outputPerMToken: 0.6,
+  },
+  "gemini-2.0-flash": {
+    inputPerMToken: 0.1,
+    outputPerMToken: 0.4,
+  },
 }
 
 // ---------------------------------------------------------------------------

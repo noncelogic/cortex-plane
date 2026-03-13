@@ -244,16 +244,17 @@ export class HttpLlmBackend implements ExecutionBackend {
           }),
         )
       }
-      // OpenAI or other providers
+      // OpenAI or other providers — resolve base URL from credential or provider default
+      const openaiBaseUrl = cred.baseUrl ?? baseUrl ?? resolveOpenAICompatibleBaseUrl(cred.provider)
       const client = new OpenAI({
         apiKey: cred.token,
-        ...(baseUrl ? { baseURL: baseUrl } : {}),
+        ...(openaiBaseUrl ? { baseURL: openaiBaseUrl } : {}),
       })
       return Promise.resolve(
         new OpenAIHandle(task, client, model, startTime, registry, {
           tokenRefresher,
           credentialId: cred.credentialId,
-          baseUrl,
+          baseUrl: openaiBaseUrl,
         }),
       )
     }
@@ -370,6 +371,17 @@ function toAnthropicTools(defs: ToolDefinition[]): Anthropic.Tool[] {
 function mapCredentialProvider(provider: string): LlmProvider {
   if (provider === "anthropic" || provider === "google-antigravity") return "anthropic"
   return "openai"
+}
+
+/**
+ * Return the default base URL for OpenAI-compatible providers that use
+ * a non-standard endpoint. Returns undefined for native OpenAI providers.
+ */
+function resolveOpenAICompatibleBaseUrl(provider: string): string | undefined {
+  if (provider === "google-ai-studio") {
+    return "https://generativelanguage.googleapis.com/v1beta/openai/"
+  }
+  return undefined
 }
 
 /**
