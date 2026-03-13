@@ -1,0 +1,64 @@
+name: Bug Report
+description: Something is broken
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What's broken
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+
+  - type: textarea
+    id: touch-points
+    attributes:
+      label: Architectural touch points
+      description: Which architectural layers/concerns does this cross?
+      placeholder: |
+        - Provider registration
+        - Credential resolution pipeline
+        - Dashboard settings UI
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How to prove the fix works — not just "tests pass"
+    validations:
+      required: true
+
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documentation updates
+      description: What docs need updating? (DEPLOYMENT.md, VISION.md, .env.example, API docs, etc.)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking change?
+      options:
+        - "No"
+        - "Yes — requires env vars"
+        - "Yes — requires migration"
+        - "Yes — requires deployment changes"
+    validations:
+      required: true

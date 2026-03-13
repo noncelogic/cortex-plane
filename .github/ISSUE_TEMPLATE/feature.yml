@@ -1,0 +1,58 @@
+name: Feature
+description: New capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What and why
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable, concrete conditions — not aspirational
+      placeholder: |
+        - [ ] GET /models returns models from connected provider APIs
+        - [ ] Empty list returned when no credentials configured
+        - [ ] Cache refreshes on credential add/remove
+    validations:
+      required: true
+
+  - type: textarea
+    id: touch-points
+    attributes:
+      label: Architectural touch points
+      description: Which architectural layers/concerns does this cross?
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How to prove it works end-to-end
+    validations:
+      required: true
+
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documentation updates
+      description: What docs need updating? (DEPLOYMENT.md, VISION.md, .env.example, API docs, etc.)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking change?
+      options:
+        - "No"
+        - "Yes — requires env vars"
+        - "Yes — requires migration"
+        - "Yes — requires deployment changes"
+    validations:
+      required: true
