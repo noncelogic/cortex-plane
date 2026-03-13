@@ -99,6 +99,22 @@ function buildCodePasteProviders(): Record<string, CodePasteProviderConfig> {
     }
   }
 
+  // GitHub Copilot
+  if (process.env.OAUTH_GITHUB_COPILOT_CLIENT_ID) {
+    providers["github-copilot"] = {
+      id: "github-copilot",
+      name: "GitHub Copilot",
+      description: "GPT/Claude models via GitHub Copilot subscription",
+      clientId: process.env.OAUTH_GITHUB_COPILOT_CLIENT_ID,
+      clientSecret: process.env.OAUTH_GITHUB_COPILOT_CLIENT_SECRET ?? "",
+      redirectUri: "http://localhost:1234",
+      authUrl: "https://github.com/login/oauth/authorize",
+      tokenUrl: "https://github.com/login/oauth/access_token",
+      scopes: ["read:user"],
+      usePkce: false,
+    }
+  }
+
   // Anthropic
   if (process.env.OAUTH_ANTHROPIC_CLIENT_ID) {
     providers["anthropic"] = {
