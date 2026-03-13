@@ -74,19 +74,24 @@ function CredentialHealthDetails({
       {cred.lastUsedAt && (
         <p className="text-text-muted">Last used: {new Date(cred.lastUsedAt).toLocaleString()}</p>
       )}
-      {expiry && (
-        <p
-          className={
-            expiry.severity === "danger"
-              ? "text-danger"
-              : expiry.severity === "warning"
-                ? "text-warning"
-                : "text-text-muted"
-          }
-        >
-          {expiry.label}
-        </p>
-      )}
+      {expiry &&
+        (expiry.label === "Auto-renewing" ? (
+          <span className="inline-block rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase text-success">
+            Auto-renewing
+          </span>
+        ) : (
+          <p
+            className={
+              expiry.severity === "danger"
+                ? "text-danger"
+                : expiry.severity === "warning"
+                  ? "text-warning"
+                  : "text-text-muted"
+            }
+          >
+            {expiry.label}
+          </p>
+        ))}
       {refresh && <p className="text-text-muted">{refresh}</p>}
       {err && (
         <div className="mt-1 rounded border border-danger/20 bg-danger/5 px-2 py-1">
