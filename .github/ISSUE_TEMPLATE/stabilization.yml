@@ -40,3 +40,15 @@ body:
       description: How to prove the fix works and the recurrence is blocked
     validations:
       required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking change?
+      options:
+        - "No"
+        - "Yes — requires env vars"
+        - "Yes — requires migration"
+        - "Yes — requires deployment changes"
+    validations:
+      required: true
