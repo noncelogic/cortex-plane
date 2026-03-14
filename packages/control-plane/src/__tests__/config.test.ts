@@ -230,6 +230,31 @@ describe("loadConfig", () => {
       expect(config.auth!.slackUser!.clientSecret).toBe("slack-client-secret")
     })
 
+    it("registers provider when CLIENT_SECRET is empty string", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CREDENTIAL_MASTER_KEY: "test-master-key",
+        OAUTH_ANTHROPIC_CLIENT_ID: "anthropic-client-id",
+        OAUTH_ANTHROPIC_CLIENT_SECRET: "",
+      })
+      expect(config.auth).toBeDefined()
+      expect(config.auth!.anthropic).toBeDefined()
+      expect(config.auth!.anthropic!.clientId).toBe("anthropic-client-id")
+      expect(config.auth!.anthropic!.clientSecret).toBe("")
+    })
+
+    it("registers provider when CLIENT_SECRET env var is absent", () => {
+      const config = loadConfig({
+        DATABASE_URL: "postgres://localhost/test",
+        CREDENTIAL_MASTER_KEY: "test-master-key",
+        OAUTH_OPENAI_CODEX_CLIENT_ID: "codex-client-id",
+      })
+      expect(config.auth).toBeDefined()
+      expect(config.auth!.openaiCodex).toBeDefined()
+      expect(config.auth!.openaiCodex!.clientId).toBe("codex-client-id")
+      expect(config.auth!.openaiCodex!.clientSecret).toBe("")
+    })
+
     it("leaves user service providers undefined when env vars are missing", () => {
       const config = loadConfig({
         DATABASE_URL: "postgres://localhost/test",

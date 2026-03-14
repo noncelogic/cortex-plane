@@ -161,16 +161,20 @@ function parseFloatOr(value: string | undefined, fallback: number): number {
  * Expects OAUTH_{PREFIX}_CLIENT_ID and OAUTH_{PREFIX}_CLIENT_SECRET.
  * Returns undefined if client ID is missing (provider not configured).
  */
+/**
+ * Parse an OAuth provider from environment variables.
+ * CLIENT_ID is required — returns undefined when absent.
+ * CLIENT_SECRET is optional (defaults to empty string for PKCE-only providers).
+ */
 function parseOAuthProvider(
   env: Record<string, string | undefined>,
   prefix: string,
 ): OAuthProviderConfig | undefined {
   const clientId = env[`OAUTH_${prefix}_CLIENT_ID`]
-  const clientSecret = env[`OAUTH_${prefix}_CLIENT_SECRET`]
-  if (!clientId || !clientSecret) return undefined
+  if (!clientId) return undefined
   return {
     clientId,
-    clientSecret,
+    clientSecret: env[`OAUTH_${prefix}_CLIENT_SECRET`] ?? "",
     authUrl: env[`OAUTH_${prefix}_AUTH_URL`],
     tokenUrl: env[`OAUTH_${prefix}_TOKEN_URL`],
   }

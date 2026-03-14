@@ -30,6 +30,32 @@ const mockDecodeState = vi.hoisted(() =>
   }),
 )
 
+const mockGetCodePasteProvider = vi.hoisted(() =>
+  vi.fn().mockImplementation((provider: string) => {
+    if (provider === "google-antigravity") {
+      return {
+        id: "google-antigravity",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        redirectUri: "http://localhost:51121/oauth-callback",
+        scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+        usePkce: true,
+      }
+    }
+    return undefined
+  }),
+)
+
+vi.mock("../auth/oauth-providers.js", async (importOriginal) => {
+  const original = await importOriginal<Record<string, unknown>>()
+  return {
+    ...original,
+    getCodePasteProvider: mockGetCodePasteProvider,
+  }
+})
+
 vi.mock("../auth/antigravity-project.js", () => ({
   discoverAntigravityProject: mockDiscoverProject,
 }))

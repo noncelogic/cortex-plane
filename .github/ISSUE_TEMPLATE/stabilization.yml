@@ -1,0 +1,54 @@
+name: Stabilization
+description: Process or quality fix
+labels: ["stabilization"]
+body:
+  - type: textarea
+    id: root-cause
+    attributes:
+      label: Root cause
+      description: What went wrong and why
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Specific examples — PRs, commits, error messages
+    validations:
+      required: true
+
+  - type: textarea
+    id: touch-points
+    attributes:
+      label: Architectural touch points
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix
+      description: What changes and what contract test prevents recurrence
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How to prove the fix works and the recurrence is blocked
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking change?
+      options:
+        - "No"
+        - "Yes — requires env vars"
+        - "Yes — requires migration"
+        - "Yes — requires deployment changes"
+    validations:
+      required: true
