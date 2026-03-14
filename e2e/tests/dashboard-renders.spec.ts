@@ -32,8 +32,8 @@ test.describe("Dashboard renders without errors", () => {
     await page.goto("/login")
     await page.waitForLoadState("networkidle")
 
-    // The page should contain at least one login provider button
-    const title = page.locator("text=Sign in")
-    await expect(title).toBeVisible({ timeout: 10_000 })
+    // The page should render the login UI (brand heading or provider buttons)
+    const heading = page.locator("text=Cortex Plane")
+    await expect(heading).toBeVisible({ timeout: 10_000 })
   })
 })

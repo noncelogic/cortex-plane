@@ -24,7 +24,8 @@ test.describe("Channel CRUD operations", () => {
     // Without auth: 401. With auth: 200 + array.
     if (res.status() === 200) {
       const body = await res.json()
-      expect(Array.isArray(body)).toBe(true)
+      expect(body).toHaveProperty("channels")
+      expect(Array.isArray(body.channels)).toBe(true)
     } else {
       expect(res.status()).toBe(401)
     }
