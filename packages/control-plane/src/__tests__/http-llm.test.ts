@@ -1332,7 +1332,7 @@ describe("HttpLlmBackend — 401 token refresh retry", () => {
 // ---------------------------------------------------------------------------
 
 describe("HttpLlmBackend — credential provider routing", () => {
-  it("routes google-antigravity to proxy with authToken", async () => {
+  it("rejects google-antigravity when no base URL is configured", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1348,18 +1348,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
       },
     })
 
-    const handle = await backend.executeTask(task)
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const client = (handle as any).client as {
-      baseURL: string
-      authToken: string | null
-    }
-    // Default Antigravity proxy — no direct Vertex AI access
-    expect(client.baseURL).toBe("https://daily-cloudcode-pa.sandbox.googleapis.com")
-    expect(client.authToken).toBe("gcp-oauth-token")
-
-    await handle.cancel("test")
+    await expect(backend.executeTask(task)).rejects.toThrow(/Antigravity base URL not configured/)
   })
 
   it("routes plain anthropic credential with apiKey and default base URL", async () => {
@@ -1449,7 +1438,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
     await handle.cancel("test")
   })
 
-  it("falls back to default proxy when accountId is missing", async () => {
+  it("rejects google-antigravity when accountId is missing and no base URL configured", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1460,23 +1449,12 @@ describe("HttpLlmBackend — credential provider routing", () => {
           provider: "google-antigravity",
           token: "gcp-oauth-token",
           credentialId: "cred-gcp-no-account",
-          // accountId omitted — still routes through proxy
+          // accountId omitted, no baseUrl, no env var
         },
       },
     })
 
-    const handle = await backend.executeTask(task)
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const client = (handle as any).client as {
-      baseURL: string
-      authToken: string | null
-    }
-    // Without accountId, still uses the default Antigravity proxy
-    expect(client.baseURL).toBe("https://daily-cloudcode-pa.sandbox.googleapis.com")
-    expect(client.authToken).toBe("gcp-oauth-token")
-
-    await handle.cancel("test")
+    await expect(backend.executeTask(task)).rejects.toThrow(/Antigravity base URL not configured/)
   })
 
   it("uses credential baseUrl when provided (provider config override)", async () => {
@@ -1554,6 +1532,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
           token: "gcp-oauth-token",
           credentialId: "cred-gcp-proxy",
           accountId: "my-project-42",
+          baseUrl: "https://my-proxy.example.com",
         },
       },
     })
@@ -1562,8 +1541,8 @@ describe("HttpLlmBackend — credential provider routing", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    // All Antigravity routing goes through the proxy — no Vertex AI direct access
-    expect(client.baseURL).toBe("https://daily-cloudcode-pa.sandbox.googleapis.com")
+    // All Antigravity routing goes through the configured proxy
+    expect(client.baseURL).toBe("https://my-proxy.example.com")
     expect(client.authToken).toBe("gcp-oauth-token")
 
     await handle.cancel("test")

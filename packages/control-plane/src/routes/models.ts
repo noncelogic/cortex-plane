@@ -138,6 +138,7 @@ export function modelRoutes(deps?: ModelRouteDeps) {
         const models = await discovery.discoverModels(cred.provider, {
           accessToken: tokenResult.token,
           apiKey: cred.credentialType === "api_key" ? tokenResult.token : undefined,
+          baseUrl: cred.baseUrl ?? undefined,
         })
         discovered += models.length
       }

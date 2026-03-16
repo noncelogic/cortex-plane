@@ -18,6 +18,7 @@ import {
   type ProviderInfo,
   saveProviderApiKey,
   testCredential as apiTestCredential,
+  updateCredentialBaseUrl,
 } from "@/lib/api-client"
 import { errorSummary, refreshStatus, tokenExpiry } from "@/lib/credential-health"
 
@@ -143,6 +144,13 @@ function SettingsInner() {
   const [testResults, setTestResults] = useState<Record<string, CredentialTestResult>>({})
   const [testingId, setTestingId] = useState<string | null>(null)
 
+  // Base URL editing state
+  const [editingBaseUrl, setEditingBaseUrl] = useState<{
+    credentialId: string
+    value: string
+  } | null>(null)
+  const [savingBaseUrl, setSavingBaseUrl] = useState(false)
+
   // Code-paste fallback state (shown when popup cannot read the redirect URL)
   const [popupProvider, setPopupProvider] = useState<string | null>(null)
   const [codePastePastedUrl, setCodePastePastedUrl] = useState("")
@@ -220,6 +228,25 @@ function SettingsInner() {
       setCodePasteSubmitting(false)
     }
   }, [popup, popupProvider, codePastePastedUrl, fetchData])
+
+  // Save base URL
+  const handleSaveBaseUrl = useCallback(async () => {
+    if (!editingBaseUrl) return
+    setSavingBaseUrl(true)
+    try {
+      await updateCredentialBaseUrl(
+        editingBaseUrl.credentialId,
+        editingBaseUrl.value.trim() || null,
+      )
+      setEditingBaseUrl(null)
+      addToast("Base URL saved", "success")
+      void fetchData()
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : "Failed to save base URL", "error")
+    } finally {
+      setSavingBaseUrl(false)
+    }
+  }, [editingBaseUrl, fetchData, addToast])
 
   // Save API key
   const saveApiKey = useCallback(async () => {
@@ -444,6 +471,59 @@ function SettingsInner() {
                     <p className="mt-1 text-xs text-text-muted">
                       Project: <span className="break-all font-mono">{cred.accountId}</span>
                     </p>
+                  )}
+                  {cred && (
+                    <div className="mt-1.5">
+                      {editingBaseUrl?.credentialId === cred.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editingBaseUrl.value}
+                            onChange={(e) =>
+                              setEditingBaseUrl({ ...editingBaseUrl, value: e.target.value })
+                            }
+                            className="flex-1 rounded-md border border-surface-border bg-surface-dark px-2 py-1 text-xs text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none"
+                            placeholder="https://your-proxy.example.com"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveBaseUrl()}
+                            disabled={savingBaseUrl}
+                            className="rounded-md bg-primary px-2 py-1 text-[10px] font-medium text-primary-content hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            {savingBaseUrl ? "..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingBaseUrl(null)}
+                            className="rounded-md px-2 py-1 text-[10px] font-medium text-text-muted hover:bg-secondary"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingBaseUrl({
+                              credentialId: cred.id,
+                              value: cred.baseUrl ?? "",
+                            })
+                          }
+                          className="text-xs text-text-muted hover:text-primary transition-colors"
+                        >
+                          {cred.baseUrl ? (
+                            <>
+                              Base URL: <span className="break-all font-mono">{cred.baseUrl}</span>{" "}
+                              <span className="text-primary">(edit)</span>
+                            </>
+                          ) : (
+                            <span className="text-primary">+ Set base URL</span>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   )}
                   {cred && (
                     <CredentialHealthDetails

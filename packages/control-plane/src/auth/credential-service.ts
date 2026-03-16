@@ -120,6 +120,7 @@ export interface CredentialSummary {
   credentialClass: CredentialClass
   toolName: string | null
   displayLabel: string | null
+  baseUrl: string | null
   status: CredentialStatus
   accountId: string | null
   scopes: string[] | null
@@ -141,6 +142,7 @@ function toSummary(cred: ProviderCredential, maskedKey: string | null): Credenti
     credentialClass: cred.credential_class,
     toolName: cred.tool_name ?? null,
     displayLabel: cred.display_label,
+    baseUrl: cred.base_url ?? null,
     status: cred.status,
     accountId: cred.account_id,
     scopes: cred.scopes,
@@ -204,6 +206,7 @@ export class CredentialService {
       displayLabel?: string
       scopes?: string[]
       credentialClass?: CredentialClass
+      baseUrl?: string
     },
   ): Promise<CredentialSummary> {
     const userKey = await this.ensureUserKey(userId)
@@ -273,7 +276,7 @@ export class CredentialService {
     userId: string,
     provider: string,
     apiKey: string,
-    opts?: { displayLabel?: string; credentialClass?: CredentialClass },
+    opts?: { displayLabel?: string; credentialClass?: CredentialClass; baseUrl?: string },
   ): Promise<CredentialSummary> {
     const userKey = await this.ensureUserKey(userId)
 
@@ -284,6 +287,7 @@ export class CredentialService {
       credential_class: opts?.credentialClass ?? "llm_provider",
       api_key_enc: encryptCredential(apiKey, userKey),
       display_label: opts?.displayLabel ?? provider,
+      base_url: opts?.baseUrl ?? null,
       status: "active",
     }
 
@@ -302,6 +306,7 @@ export class CredentialService {
         .updateTable("provider_credential")
         .set({
           api_key_enc: values.api_key_enc,
+          base_url: values.base_url,
           status: "active",
           error_count: 0,
           last_error: null,
@@ -582,6 +587,18 @@ export class CredentialService {
   }
 
   /**
+   * Update the base URL on a credential.
+   */
+  async updateBaseUrl(userId: string, credentialId: string, baseUrl: string | null): Promise<void> {
+    await this.db
+      .updateTable("provider_credential")
+      .set({ base_url: baseUrl, updated_at: new Date() })
+      .where("id", "=", credentialId)
+      .where("user_account_id", "=", userId)
+      .execute()
+  }
+
+  /**
    * Delete a credential.
    */
   async deleteCredential(userId: string, credentialId: string): Promise<void> {
@@ -613,7 +630,7 @@ export class CredentialService {
     provider: string,
     context?: AuditContext,
     opts?: { forceRefresh?: boolean },
-  ): Promise<{ token: string; credentialId: string } | null> {
+  ): Promise<{ token: string; credentialId: string; baseUrl?: string } | null> {
     const cred = await this.db
       .selectFrom("provider_credential")
       .selectAll()
@@ -627,12 +644,14 @@ export class CredentialService {
 
     const userKey = await this.ensureUserKey(userId)
 
+    const baseUrl = cred.base_url ?? undefined
+
     // For API keys, just decrypt and return
     if (cred.credential_type === "api_key" && cred.api_key_enc) {
       const token = decryptCredential(cred.api_key_enc, userKey)
       await this.auditAccess(cred, context)
       await this.markUsed(cred.id)
-      return { token, credentialId: cred.id }
+      return { token, credentialId: cred.id, baseUrl }
     }
 
     // For OAuth, check expiry and refresh if needed
@@ -646,7 +665,7 @@ export class CredentialService {
         const refreshed = await this.refreshToken(cred, userKey)
         if (refreshed) {
           await this.auditAccess(cred, context)
-          return { token: refreshed, credentialId: cred.id }
+          return { token: refreshed, credentialId: cred.id, baseUrl }
         }
         // Refresh failed — fall through to return current token
       }
@@ -654,7 +673,7 @@ export class CredentialService {
       const token = decryptCredential(cred.access_token_enc, userKey)
       await this.auditAccess(cred, context)
       await this.markUsed(cred.id)
-      return { token, credentialId: cred.id }
+      return { token, credentialId: cred.id, baseUrl }
     }
 
     return null

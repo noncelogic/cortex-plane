@@ -184,14 +184,25 @@ describe("discoverModels — google-antigravity", () => {
     )
 
     const svc = new ModelDiscoveryService()
-    const models = await svc.discoverModels("google-antigravity", { accessToken: "goog-tok" })
+    const models = await svc.discoverModels("google-antigravity", {
+      accessToken: "goog-tok",
+      baseUrl: "https://test-proxy.example.com",
+    })
 
     expect(models).toHaveLength(2)
     expect(models[0]!.providers).toEqual(["google-antigravity"])
 
     const [url, init] = fetchMock.mock.calls[0]! as [string, RequestInit]
-    expect(url).toContain("/v1/models")
+    expect(url).toBe("https://test-proxy.example.com/v1/models")
     expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer goog-tok")
+  })
+
+  it("returns empty when no base URL is configured", async () => {
+    const svc = new ModelDiscoveryService()
+    const models = await svc.discoverModels("google-antigravity", { accessToken: "goog-tok" })
+
+    expect(models).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("uses ANTIGRAVITY_BASE_URL env var", async () => {
@@ -357,7 +368,10 @@ describe("getAllCachedModels", () => {
 
     const svc = new ModelDiscoveryService()
     await svc.discoverModels("anthropic", { apiKey: "sk-a" })
-    await svc.discoverModels("google-antigravity", { accessToken: "tok" })
+    await svc.discoverModels("google-antigravity", {
+      accessToken: "tok",
+      baseUrl: "https://test-proxy.example.com",
+    })
 
     const all = svc.getAllCachedModels()
     const claude = all.find((m) => m.id === "claude-sonnet-4-6")

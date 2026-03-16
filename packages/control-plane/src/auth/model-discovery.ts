@@ -3,9 +3,13 @@
  *
  * Replaces the static MODEL_CATALOGUE with live discovery. Each provider
  * exposes a models endpoint; this service calls them and caches results
- * with a 1-hour TTL.
+ * with a 1-hour TTL. Discovered models are also persisted to the DB so
+ * the cache survives restarts.
  */
 
+import type { Kysely } from "kysely"
+
+import type { Database } from "../db/types.js"
 import type { ModelInfo } from "../observability/model-providers.js"
 
 // ---------------------------------------------------------------------------
@@ -15,6 +19,7 @@ import type { ModelInfo } from "../observability/model-providers.js"
 export interface ProviderCredential {
   accessToken?: string
   apiKey?: string
+  baseUrl?: string
 }
 
 interface CacheEntry {
@@ -128,8 +133,8 @@ async function discoverGoogleAntigravity(cred: ProviderCredential): Promise<Mode
   const token = cred.accessToken
   if (!token) return []
 
-  const baseUrl =
-    process.env.ANTIGRAVITY_BASE_URL ?? "https://daily-cloudcode-pa.sandbox.googleapis.com"
+  const baseUrl = cred.baseUrl ?? process.env.ANTIGRAVITY_BASE_URL
+  if (!baseUrl) return [] // No base URL configured — skip discovery silently
 
   // Try Anthropic-format models endpoint on the proxy
   const data = (await fetchJson(`${baseUrl}/v1/models`, {
@@ -196,10 +201,21 @@ async function discoverGeminiCli(cred: ProviderCredential): Promise<ModelInfo[]>
 
 export class ModelDiscoveryService {
   private cache = new Map<string, CacheEntry>()
+  private db: Kysely<Database> | null = null
+  private dbLoaded = false
+
+  /**
+   * Attach a DB connection for persistent model storage.
+   * When set, discovered models are written to `discovered_model` and
+   * loaded from there when the in-memory cache is cold.
+   */
+  setDb(db: Kysely<Database>): void {
+    this.db = db
+  }
 
   /**
    * Discover models from a provider's API.
-   * Results are cached with 1h TTL.
+   * Results are cached with 1h TTL and persisted to DB if available.
    */
   async discoverModels(providerId: string, credential: ProviderCredential): Promise<ModelInfo[]> {
     let models: ModelInfo[]
@@ -235,6 +251,7 @@ export class ModelDiscoveryService {
         models,
         expiresAt: Date.now() + CACHE_TTL_MS,
       })
+      await this.persistModels(providerId, models)
     }
 
     return models
@@ -253,6 +270,7 @@ export class ModelDiscoveryService {
   /**
    * Return all discovered models across all cached providers.
    * Deduplicates by model ID, merging provider arrays.
+   * When in-memory cache is cold, loads from DB.
    */
   getAllCachedModels(): ModelInfo[] {
     const merged = new Map<string, ModelInfo>()
@@ -272,6 +290,48 @@ export class ModelDiscoveryService {
   }
 
   /**
+   * Load persisted models from the DB into the in-memory cache.
+   * Called on startup to warm the cache without hitting provider APIs.
+   */
+  async loadFromDb(): Promise<number> {
+    if (!this.db || this.dbLoaded) return 0
+
+    try {
+      const rows = await this.db.selectFrom("discovered_model").selectAll().execute()
+
+      // Group by provider_id
+      const byProvider = new Map<string, ModelInfo[]>()
+      for (const row of rows) {
+        let models = byProvider.get(row.provider_id)
+        if (!models) {
+          models = []
+          byProvider.set(row.provider_id, models)
+        }
+        models.push({
+          id: row.model_id,
+          label: row.label,
+          providers: [row.provider_id],
+        })
+      }
+
+      for (const [providerId, models] of byProvider) {
+        // Only set cache if not already populated (live discovery takes precedence)
+        if (!this.cache.has(providerId)) {
+          this.cache.set(providerId, {
+            models,
+            expiresAt: Date.now() + CACHE_TTL_MS,
+          })
+        }
+      }
+
+      this.dbLoaded = true
+      return rows.length
+    } catch {
+      return 0
+    }
+  }
+
+  /**
    * Invalidate cache for a specific provider (e.g. on credential add/remove).
    */
   invalidate(providerId: string): void {
@@ -283,5 +343,32 @@ export class ModelDiscoveryService {
    */
   invalidateAll(): void {
     this.cache.clear()
+  }
+
+  /**
+   * Persist discovered models to the DB (upsert).
+   */
+  private async persistModels(providerId: string, models: ModelInfo[]): Promise<void> {
+    if (!this.db) return
+
+    try {
+      // Delete existing rows for this provider, then insert fresh
+      await this.db.deleteFrom("discovered_model").where("provider_id", "=", providerId).execute()
+
+      if (models.length > 0) {
+        await this.db
+          .insertInto("discovered_model")
+          .values(
+            models.map((m) => ({
+              provider_id: providerId,
+              model_id: m.id,
+              label: m.label,
+            })),
+          )
+          .execute()
+      }
+    } catch {
+      // Non-fatal — in-memory cache still works
+    }
   }
 }

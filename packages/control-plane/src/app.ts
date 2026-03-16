@@ -36,6 +36,7 @@ import { MemorySyncService } from "./memory/sync-service.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { AgentEventEmitter } from "./observability/event-emitter.js"
 import { ExecutionRegistry } from "./observability/execution-registry.js"
+import { initModelDiscoveryDb, modelDiscoveryService } from "./observability/model-providers.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentCheckpointRoutes } from "./routes/agent-checkpoints.js"
@@ -121,6 +122,12 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // resolve per-job LLM credentials from agent_credential_binding (#444).
   const credentialService = config.auth ? new CredentialService(db, config.auth) : undefined
 
+  // Wire model discovery to DB for persistent cache across restarts (#674)
+  initModelDiscoveryDb(db)
+  modelDiscoveryService.loadFromDb().catch(() => {
+    // Non-fatal — discovery will happen on first credential use
+  })
+
   // Start Graphile Worker alongside Fastify — shared pg.Pool
   const runner = await createWorker({
     pgPool: pool,
@@ -193,6 +200,13 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   }
 
   await app.register(healthRoutes)
+
+  // Discover models for all active LLM credentials on startup (#674)
+  if (credentialService) {
+    void discoverModelsForAllCredentials(db, credentialService).catch((err: unknown) => {
+      app.log.warn({ err }, "startup model discovery failed (non-fatal)")
+    })
+  }
 
   // Start MCP health supervisor
   mcpHealthSupervisor.start()
@@ -535,3 +549,40 @@ async function createDefaultRegistry(): Promise<BackendRegistry> {
 
   return registry
 }
+
+/**
+ * Discover models for all active LLM provider credentials.
+ * Called on startup and after credential creation to warm the model cache.
+ */
+async function discoverModelsForAllCredentials(
+  db: Kysely<Database>,
+  credentialService: CredentialService,
+): Promise<void> {
+  // Find all distinct users with active llm_provider credentials
+  const creds = await db
+    .selectFrom("provider_credential")
+    .select(["user_account_id", "provider", "credential_type", "base_url"])
+    .where("credential_class", "=", "llm_provider")
+    .where("status", "=", "active")
+    .execute()
+
+  for (const cred of creds) {
+    try {
+      const tokenResult = await credentialService.getAccessToken(
+        cred.user_account_id,
+        cred.provider,
+      )
+      if (!tokenResult) continue
+
+      await modelDiscoveryService.discoverModels(cred.provider, {
+        accessToken: tokenResult.token,
+        apiKey: cred.credential_type === "api_key" ? tokenResult.token : undefined,
+        baseUrl: cred.base_url ?? undefined,
+      })
+    } catch {
+      // Non-fatal per credential — continue with others
+    }
+  }
+}
+
+export { discoverModelsForAllCredentials }

@@ -6,7 +6,10 @@
  * backward compatibility with the credential resolver and pricing table.
  */
 
+import type { Kysely } from "kysely"
+
 import { ModelDiscoveryService } from "../auth/model-discovery.js"
+import type { Database } from "../db/types.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +27,14 @@ export interface ModelInfo {
 // ---------------------------------------------------------------------------
 
 export const modelDiscoveryService = new ModelDiscoveryService()
+
+/**
+ * Attach a DB connection to the singleton discovery service so it can
+ * persist and reload discovered models across restarts.
+ */
+export function initModelDiscoveryDb(db: Kysely<Database>): void {
+  modelDiscoveryService.setDb(db)
+}
 
 // ---------------------------------------------------------------------------
 // Lookup helpers (read from discovery cache)

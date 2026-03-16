@@ -220,7 +220,12 @@ export class HttpLlmBackend implements ExecutionBackend {
         let clientBaseUrl = baseUrl
 
         if (isAntigravity) {
-          const routing = resolveAntigravityRouting(cred.baseUrl, cred.accountId)
+          let routing: AntigravityRouting
+          try {
+            routing = resolveAntigravityRouting(cred.baseUrl, cred.accountId)
+          } catch (err) {
+            return Promise.reject(err)
+          }
           clientBaseUrl = routing.baseUrl
           // Proxy accepts standard Anthropic API format — no path rewriting needed
           client = new Anthropic({
@@ -408,11 +413,38 @@ function resolveAntigravityRouting(
   const envUrl = process.env.ANTIGRAVITY_BASE_URL
   if (envUrl) return { type: "proxy", baseUrl: envUrl }
 
-  // Default: use the Antigravity proxy (not direct Vertex AI)
-  return {
-    type: "proxy",
-    baseUrl: "https://daily-cloudcode-pa.sandbox.googleapis.com",
+  throw new Error(
+    "Antigravity base URL not configured. Set ANTIGRAVITY_BASE_URL env var " +
+      "or configure a base URL on the provider credential in Settings.",
+  )
+}
+
+/**
+ * Sanitize error messages from LLM provider SDKs.
+ * When a provider returns an HTML error page (e.g. 404/403), the SDK may
+ * include the raw HTML in the error message. Strip it to produce a
+ * user-friendly message.
+ */
+function sanitizeErrorMessage(err: unknown): string {
+  if (!(err instanceof Error)) return "Unknown error"
+
+  const msg = err.message
+
+  // If the message contains HTML tags, extract just the status info
+  if (/<[a-z][\s\S]*>/i.test(msg)) {
+    const status = "status" in err ? (err as { status: number }).status : undefined
+    if (status) {
+      return `Provider returned HTTP ${status}. Check your provider base URL and credentials.`
+    }
+    return "Provider returned an error. Check your provider base URL and credentials."
   }
+
+  // Truncate very long error messages (some providers return large JSON blobs)
+  if (msg.length > 500) {
+    return msg.slice(0, 500) + "..."
+  }
+
+  return msg
 }
 
 function toOpenAITools(defs: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
@@ -629,7 +661,7 @@ class AnthropicHandle implements ExecutionHandle {
     } catch (err) {
       if (this.cancelled) return
 
-      const errorMsg = err instanceof Error ? err.message : "Unknown error"
+      const errorMsg = sanitizeErrorMessage(err)
       const execResult: ExecutionResult = {
         taskId: this.taskId,
         status: "failed",
@@ -931,7 +963,7 @@ class OpenAIHandle implements ExecutionHandle {
     } catch (err) {
       if (this.cancelled) return
 
-      const errorMsg = err instanceof Error ? err.message : "Unknown error"
+      const errorMsg = sanitizeErrorMessage(err)
       const execResult: ExecutionResult = {
         taskId: this.taskId,
         status: "failed",

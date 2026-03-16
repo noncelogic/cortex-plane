@@ -17,7 +17,7 @@ import { CredentialService, SUPPORTED_PROVIDERS } from "../auth/credential-servi
 import type { SessionService } from "../auth/session-service.js"
 import { createRequireAuth, createRequireRole, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
-import { modelsForProvider } from "../observability/model-providers.js"
+import { modelDiscoveryService, modelsForProvider } from "../observability/model-providers.js"
 
 const TOOL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 
@@ -92,13 +92,14 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
         provider: string
         apiKey: string
         displayLabel?: string
+        baseUrl?: string
       }
     }>(
       "/credentials/api-key",
       { preHandler: [requireAuth] },
       async (
         request: FastifyRequest<{
-          Body: { provider: string; apiKey: string; displayLabel?: string }
+          Body: { provider: string; apiKey: string; displayLabel?: string; baseUrl?: string }
         }>,
         reply: FastifyReply,
       ) => {
@@ -108,7 +109,7 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
           return
         }
 
-        const { provider, apiKey, displayLabel } = request.body
+        const { provider, apiKey, displayLabel, baseUrl } = request.body
 
         // Validate provider is a known API key provider
         const providerInfo = SUPPORTED_PROVIDERS.find((p) => p.id === provider)
@@ -132,8 +133,15 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
           principal.userId,
           provider,
           apiKey,
-          { displayLabel },
+          { displayLabel, baseUrl },
         )
+
+        // Trigger model discovery for LLM providers (#674)
+        if (!providerInfo.credentialClass || providerInfo.credentialClass === "llm_provider") {
+          void modelDiscoveryService.discoverModels(provider, { apiKey }).catch(() => {
+            // Non-fatal — models will be discovered on next refresh
+          })
+        }
 
         reply.status(201).send({ credential })
       },
@@ -294,6 +302,37 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
         }
 
         await credentialService.deleteCredential(principal.userId, request.params.id)
+        return { ok: true }
+      },
+    )
+
+    /**
+     * PUT /credentials/:id/base-url — update a credential's base URL
+     */
+    app.put<{
+      Params: { id: string }
+      Body: { baseUrl: string | null }
+    }>(
+      "/credentials/:id/base-url",
+      { preHandler: [requireAuth] },
+      async (
+        request: FastifyRequest<{
+          Params: { id: string }
+          Body: { baseUrl: string | null }
+        }>,
+        reply: FastifyReply,
+      ) => {
+        const principal = (request as AuthenticatedRequest).principal
+        if (!principal) {
+          reply.status(401).send({ error: "unauthorized" })
+          return
+        }
+
+        await credentialService.updateBaseUrl(
+          principal.userId,
+          request.params.id,
+          request.body.baseUrl,
+        )
         return { ok: true }
       },
     )

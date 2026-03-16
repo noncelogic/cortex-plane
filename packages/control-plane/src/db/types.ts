@@ -408,6 +408,7 @@ export interface ProviderCredentialTable {
   last_error: string | null
   credential_class: ColumnType<CredentialClass, CredentialClass | undefined, CredentialClass>
   tool_name: string | null
+  base_url: string | null
   metadata: ColumnType<
     Record<string, unknown>,
     Record<string, unknown> | undefined,
@@ -420,6 +421,20 @@ export interface ProviderCredentialTable {
 export type ProviderCredential = Selectable<ProviderCredentialTable>
 export type NewProviderCredential = Insertable<ProviderCredentialTable>
 export type ProviderCredentialUpdate = Updateable<ProviderCredentialTable>
+
+// ---------------------------------------------------------------------------
+// Table: discovered_model
+// ---------------------------------------------------------------------------
+export interface DiscoveredModelTable {
+  id: Generated<string>
+  provider_id: string
+  model_id: string
+  label: string
+  discovered_at: ColumnType<Date, Date | undefined, never>
+}
+
+export type DiscoveredModel = Selectable<DiscoveredModelTable>
+export type NewDiscoveredModel = Insertable<DiscoveredModelTable>
 
 // ---------------------------------------------------------------------------
 // Table: agent_channel_binding
@@ -1012,4 +1027,5 @@ export interface Database {
   content_item: ContentItemTable
   browser_screenshot: BrowserScreenshotTable
   browser_event: BrowserEventTable
+  discovered_model: DiscoveredModelTable
 }

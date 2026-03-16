@@ -408,6 +408,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   credentialId: result.credentialId,
                   accountId: binding.account_id,
                   credentialType: binding.credential_type as "oauth" | "api_key",
+                  baseUrl: result.baseUrl,
                 }
 
                 // Build a token refresher for transparent 401 retry.

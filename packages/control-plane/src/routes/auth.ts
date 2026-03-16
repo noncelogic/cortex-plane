@@ -15,6 +15,7 @@ import type { Kysely } from "kysely"
 
 import { discoverAntigravityProject } from "../auth/antigravity-project.js"
 import type { CredentialService } from "../auth/credential-service.js"
+import { modelDiscoveryService } from "../observability/model-providers.js"
 import { getCodePasteProvider, getUserServiceProvider } from "../auth/oauth-providers.js"
 import {
   buildAuthorizeUrl,
@@ -419,11 +420,19 @@ export function authRoutes(deps: AuthRouteDeps) {
 
           // Detect credential class and scopes from user service provider registry
           const userServiceDef = getUserServiceProvider(provider)
+          const credClass = userServiceDef?.credentialClass
           await credentialService.storeOAuthCredential(principal.userId, provider, tokens, {
             accountId,
-            credentialClass: userServiceDef?.credentialClass,
+            credentialClass: credClass,
             scopes: userServiceDef?.defaultScopes,
           })
+
+          // Trigger model discovery for LLM providers (#674)
+          if (!credClass || credClass === "llm_provider") {
+            void modelDiscoveryService
+              .discoverModels(provider, { accessToken: tokens.access_token })
+              .catch(() => {})
+          }
 
           reply.redirect(`${authConfig.dashboardUrl}/settings?connected=${provider}`)
         } catch (err) {
@@ -575,6 +584,11 @@ export function authRoutes(deps: AuthRouteDeps) {
             accountId,
             scopes: providerReg.scopes,
           })
+
+          // Trigger model discovery for LLM providers (#674)
+          void modelDiscoveryService
+            .discoverModels(provider, { accessToken: tokens.access_token })
+            .catch(() => {})
 
           return {
             ok: true,

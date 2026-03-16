@@ -837,8 +837,20 @@ export async function saveProviderApiKey(body: {
   provider: string
   apiKey: string
   displayLabel?: string
+  baseUrl?: string
 }): Promise<unknown> {
   return apiFetch("/credentials/api-key", { method: "POST", body, schema: z.unknown() })
+}
+
+export async function updateCredentialBaseUrl(
+  id: string,
+  baseUrl: string | null,
+): Promise<unknown> {
+  return apiFetch(`/credentials/${id}/base-url`, {
+    method: "PUT",
+    body: { baseUrl },
+    schema: z.unknown(),
+  })
 }
 
 export async function deleteCredential(id: string): Promise<unknown> {

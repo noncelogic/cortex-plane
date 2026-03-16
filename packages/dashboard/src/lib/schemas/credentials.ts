@@ -21,6 +21,7 @@ export const CredentialSchema = z.object({
   credentialClass: z.string().optional(),
   toolName: z.string().nullable().optional(),
   displayLabel: z.string().nullable(),
+  baseUrl: z.string().nullable().optional(),
   maskedKey: z.string().nullable(),
   status: z.string(),
   accountId: z.string().nullable().optional(),

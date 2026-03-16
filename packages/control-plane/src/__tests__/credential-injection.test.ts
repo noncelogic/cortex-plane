@@ -181,6 +181,7 @@ describe("LLM credential injection", () => {
           provider: "google-antigravity",
           token: "goog-token",
           credentialId: "cred-goog",
+          baseUrl: "https://test-proxy.example.com",
         },
       },
     })
@@ -247,6 +248,7 @@ describe("LLM credential injection", () => {
           provider: "google-antigravity",
           token: "goog-oauth-token",
           credentialId: "cred-goog-2",
+          baseUrl: "https://test-proxy.example.com",
           // No credentialType — Antigravity always uses Bearer
         },
       },
