@@ -15,7 +15,6 @@ import type { Kysely } from "kysely"
 
 import { discoverAntigravityProject } from "../auth/antigravity-project.js"
 import type { CredentialService } from "../auth/credential-service.js"
-import { modelDiscoveryService } from "../observability/model-providers.js"
 import { getCodePasteProvider, getUserServiceProvider } from "../auth/oauth-providers.js"
 import {
   buildAuthorizeUrl,
@@ -33,6 +32,7 @@ import type { AuthOAuthConfig, OAuthProviderConfig } from "../config.js"
 import type { Database } from "../db/types.js"
 import { createRequireAuth, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
+import { modelDiscoveryService } from "../observability/model-providers.js"
 
 // In-memory store for PKCE verifiers (keyed by state nonce).
 // In production, use Redis or DB. For single-instance deployments this is fine.
