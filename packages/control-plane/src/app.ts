@@ -36,6 +36,7 @@ import { MemorySyncService } from "./memory/sync-service.js"
 import { loadAuthConfig } from "./middleware/api-keys.js"
 import { AgentEventEmitter } from "./observability/event-emitter.js"
 import { ExecutionRegistry } from "./observability/execution-registry.js"
+import { modelDiscoveryService } from "./observability/model-providers.js"
 import { BrowserObservationService } from "./observation/service.js"
 import { agentChannelRoutes } from "./routes/agent-channels.js"
 import { agentCheckpointRoutes } from "./routes/agent-checkpoints.js"
@@ -423,9 +424,21 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // Register auth + credential management routes (if OAuth configured)
   if (config.auth && sessionService && credentialService) {
     await app.register(
-      authRoutes({ db, authConfig: config.auth, sessionService, credentialService }),
+      authRoutes({
+        db,
+        authConfig: config.auth,
+        sessionService,
+        credentialService,
+        modelDiscovery: modelDiscoveryService,
+      }),
     )
-    await app.register(credentialRoutes({ credentialService, sessionService }))
+    await app.register(
+      credentialRoutes({
+        credentialService,
+        sessionService,
+        modelDiscovery: modelDiscoveryService,
+      }),
+    )
   }
 
   // Register model catalogue route (public, optionally credential-aware)
@@ -469,6 +482,44 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       await memoryScheduler.flushAllPending(workerUtils)
     },
   })
+
+  // Auto-discover models for all active LLM credentials on startup (fire-and-forget).
+  // Populates the model discovery cache so the model catalogue endpoint returns
+  // results immediately without waiting for a manual refresh.
+  if (credentialService) {
+    void (async () => {
+      try {
+        // Find distinct (provider, user) pairs for active LLM credentials
+        const activeCreds = await db
+          .selectFrom("provider_credential")
+          .select(["provider", "credential_type", "user_account_id"])
+          .where("credential_class", "=", "llm_provider")
+          .where("status", "=", "active")
+          .execute()
+
+        // Deduplicate by provider — only need one credential per provider for discovery
+        const seenProviders = new Set<string>()
+        for (const row of activeCreds) {
+          if (seenProviders.has(row.provider)) continue
+          seenProviders.add(row.provider)
+          try {
+            const result = await credentialService.getAccessToken(row.user_account_id, row.provider)
+            if (result) {
+              const cred =
+                row.credential_type === "api_key"
+                  ? { apiKey: result.token }
+                  : { accessToken: result.token }
+              await modelDiscoveryService.discoverModels(row.provider, cred)
+            }
+          } catch {
+            // Non-fatal: skip providers whose tokens are expired/missing
+          }
+        }
+      } catch {
+        // Non-fatal: startup discovery is best-effort
+      }
+    })()
+  }
 
   // Shut down SSE connections + observation service + browser services + backend registry on app close
   app.addHook("onClose", async () => {

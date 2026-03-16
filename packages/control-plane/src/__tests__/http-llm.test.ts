@@ -1355,9 +1355,12 @@ describe("HttpLlmBackend — credential provider routing", () => {
       baseURL: string
       authToken: string | null
     }
-    // Default Antigravity proxy — no direct Vertex AI access
-    expect(client.baseURL).toBe("https://daily-cloudcode-pa.sandbox.googleapis.com")
-    expect(client.authToken).toBe("gcp-oauth-token")
+    // Default Antigravity routing: production endpoint first, then sandbox fallback
+    expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
+    // Token wrapping: JSON.stringify({ token, projectId }) for Antigravity
+    expect(client.authToken).toBe(
+      JSON.stringify({ token: "gcp-oauth-token", projectId: "my-gcp-project-123" }),
+    )
 
     await handle.cancel("test")
   })
@@ -1472,8 +1475,9 @@ describe("HttpLlmBackend — credential provider routing", () => {
       baseURL: string
       authToken: string | null
     }
-    // Without accountId, still uses the default Antigravity proxy
-    expect(client.baseURL).toBe("https://daily-cloudcode-pa.sandbox.googleapis.com")
+    // Without accountId, still uses the default Antigravity production endpoint
+    expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
+    // No projectId available — token sent unwrapped
     expect(client.authToken).toBe("gcp-oauth-token")
 
     await handle.cancel("test")
@@ -1501,7 +1505,10 @@ describe("HttpLlmBackend — credential provider routing", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     const client = (handle as any).client as { baseURL: string; authToken: string | null }
     expect(client.baseURL).toBe("https://custom-proxy.example.com/v1")
-    expect(client.authToken).toBe("gcp-oauth-token")
+    // Token wrapping: JSON.stringify({ token, projectId }) for Antigravity
+    expect(client.authToken).toBe(
+      JSON.stringify({ token: "gcp-oauth-token", projectId: "my-project" }),
+    )
 
     await handle.cancel("test")
   })
@@ -1562,9 +1569,12 @@ describe("HttpLlmBackend — credential provider routing", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    // All Antigravity routing goes through the proxy — no Vertex AI direct access
-    expect(client.baseURL).toBe("https://daily-cloudcode-pa.sandbox.googleapis.com")
-    expect(client.authToken).toBe("gcp-oauth-token")
+    // Default Antigravity routing: production endpoint first, then sandbox fallback
+    expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
+    // Token wrapping: JSON.stringify({ token, projectId }) for Antigravity
+    expect(client.authToken).toBe(
+      JSON.stringify({ token: "gcp-oauth-token", projectId: "my-project-42" }),
+    )
 
     await handle.cancel("test")
   })

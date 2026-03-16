@@ -124,28 +124,41 @@ async function discoverGoogleAIStudio(cred: ProviderCredential): Promise<ModelIn
   })
 }
 
+/**
+ * Antigravity endpoint candidates for model discovery (prod first, then sandbox).
+ * Mirrors the endpoint fallback strategy from the OpenClaw reference.
+ */
+const ANTIGRAVITY_DISCOVERY_ENDPOINTS = [
+  "https://cloudcode-pa.googleapis.com",
+  "https://daily-cloudcode-pa.sandbox.googleapis.com",
+] as const
+
 async function discoverGoogleAntigravity(cred: ProviderCredential): Promise<ModelInfo[]> {
   const token = cred.accessToken
   if (!token) return []
 
-  const baseUrl =
-    process.env.ANTIGRAVITY_BASE_URL ?? "https://daily-cloudcode-pa.sandbox.googleapis.com"
+  const envUrl = process.env.ANTIGRAVITY_BASE_URL
+  const endpoints = envUrl ? [envUrl] : [...ANTIGRAVITY_DISCOVERY_ENDPOINTS]
 
-  // Try Anthropic-format models endpoint on the proxy
-  const data = (await fetchJson(`${baseUrl}/v1/models`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "anthropic-version": "2023-06-01",
-    },
-  })) as { data?: { id: string }[] } | null
-  if (!data?.data) return []
+  // Try each endpoint with Anthropic-format models endpoint
+  for (const baseUrl of endpoints) {
+    const data = (await fetchJson(`${baseUrl}/v1/models`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-version": "2023-06-01",
+      },
+    })) as { data?: { id: string }[] } | null
+    if (data?.data && data.data.length > 0) {
+      return data.data.map((m) => ({
+        id: m.id,
+        label: labelFromId(m.id),
+        providers: ["google-antigravity"],
+      }))
+    }
+  }
 
-  return data.data.map((m) => ({
-    id: m.id,
-    label: labelFromId(m.id),
-    providers: ["google-antigravity"],
-  }))
+  return []
 }
 
 async function discoverGitHubCopilot(cred: ProviderCredential): Promise<ModelInfo[]> {

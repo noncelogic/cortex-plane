@@ -222,9 +222,11 @@ export class HttpLlmBackend implements ExecutionBackend {
         if (isAntigravity) {
           const routing = resolveAntigravityRouting(cred.baseUrl, cred.accountId)
           clientBaseUrl = routing.baseUrl
+          // Wrap token with projectId for Antigravity (OpenClaw pattern)
+          const wrappedToken = wrapAntigravityToken(cred.token, cred.accountId)
           // Proxy accepts standard Anthropic API format — no path rewriting needed
           client = new Anthropic({
-            authToken: cred.token,
+            authToken: wrappedToken,
             apiKey: null as unknown as string,
             baseURL: routing.baseUrl,
           })
@@ -385,13 +387,22 @@ function resolveOpenAICompatibleBaseUrl(provider: string): string | undefined {
 }
 
 /**
+ * Antigravity endpoint candidates, tried in order (prod first, then sandbox).
+ * Mirrors the endpoint fallback strategy from the OpenClaw reference.
+ */
+const ANTIGRAVITY_ENDPOINTS = [
+  "https://cloudcode-pa.googleapis.com",
+  "https://daily-cloudcode-pa.sandbox.googleapis.com",
+] as const
+
+/**
  * Resolve Antigravity routing config.
  *
  * Priority:
  *   1. Explicit `baseUrl` on the credential ref (set by provider config) — assumed
  *      to be a custom proxy that accepts standard Anthropic API format.
  *   2. `ANTIGRAVITY_BASE_URL` env var — same assumption.
- *   3. Default Antigravity proxy — accepts standard Anthropic `/v1/messages` format.
+ *   3. Endpoint fallback: try prod first, then sandbox.
  *      Consumer OAuth tokens cannot access Vertex AI directly (401/403).
  */
 interface AntigravityRouting {
@@ -408,11 +419,169 @@ function resolveAntigravityRouting(
   const envUrl = process.env.ANTIGRAVITY_BASE_URL
   if (envUrl) return { type: "proxy", baseUrl: envUrl }
 
-  // Default: use the Antigravity proxy (not direct Vertex AI)
+  // Default: production endpoint (falls back on 401/connection failure)
   return {
     type: "proxy",
-    baseUrl: "https://daily-cloudcode-pa.sandbox.googleapis.com",
+    baseUrl: ANTIGRAVITY_ENDPOINTS[0],
   }
+}
+
+/**
+ * Return the next Antigravity endpoint to try after a failure, or null if
+ * all candidates have been exhausted.
+ */
+function nextAntigravityEndpoint(currentBaseUrl: string): string | null {
+  const idx = ANTIGRAVITY_ENDPOINTS.indexOf(
+    currentBaseUrl as (typeof ANTIGRAVITY_ENDPOINTS)[number],
+  )
+  if (idx >= 0 && idx + 1 < ANTIGRAVITY_ENDPOINTS.length) {
+    return ANTIGRAVITY_ENDPOINTS[idx + 1] ?? null
+  }
+  return null
+}
+
+/**
+ * Wrap an OAuth access token for Antigravity.
+ *
+ * The Antigravity proxy expects the auth token to be a JSON blob containing
+ * both the OAuth bearer token and the GCP project ID (discovered during
+ * the OAuth flow and stored as `accountId` on the credential).
+ *
+ * Pattern from OpenClaw's `getApiKey()`:
+ *   JSON.stringify({ token: credentials.access, projectId: credentials.projectId })
+ */
+function wrapAntigravityToken(rawToken: string, projectId?: string | null): string {
+  if (!projectId) return rawToken
+  return JSON.stringify({ token: rawToken, projectId })
+}
+
+/**
+ * Strip HTML tags and collapse whitespace from an error message.
+ * LLM providers sometimes return raw HTML error pages; showing those in the
+ * chat UI is ugly and unhelpful.
+ */
+function sanitizeProviderErrorMessage(message: string): string {
+  if (!/<[a-z/][\s\S]*>/i.test(message)) return message
+  return message
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+}
+
+/**
+ * Sanitize thinking blocks in conversation history for Antigravity Claude.
+ *
+ * Antigravity Claude rejects unsigned thinking blocks. This function:
+ * - Converts unsigned thinking blocks to plain text (preserving reasoning)
+ * - Maps Anthropic-style `signature` field to `thinkingSignature`
+ * - Validates signatures are base64-encoded
+ *
+ * Pattern from OpenClaw's `sanitizeAntigravityThinkingBlocks()`.
+ */
+const ANTIGRAVITY_SIG_RE = /^[A-Za-z0-9+/]+=*$/
+
+function sanitizeAntigravityConversationHistory<T extends { role: string; content: string }>(
+  history: T[],
+  isAntigravityClaude: boolean,
+): T[] {
+  if (!isAntigravityClaude) return history
+  return history.map((turn) => {
+    if (turn.role !== "assistant") return turn
+
+    // Try to parse content as JSON array of blocks (structured content)
+    let blocks: unknown[]
+    try {
+      blocks = JSON.parse(turn.content) as unknown[]
+      if (!Array.isArray(blocks)) return turn
+    } catch {
+      return turn // plain text content, no thinking blocks
+    }
+
+    let changed = false
+    const sanitized = blocks
+      .map((block) => {
+        if (!block || typeof block !== "object") return block
+        const rec = block as Record<string, unknown>
+        if (rec.type !== "thinking") return block
+
+        // Check for a valid base64 signature
+        const sig = rec.thinkingSignature ?? rec.signature ?? rec.thought_signature
+        if (
+          typeof sig === "string" &&
+          sig.length > 0 &&
+          sig.length % 4 === 0 &&
+          ANTIGRAVITY_SIG_RE.test(sig)
+        ) {
+          // Valid signature — keep thinking block, normalize field name
+          if (rec.thinkingSignature !== sig) {
+            changed = true
+            return { ...rec, thinkingSignature: sig }
+          }
+          return block
+        }
+
+        // No valid signature — convert to text to preserve reasoning content
+        const text = typeof rec.thinking === "string" ? rec.thinking : ""
+        if (text.trim()) {
+          changed = true
+          return { type: "text", text }
+        }
+        changed = true
+        return null // drop empty unsigned thinking blocks
+      })
+      .filter(Boolean)
+
+    if (!changed) return turn
+    return { ...turn, content: JSON.stringify(sanitized) }
+  })
+}
+
+/**
+ * Strip unsupported JSON Schema keywords from tool input schemas for
+ * Antigravity (same restriction as google-gemini-cli — Cloud Code Assist
+ * uses OpenAPI 3.03 `parameters` format for both Gemini and Claude models).
+ */
+const ANTIGRAVITY_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
+  "patternProperties",
+  "additionalProperties",
+  "$schema",
+  "$id",
+  "$ref",
+  "$defs",
+  "definitions",
+  "examples",
+  "format",
+  "minLength",
+  "maxLength",
+  "minimum",
+  "maximum",
+  "multipleOf",
+  "pattern",
+  "minItems",
+  "maxItems",
+  "uniqueItems",
+  "minProperties",
+  "maxProperties",
+])
+
+function stripUnsupportedSchemaKeywords(schema: unknown): unknown {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return schema
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+    if (ANTIGRAVITY_UNSUPPORTED_SCHEMA_KEYWORDS.has(key)) continue
+    out[key] = value && typeof value === "object" ? stripUnsupportedSchemaKeywords(value) : value
+  }
+  return out
+}
+
+function sanitizeAntigravityToolSchemas(defs: ToolDefinition[]): ToolDefinition[] {
+  return defs.map((t) => {
+    if (!t.inputSchema || typeof t.inputSchema !== "object") return t
+    return {
+      ...t,
+      inputSchema: stripUnsupportedSchemaKeywords(t.inputSchema) as typeof t.inputSchema,
+    }
+  })
 }
 
 function toOpenAITools(defs: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
@@ -441,7 +610,7 @@ class AnthropicHandle implements ExecutionHandle {
 
   private readonly tokenRefresher?: TokenRefresher
   private readonly credentialId?: string
-  private readonly baseUrl?: string
+  private baseUrl?: string
   private readonly useAuthToken: boolean
 
   constructor(
@@ -468,9 +637,17 @@ class AnthropicHandle implements ExecutionHandle {
     const systemPrompt = this.task.context.systemPrompt || "You are a helpful assistant."
     const messages: Anthropic.MessageParam[] = []
 
-    // Replay conversation history
+    // Detect Antigravity Claude for thinking block sanitization
+    const isAntigravityClaude =
+      this.task.constraints.llmCredential?.provider === "google-antigravity" &&
+      this.model.toLowerCase().includes("claude")
+
+    // Replay conversation history (sanitize thinking blocks for Antigravity Claude)
     if (this.task.instruction.conversationHistory) {
-      for (const turn of this.task.instruction.conversationHistory) {
+      const history = isAntigravityClaude
+        ? sanitizeAntigravityConversationHistory(this.task.instruction.conversationHistory, true)
+        : this.task.instruction.conversationHistory
+      for (const turn of history) {
         messages.push({ role: turn.role, content: turn.content })
       }
     }
@@ -478,10 +655,15 @@ class AnthropicHandle implements ExecutionHandle {
     messages.push({ role: "user", content: this.task.instruction.prompt })
 
     // Resolve available tools based on task constraints
-    const toolDefs = this.toolRegistry.resolve(
+    let toolDefs = this.toolRegistry.resolve(
       this.task.constraints.allowedTools,
       this.task.constraints.deniedTools,
     )
+    // Antigravity uses the same OpenAPI 3.03 parameters format as google-gemini-cli;
+    // strip unsupported JSON Schema keywords to prevent rejection.
+    if (this.task.constraints.llmCredential?.provider === "google-antigravity") {
+      toolDefs = sanitizeAntigravityToolSchemas(toolDefs)
+    }
     const anthropicTools = toAnthropicTools(toolDefs)
 
     let fullText = ""
@@ -595,6 +777,28 @@ class AnthropicHandle implements ExecutionHandle {
               continue
             }
           }
+
+          // Antigravity endpoint fallback: on connection failure, try next endpoint
+          if (
+            this.baseUrl &&
+            this.task.constraints.llmCredential?.provider === "google-antigravity" &&
+            turn === 0
+          ) {
+            const fallback = nextAntigravityEndpoint(this.baseUrl)
+            if (fallback) {
+              this.baseUrl = fallback
+              const cred = this.task.constraints.llmCredential
+              const wrappedToken = wrapAntigravityToken(cred.token, cred.accountId)
+              this.client = new Anthropic({
+                authToken: wrappedToken,
+                apiKey: null as unknown as string,
+                baseURL: fallback,
+              })
+              turn-- // retry this turn with fallback endpoint
+              continue
+            }
+          }
+
           throw err
         }
       }
@@ -629,7 +833,8 @@ class AnthropicHandle implements ExecutionHandle {
     } catch (err) {
       if (this.cancelled) return
 
-      const errorMsg = err instanceof Error ? err.message : "Unknown error"
+      const rawMsg = err instanceof Error ? err.message : "Unknown error"
+      const errorMsg = sanitizeProviderErrorMessage(rawMsg)
       const execResult: ExecutionResult = {
         taskId: this.taskId,
         status: "failed",
@@ -931,7 +1136,8 @@ class OpenAIHandle implements ExecutionHandle {
     } catch (err) {
       if (this.cancelled) return
 
-      const errorMsg = err instanceof Error ? err.message : "Unknown error"
+      const rawMsg = err instanceof Error ? err.message : "Unknown error"
+      const errorMsg = sanitizeProviderErrorMessage(rawMsg)
       const execResult: ExecutionResult = {
         taskId: this.taskId,
         status: "failed",
