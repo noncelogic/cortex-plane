@@ -14,6 +14,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
 import { CredentialService, SUPPORTED_PROVIDERS } from "../auth/credential-service.js"
+import type { ModelDiscoveryService } from "../auth/model-discovery.js"
 import type { SessionService } from "../auth/session-service.js"
 import { createRequireAuth, createRequireRole, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
@@ -24,10 +25,11 @@ const TOOL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 interface CredentialRouteDeps {
   credentialService: CredentialService
   sessionService: SessionService
+  modelDiscovery?: ModelDiscoveryService
 }
 
 export function credentialRoutes(deps: CredentialRouteDeps) {
-  const { credentialService, sessionService } = deps
+  const { credentialService, sessionService, modelDiscovery } = deps
 
   const requireAuth: PreHandler = createRequireAuth({
     config: { apiKeys: [], requireAuth: true },
@@ -134,6 +136,11 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
           apiKey,
           { displayLabel },
         )
+
+        // Auto-trigger model discovery for the new credential (fire-and-forget)
+        if (modelDiscovery) {
+          modelDiscovery.discoverModels(provider, { apiKey }).catch(() => {})
+        }
 
         reply.status(201).send({ credential })
       },

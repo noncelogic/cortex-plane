@@ -15,6 +15,7 @@ import type { Kysely } from "kysely"
 
 import { discoverAntigravityProject } from "../auth/antigravity-project.js"
 import type { CredentialService } from "../auth/credential-service.js"
+import type { ModelDiscoveryService } from "../auth/model-discovery.js"
 import { getCodePasteProvider, getUserServiceProvider } from "../auth/oauth-providers.js"
 import {
   buildAuthorizeUrl,
@@ -42,10 +43,11 @@ interface AuthRouteDeps {
   authConfig: AuthOAuthConfig
   sessionService: SessionService
   credentialService: CredentialService
+  modelDiscovery?: ModelDiscoveryService
 }
 
 export function authRoutes(deps: AuthRouteDeps) {
-  const { db, authConfig, sessionService, credentialService } = deps
+  const { db, authConfig, sessionService, credentialService, modelDiscovery } = deps
 
   return function register(app: FastifyInstance): void {
     const isSecure = authConfig.dashboardUrl.startsWith("https")
@@ -425,6 +427,13 @@ export function authRoutes(deps: AuthRouteDeps) {
             scopes: userServiceDef?.defaultScopes,
           })
 
+          // Auto-trigger model discovery for the new credential (fire-and-forget)
+          if (modelDiscovery) {
+            modelDiscovery
+              .discoverModels(provider, { accessToken: tokens.access_token })
+              .catch(() => {})
+          }
+
           reply.redirect(`${authConfig.dashboardUrl}/settings?connected=${provider}`)
         } catch (err) {
           request.log.error(err, `Provider connect error for ${provider}`)
@@ -575,6 +584,13 @@ export function authRoutes(deps: AuthRouteDeps) {
             accountId,
             scopes: providerReg.scopes,
           })
+
+          // Auto-trigger model discovery for the new credential (fire-and-forget)
+          if (modelDiscovery) {
+            modelDiscovery
+              .discoverModels(provider, { accessToken: tokens.access_token })
+              .catch(() => {})
+          }
 
           return {
             ok: true,
