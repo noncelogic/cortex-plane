@@ -1,13 +1,64 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   AgentCircuitBreaker,
   DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG,
+  isQuarantineDisabled,
 } from "../agent-circuit-breaker.js"
 
 // ---------------------------------------------------------------------------
 // Constructor + defaults
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// DISABLE_AGENT_QUARANTINE env var (#677)
+// ---------------------------------------------------------------------------
+
+describe("isQuarantineDisabled", () => {
+  afterEach(() => {
+    delete process.env.DISABLE_AGENT_QUARANTINE
+  })
+
+  it("returns false when env var is not set", () => {
+    delete process.env.DISABLE_AGENT_QUARANTINE
+    expect(isQuarantineDisabled()).toBe(false)
+  })
+
+  it('returns true when env var is "true"', () => {
+    process.env.DISABLE_AGENT_QUARANTINE = "true"
+    expect(isQuarantineDisabled()).toBe(true)
+  })
+
+  it("returns false for other truthy values", () => {
+    process.env.DISABLE_AGENT_QUARANTINE = "1"
+    expect(isQuarantineDisabled()).toBe(false)
+  })
+})
+
+describe("shouldQuarantine with DISABLE_AGENT_QUARANTINE (#677)", () => {
+  afterEach(() => {
+    delete process.env.DISABLE_AGENT_QUARANTINE
+  })
+
+  it("never quarantines when env var is set", () => {
+    process.env.DISABLE_AGENT_QUARANTINE = "true"
+    const cb = new AgentCircuitBreaker("agent-1")
+    cb.recordJobFailure()
+    cb.recordJobFailure()
+    cb.recordJobFailure()
+    expect(cb.shouldQuarantine().quarantine).toBe(false)
+    expect(cb.tripped).toBe(false)
+  })
+
+  it("quarantines normally when env var is not set", () => {
+    delete process.env.DISABLE_AGENT_QUARANTINE
+    const cb = new AgentCircuitBreaker("agent-1")
+    cb.recordJobFailure()
+    cb.recordJobFailure()
+    cb.recordJobFailure()
+    expect(cb.shouldQuarantine().quarantine).toBe(true)
+  })
+})
 
 describe("AgentCircuitBreaker", () => {
   it("starts un-tripped with zero counters", () => {

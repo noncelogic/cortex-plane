@@ -30,7 +30,7 @@ import type { TokenRefresher } from "../../backends/http-llm.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
 import type { CapabilityAssembler } from "../../capabilities/index.js"
 import type { Database, Job } from "../../db/types.js"
-import { AgentCircuitBreaker } from "../../lifecycle/agent-circuit-breaker.js"
+import { AgentCircuitBreaker, isQuarantineDisabled } from "../../lifecycle/agent-circuit-breaker.js"
 import {
   type ContextBudgetConfig,
   DEFAULT_CONTEXT_BUDGET,
@@ -167,7 +167,10 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         }
 
         if (agent.status !== "ACTIVE") {
-          throw new Error(`Agent ${agent.name} is ${agent.status}, cannot execute`)
+          // When quarantine is disabled (#677), allow QUARANTINED agents to proceed
+          if (!(agent.status === "QUARANTINED" && isQuarantineDisabled())) {
+            throw new Error(`Agent ${agent.name} is ${agent.status}, cannot execute`)
+          }
         }
 
         rootSpan.setAttribute(CortexAttributes.AGENT_NAME, agent.name)

@@ -51,6 +51,15 @@ export { DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG } from "./defaults.js"
 import { DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG } from "./defaults.js"
 
 // ---------------------------------------------------------------------------
+// Quarantine kill-switch (#677)
+// ---------------------------------------------------------------------------
+
+/** Returns `true` when the quarantine system is disabled via env var. */
+export function isQuarantineDisabled(): boolean {
+  return process.env.DISABLE_AGENT_QUARANTINE === "true"
+}
+
+// ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 
@@ -144,6 +153,9 @@ export class AgentCircuitBreaker {
 
   /** Check if the agent should be quarantined (consecutive job failures). */
   shouldQuarantine(): QuarantineDecision {
+    if (isQuarantineDisabled()) {
+      return { quarantine: false, reason: "" }
+    }
     if (this.state.consecutiveJobFailures >= this.config.maxConsecutiveFailures) {
       const reason = `${this.state.consecutiveJobFailures} consecutive job failures (threshold: ${this.config.maxConsecutiveFailures})`
       this.trip(reason)

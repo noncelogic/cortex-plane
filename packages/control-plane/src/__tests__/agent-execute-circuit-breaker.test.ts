@@ -15,7 +15,7 @@ import type {
   ExecutionResult,
   OutputEvent,
 } from "@cortex/shared/backends"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { type AgentExecuteDeps, createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
 
@@ -660,6 +660,107 @@ describe("agent-execute circuit breaker wiring", () => {
 
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(registry.routeTask).toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // DISABLE_AGENT_QUARANTINE env var (#677)
+  // -------------------------------------------------------------------------
+
+  describe("with DISABLE_AGENT_QUARANTINE=true", () => {
+    afterEach(() => {
+      delete process.env.DISABLE_AGENT_QUARANTINE
+    })
+
+    it("does NOT quarantine pre-dispatch even with 3 consecutive failures (#677)", async () => {
+      process.env.DISABLE_AGENT_QUARANTINE = "true"
+      const db = makeMockDb({
+        recentJobs: [{ status: "FAILED" }, { status: "FAILED" }, { status: "FAILED" }],
+      })
+
+      const handle = createMockHandle()
+      const registry = makeMockRegistry(handle)
+      const task = createAgentExecuteTask({
+        db: db as unknown as AgentExecuteDeps["db"],
+        registry,
+      })
+
+      await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+      // Agent should NOT be quarantined
+      const agentQuarantine = db._setCalls.find(
+        (c) => c.table === "agent" && c.values.status === "QUARANTINED",
+      )
+      expect(agentQuarantine).toBeUndefined()
+
+      // Backend SHOULD have been called — job proceeds normally
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(registry.routeTask).toHaveBeenCalled()
+    })
+
+    it("does NOT quarantine post-execution even at failure threshold (#677)", async () => {
+      process.env.DISABLE_AGENT_QUARANTINE = "true"
+      const db = makeMockDb({
+        recentJobs: [{ status: "FAILED" }, { status: "FAILED" }],
+      })
+
+      const events: OutputEvent[] = [
+        { type: "text", timestamp: new Date().toISOString(), content: "Working..." },
+      ]
+
+      const failedResult = createMockResult({
+        status: "failed",
+        error: {
+          message: "Agent crashed",
+          classification: "transient",
+          partialExecution: false,
+        },
+      })
+      const handle = createMockHandle(failedResult, events)
+      const registry = makeMockRegistry(handle)
+      const task = createAgentExecuteTask({
+        db: db as unknown as AgentExecuteDeps["db"],
+        registry,
+      })
+
+      await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+      // Agent should NOT be quarantined even though threshold is reached
+      const agentQuarantine = db._setCalls.find(
+        (c) => c.table === "agent" && c.values.status === "QUARANTINED",
+      )
+      expect(agentQuarantine).toBeUndefined()
+    })
+
+    it("allows QUARANTINED agents to execute (#677)", async () => {
+      process.env.DISABLE_AGENT_QUARANTINE = "true"
+      const handle = createMockHandle()
+      const db = makeMockDb({
+        agent: {
+          id: "agent-1",
+          name: "TestAgent",
+          slug: "test-agent",
+          role: "developer",
+          description: null,
+          status: "QUARANTINED",
+          model_config: {},
+          skill_config: {},
+          resource_limits: {},
+          config: null,
+        },
+      })
+
+      const registry = makeMockRegistry(handle)
+      const task = createAgentExecuteTask({
+        db: db as unknown as AgentExecuteDeps["db"],
+        registry,
+      })
+
+      // Should NOT throw — quarantined agents proceed when disabled
+      await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(registry.routeTask).toHaveBeenCalled()
+    })
   })
 
   it("does not quarantine when health_reset_at filters out prior failures (#443)", async () => {
