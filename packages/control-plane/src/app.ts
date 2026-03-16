@@ -437,6 +437,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
         credentialService,
         sessionService,
         modelDiscovery: modelDiscoveryService,
+        authConfig: config.auth,
       }),
     )
   }

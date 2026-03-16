@@ -112,6 +112,37 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
   },
 ]
 
+/**
+ * Maps OAuth provider IDs to their corresponding AuthOAuthConfig property key.
+ * API key providers are always available and not listed here.
+ */
+const OAUTH_PROVIDER_CONFIG_KEY: Record<string, keyof AuthOAuthConfig> = {
+  "google-antigravity": "googleAntigravity",
+  "openai-codex": "openaiCodex",
+  anthropic: "anthropic",
+  "google-workspace": "googleWorkspace",
+  "github-user": "githubUser",
+  "slack-user": "slackUser",
+}
+
+/**
+ * Return the subset of SUPPORTED_PROVIDERS that are actually connectable:
+ *  - API key providers are always included (user pastes their own key)
+ *  - OAuth providers are included only when their OAUTH_*_CLIENT_ID env vars
+ *    are configured (i.e. the matching AuthOAuthConfig property is defined)
+ */
+export function getConfiguredProviders(authConfig?: AuthOAuthConfig): ProviderInfo[] {
+  if (!authConfig) return []
+
+  return SUPPORTED_PROVIDERS.filter((p) => {
+    const configKey = OAUTH_PROVIDER_CONFIG_KEY[p.id]
+    // Not an OAuth provider (api_key) — always available
+    if (!configKey) return true
+    // OAuth provider — only available if config is set
+    return authConfig[configKey] !== undefined
+  })
+}
+
 /** Credential summary returned to the dashboard (no secrets). */
 export interface CredentialSummary {
   id: string

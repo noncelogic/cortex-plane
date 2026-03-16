@@ -13,7 +13,12 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
-import { CredentialService, SUPPORTED_PROVIDERS } from "../auth/credential-service.js"
+import {
+  CredentialService,
+  SUPPORTED_PROVIDERS,
+  getConfiguredProviders,
+} from "../auth/credential-service.js"
+import type { AuthOAuthConfig } from "../config.js"
 import type { ModelDiscoveryService } from "../auth/model-discovery.js"
 import type { SessionService } from "../auth/session-service.js"
 import { createRequireAuth, createRequireRole, type PreHandler } from "../middleware/auth.js"
@@ -26,10 +31,11 @@ interface CredentialRouteDeps {
   credentialService: CredentialService
   sessionService: SessionService
   modelDiscovery?: ModelDiscoveryService
+  authConfig?: AuthOAuthConfig
 }
 
 export function credentialRoutes(deps: CredentialRouteDeps) {
-  const { credentialService, sessionService, modelDiscovery } = deps
+  const { credentialService, sessionService, modelDiscovery, authConfig } = deps
 
   const requireAuth: PreHandler = createRequireAuth({
     config: { apiKeys: [], requireAuth: true },
@@ -43,7 +49,8 @@ export function credentialRoutes(deps: CredentialRouteDeps) {
      * GET /credentials/providers — list supported providers with metadata
      */
     app.get("/credentials/providers", () => {
-      const providers = SUPPORTED_PROVIDERS.map((p) => {
+      const configured = getConfiguredProviders(authConfig)
+      const providers = configured.map((p) => {
         const models = modelsForProvider(p.id)
         return models.length > 0
           ? { ...p, models: models.map((m) => ({ id: m.id, label: m.label })) }

@@ -3,6 +3,7 @@ import Fastify from "fastify"
 import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import type { CredentialSummary } from "../auth/credential-service.js"
+import type { AuthOAuthConfig } from "../config.js"
 import { modelDiscoveryService } from "../observability/model-providers.js"
 import { credentialRoutes } from "../routes/credentials.js"
 
@@ -93,10 +94,24 @@ function mockSessionService(role: "admin" | "viewer" = "admin") {
   }
 }
 
+/** Auth config with all OAuth providers configured. */
+const FULL_AUTH_CONFIG: AuthOAuthConfig = {
+  dashboardUrl: "http://localhost:3100",
+  credentialMasterKey: "test-master-key",
+  sessionMaxAge: 3600,
+  googleAntigravity: { clientId: "ga-id", clientSecret: "ga-secret" },
+  openaiCodex: { clientId: "oc-id", clientSecret: "oc-secret" },
+  anthropic: { clientId: "ant-id", clientSecret: "ant-secret" },
+  googleWorkspace: { clientId: "gw-id", clientSecret: "gw-secret" },
+  githubUser: { clientId: "gh-id", clientSecret: "gh-secret" },
+  slackUser: { clientId: "sl-id", clientSecret: "sl-secret" },
+}
+
 async function buildTestApp(
   opts: {
     credentialServiceOverrides?: Record<string, unknown>
     role?: "admin" | "viewer"
+    authConfig?: AuthOAuthConfig
   } = {},
 ) {
   const app = Fastify({ logger: false })
@@ -107,6 +122,7 @@ async function buildTestApp(
     credentialRoutes({
       credentialService: credentialService as never,
       sessionService: sessionService as never,
+      authConfig: opts.authConfig ?? FULL_AUTH_CONFIG,
     }),
   )
 
@@ -151,6 +167,60 @@ describe("GET /credentials/providers", () => {
     const googleWorkspace = body.providers.find((p: { id: string }) => p.id === "google-workspace")
     expect(googleWorkspace).toBeDefined()
     expect(googleWorkspace.models).toBeUndefined()
+  })
+
+  it("returns empty list when no authConfig is provided", async () => {
+    const app = Fastify({ logger: false })
+    await app.register(
+      credentialRoutes({
+        credentialService: mockCredentialService() as never,
+        sessionService: mockSessionService() as never,
+      }),
+    )
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/credentials/providers",
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.providers).toEqual([])
+  })
+
+  it("only returns configured OAuth providers", async () => {
+    const partialAuth: AuthOAuthConfig = {
+      dashboardUrl: "http://localhost:3100",
+      credentialMasterKey: "test-master-key",
+      sessionMaxAge: 3600,
+      googleAntigravity: { clientId: "ga-id", clientSecret: "ga-secret" },
+      // No other OAuth providers configured
+    }
+    const { app } = await buildTestApp({ authConfig: partialAuth })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/credentials/providers",
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    const ids = body.providers.map((p: { id: string }) => p.id) as string[]
+
+    // google-antigravity is configured → included
+    expect(ids).toContain("google-antigravity")
+
+    // API key providers always included
+    expect(ids).toContain("openai")
+    expect(ids).toContain("google-ai-studio")
+    expect(ids).toContain("brave")
+
+    // Unconfigured OAuth providers excluded
+    expect(ids).not.toContain("anthropic")
+    expect(ids).not.toContain("openai-codex")
+    expect(ids).not.toContain("google-workspace")
+    expect(ids).not.toContain("github-user")
+    expect(ids).not.toContain("slack-user")
   })
 })
 
