@@ -264,6 +264,8 @@ describe("session buffer — watchJobCompletion stores assistant response", () =
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "COMPLETED",
             result: completedResult,
+            error: null,
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -304,7 +306,7 @@ describe("session buffer — watchJobCompletion stores assistant response", () =
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(onComplete).toHaveBeenCalledWith(completedResult, "COMPLETED")
+    expect(onComplete).toHaveBeenCalledWith(completedResult, "COMPLETED", null)
     expect(sessionMessageInserts).toContainEqual(
       expect.objectContaining({
         session_id: "session-123",

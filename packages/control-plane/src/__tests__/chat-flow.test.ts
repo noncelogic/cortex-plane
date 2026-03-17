@@ -239,6 +239,8 @@ describe("end-to-end chat flow", () => {
               summary: fullResponseText.slice(0, 200),
               stdout: fullResponseText,
             },
+            error: null,
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -306,6 +308,8 @@ describe("end-to-end chat flow", () => {
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "FAILED",
             result: null,
+            error: { category: "PERMANENT", message: "provider error" },
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -317,15 +321,8 @@ describe("end-to-end chat flow", () => {
     watchJobCompletion(
       db,
       "job-fail",
-      async (result, status) => {
-        const responseText =
-          typeof result?.stdout === "string" && result.stdout.length > 0
-            ? result.stdout
-            : typeof result?.summary === "string" && result.summary.length > 0
-              ? result.summary
-              : null
-
-        if (!responseText && (status === "FAILED" || status === "TIMED_OUT")) {
+      async (_result, status, _error) => {
+        if (status === "FAILED" || status === "TIMED_OUT") {
           const errMsg =
             status === "TIMED_OUT"
               ? "The request timed out. Please try again."
@@ -355,6 +352,8 @@ describe("end-to-end chat flow", () => {
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "TIMED_OUT",
             result: null,
+            error: { category: "TIMEOUT", message: "timed out" },
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -366,15 +365,8 @@ describe("end-to-end chat flow", () => {
     watchJobCompletion(
       db,
       "job-timeout",
-      async (result, status) => {
-        const responseText =
-          typeof result?.stdout === "string" && result.stdout.length > 0
-            ? result.stdout
-            : typeof result?.summary === "string" && result.summary.length > 0
-              ? result.summary
-              : null
-
-        if (!responseText && (status === "FAILED" || status === "TIMED_OUT")) {
+      async (_result, status, _error) => {
+        if (status === "FAILED" || status === "TIMED_OUT") {
           const errMsg =
             status === "TIMED_OUT"
               ? "The request timed out. Please try again."
@@ -396,22 +388,24 @@ describe("end-to-end chat flow", () => {
   })
 })
 
-describe("job error feedback — FAILED job with error result passed to mapJobErrorToUserMessage", () => {
-  it("calls mapJobErrorToUserMessage with the job result for FAILED status", async () => {
+describe("job error feedback — FAILED job with error column passed to mapJobErrorToUserMessage", () => {
+  it("calls mapJobErrorToUserMessage with the job error column for FAILED status", async () => {
     vi.useFakeTimers()
 
     const { mapJobErrorToUserMessage } = await import("../channels/preflight.js")
     const mockMapFn = vi.mocked(mapJobErrorToUserMessage)
     mockMapFn.mockClear()
 
-    const errorResult = { category: "QUARANTINED", message: "Agent quarantined after 5 failures" }
+    const jobError = { category: "QUARANTINED", message: "Agent quarantined after 5 failures" }
 
     const selectFn = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "FAILED",
-            result: errorResult,
+            result: null,
+            error: jobError,
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -423,12 +417,9 @@ describe("job error feedback — FAILED job with error result passed to mapJobEr
     watchJobCompletion(
       db,
       "job-quarantine",
-      async (result, status) => {
-        const responseText =
-          typeof result?.stdout === "string" && result.stdout.length > 0 ? result.stdout : null
-
-        if (!responseText && status === "FAILED") {
-          const errMsg = mapJobErrorToUserMessage(result)
+      async (_result, status, error) => {
+        if (status === "FAILED") {
+          const errMsg = mapJobErrorToUserMessage(error)
           await router.send("telegram", "chat-42", { text: errMsg })
         }
       },
@@ -438,8 +429,8 @@ describe("job error feedback — FAILED job with error result passed to mapJobEr
 
     await vi.advanceTimersByTimeAsync(150)
 
-    // Verify mapJobErrorToUserMessage was called with the error result
-    expect(mockMapFn).toHaveBeenCalledWith(errorResult)
+    // Verify mapJobErrorToUserMessage was called with the error column (not result)
+    expect(mockMapFn).toHaveBeenCalledWith(jobError)
     // Verify the mapped message was sent
     expect(router.send).toHaveBeenCalledWith("telegram", "chat-42", {
       text: expect.any(String) as string,
@@ -516,6 +507,8 @@ describe("WAITING_FOR_APPROVAL status in watchJobCompletion", () => {
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "WAITING_FOR_APPROVAL",
             result: null,
+            error: null,
+            completed_at: null,
           }),
         }),
       }),
@@ -590,6 +583,8 @@ describe("chat message status lifecycle", () => {
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "DEAD_LETTER",
             result: null,
+            error: null,
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -602,7 +597,7 @@ describe("chat message status lifecycle", () => {
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(onComplete).toHaveBeenCalledWith(null, "DEAD_LETTER")
+    expect(onComplete).toHaveBeenCalledWith(null, "DEAD_LETTER", null)
 
     vi.useRealTimers()
   })

@@ -276,7 +276,18 @@ export function createMessageDispatch(
     watchJobCompletion(
       db,
       job.id,
-      async (result, status) => {
+      async (result, status, error) => {
+        // For failed/timed-out jobs, always send a user-friendly error message
+        // instead of raw stdout (which may contain provider JSON / internal details).
+        if (status === "FAILED" || status === "TIMED_OUT") {
+          const errMsg =
+            status === "TIMED_OUT"
+              ? "The request timed out. Please try again."
+              : mapJobErrorToUserMessage(error ?? result)
+          await router.send(channelType, chatId, { text: errMsg })
+          return
+        }
+
         // Prefer the full response text (stdout) over the truncated summary
         const responseText =
           typeof result?.stdout === "string" && result.stdout.length > 0
@@ -297,18 +308,26 @@ export function createMessageDispatch(
             .execute()
 
           await router.send(channelType, chatId, { text: responseText })
-        } else if (status === "FAILED" || status === "TIMED_OUT") {
-          const errMsg =
-            status === "TIMED_OUT"
-              ? "The request timed out. Please try again."
-              : mapJobErrorToUserMessage(result)
-          await router.send(channelType, chatId, { text: errMsg })
         }
       },
       logger,
+      {
+        onTimeout: async () => {
+          await router.send(channelType, chatId, {
+            text: "The request timed out. Please try again.",
+          })
+        },
+      },
     )
   }
 }
+
+/** Callback signature for job completion watchers. */
+export type JobCompletionCallback = (
+  result: Record<string, unknown> | null,
+  status: string,
+  error: Record<string, unknown> | null,
+) => Promise<void>
 
 /**
  * Poll the job table for a terminal status, then invoke the callback with the result.
@@ -317,9 +336,9 @@ export function createMessageDispatch(
 export function watchJobCompletion(
   db: Kysely<Database>,
   jobId: string,
-  onComplete: (result: Record<string, unknown> | null, status: string) => Promise<void>,
+  onComplete: JobCompletionCallback,
   logger: { warn: (...args: unknown[]) => void },
-  opts: { intervalMs?: number; timeoutMs?: number } = {},
+  opts: { intervalMs?: number; timeoutMs?: number; onTimeout?: () => Promise<void> } = {},
 ): void {
   const intervalMs = opts.intervalMs ?? JOB_POLL_INTERVAL_MS
   const timeoutMs = opts.timeoutMs ?? JOB_POLL_TIMEOUT_MS
@@ -330,13 +349,20 @@ export function watchJobCompletion(
       if (Date.now() > deadline) {
         clearInterval(timer)
         logger.warn({ jobId }, "Job completion watch timed out")
+        if (opts.onTimeout) {
+          try {
+            await opts.onTimeout()
+          } catch (err) {
+            logger.warn({ err, jobId }, "Failed to send timeout message to chat")
+          }
+        }
         return
       }
 
       try {
         const row = await db
           .selectFrom("job")
-          .select(["status", "result"])
+          .select(["status", "result", "error", "completed_at"])
           .where("id", "=", jobId)
           .executeTakeFirst()
 
@@ -345,10 +371,18 @@ export function watchJobCompletion(
           return
         }
 
+        // Only treat FAILED as terminal when completed_at is set.
+        // During retries the job transitions FAILED → RETRYING → SCHEDULED
+        // without setting completed_at; catching that transient state would
+        // fire the callback prematurely and leave the final outcome unrelayed.
+        if (row.status === "FAILED" && !row.completed_at) {
+          return
+        }
+
         if (TERMINAL_STATUSES.has(row.status)) {
           clearInterval(timer)
           try {
-            await onComplete(row.result, row.status)
+            await onComplete(row.result, row.status, row.error)
           } catch (err) {
             logger.warn({ err, jobId }, "Failed to relay job completion to chat")
           }
