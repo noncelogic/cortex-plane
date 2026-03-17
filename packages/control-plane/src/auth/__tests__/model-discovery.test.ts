@@ -62,22 +62,29 @@ describe("discoverModels — anthropic", () => {
     expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer oauth-tok")
   })
 
-  it("returns empty array on failure", async () => {
+  it("falls back to static catalogue on API failure", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({}, 401))
+
+    vi.spyOn(console, "warn").mockImplementation(() => {})
 
     const svc = new ModelDiscoveryService()
     const models = await svc.discoverModels("anthropic", { apiKey: "bad" })
 
-    expect(models).toEqual([])
+    // Static catalogue kicks in for anthropic
+    expect(models.length).toBeGreaterThan(0)
+    expect(models.some((m) => m.id === "claude-sonnet-4-5")).toBe(true)
   })
 
-  it("returns empty array on network error", async () => {
+  it("falls back to static catalogue on network error", async () => {
     fetchMock.mockRejectedValueOnce(new Error("network error"))
+
+    vi.spyOn(console, "warn").mockImplementation(() => {})
 
     const svc = new ModelDiscoveryService()
     const models = await svc.discoverModels("anthropic", { apiKey: "sk-test" })
 
-    expect(models).toEqual([])
+    expect(models.length).toBeGreaterThan(0)
+    expect(models.some((m) => m.id === "claude-sonnet-4-5")).toBe(true)
   })
 })
 
@@ -332,13 +339,12 @@ describe("cache", () => {
     expect(svc.getAllCachedModels()).toEqual([])
   })
 
-  it("does not cache empty results", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({}, 401))
-
+  it("does not cache empty results for providers without static catalogue", async () => {
+    // google-ai-studio has no static fallback and needs apiKey (not accessToken)
     const svc = new ModelDiscoveryService()
-    await svc.discoverModels("anthropic", { apiKey: "bad" })
+    await svc.discoverModels("google-ai-studio", { accessToken: "tok" })
 
-    expect(svc.getCachedModels("anthropic")).toEqual([])
+    expect(svc.getCachedModels("google-ai-studio")).toEqual([])
   })
 })
 
@@ -368,5 +374,101 @@ describe("getAllCachedModels", () => {
     const gemini = all.find((m) => m.id === "gemini-2.5-pro")
     expect(gemini).toBeDefined()
     expect(gemini!.providers).toEqual(["google-antigravity"])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Static catalogue fallback
+// ---------------------------------------------------------------------------
+
+describe("discoverModels — static catalogue fallback", () => {
+  it("falls back to static catalogue when google-antigravity API returns 404", async () => {
+    // Both endpoints return 404
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({}, 404))
+      .mockResolvedValueOnce(jsonResponse({}, 404))
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const svc = new ModelDiscoveryService()
+    const models = await svc.discoverModels("google-antigravity", { accessToken: "tok" })
+
+    expect(models.length).toBeGreaterThan(0)
+    expect(models.some((m) => m.id === "gemini-3-flash")).toBe(true)
+    expect(models.every((m) => m.providers.includes("google-antigravity"))).toBe(true)
+
+    // Warning should have been logged
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("static model catalogue"))
+
+    warnSpy.mockRestore()
+  })
+
+  it("falls back to static catalogue when anthropic API fails", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({}, 500))
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const svc = new ModelDiscoveryService()
+    const models = await svc.discoverModels("anthropic", { apiKey: "bad-key" })
+
+    expect(models.length).toBeGreaterThan(0)
+    expect(models.some((m) => m.id === "claude-sonnet-4-5")).toBe(true)
+    expect(models.every((m) => m.providers.includes("anthropic"))).toBe(true)
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("static model catalogue"))
+
+    warnSpy.mockRestore()
+  })
+
+  it("falls back to static catalogue when openai-codex API fails", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({}, 403))
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const svc = new ModelDiscoveryService()
+    const models = await svc.discoverModels("openai-codex", { apiKey: "bad" })
+
+    expect(models.length).toBeGreaterThan(0)
+    expect(models.some((m) => m.id === "gpt-5")).toBe(true)
+
+    warnSpy.mockRestore()
+  })
+
+  it("does NOT fall back when dynamic discovery succeeds", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ data: [{ id: "claude-sonnet-4-6" }] }))
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const svc = new ModelDiscoveryService()
+    const models = await svc.discoverModels("anthropic", { apiKey: "sk-good" })
+
+    expect(models).toHaveLength(1)
+    expect(models[0]!.id).toBe("claude-sonnet-4-6")
+
+    // No fallback warning
+    expect(warnSpy).not.toHaveBeenCalled()
+
+    warnSpy.mockRestore()
+  })
+
+  it("does NOT fall back for providers without static catalogue", async () => {
+    const svc = new ModelDiscoveryService()
+    const models = await svc.discoverModels("some-unknown", { apiKey: "key" })
+    expect(models).toEqual([])
+  })
+
+  it("caches fallback results", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({}, 404))
+      .mockResolvedValueOnce(jsonResponse({}, 404))
+
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const svc = new ModelDiscoveryService()
+    await svc.discoverModels("google-antigravity", { accessToken: "tok" })
+
+    const cached = svc.getCachedModels("google-antigravity")
+    expect(cached.length).toBeGreaterThan(0)
+    expect(cached.some((m) => m.id === "gemini-3-flash")).toBe(true)
   })
 })

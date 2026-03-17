@@ -7,6 +7,7 @@
  */
 
 import type { ModelInfo } from "../observability/model-providers.js"
+import { getStaticModels } from "./model-catalogue.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -241,6 +242,17 @@ export class ModelDiscoveryService {
         break
       default:
         models = []
+    }
+
+    // Fall back to static catalogue when dynamic discovery returns empty
+    if (models.length === 0) {
+      const fallback = getStaticModels(providerId)
+      if (fallback) {
+        console.warn(
+          `[model-discovery] Dynamic discovery returned empty for "${providerId}" — using static model catalogue`,
+        )
+        models = fallback
+      }
     }
 
     if (models.length > 0) {
