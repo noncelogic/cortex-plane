@@ -59,10 +59,22 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
     description: "Claude/Gemini via Google Cloud Antigravity",
   },
   {
+    id: "google-gemini-cli",
+    name: "Google Gemini CLI",
+    authType: "oauth",
+    description: "Gemini models via Google Gemini CLI OAuth",
+  },
+  {
     id: "openai-codex",
     name: "OpenAI Codex",
     authType: "oauth",
     description: "GPT models via ChatGPT subscription",
+  },
+  {
+    id: "github-copilot",
+    name: "GitHub Copilot",
+    authType: "oauth",
+    description: "GPT/Claude models via GitHub Copilot subscription",
   },
   {
     id: "anthropic",
@@ -113,13 +125,11 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
 ]
 
 /**
- * Maps OAuth provider IDs to their corresponding AuthOAuthConfig property key.
+ * Maps user-service OAuth provider IDs to their AuthOAuthConfig property key.
+ * Code-paste (LLM) providers are resolved via CODE_PASTE_PROVIDERS instead.
  * API key providers are always available and not listed here.
  */
-const OAUTH_PROVIDER_CONFIG_KEY: Record<string, keyof AuthOAuthConfig> = {
-  "google-antigravity": "googleAntigravity",
-  "openai-codex": "openaiCodex",
-  anthropic: "anthropic",
+const USER_SERVICE_CONFIG_KEY: Record<string, keyof AuthOAuthConfig> = {
   "google-workspace": "googleWorkspace",
   "github-user": "githubUser",
   "slack-user": "slackUser",
@@ -128,17 +138,22 @@ const OAUTH_PROVIDER_CONFIG_KEY: Record<string, keyof AuthOAuthConfig> = {
 /**
  * Return the subset of SUPPORTED_PROVIDERS that are actually connectable:
  *  - API key providers are always included (user pastes their own key)
- *  - OAuth providers are included only when their OAUTH_*_CLIENT_ID env vars
- *    are configured (i.e. the matching AuthOAuthConfig property is defined)
+ *  - Code-paste (LLM) OAuth providers are included when their CLIENT_ID env
+ *    var is set (checked via CODE_PASTE_PROVIDERS registry)
+ *  - User-service OAuth providers are included when the matching
+ *    AuthOAuthConfig property is defined
  */
 export function getConfiguredProviders(authConfig?: AuthOAuthConfig): ProviderInfo[] {
   if (!authConfig) return []
 
   return SUPPORTED_PROVIDERS.filter((p) => {
-    const configKey = OAUTH_PROVIDER_CONFIG_KEY[p.id]
+    // Code-paste (LLM) providers — single source of truth
+    if (p.id in CODE_PASTE_PROVIDERS) return true
+
+    const configKey = USER_SERVICE_CONFIG_KEY[p.id]
     // Not an OAuth provider (api_key) — always available
     if (!configKey) return true
-    // OAuth provider — only available if config is set
+    // User-service OAuth provider — only available if config is set
     return authConfig[configKey] !== undefined
   })
 }
@@ -756,26 +771,19 @@ export class CredentialService {
   }
 
   private getProviderConfig(provider: string): OAuthProviderConfig | undefined {
-    switch (provider) {
-      case "google-antigravity":
-        return this.authConfig.googleAntigravity
-      case "openai-codex":
-        return this.authConfig.openaiCodex
-      case "anthropic": {
-        // Anthropic config comes from hardcoded registry (or env override)
-        if (this.authConfig.anthropic) return this.authConfig.anthropic
-        const reg = CODE_PASTE_PROVIDERS["anthropic"]
-        if (reg) {
-          return {
-            clientId: reg.clientId,
-            clientSecret: reg.clientSecret,
-            authUrl: reg.authUrl,
-            tokenUrl: reg.tokenUrl,
-          }
-        }
-        return undefined
+    // Code-paste (LLM) providers — single source of truth
+    const codePaste = CODE_PASTE_PROVIDERS[provider]
+    if (codePaste) {
+      return {
+        clientId: codePaste.clientId,
+        clientSecret: codePaste.clientSecret,
+        authUrl: codePaste.authUrl,
+        tokenUrl: codePaste.tokenUrl,
       }
-      // User service providers
+    }
+
+    // User service providers
+    switch (provider) {
       case "google-workspace":
         return this.authConfig.googleWorkspace
       case "github-user":

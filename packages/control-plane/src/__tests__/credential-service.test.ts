@@ -1,3 +1,11 @@
+// Set env vars before imports so CODE_PASTE_PROVIDERS is populated.
+vi.hoisted(() => {
+  process.env.OAUTH_GOOGLE_ANTIGRAVITY_CLIENT_ID = "test-ga-id"
+  process.env.OAUTH_OPENAI_CODEX_CLIENT_ID = "test-oc-id"
+  // Anthropic: CLIENT_ID only, no CLIENT_SECRET (PKCE-only)
+  process.env.OAUTH_ANTHROPIC_CLIENT_ID = "test-ant-id"
+})
+
 import type { Kysely } from "kysely"
 import { describe, expect, it, vi } from "vitest"
 
@@ -7,7 +15,12 @@ import {
   encryptUserKey,
   generateUserKey,
 } from "../auth/credential-encryption.js"
-import { CredentialService, SUPPORTED_PROVIDERS } from "../auth/credential-service.js"
+import {
+  CredentialService,
+  getConfiguredProviders,
+  SUPPORTED_PROVIDERS,
+} from "../auth/credential-service.js"
+import type { AuthOAuthConfig } from "../config.js"
 import type { Database, ProviderCredential } from "../db/types.js"
 
 // ---------------------------------------------------------------------------
@@ -620,6 +633,15 @@ describe("SUPPORTED_PROVIDERS", () => {
     expect(slackUser!.credentialClass).toBe("user_service")
   })
 
+  it("includes all code-paste LLM providers", () => {
+    const ids = SUPPORTED_PROVIDERS.map((p) => p.id)
+    expect(ids).toContain("google-antigravity")
+    expect(ids).toContain("google-gemini-cli")
+    expect(ids).toContain("openai-codex")
+    expect(ids).toContain("github-copilot")
+    expect(ids).toContain("anthropic")
+  })
+
   it("includes tool secret providers", () => {
     const brave = SUPPORTED_PROVIDERS.find((p) => p.id === "brave")
     expect(brave).toBeDefined()
@@ -821,5 +843,67 @@ describe("CredentialService.deleteCredential", () => {
     expect(auditIdx).toBeGreaterThanOrEqual(0)
     expect(deleteIdx).toBeGreaterThanOrEqual(0)
     expect(auditIdx).toBeLessThan(deleteIdx)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: getConfiguredProviders (PKCE / empty-secret providers)
+// ---------------------------------------------------------------------------
+
+describe("getConfiguredProviders", () => {
+  const baseAuth: AuthOAuthConfig = {
+    dashboardUrl: "http://localhost:3100",
+    credentialMasterKey: "test-key",
+    sessionMaxAge: 3600,
+  }
+
+  it("includes code-paste providers when their CLIENT_ID env var is set", () => {
+    // Env vars set via vi.hoisted above (no CLIENT_SECRET for anthropic)
+    const providers = getConfiguredProviders(baseAuth)
+    const ids = providers.map((p) => p.id)
+    expect(ids).toContain("google-antigravity")
+    expect(ids).toContain("openai-codex")
+    expect(ids).toContain("anthropic")
+  })
+
+  it("includes PKCE-only providers with empty client secret", () => {
+    // OAUTH_ANTHROPIC_CLIENT_ID is set but OAUTH_ANTHROPIC_CLIENT_SECRET is not
+    const providers = getConfiguredProviders(baseAuth)
+    const anthropic = providers.find((p) => p.id === "anthropic")
+    expect(anthropic).toBeDefined()
+    expect(anthropic!.authType).toBe("oauth")
+  })
+
+  it("always includes API key providers", () => {
+    const providers = getConfiguredProviders(baseAuth)
+    const ids = providers.map((p) => p.id)
+    expect(ids).toContain("openai")
+    expect(ids).toContain("google-ai-studio")
+    expect(ids).toContain("brave")
+  })
+
+  it("excludes user-service providers when not in authConfig", () => {
+    const providers = getConfiguredProviders(baseAuth)
+    const ids = providers.map((p) => p.id)
+    expect(ids).not.toContain("google-workspace")
+    expect(ids).not.toContain("github-user")
+    expect(ids).not.toContain("slack-user")
+  })
+
+  it("includes user-service providers when configured in authConfig", () => {
+    const auth: AuthOAuthConfig = {
+      ...baseAuth,
+      googleWorkspace: { clientId: "gw-id", clientSecret: "gw-secret" },
+      slackUser: { clientId: "sl-id", clientSecret: "sl-secret" },
+    }
+    const providers = getConfiguredProviders(auth)
+    const ids = providers.map((p) => p.id)
+    expect(ids).toContain("google-workspace")
+    expect(ids).toContain("slack-user")
+    expect(ids).not.toContain("github-user")
+  })
+
+  it("returns empty array when authConfig is undefined", () => {
+    expect(getConfiguredProviders(undefined)).toEqual([])
   })
 })

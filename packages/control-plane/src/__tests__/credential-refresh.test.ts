@@ -1,3 +1,9 @@
+// Set env vars before imports so CODE_PASTE_PROVIDERS is populated.
+vi.hoisted(() => {
+  process.env.OAUTH_GOOGLE_ANTIGRAVITY_CLIENT_ID = "test-client-id"
+  process.env.OAUTH_GOOGLE_ANTIGRAVITY_CLIENT_SECRET = "test-client-secret"
+})
+
 import type { Kysely } from "kysely"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -43,10 +49,6 @@ const AUTH_CONFIG: AuthOAuthConfig = {
   dashboardUrl: "http://localhost:3000",
   credentialMasterKey: MASTER_PASSPHRASE,
   sessionMaxAge: 3600,
-  googleAntigravity: {
-    clientId: "test-client-id",
-    clientSecret: "test-client-secret",
-  },
 }
 
 const now = new Date()

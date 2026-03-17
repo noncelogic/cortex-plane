@@ -31,9 +31,6 @@ export interface AuthOAuthConfig {
   sessionMaxAge: number
   google?: OAuthProviderConfig
   github?: OAuthProviderConfig
-  googleAntigravity?: OAuthProviderConfig
-  openaiCodex?: OAuthProviderConfig
-  anthropic?: OAuthProviderConfig
   // User service OAuth providers
   googleWorkspace?: OAuthProviderConfig
   githubUser?: OAuthProviderConfig
@@ -107,9 +104,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       sessionMaxAge: parseIntOr(env.SESSION_MAX_AGE_SECONDS, 7 * 24 * 3600),
       google: parseOAuthProvider(env, "GOOGLE"),
       github: parseOAuthProvider(env, "GITHUB"),
-      googleAntigravity: parseOAuthProvider(env, "GOOGLE_ANTIGRAVITY"),
-      openaiCodex: parseOAuthProvider(env, "OPENAI_CODEX"),
-      anthropic: parseOAuthProvider(env, "ANTHROPIC"),
       // User service OAuth providers
       googleWorkspace: parseOAuthProvider(env, "GOOGLE_WORKSPACE"),
       githubUser: parseOAuthProvider(env, "GITHUB_USER"),
@@ -156,11 +150,6 @@ function parseFloatOr(value: string | undefined, fallback: number): number {
   return Math.max(0, Math.min(1, parsed))
 }
 
-/**
- * Parse OAuth provider config from env vars.
- * Expects OAUTH_{PREFIX}_CLIENT_ID and OAUTH_{PREFIX}_CLIENT_SECRET.
- * Returns undefined if client ID is missing (provider not configured).
- */
 /**
  * Parse an OAuth provider from environment variables.
  * CLIENT_ID is required — returns undefined when absent.
