@@ -50,9 +50,10 @@ ssh cortex-plane 'k3s kubectl logs -n cortex deployment/control-plane --tail=50'
 | `OAUTH_GITHUB_CLIENT_ID`     | Dashboard login                               | Yes      |
 | `OAUTH_GITHUB_CLIENT_SECRET` | Dashboard login                               | Yes      |
 
-**NOT needed as env vars** (embedded in code):
+**Optional env vars** (LLM OAuth):
 
-- LLM OAuth credentials (Antigravity, Codex, Anthropic) — hardcoded in `oauth-providers.ts`
+- `OAUTH_<PROVIDER>_CLIENT_ID` — set to enable the provider (see `.env.example`)
+- `OAUTH_<PROVIDER>_CLIENT_SECRET` — optional for PKCE-only providers (Anthropic, Codex, Gemini CLI, Antigravity)
 - LLM API keys — stored per-user in DB, encrypted with `CREDENTIAL_MASTER_KEY`
 
 ## ConfigMaps

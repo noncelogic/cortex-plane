@@ -81,10 +81,6 @@ const MOCK_AUTH_CONFIG: AuthOAuthConfig = {
   credentialMasterKey: "test-master-key-32chars-minimum!",
   dashboardUrl: "http://localhost:3100",
   sessionMaxAge: 86400,
-  googleAntigravity: {
-    clientId: "test-client-id",
-    clientSecret: "test-client-secret",
-  },
   googleWorkspace: {
     clientId: "ws-client-id",
     clientSecret: "ws-client-secret",

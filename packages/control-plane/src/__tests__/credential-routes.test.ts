@@ -1,4 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+
+// Set env vars before imports so CODE_PASTE_PROVIDERS is populated.
+vi.hoisted(() => {
+  process.env.OAUTH_GOOGLE_ANTIGRAVITY_CLIENT_ID = "ga-id"
+  process.env.OAUTH_GEMINI_CLI_CLIENT_ID = "gc-id"
+  process.env.OAUTH_OPENAI_CODEX_CLIENT_ID = "oc-id"
+  process.env.OAUTH_GITHUB_COPILOT_CLIENT_ID = "ghc-id"
+  process.env.OAUTH_ANTHROPIC_CLIENT_ID = "ant-id"
+})
+
 import Fastify from "fastify"
 import { beforeAll, describe, expect, it, vi } from "vitest"
 
@@ -99,9 +109,8 @@ const FULL_AUTH_CONFIG: AuthOAuthConfig = {
   dashboardUrl: "http://localhost:3100",
   credentialMasterKey: "test-master-key",
   sessionMaxAge: 3600,
-  googleAntigravity: { clientId: "ga-id", clientSecret: "ga-secret" },
-  openaiCodex: { clientId: "oc-id", clientSecret: "oc-secret" },
-  anthropic: { clientId: "ant-id", clientSecret: "ant-secret" },
+  // Code-paste (LLM) providers are configured via CODE_PASTE_PROVIDERS
+  // (env vars set in beforeAll below), not via authConfig.
   googleWorkspace: { clientId: "gw-id", clientSecret: "gw-secret" },
   githubUser: { clientId: "gh-id", clientSecret: "gh-secret" },
   slackUser: { clientId: "sl-id", clientSecret: "sl-secret" },
@@ -193,8 +202,7 @@ describe("GET /credentials/providers", () => {
       dashboardUrl: "http://localhost:3100",
       credentialMasterKey: "test-master-key",
       sessionMaxAge: 3600,
-      googleAntigravity: { clientId: "ga-id", clientSecret: "ga-secret" },
-      // No other OAuth providers configured
+      // No user-service OAuth providers configured
     }
     const { app } = await buildTestApp({ authConfig: partialAuth })
 
@@ -207,17 +215,17 @@ describe("GET /credentials/providers", () => {
     const body = res.json()
     const ids = body.providers.map((p: { id: string }) => p.id) as string[]
 
-    // google-antigravity is configured → included
+    // Code-paste (LLM) providers enabled via env vars → always included
     expect(ids).toContain("google-antigravity")
+    expect(ids).toContain("anthropic")
+    expect(ids).toContain("openai-codex")
 
     // API key providers always included
     expect(ids).toContain("openai")
     expect(ids).toContain("google-ai-studio")
     expect(ids).toContain("brave")
 
-    // Unconfigured OAuth providers excluded
-    expect(ids).not.toContain("anthropic")
-    expect(ids).not.toContain("openai-codex")
+    // Unconfigured user-service OAuth providers excluded
     expect(ids).not.toContain("google-workspace")
     expect(ids).not.toContain("github-user")
     expect(ids).not.toContain("slack-user")

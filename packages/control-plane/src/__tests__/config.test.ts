@@ -230,29 +230,29 @@ describe("loadConfig", () => {
       expect(config.auth!.slackUser!.clientSecret).toBe("slack-client-secret")
     })
 
-    it("registers provider when CLIENT_SECRET is empty string", () => {
+    it("registers user-service provider when CLIENT_SECRET is empty string", () => {
       const config = loadConfig({
         DATABASE_URL: "postgres://localhost/test",
         CREDENTIAL_MASTER_KEY: "test-master-key",
-        OAUTH_ANTHROPIC_CLIENT_ID: "anthropic-client-id",
-        OAUTH_ANTHROPIC_CLIENT_SECRET: "",
+        OAUTH_GOOGLE_WORKSPACE_CLIENT_ID: "gw-client-id",
+        OAUTH_GOOGLE_WORKSPACE_CLIENT_SECRET: "",
       })
       expect(config.auth).toBeDefined()
-      expect(config.auth!.anthropic).toBeDefined()
-      expect(config.auth!.anthropic!.clientId).toBe("anthropic-client-id")
-      expect(config.auth!.anthropic!.clientSecret).toBe("")
+      expect(config.auth!.googleWorkspace).toBeDefined()
+      expect(config.auth!.googleWorkspace!.clientId).toBe("gw-client-id")
+      expect(config.auth!.googleWorkspace!.clientSecret).toBe("")
     })
 
-    it("registers provider when CLIENT_SECRET env var is absent", () => {
+    it("registers user-service provider when CLIENT_SECRET env var is absent", () => {
       const config = loadConfig({
         DATABASE_URL: "postgres://localhost/test",
         CREDENTIAL_MASTER_KEY: "test-master-key",
-        OAUTH_OPENAI_CODEX_CLIENT_ID: "codex-client-id",
+        OAUTH_GITHUB_USER_CLIENT_ID: "gh-client-id",
       })
       expect(config.auth).toBeDefined()
-      expect(config.auth!.openaiCodex).toBeDefined()
-      expect(config.auth!.openaiCodex!.clientId).toBe("codex-client-id")
-      expect(config.auth!.openaiCodex!.clientSecret).toBe("")
+      expect(config.auth!.githubUser).toBeDefined()
+      expect(config.auth!.githubUser!.clientId).toBe("gh-client-id")
+      expect(config.auth!.githubUser!.clientSecret).toBe("")
     })
 
     it("leaves user service providers undefined when env vars are missing", () => {
