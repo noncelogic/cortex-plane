@@ -15,12 +15,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 
 import {
   CredentialService,
-  SUPPORTED_PROVIDERS,
   getConfiguredProviders,
+  SUPPORTED_PROVIDERS,
 } from "../auth/credential-service.js"
-import type { AuthOAuthConfig } from "../config.js"
 import type { ModelDiscoveryService } from "../auth/model-discovery.js"
 import type { SessionService } from "../auth/session-service.js"
+import type { AuthOAuthConfig } from "../config.js"
 import { createRequireAuth, createRequireRole, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
 import { modelsForProvider } from "../observability/model-providers.js"
