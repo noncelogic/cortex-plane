@@ -328,6 +328,8 @@ describe("watchJobCompletion", () => {
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "COMPLETED",
             result: completedResult,
+            error: null,
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -342,17 +344,19 @@ describe("watchJobCompletion", () => {
     // Advance timers past one interval
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(onComplete).toHaveBeenCalledWith(completedResult, "COMPLETED")
+    expect(onComplete).toHaveBeenCalledWith(completedResult, "COMPLETED", null)
   })
 
-  it("calls onComplete when job reaches FAILED status", async () => {
-    const failedResult = { error: "something broke" }
+  it("calls onComplete when job reaches terminal FAILED status (with completed_at)", async () => {
+    const failedError = { category: "PERMANENT", message: "something broke" }
     const selectFn = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "FAILED",
-            result: failedResult,
+            result: null,
+            error: failedError,
+            completed_at: new Date(),
           }),
         }),
       }),
@@ -366,7 +370,67 @@ describe("watchJobCompletion", () => {
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(onComplete).toHaveBeenCalledWith(failedResult, "FAILED")
+    expect(onComplete).toHaveBeenCalledWith(null, "FAILED", failedError)
+  })
+
+  it("skips transient FAILED status during retries (no completed_at)", async () => {
+    let callCount = 0
+    const selectFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          executeTakeFirst: vi.fn().mockImplementation(() => {
+            callCount++
+            if (callCount === 1) {
+              // Transient FAILED during retry — no completed_at
+              return Promise.resolve({
+                status: "FAILED",
+                result: null,
+                error: { category: "RETRYABLE", message: "transient" },
+                completed_at: null,
+              })
+            }
+            if (callCount === 2) {
+              // Back to RUNNING after retry
+              return Promise.resolve({
+                status: "RUNNING",
+                result: null,
+                error: null,
+                completed_at: null,
+              })
+            }
+            // Final permanent failure
+            return Promise.resolve({
+              status: "FAILED",
+              result: null,
+              error: { category: "PERMANENT", message: "final failure" },
+              completed_at: new Date(),
+            })
+          }),
+        }),
+      }),
+    })
+    const db = { selectFrom: selectFn } as unknown as Kysely<Database>
+
+    const onComplete = vi.fn().mockResolvedValue(undefined)
+    const logger = { warn: vi.fn() }
+
+    watchJobCompletion(db, "job-42", onComplete, logger, { intervalMs: 100 })
+
+    // First interval: transient FAILED — should NOT fire callback
+    await vi.advanceTimersByTimeAsync(150)
+    expect(onComplete).not.toHaveBeenCalled()
+
+    // Second interval: RUNNING
+    await vi.advanceTimersByTimeAsync(100)
+    expect(onComplete).not.toHaveBeenCalled()
+
+    // Third interval: terminal FAILED with completed_at
+    await vi.advanceTimersByTimeAsync(100)
+    expect(onComplete).toHaveBeenCalledWith(null, "FAILED", {
+      category: "PERMANENT",
+      message: "final failure",
+    })
+    expect(callCount).toBe(3)
   })
 
   it("keeps polling while job is still RUNNING", async () => {
@@ -377,11 +441,18 @@ describe("watchJobCompletion", () => {
           executeTakeFirst: vi.fn().mockImplementation(() => {
             callCount++
             if (callCount < 3) {
-              return Promise.resolve({ status: "RUNNING", result: null })
+              return Promise.resolve({
+                status: "RUNNING",
+                result: null,
+                error: null,
+                completed_at: null,
+              })
             }
             return Promise.resolve({
               status: "COMPLETED",
               result: { summary: "finally done" },
+              error: null,
+              completed_at: new Date(),
             })
           }),
         }),
@@ -400,17 +471,19 @@ describe("watchJobCompletion", () => {
     // Third interval: completed
     await vi.advanceTimersByTimeAsync(100)
 
-    expect(onComplete).toHaveBeenCalledWith({ summary: "finally done" }, "COMPLETED")
+    expect(onComplete).toHaveBeenCalledWith({ summary: "finally done" }, "COMPLETED", null)
     expect(callCount).toBe(3)
   })
 
-  it("stops polling on timeout", async () => {
+  it("stops polling on timeout and calls onTimeout callback", async () => {
     const selectFn = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           executeTakeFirst: vi.fn().mockResolvedValue({
             status: "RUNNING",
             result: null,
+            error: null,
+            completed_at: null,
           }),
         }),
       }),
@@ -418,17 +491,20 @@ describe("watchJobCompletion", () => {
     const db = { selectFrom: selectFn } as unknown as Kysely<Database>
 
     const onComplete = vi.fn()
+    const onTimeout = vi.fn().mockResolvedValue(undefined)
     const logger = { warn: vi.fn() }
 
     watchJobCompletion(db, "job-42", onComplete, logger, {
       intervalMs: 100,
       timeoutMs: 350,
+      onTimeout,
     })
 
     // Advance past the timeout
     await vi.advanceTimersByTimeAsync(500)
 
     expect(onComplete).not.toHaveBeenCalled()
+    expect(onTimeout).toHaveBeenCalled()
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ jobId: "job-42" }),
       "Job completion watch timed out",

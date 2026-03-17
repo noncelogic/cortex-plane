@@ -114,9 +114,14 @@ export async function runPreflight(
 // ---------------------------------------------------------------------------
 
 /**
- * Map a job error object (from the `error` JSONB column) to an actionable
- * user-facing message.  Falls back to a generic message when the error
- * category is not recognised.
+ * Map a job error object (from the `error` JSONB column or the execution
+ * `result` JSONB column) to an actionable user-facing message.
+ *
+ * The function inspects both the top-level `category`/`message` fields
+ * (set by the catch-block error path) and the nested `error.classification`
+ * field (set by the execution-result path via `executionResultToJson`).
+ *
+ * Falls back to a generic message when the error category is not recognised.
  */
 export function mapJobErrorToUserMessage(
   error: Record<string, unknown> | null | undefined,
@@ -125,11 +130,21 @@ export function mapJobErrorToUserMessage(
     return "Something went wrong processing your message. Please try again."
   }
 
+  // Top-level fields from the job `error` column (exception path)
   const category = typeof error.category === "string" ? error.category : ""
   const message = typeof error.message === "string" ? error.message : ""
 
+  // Nested error from the execution `result` column (execution-result path)
+  const nested = error.error as Record<string, unknown> | undefined
+  const nestedClassification =
+    typeof nested?.classification === "string" ? nested.classification : ""
+  const nestedMessage = typeof nested?.message === "string" ? nested.message : ""
+
+  // Combine for matching
+  const allMessages = [message, nestedMessage].join(" ")
+
   // Quarantine
-  if (category === "QUARANTINED" || message.includes("QUARANTINED")) {
+  if (category === "QUARANTINED" || allMessages.includes("QUARANTINED")) {
     return (
       "This agent has been quarantined due to repeated failures. " +
       "An operator can reset it from the agent dashboard."
@@ -138,9 +153,9 @@ export function mapJobErrorToUserMessage(
 
   // Missing credential
   if (
-    message.includes("No LLM credential") ||
-    message.includes("credential") ||
-    message.includes("LLM_API_KEY")
+    allMessages.includes("No LLM credential") ||
+    allMessages.includes("credential") ||
+    allMessages.includes("LLM_API_KEY")
   ) {
     return (
       "This agent does not have an LLM API key configured. " +
@@ -148,12 +163,44 @@ export function mapJobErrorToUserMessage(
     )
   }
 
-  // Authentication failure (e.g. expired/revoked API key)
-  if (category === "PERMANENT" && message.includes("Authentication")) {
+  // Authentication / authorization failure (e.g. expired/revoked API key, 401/403)
+  if (
+    (category === "PERMANENT" || nestedClassification === "permanent") &&
+    (allMessages.includes("Authentication") ||
+      allMessages.includes("authorization") ||
+      allMessages.includes("403") ||
+      allMessages.includes("401") ||
+      allMessages.includes("Forbidden") ||
+      allMessages.includes("Unauthorized"))
+  ) {
     return (
       "The agent's LLM API key is invalid or expired. " +
       "An operator needs to update the credential in the agent settings."
     )
+  }
+
+  // Provider not found / model not available (404)
+  if (
+    allMessages.includes("404") ||
+    allMessages.includes("Not Found") ||
+    allMessages.includes("model not found") ||
+    allMessages.includes("does not exist")
+  ) {
+    return (
+      "The configured AI model or provider endpoint was not found. " +
+      "An operator needs to check the agent's model configuration."
+    )
+  }
+
+  // Rate limiting (429)
+  if (
+    allMessages.includes("429") ||
+    allMessages.includes("rate limit") ||
+    allMessages.includes("Rate limit") ||
+    allMessages.includes("Too Many Requests") ||
+    allMessages.includes("quota")
+  ) {
+    return "The AI provider is currently rate-limiting requests. Please try again in a few minutes."
   }
 
   // Context budget exceeded
@@ -167,6 +214,17 @@ export function mapJobErrorToUserMessage(
   // Timeout
   if (category === "TIMEOUT") {
     return "The request timed out. Please try again."
+  }
+
+  // Provider unavailable (500/502/503)
+  if (
+    allMessages.includes("500") ||
+    allMessages.includes("502") ||
+    allMessages.includes("503") ||
+    allMessages.includes("Service Unavailable") ||
+    allMessages.includes("Internal Server Error")
+  ) {
+    return "The AI provider is temporarily unavailable. Please try again shortly."
   }
 
   // Generic fallback

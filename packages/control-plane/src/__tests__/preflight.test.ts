@@ -216,4 +216,88 @@ describe("mapJobErrorToUserMessage", () => {
     expect(mapJobErrorToUserMessage(null)).toContain("Something went wrong")
     expect(mapJobErrorToUserMessage(undefined)).toContain("Something went wrong")
   })
+
+  // --- Provider error patterns (HTTP status codes) ---
+
+  it("returns auth failure for 403 Forbidden from provider", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "PERMANENT",
+      message: "403 Forbidden: API key not authorized",
+    })
+    expect(msg).toContain("invalid or expired")
+    expect(msg).toContain("operator")
+  })
+
+  it("returns auth failure for 401 Unauthorized", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "PERMANENT",
+      message: "401 Unauthorized",
+    })
+    expect(msg).toContain("invalid or expired")
+  })
+
+  it("returns model-not-found for 404 errors", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "PERMANENT",
+      message: "404 Not Found: model does not exist",
+    })
+    expect(msg).toContain("model or provider endpoint was not found")
+  })
+
+  it("returns rate-limit message for 429 errors", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "RETRYABLE",
+      message: "429 Too Many Requests",
+    })
+    expect(msg).toContain("rate-limiting")
+  })
+
+  it("returns provider unavailable for 503 errors", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "RETRYABLE",
+      message: "503 Service Unavailable",
+    })
+    expect(msg).toContain("temporarily unavailable")
+  })
+
+  // --- Execution result error format (nested error.classification) ---
+
+  it("handles nested error from execution result (permanent classification)", () => {
+    const msg = mapJobErrorToUserMessage({
+      taskId: "task-1",
+      status: "failed",
+      stdout: "",
+      summary: "",
+      error: {
+        classification: "permanent",
+        message: "403 Forbidden: access denied",
+      },
+    })
+    expect(msg).toContain("invalid or expired")
+  })
+
+  it("handles nested error with rate limit message", () => {
+    const msg = mapJobErrorToUserMessage({
+      taskId: "task-1",
+      status: "failed",
+      stdout: "",
+      error: {
+        classification: "retryable",
+        message: "rate limit exceeded for model",
+      },
+    })
+    expect(msg).toContain("rate-limiting")
+  })
+
+  it("returns generic message for execution result with unrecognised nested error", () => {
+    const msg = mapJobErrorToUserMessage({
+      taskId: "task-1",
+      status: "failed",
+      error: {
+        classification: "unknown",
+        message: "something unexpected",
+      },
+    })
+    expect(msg).toContain("Something went wrong")
+  })
 })
