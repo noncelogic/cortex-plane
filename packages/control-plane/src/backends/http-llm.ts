@@ -478,10 +478,7 @@ const ANTIGRAVITY_CLIENT_METADATA = {
  * Non-messages requests pass through unchanged.
  */
 export function createAntigravityFetch(): typeof globalThis.fetch {
-  return async (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ): Promise<Response> => {
+  return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     let url: string
     let requestInit = init
 

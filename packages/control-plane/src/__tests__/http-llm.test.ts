@@ -1,7 +1,7 @@
 import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
 import { describe, expect, it, vi } from "vitest"
 
-import { HttpLlmBackend, type McpDeps, createAntigravityFetch } from "../backends/http-llm.js"
+import { createAntigravityFetch, HttpLlmBackend, type McpDeps } from "../backends/http-llm.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 
 // ---------------------------------------------------------------------------
@@ -1568,7 +1568,11 @@ describe("HttpLlmBackend — credential provider routing", () => {
     const handle = await backend.executeTask(task)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const client = (handle as any).client as { baseURL: string; authToken: string | null; fetch: unknown }
+    const client = (handle as any).client as {
+      baseURL: string
+      authToken: string | null
+      fetch: unknown
+    }
     expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
     expect(client.authToken).toBe(
       JSON.stringify({ token: "gcp-oauth-token", projectId: "my-project-42" }),
@@ -1590,20 +1594,19 @@ describe("createAntigravityFetch — URL rewriting", () => {
     const originalFetch = globalThis.fetch
 
     let capturedUrl = ""
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+    globalThis.fetch = vi.fn((input: string | URL | Request) => {
+      capturedUrl =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
       return new Response("{}", { status: 200 })
     }) as typeof globalThis.fetch
 
     try {
-      await antigravityFetch(
-        "https://cloudcode-pa.googleapis.com/v1/messages",
-        { method: "POST", body: JSON.stringify({ model: "claude-3", messages: [] }) },
-      )
+      await antigravityFetch("https://cloudcode-pa.googleapis.com/v1/messages", {
+        method: "POST",
+        body: JSON.stringify({ model: "claude-3", messages: [] }),
+      })
 
-      expect(capturedUrl).toBe(
-        "https://cloudcode-pa.googleapis.com/v1internal:streamCodeAssist",
-      )
+      expect(capturedUrl).toBe("https://cloudcode-pa.googleapis.com/v1internal:streamCodeAssist")
     } finally {
       globalThis.fetch = originalFetch
     }
@@ -1614,16 +1617,17 @@ describe("createAntigravityFetch — URL rewriting", () => {
     const originalFetch = globalThis.fetch
 
     let capturedUrl = ""
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+    globalThis.fetch = vi.fn((input: string | URL | Request) => {
+      capturedUrl =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
       return new Response("{}", { status: 200 })
     }) as typeof globalThis.fetch
 
     try {
-      await antigravityFetch(
-        "https://daily-cloudcode-pa.sandbox.googleapis.com/v1/messages",
-        { method: "POST", body: "{}" },
-      )
+      await antigravityFetch("https://daily-cloudcode-pa.sandbox.googleapis.com/v1/messages", {
+        method: "POST",
+        body: "{}",
+      })
 
       expect(capturedUrl).toBe(
         "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamCodeAssist",
@@ -1638,8 +1642,9 @@ describe("createAntigravityFetch — URL rewriting", () => {
     const originalFetch = globalThis.fetch
 
     let capturedUrl = ""
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+    globalThis.fetch = vi.fn((input: string | URL | Request) => {
+      capturedUrl =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
       return new Response("{}", { status: 200 })
     }) as typeof globalThis.fetch
 
@@ -1659,22 +1664,20 @@ describe("createAntigravityFetch — URL rewriting", () => {
     const originalFetch = globalThis.fetch
 
     let capturedInit: RequestInit | undefined
-    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    globalThis.fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       capturedInit = init
       return new Response("{}", { status: 200 })
     }) as typeof globalThis.fetch
 
     try {
-      await antigravityFetch(
-        "https://cloudcode-pa.googleapis.com/v1/messages",
-        { method: "POST", body: "{}" },
-      )
+      await antigravityFetch("https://cloudcode-pa.googleapis.com/v1/messages", {
+        method: "POST",
+        body: "{}",
+      })
 
       const headers = new Headers(capturedInit?.headers)
       expect(headers.get("User-Agent")).toBe("google-api-nodejs-client/9.15.1")
-      expect(headers.get("X-Goog-Api-Client")).toBe(
-        "google-cloud-sdk vscode_cloudshelleditor/0.1",
-      )
+      expect(headers.get("X-Goog-Api-Client")).toBe("google-cloud-sdk vscode_cloudshelleditor/0.1")
       expect(headers.get("Client-Metadata")).toContain("GEMINI")
     } finally {
       globalThis.fetch = originalFetch
@@ -1686,17 +1689,17 @@ describe("createAntigravityFetch — URL rewriting", () => {
     const originalFetch = globalThis.fetch
 
     let capturedBody = ""
-    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    globalThis.fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       capturedBody = (init?.body as string) ?? ""
       return new Response("{}", { status: 200 })
     }) as typeof globalThis.fetch
 
     try {
       const originalBody = { model: "claude-3", messages: [{ role: "user", content: "hello" }] }
-      await antigravityFetch(
-        "https://cloudcode-pa.googleapis.com/v1/messages",
-        { method: "POST", body: JSON.stringify(originalBody) },
-      )
+      await antigravityFetch("https://cloudcode-pa.googleapis.com/v1/messages", {
+        method: "POST",
+        body: JSON.stringify(originalBody),
+      })
 
       const parsedBody = JSON.parse(capturedBody) as Record<string, unknown>
       // Original fields preserved
@@ -1718,8 +1721,9 @@ describe("createAntigravityFetch — URL rewriting", () => {
     const originalFetch = globalThis.fetch
 
     let capturedUrl = ""
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+    globalThis.fetch = vi.fn((input: string | URL | Request) => {
+      capturedUrl =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
       return new Response("{}", { status: 200 })
     }) as typeof globalThis.fetch
 
