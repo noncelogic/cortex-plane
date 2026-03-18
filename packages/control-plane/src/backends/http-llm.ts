@@ -224,11 +224,11 @@ export class HttpLlmBackend implements ExecutionBackend {
           clientBaseUrl = routing.baseUrl
           // Wrap token with projectId for Antigravity (OpenClaw pattern)
           const wrappedToken = wrapAntigravityToken(cred.token, cred.accountId)
-          // Proxy accepts standard Anthropic API format — no path rewriting needed
           client = new Anthropic({
             authToken: wrappedToken,
             apiKey: null as unknown as string,
             baseURL: routing.baseUrl,
+            fetch: createAntigravityFetch(),
           })
         } else {
           client = new Anthropic({
@@ -453,6 +453,87 @@ function nextAntigravityEndpoint(currentBaseUrl: string): string | null {
 function wrapAntigravityToken(rawToken: string, projectId?: string | null): string {
   if (!projectId) return rawToken
   return JSON.stringify({ token: rawToken, projectId })
+}
+
+/**
+ * Google Cloud Code Assist client metadata, used in Antigravity API calls.
+ * Matches the metadata format used by the Cloud Code IDE plugins.
+ */
+const ANTIGRAVITY_CLIENT_METADATA = {
+  ideType: "IDE_UNSPECIFIED",
+  platform: "PLATFORM_UNSPECIFIED",
+  pluginType: "GEMINI",
+} as const
+
+/**
+ * Create a custom fetch function for Google Antigravity.
+ *
+ * The Anthropic SDK appends `/v1/messages` to the configured baseURL,
+ * but Google's Cloud Code backend serves at `/v1internal:streamCodeAssist`.
+ * This fetch override intercepts outgoing requests and:
+ *   1. Rewrites the URL path from `/v1/messages` to `/v1internal:streamCodeAssist`
+ *   2. Adds Google-specific headers (User-Agent, X-Goog-Api-Client, Client-Metadata)
+ *   3. Wraps the request body with Cloud Code metadata
+ *
+ * Non-messages requests pass through unchanged.
+ */
+export function createAntigravityFetch(): typeof globalThis.fetch {
+  return async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    let url: string
+    let requestInit = init
+
+    if (typeof input === "string") {
+      url = input
+    } else if (input instanceof URL) {
+      url = input.toString()
+    } else {
+      url = input.url
+      if (!requestInit) {
+        requestInit = {
+          method: input.method,
+          headers: input.headers,
+          body: input.body,
+        }
+      }
+    }
+
+    // Only intercept Anthropic SDK message endpoints
+    if (!url.endsWith("/v1/messages")) {
+      return globalThis.fetch(input, init)
+    }
+
+    // Rewrite path to Cloud Code Assist streaming endpoint
+    const rewrittenUrl = url.replace(/\/v1\/messages$/, "/v1internal:streamCodeAssist")
+
+    // Add Google-specific headers
+    const headers = new Headers(requestInit?.headers)
+    headers.set("User-Agent", "google-api-nodejs-client/9.15.1")
+    headers.set("X-Goog-Api-Client", "google-cloud-sdk vscode_cloudshelleditor/0.1")
+    headers.set("Client-Metadata", JSON.stringify(ANTIGRAVITY_CLIENT_METADATA))
+
+    // Wrap request body with Cloud Code metadata
+    let body = requestInit?.body
+    if (body && typeof body === "string") {
+      try {
+        const parsed = JSON.parse(body) as Record<string, unknown>
+        body = JSON.stringify({
+          ...parsed,
+          metadata: ANTIGRAVITY_CLIENT_METADATA,
+        })
+      } catch {
+        // If body parsing fails, send as-is
+      }
+    }
+
+    return globalThis.fetch(rewrittenUrl, {
+      ...requestInit,
+      headers,
+      body,
+    })
+  }
 }
 
 /**
@@ -767,11 +848,14 @@ class AnthropicHandle implements ExecutionHandle {
             lastRetryTurn = turn
             const newToken = await this.tokenRefresher(this.credentialId)
             if (newToken) {
+              const isAntigravity =
+                this.task.constraints.llmCredential?.provider === "google-antigravity"
               this.client = new Anthropic({
                 ...(this.useAuthToken
                   ? { authToken: newToken, apiKey: null }
                   : { apiKey: newToken }),
                 ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
+                ...(isAntigravity ? { fetch: createAntigravityFetch() } : {}),
               })
               turn-- // retry this turn
               continue
@@ -793,6 +877,7 @@ class AnthropicHandle implements ExecutionHandle {
                 authToken: wrappedToken,
                 apiKey: null as unknown as string,
                 baseURL: fallback,
+                fetch: createAntigravityFetch(),
               })
               turn-- // retry this turn with fallback endpoint
               continue

@@ -1,7 +1,7 @@
 import type { ExecutionTask, OutputEvent } from "@cortex/shared/backends"
 import { describe, expect, it, vi } from "vitest"
 
-import { HttpLlmBackend, type McpDeps } from "../backends/http-llm.js"
+import { HttpLlmBackend, type McpDeps, createAntigravityFetch } from "../backends/http-llm.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 
 // ---------------------------------------------------------------------------
@@ -1549,7 +1549,7 @@ describe("HttpLlmBackend — credential provider routing", () => {
     }
   })
 
-  it("does not rewrite paths — proxy accepts standard Anthropic API format", async () => {
+  it("uses custom fetch override for antigravity clients", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -1568,14 +1568,170 @@ describe("HttpLlmBackend — credential provider routing", () => {
     const handle = await backend.executeTask(task)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const client = (handle as any).client as { baseURL: string; authToken: string | null }
-    // Default Antigravity routing: production endpoint first, then sandbox fallback
+    const client = (handle as any).client as { baseURL: string; authToken: string | null; fetch: unknown }
     expect(client.baseURL).toBe("https://cloudcode-pa.googleapis.com")
-    // Token wrapping: JSON.stringify({ token, projectId }) for Antigravity
     expect(client.authToken).toBe(
       JSON.stringify({ token: "gcp-oauth-token", projectId: "my-project-42" }),
     )
+    // Antigravity client must have a custom fetch override
+    expect(typeof client.fetch).toBe("function")
 
     await handle.cancel("test")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Google Antigravity fetch override
+// ---------------------------------------------------------------------------
+
+describe("createAntigravityFetch — URL rewriting", () => {
+  it("rewrites /v1/messages to /v1internal:streamCodeAssist", async () => {
+    const antigravityFetch = createAntigravityFetch()
+    const originalFetch = globalThis.fetch
+
+    let capturedUrl = ""
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      return new Response("{}", { status: 200 })
+    }) as typeof globalThis.fetch
+
+    try {
+      await antigravityFetch(
+        "https://cloudcode-pa.googleapis.com/v1/messages",
+        { method: "POST", body: JSON.stringify({ model: "claude-3", messages: [] }) },
+      )
+
+      expect(capturedUrl).toBe(
+        "https://cloudcode-pa.googleapis.com/v1internal:streamCodeAssist",
+      )
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("rewrites sandbox endpoint the same way", async () => {
+    const antigravityFetch = createAntigravityFetch()
+    const originalFetch = globalThis.fetch
+
+    let capturedUrl = ""
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      return new Response("{}", { status: 200 })
+    }) as typeof globalThis.fetch
+
+    try {
+      await antigravityFetch(
+        "https://daily-cloudcode-pa.sandbox.googleapis.com/v1/messages",
+        { method: "POST", body: "{}" },
+      )
+
+      expect(capturedUrl).toBe(
+        "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamCodeAssist",
+      )
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("does not rewrite non-messages paths", async () => {
+    const antigravityFetch = createAntigravityFetch()
+    const originalFetch = globalThis.fetch
+
+    let capturedUrl = ""
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      return new Response("{}", { status: 200 })
+    }) as typeof globalThis.fetch
+
+    try {
+      await antigravityFetch("https://cloudcode-pa.googleapis.com/v1/models", {
+        method: "GET",
+      })
+
+      expect(capturedUrl).toBe("https://cloudcode-pa.googleapis.com/v1/models")
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("adds Google-specific headers for messages requests", async () => {
+    const antigravityFetch = createAntigravityFetch()
+    const originalFetch = globalThis.fetch
+
+    let capturedInit: RequestInit | undefined
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      capturedInit = init
+      return new Response("{}", { status: 200 })
+    }) as typeof globalThis.fetch
+
+    try {
+      await antigravityFetch(
+        "https://cloudcode-pa.googleapis.com/v1/messages",
+        { method: "POST", body: "{}" },
+      )
+
+      const headers = new Headers(capturedInit?.headers)
+      expect(headers.get("User-Agent")).toBe("google-api-nodejs-client/9.15.1")
+      expect(headers.get("X-Goog-Api-Client")).toBe(
+        "google-cloud-sdk vscode_cloudshelleditor/0.1",
+      )
+      expect(headers.get("Client-Metadata")).toContain("GEMINI")
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("wraps request body with Cloud Code metadata", async () => {
+    const antigravityFetch = createAntigravityFetch()
+    const originalFetch = globalThis.fetch
+
+    let capturedBody = ""
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      capturedBody = (init?.body as string) ?? ""
+      return new Response("{}", { status: 200 })
+    }) as typeof globalThis.fetch
+
+    try {
+      const originalBody = { model: "claude-3", messages: [{ role: "user", content: "hello" }] }
+      await antigravityFetch(
+        "https://cloudcode-pa.googleapis.com/v1/messages",
+        { method: "POST", body: JSON.stringify(originalBody) },
+      )
+
+      const parsedBody = JSON.parse(capturedBody) as Record<string, unknown>
+      // Original fields preserved
+      expect(parsedBody.model).toBe("claude-3")
+      expect(parsedBody.messages).toEqual([{ role: "user", content: "hello" }])
+      // Cloud Code metadata added
+      expect(parsedBody.metadata).toEqual({
+        ideType: "IDE_UNSPECIFIED",
+        platform: "PLATFORM_UNSPECIFIED",
+        pluginType: "GEMINI",
+      })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("does not affect standard Anthropic clients (no URL rewriting)", async () => {
+    const antigravityFetch = createAntigravityFetch()
+    const originalFetch = globalThis.fetch
+
+    let capturedUrl = ""
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      return new Response("{}", { status: 200 })
+    }) as typeof globalThis.fetch
+
+    try {
+      // Standard Anthropic API call — should NOT be rewritten
+      await antigravityFetch("https://api.anthropic.com/v1/complete", {
+        method: "POST",
+        body: "{}",
+      })
+      expect(capturedUrl).toBe("https://api.anthropic.com/v1/complete")
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 })
