@@ -62,7 +62,7 @@ function createMockHandle(
     async result() {
       return result
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
+
     async cancel() {
       // no-op
     },
@@ -336,7 +336,7 @@ describe("agent-execute credential wiring (#444)", () => {
     await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
     // Verify the credential binding query included a provider filter
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     const selectCalls = (db.selectFrom as ReturnType<typeof vi.fn>).mock.calls
     const credBindingCall = selectCalls.find((c: string[]) => c[0] === "agent_credential_binding")
     expect(credBindingCall).toBeDefined()
