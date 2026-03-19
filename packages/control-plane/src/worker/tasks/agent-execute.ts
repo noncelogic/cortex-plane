@@ -1315,6 +1315,7 @@ function executionErrorToJobError(
 
     return {
       category,
+      ...(result.error.code ? { code: result.error.code } : {}),
       message: result.error.message,
       provider,
       model,
