@@ -52,14 +52,15 @@ describe("discoverModels — anthropic", () => {
     expect((init.headers as Record<string, string>)["anthropic-version"]).toBe("2023-06-01")
   })
 
-  it("uses Bearer auth when accessToken provided", async () => {
+  it("uses x-api-key auth when accessToken provided", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ data: [{ id: "claude-haiku-4-5" }] }))
 
     const svc = new ModelDiscoveryService()
     await svc.discoverModels("anthropic", { accessToken: "oauth-tok" })
 
     const [, init] = fetchMock.mock.calls[0]! as [string, RequestInit]
-    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer oauth-tok")
+    expect((init.headers as Record<string, string>)["x-api-key"]).toBe("oauth-tok")
+    expect((init.headers as Record<string, string>)["Authorization"]).toBeUndefined()
   })
 
   it("falls back to static catalogue on API failure", async () => {
