@@ -259,6 +259,33 @@ describe("LLM credential injection", () => {
     await handle.cancel("test")
   })
 
+  it("fails fast with typed model_unavailable when provider/model pair is invalid", async () => {
+    const backend = new HttpLlmBackend()
+    await backend.start({ provider: "anthropic", apiKey: "global-key" })
+
+    const task = makeTask({
+      constraints: {
+        ...makeTask().constraints,
+        model: "claude-sonnet-4-5",
+        llmCredential: {
+          provider: "openai-codex",
+          token: "sk-codex",
+          credentialId: "cred-codex-1",
+        },
+      },
+    })
+
+    const handle = await backend.executeTask(task)
+    await collectEvents(handle)
+    const result = await handle.result()
+
+    expect(result.status).toBe("failed")
+    expect(result.error?.classification).toBe("permanent")
+    expect(result.error?.code).toBe("model_unavailable")
+    expect(result.error?.partialExecution).toBe(false)
+    expect(result.summary).toContain("not available")
+  })
+
   it("falls back to global client when no llmCredential is set", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })

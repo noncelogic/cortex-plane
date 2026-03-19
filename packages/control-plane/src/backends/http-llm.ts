@@ -27,6 +27,7 @@ import type {
 } from "@cortex/shared/backends"
 import OpenAI from "openai"
 
+import { getStaticModels } from "../auth/model-catalogue.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 import { createAntigravityHandle } from "./antigravity-backend.js"
 import {
@@ -199,13 +200,24 @@ export class HttpLlmBackend implements ExecutionBackend {
       return Promise.reject(new Error("HttpLlmBackend not started"))
     }
 
-    const model = task.constraints.model || this.model
     const startTime = Date.now()
     const registry = taskToolRegistry ?? this.toolRegistry
     const baseUrl = this.baseUrl
 
     // Per-job credential override: create a one-shot client with the job's token
     const cred = task.constraints.llmCredential
+    const requestedModel = task.constraints.model
+    const model = normalizeModelForProvider(requestedModel || this.model, cred?.provider)
+
+    // Fail fast only for explicit per-task model overrides when provider has a
+    // known static catalogue. This keeps default provider flows stable while
+    // still surfacing typed model_unavailable errors for explicit invalid picks.
+    if (cred && requestedModel) {
+      const unavailable = buildModelUnavailableResult(task, startTime, cred.provider, model)
+      if (unavailable) {
+        return Promise.resolve(new FailedExecutionHandle(task.id, unavailable))
+      }
+    }
     if (cred) {
       // Google Antigravity routes through the pi-ai native streaming backend
       if (cred.provider === "google-antigravity") {
@@ -402,6 +414,70 @@ function toOpenAITools(defs: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
       parameters: t.inputSchema,
     },
   }))
+}
+
+function normalizeModelForProvider(model: string, provider?: string): string {
+  if (provider === "google-antigravity") {
+    return model.replace(/-\d{8}$/, "")
+  }
+  return model
+}
+
+function buildModelUnavailableResult(
+  task: ExecutionTask,
+  startTime: number,
+  provider: string,
+  model: string,
+): ExecutionResult | null {
+  // Keep this strict validation focused to providers with stable static model IDs
+  // in tests/runtime to avoid breaking legacy/default alias behavior elsewhere.
+  if (provider !== "openai-codex") return null
+
+  const staticModels = getStaticModels(provider)
+  if (!staticModels || staticModels.length === 0) return null
+
+  const available = staticModels.some((m) => m.id === model)
+  if (available) return null
+
+  const availableIds = staticModels.map((m) => m.id)
+  return {
+    taskId: task.id,
+    status: "failed",
+    exitCode: null,
+    summary: `Model '${model}' is not available for provider '${provider}'`,
+    fileChanges: [],
+    stdout: "",
+    stderr: `Requested model '${model}' is unavailable for provider '${provider}'. Available models: ${availableIds.join(", ")}`,
+    tokenUsage: { ...ZERO_TOKEN_USAGE },
+    artifacts: [],
+    durationMs: Date.now() - startTime,
+    error: {
+      message: `Model '${model}' is unavailable for provider '${provider}'`,
+      classification: "permanent",
+      code: "model_unavailable",
+      partialExecution: false,
+    },
+  }
+}
+
+class FailedExecutionHandle implements ExecutionHandle {
+  readonly taskId: string
+  constructor(
+    taskId: string,
+    private readonly failedResult: ExecutionResult,
+  ) {
+    this.taskId = taskId
+  }
+  async *events(): AsyncIterable<OutputEvent> {
+    await Promise.resolve()
+    yield { type: "complete", timestamp: new Date().toISOString(), result: this.failedResult }
+  }
+  result(): Promise<ExecutionResult> {
+    return Promise.resolve(this.failedResult)
+  }
+  cancel(_reason: string): Promise<void> {
+    return Promise.resolve()
+  }
 }
 
 // ──────────────────────────────────────────────────
