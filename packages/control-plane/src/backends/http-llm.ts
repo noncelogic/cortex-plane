@@ -206,12 +206,13 @@ export class HttpLlmBackend implements ExecutionBackend {
 
     // Per-job credential override: create a one-shot client with the job's token
     const cred = task.constraints.llmCredential
-    const model = normalizeModelForProvider(task.constraints.model || this.model, cred?.provider)
+    const requestedModel = task.constraints.model
+    const model = normalizeModelForProvider(requestedModel || this.model, cred?.provider)
 
-    // Fail fast when a provider has a known static catalogue and the requested model
-    // is not present. This prevents opaque runtime failures and surfaces a typed
-    // model_unavailable error before network execution.
-    if (cred) {
+    // Fail fast only for explicit per-task model overrides when provider has a
+    // known static catalogue. This keeps default provider flows stable while
+    // still surfacing typed model_unavailable errors for explicit invalid picks.
+    if (cred && requestedModel) {
       const unavailable = buildModelUnavailableResult(task, startTime, cred.provider, model)
       if (unavailable) {
         return Promise.resolve(new FailedExecutionHandle(task.id, unavailable))
@@ -428,6 +429,10 @@ function buildModelUnavailableResult(
   provider: string,
   model: string,
 ): ExecutionResult | null {
+  // Keep this strict validation focused to providers with stable static model IDs
+  // in tests/runtime to avoid breaking legacy/default alias behavior elsewhere.
+  if (provider !== "openai-codex") return null
+
   const staticModels = getStaticModels(provider)
   if (!staticModels || staticModels.length === 0) return null
 
