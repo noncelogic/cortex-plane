@@ -132,16 +132,31 @@ export function mapJobErrorToUserMessage(
 
   // Top-level fields from the job `error` column (exception path)
   const category = typeof error.category === "string" ? error.category : ""
+  const code = typeof error.code === "string" ? error.code : ""
   const message = typeof error.message === "string" ? error.message : ""
+  const provider = typeof error.provider === "string" ? error.provider : ""
+  const model = typeof error.model === "string" ? error.model : ""
 
   // Nested error from the execution `result` column (execution-result path)
   const nested = error.error as Record<string, unknown> | undefined
+  const nestedCode = typeof nested?.code === "string" ? nested.code : ""
   const nestedClassification =
     typeof nested?.classification === "string" ? nested.classification : ""
   const nestedMessage = typeof nested?.message === "string" ? nested.message : ""
+  const nestedProvider = typeof nested?.provider === "string" ? nested.provider : ""
+  const nestedModel = typeof nested?.model === "string" ? nested.model : ""
 
   // Combine for matching
   const allMessages = [message, nestedMessage].join(" ")
+  const resolvedProvider = provider || nestedProvider
+  const resolvedModel = model || nestedModel
+
+  if (code === "model_unavailable" || nestedCode === "model_unavailable") {
+    const details = [resolvedModel, resolvedProvider].filter(Boolean).join(" / ")
+    return details
+      ? `The configured AI model is unavailable for this provider (${details}). An operator needs to update the agent's model configuration.`
+      : "The configured AI model is unavailable for this provider. An operator needs to update the agent's model configuration."
+  }
 
   // Quarantine
   if (category === "QUARANTINED" || allMessages.includes("QUARANTINED")) {

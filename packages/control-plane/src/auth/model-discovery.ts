@@ -65,7 +65,9 @@ async function discoverAnthropic(cred: ProviderCredential): Promise<ModelInfo[]>
   if (cred.apiKey) {
     headers["x-api-key"] = cred.apiKey
   } else if (cred.accessToken) {
-    headers["Authorization"] = `Bearer ${cred.accessToken}`
+    // Anthropic model discovery follows the same x-api-key contract used by
+    // the runtime path, even when the credential originated from OAuth.
+    headers["x-api-key"] = cred.accessToken
   } else {
     return []
   }

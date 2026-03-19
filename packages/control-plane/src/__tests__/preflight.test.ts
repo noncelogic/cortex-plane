@@ -300,4 +300,32 @@ describe("mapJobErrorToUserMessage", () => {
     })
     expect(msg).toContain("Something went wrong")
   })
+
+  it("returns typed model_unavailable message from job error fields", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "PERMANENT",
+      code: "model_unavailable",
+      provider: "openai-codex",
+      model: "claude-sonnet-4-5",
+      message: "Model 'claude-sonnet-4-5' is unavailable for provider 'openai-codex'",
+    })
+    expect(msg).toContain("unavailable for this provider")
+    expect(msg).toContain("claude-sonnet-4-5 / openai-codex")
+  })
+
+  it("returns typed model_unavailable message from nested execution error", () => {
+    const msg = mapJobErrorToUserMessage({
+      taskId: "task-1",
+      status: "failed",
+      error: {
+        classification: "permanent",
+        code: "model_unavailable",
+        message: "Model 'claude-sonnet-4-5' is unavailable for provider 'openai-codex'",
+      },
+      provider: "openai-codex",
+      model: "claude-sonnet-4-5",
+    })
+    expect(msg).toContain("unavailable for this provider")
+    expect(msg).toContain("claude-sonnet-4-5 / openai-codex")
+  })
 })
