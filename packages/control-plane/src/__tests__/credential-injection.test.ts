@@ -236,7 +236,7 @@ describe("LLM credential injection", () => {
     await handle.cancel("test")
   })
 
-  it("uses Bearer auth (authToken) for google-antigravity even without credentialType", async () => {
+  it("routes google-antigravity to AntigravityHandle (pi-ai)", async () => {
     const backend = new HttpLlmBackend()
     await backend.start({ provider: "anthropic", apiKey: "global-key" })
 
@@ -247,15 +247,15 @@ describe("LLM credential injection", () => {
           provider: "google-antigravity",
           token: "goog-oauth-token",
           credentialId: "cred-goog-2",
-          // No credentialType — Antigravity always uses Bearer
         },
       },
     })
 
     const handle = await backend.executeTask(task)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const useAuthToken = (handle as any).useAuthToken
-    expect(useAuthToken).toBe(true)
+    // AntigravityHandle uses pi-ai, not the Anthropic SDK
+    expect(handle.taskId).toBe("task-cred-001")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    expect((handle as any).constructor.name).toBe("AntigravityHandle")
     await handle.cancel("test")
   })
 
