@@ -227,7 +227,12 @@ describe("dashboard routes", () => {
 
   it("returns job detail with failureReason and attempt info", async () => {
     const { app } = await buildTestApp({
-      error: { message: "context budget exceeded", category: "CONTEXT_BUDGET_EXCEEDED" },
+      error: {
+        message: "context budget exceeded",
+        category: "CONTEXT_BUDGET_EXCEEDED",
+        provider: "google-antigravity",
+        model: "claude-sonnet-4-6",
+      },
       attempt: 2,
       max_attempts: 3,
     })
@@ -240,9 +245,38 @@ describe("dashboard routes", () => {
       failureReason: {
         message: "context budget exceeded",
         category: "CONTEXT_BUDGET_EXCEEDED",
+        provider: "google-antigravity",
+        model: "claude-sonnet-4-6",
       },
       attempt: 2,
       maxAttempts: 3,
+    })
+  })
+
+  it("falls back to result.error when job.error is missing", async () => {
+    const { app } = await buildTestApp({
+      error: null,
+      result: {
+        taskId: JOB_UUID,
+        status: "failed",
+        error: {
+          message: "Provider endpoint/model mismatch",
+          category: "PERMANENT",
+          provider: "google-antigravity",
+          model: "claude-sonnet-4-6-20250514",
+        },
+      },
+    })
+
+    const detail = await app.inject({ method: "GET", url: `/jobs/${JOB_UUID}` })
+    expect(detail.statusCode).toBe(200)
+    expect(detail.json()).toMatchObject({
+      failureReason: {
+        message: "Provider endpoint/model mismatch",
+        category: "PERMANENT",
+        provider: "google-antigravity",
+        model: "claude-sonnet-4-6-20250514",
+      },
     })
   })
 

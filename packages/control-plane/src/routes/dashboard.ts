@@ -510,13 +510,37 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
             ? Math.max(0, completedAtMs - startedAtMs)
             : undefined
 
-        // Build structured failure reason from job.error
+        // Build structured failure reason from job.error, with fallback to result.error
         const rawErr = job.error
-        const failureReason =
+        const resultObj = job.result && typeof job.result === "object" ? job.result : undefined
+        const resultErr = resultObj && "error" in resultObj ? resultObj.error : undefined
+
+        const sourceErr: Record<string, unknown> | undefined =
           rawErr && typeof rawErr === "object"
+            ? rawErr
+            : resultErr && typeof resultErr === "object"
+              ? (resultErr as Record<string, unknown>)
+              : undefined
+
+        const message =
+          sourceErr && typeof sourceErr.message === "string"
+            ? sourceErr.message
+            : sourceErr && typeof sourceErr.summary === "string"
+              ? sourceErr.summary
+              : undefined
+        const category =
+          sourceErr && typeof sourceErr.category === "string" ? sourceErr.category : undefined
+        const provider =
+          sourceErr && typeof sourceErr.provider === "string" ? sourceErr.provider : undefined
+        const model = sourceErr && typeof sourceErr.model === "string" ? sourceErr.model : undefined
+
+        const failureReason =
+          sourceErr && (message || category || provider || model)
             ? {
-                message: typeof rawErr.message === "string" ? rawErr.message : "Unknown error",
-                category: typeof rawErr.category === "string" ? rawErr.category : undefined,
+                message: message ?? "Unknown error",
+                category,
+                provider,
+                model,
               }
             : undefined
 
