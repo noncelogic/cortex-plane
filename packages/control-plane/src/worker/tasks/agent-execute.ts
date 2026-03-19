@@ -863,12 +863,15 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           // during execution; only status, result, and tool_call_count written here.
           const jobStatus = mapExecutionStatus(result.status)
 
+          const jobError = executionErrorToJobError(result, task)
+
           await db
             .updateTable("job")
             .set({
               status: jobStatus,
               completed_at: new Date(),
               result: executionResultToJson(result),
+              error: jobError,
               tool_call_count: toolCallCount,
             })
             .where("id", "=", jobId)
@@ -1286,6 +1289,51 @@ function executionResultToJson(result: ExecutionResult): Record<string, unknown>
     artifacts: result.artifacts,
     durationMs: result.durationMs,
     error: result.error ?? null,
+  }
+}
+
+function executionErrorToJobError(
+  result: ExecutionResult,
+  task: ExecutionTask,
+): Record<string, unknown> | null {
+  if (result.status === "completed") return null
+
+  const provider = task.constraints.llmCredential?.provider
+  const model = task.constraints.model
+
+  if (result.error) {
+    const category =
+      result.error.classification === "permanent"
+        ? "PERMANENT"
+        : result.error.classification === "transient"
+          ? "TRANSIENT"
+          : result.error.classification === "resource"
+            ? "RESOURCE"
+            : result.error.classification === "timeout"
+              ? "TIMEOUT"
+              : "UNKNOWN"
+
+    return {
+      category,
+      message: result.error.message,
+      provider,
+      model,
+    }
+  }
+
+  return {
+    category:
+      result.status === "timed_out"
+        ? "TIMEOUT"
+        : result.status === "cancelled"
+          ? "RESOURCE"
+          : "UNKNOWN",
+    message:
+      result.status === "cancelled"
+        ? "Execution cancelled"
+        : result.summary || result.stderr || "Execution failed",
+    provider,
+    model,
   }
 }
 
