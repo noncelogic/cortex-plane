@@ -20,11 +20,11 @@ This runbook gives a repeatable way to validate OAuth-connected behavior in loca
 The dashboard now consumes provider-declared OAuth flow metadata instead of
 hardcoding provider IDs. Validate against these modes:
 
-| Provider family | Example providers | Expected settings flow |
-| --------------- | ----------------- | ---------------------- |
-| Redirect OAuth  | `google-workspace`, `github-user`, `slack-user` | Browser redirect to `/api/auth/connect/:provider` |
-| Popup OAuth     | `google-antigravity`, `google-gemini-cli`, `openai-codex`, `github-copilot` | `init` + popup + automatic localhost URL capture when possible |
-| Code-paste only | `anthropic` | `init` + manual pasted callback/code, no popup capture dependency |
+| Provider family | Example providers                                                           | Expected settings flow                                            |
+| --------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Redirect OAuth  | `google-workspace`, `github-user`, `slack-user`                             | Browser redirect to `/api/auth/connect/:provider`                 |
+| Popup OAuth     | `google-antigravity`, `google-gemini-cli`, `openai-codex`, `github-copilot` | `init` + popup + automatic localhost URL capture when possible    |
+| Code-paste only | `anthropic`                                                                 | `init` + manual pasted callback/code, no popup capture dependency |
 
 ---
 
