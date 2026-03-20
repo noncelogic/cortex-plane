@@ -15,6 +15,17 @@ This runbook gives a repeatable way to validate OAuth-connected behavior in loca
   - Docker Compose (local)
   - Kubernetes (`kubectl port-forward`)
 
+## Provider flow matrix
+
+The dashboard now consumes provider-declared OAuth flow metadata instead of
+hardcoding provider IDs. Validate against these modes:
+
+| Provider family | Example providers                                                           | Expected settings flow                                            |
+| --------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Redirect OAuth  | `google-workspace`, `github-user`, `slack-user`                             | Browser redirect to `/api/auth/connect/:provider`                 |
+| Popup OAuth     | `google-antigravity`, `google-gemini-cli`, `openai-codex`, `github-copilot` | `init` + popup + automatic localhost URL capture when possible    |
+| Code-paste only | `anthropic`                                                                 | `init` + manual pasted callback/code, no popup capture dependency |
+
 ---
 
 ## 1) Docker-based local validation path
@@ -84,10 +95,23 @@ Expected:
 ### 1.5 Execute OAuth-connected flow (known-good credentials)
 
 1. Open dashboard settings page.
-2. Start provider connect flow from Settings.
-3. Complete provider auth in popup or code-paste flow.
+2. Pick one provider from the relevant connect mode:
+   - Redirect path: `google-workspace`, `github-user`, or `slack-user`
+   - Popup path: `google-antigravity`, `google-gemini-cli`, `openai-codex`, or `github-copilot`
+   - Code-paste-only path: `anthropic`
+3. Complete the provider auth flow:
+   - Redirect path: browser returns to `/settings?connected=<provider>`
+   - Popup path: authorize in popup and let the dashboard auto-capture the `localhost` callback URL; if the browser blocks access, paste the final callback URL into the fallback form
+   - Code-paste-only path: copy the displayed callback/code value and paste it into the fallback form
 4. Verify provider appears connected in settings.
-5. Trigger credential health check in UI (if available).
+5. Trigger credential health check in UI.
+
+API-level confirmation commands after connect:
+
+```bash
+curl -fsS http://127.0.0.1:4000/credentials/providers | jq '.providers[] | {id, authType, oauthConnectMode}'
+curl -fsS http://127.0.0.1:4000/credentials -H "Cookie: cortex_session=<session-cookie>" | jq '.credentials[] | {provider, status, credentialClass, accountId}'
+```
 
 Evidence to collect:
 
@@ -144,6 +168,7 @@ curl -fsS http://127.0.0.1:4000/healthz
 curl -fsS http://127.0.0.1:4000/readyz
 curl -I http://127.0.0.1:3000/
 curl -fsS http://127.0.0.1:6333/healthz
+curl -fsS http://127.0.0.1:4000/credentials/providers | jq '.providers[] | {id, oauthConnectMode}'
 ```
 
 Cluster sanity checks:
@@ -208,6 +233,7 @@ Mark each item as ✅/❌ during execution:
 - [ ] Kubernetes port-forward path is executable and healthy
 - [ ] Secret source-of-truth and required keys verified
 - [ ] OAuth connect flow succeeds with known-good credentials
+- [ ] Dashboard honors provider-declared connect mode (`redirect`, `popup`, `code_paste`)
 - [ ] Failure signatures checked (at least one negative-path observation)
 - [ ] Validation evidence captured (logs/screens/output)
 
@@ -230,10 +256,13 @@ OpenClaw parity-style areas already covered in this repo include:
 - `packages/dashboard/src/__tests__/oauth-popup.test.ts`
 - `packages/dashboard/src/__tests__/settings-providers.test.ts`
 
-Gaps to consider (optional follow-up):
+Parity rationale for this ticket:
 
-1. Add a focused integration-style test for settings connect flow + credential health endpoint round-trip.
-2. Add a negative-path test asserting clear error messaging for `redirect_uri_mismatch` surfaced to UI.
-3. Add docs-linked smoke test script for port-forward health endpoint checks.
+1. Keep the provider registry as the single source of truth for OAuth behavior, mirroring the OpenClaw auth-profile pattern already documented in `docs/AUTH-PROVIDERS.md`.
+2. Cover one success-path flow decision per connect mode:
+   - redirect OAuth
+   - popup OAuth
+   - code-paste-only OAuth
+3. Keep negative-path coverage on callback/state handling in `auth-connect-callback.test.ts`.
 
 These are secondary and should not preempt higher-priority pipeline work.

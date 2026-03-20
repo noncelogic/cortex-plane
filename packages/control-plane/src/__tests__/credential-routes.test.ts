@@ -162,6 +162,7 @@ describe("GET /credentials/providers", () => {
     // Anthropic should include Claude models
     const anthropic = body.providers.find((p: { id: string }) => p.id === "anthropic")
     expect(anthropic).toBeDefined()
+    expect(anthropic.oauthConnectMode).toBe("code_paste")
     expect(anthropic.models).toBeDefined()
     expect(anthropic.models.length).toBeGreaterThan(0)
     expect(anthropic.models.some((m: { id: string }) => m.id === "claude-sonnet-4-6")).toBe(true)
@@ -175,6 +176,7 @@ describe("GET /credentials/providers", () => {
     // user_service providers should not have models
     const googleWorkspace = body.providers.find((p: { id: string }) => p.id === "google-workspace")
     expect(googleWorkspace).toBeDefined()
+    expect(googleWorkspace.oauthConnectMode).toBe("redirect")
     expect(googleWorkspace.models).toBeUndefined()
   })
 
@@ -219,6 +221,10 @@ describe("GET /credentials/providers", () => {
     expect(ids).toContain("google-antigravity")
     expect(ids).toContain("anthropic")
     expect(ids).toContain("openai-codex")
+    const anthropic = body.providers.find((p: { id: string }) => p.id === "anthropic")
+    expect(anthropic.oauthConnectMode).toBe("code_paste")
+    const antigravity = body.providers.find((p: { id: string }) => p.id === "google-antigravity")
+    expect(antigravity.oauthConnectMode).toBe("popup")
 
     // API key providers always included
     expect(ids).toContain("openai")

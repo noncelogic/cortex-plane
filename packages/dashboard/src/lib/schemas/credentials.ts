@@ -11,6 +11,7 @@ export const ProviderInfoSchema = z.object({
   authType: z.enum(["oauth", "api_key"]),
   description: z.string(),
   credentialClass: z.string().optional(),
+  oauthConnectMode: z.enum(["redirect", "popup", "code_paste"]).optional(),
   models: z.array(ProviderModelSchema).optional(),
 })
 

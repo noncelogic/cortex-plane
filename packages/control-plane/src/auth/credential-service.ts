@@ -49,6 +49,7 @@ export interface ProviderInfo {
   authType: "oauth" | "api_key"
   description: string
   credentialClass?: CredentialClass
+  oauthConnectMode?: "redirect" | "popup" | "code_paste"
 }
 
 export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
@@ -57,30 +58,35 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
     name: "Google Antigravity",
     authType: "oauth",
     description: "Claude/Gemini via Google Cloud Antigravity",
+    oauthConnectMode: "popup",
   },
   {
     id: "google-gemini-cli",
     name: "Google Gemini CLI",
     authType: "oauth",
     description: "Gemini models via Google Gemini CLI OAuth",
+    oauthConnectMode: "popup",
   },
   {
     id: "openai-codex",
     name: "OpenAI Codex",
     authType: "oauth",
     description: "GPT models via ChatGPT subscription",
+    oauthConnectMode: "popup",
   },
   {
     id: "github-copilot",
     name: "GitHub Copilot",
     authType: "oauth",
     description: "GPT/Claude models via GitHub Copilot subscription",
+    oauthConnectMode: "popup",
   },
   {
     id: "anthropic",
     name: "Anthropic",
     authType: "oauth",
     description: "Claude models via OAuth",
+    oauthConnectMode: "code_paste",
   },
   {
     id: "openai",
@@ -100,6 +106,7 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
     authType: "oauth",
     description: "Google Calendar, Gmail, Drive (acting as the user)",
     credentialClass: "user_service",
+    oauthConnectMode: "redirect",
   },
   {
     id: "github-user",
@@ -107,6 +114,7 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
     authType: "oauth",
     description: "GitHub repos, issues, PRs (acting as the user)",
     credentialClass: "user_service",
+    oauthConnectMode: "redirect",
   },
   {
     id: "slack-user",
@@ -114,6 +122,7 @@ export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
     authType: "oauth",
     description: "Slack channels, messages (acting as the user)",
     credentialClass: "user_service",
+    oauthConnectMode: "redirect",
   },
   {
     id: "brave",

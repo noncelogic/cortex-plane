@@ -103,12 +103,13 @@ function CredentialHealthDetails({
   )
 }
 
-/**
- * All OAuth LLM providers use the code-paste flow with embedded client credentials.
- * These providers redirect to localhost which is unreachable from a remote dashboard,
- * so we skip the popup entirely and show a code-paste input immediately.
- */
-const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic", "google-antigravity", "openai-codex"])
+function shouldSkipOAuthPopup(provider: ProviderInfo): boolean {
+  return provider.oauthConnectMode === "code_paste"
+}
+
+function usesRedirectOAuth(provider: ProviderInfo): boolean {
+  return provider.authType === "oauth" && provider.oauthConnectMode === "redirect"
+}
 
 // ---------------------------------------------------------------------------
 // Settings page inner (wrapped in Suspense)
@@ -151,6 +152,9 @@ function SettingsInner() {
 
   const connected = searchParams.get("connected")
   const paramError = searchParams.get("error")
+  const popupProviderInfo = popupProvider
+    ? (providers.find((provider) => provider.id === popupProvider) ?? null)
+    : null
 
   // Fetch providers and credentials
   const fetchData = useCallback(async () => {
@@ -188,10 +192,11 @@ function SettingsInner() {
       setCodePasteError(null)
       setCodePastePastedUrl("")
       setPopupProvider(provider)
-      const skipPopup = CODE_PASTE_ONLY_PROVIDER_IDS.has(provider)
+      const providerInfo = providers.find((candidate) => candidate.id === provider)
+      const skipPopup = providerInfo ? shouldSkipOAuthPopup(providerInfo) : false
       await popup.startFlow(provider, { skipPopup })
     },
-    [popup],
+    [popup, providers],
   )
 
   // Submit code-paste exchange (fallback path)
@@ -492,7 +497,13 @@ function SettingsInner() {
                   ) : isOAuth ? (
                     <button
                       type="button"
-                      onClick={() => void startPopupFlow(p.id)}
+                      onClick={() => {
+                        if (usesRedirectOAuth(p)) {
+                          window.location.href = `/api/auth/connect/${p.id}`
+                          return
+                        }
+                        void startPopupFlow(p.id)
+                      }}
                       className="min-h-[44px] rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-content hover:bg-primary/90 transition-colors"
                     >
                       Connect
@@ -647,7 +658,7 @@ function SettingsInner() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-lg rounded-xl border border-surface-border bg-surface-light p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-text-main">
-              Connect {providers.find((p) => p.id === popupProvider)?.name}
+              Connect {popupProviderInfo?.name}
             </h3>
 
             <div className="mt-3 space-y-4">
@@ -662,7 +673,7 @@ function SettingsInner() {
 
               {popup.status === "fallback" && popup.fallbackContext && (
                 <>
-                  {popupProvider && CODE_PASTE_ONLY_PROVIDER_IDS.has(popupProvider) ? (
+                  {popupProviderInfo && shouldSkipOAuthPopup(popupProviderInfo) ? (
                     <>
                       <div>
                         <p className="text-sm text-text-muted">
@@ -728,7 +739,7 @@ function SettingsInner() {
 
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">
-                      {popupProvider && CODE_PASTE_ONLY_PROVIDER_IDS.has(popupProvider)
+                      {popupProviderInfo && shouldSkipOAuthPopup(popupProviderInfo)
                         ? "Paste device code here"
                         : "Paste redirect URL here"}
                     </label>
@@ -738,7 +749,7 @@ function SettingsInner() {
                       onChange={(e) => setCodePastePastedUrl(e.target.value)}
                       className="w-full rounded-lg border border-surface-border bg-surface-dark px-3 py-2 text-sm text-text-main placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       placeholder={
-                        popupProvider && CODE_PASTE_ONLY_PROVIDER_IDS.has(popupProvider)
+                        popupProviderInfo && shouldSkipOAuthPopup(popupProviderInfo)
                           ? "e.g. authcode123#state456"
                           : "http://localhost:..."
                       }

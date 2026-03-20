@@ -38,6 +38,17 @@ These use embedded client credentials from `CODE_PASTE_PROVIDERS` in `oauth-prov
 5. Dashboard calls `POST /auth/connect/:provider/exchange` with pasted URL + `codeVerifier`
 6. Control-plane exchanges code for tokens, encrypts, stores in DB
 
+### Dashboard Flow Selection
+
+`GET /credentials/providers` now exposes `oauthConnectMode` so the dashboard uses
+provider-declared behavior instead of hardcoded ID lists:
+
+| `oauthConnectMode` | Meaning                                                                 |
+| ------------------ | ----------------------------------------------------------------------- |
+| `redirect`         | Browser redirect flow via `/api/auth/connect/:provider`                 |
+| `popup`            | Popup authorize flow with localhost callback auto-capture when readable |
+| `code_paste`       | Manual pasted callback/code flow; skip popup capture assumptions        |
+
 ### Token Refresh
 
 - Antigravity: Google OAuth2 refresh flow (Bearer auth)
