@@ -39,6 +39,7 @@ Validated by the E2E suite (`e2e/tests/`) and cluster smoke tests (`scripts/smok
 | Date | Issue | Behavior | How verified |
 -->
 
-| Date       | Issue | Behavior                                        | How verified               |
-| ---------- | ----- | ----------------------------------------------- | -------------------------- |
-| 2026-03-08 | #453  | Deploy-gate blocks next ticket on smoke failure | `deploy-gate.yml` workflow |
+| Date       | Issue | Behavior                                                         | How verified                                        |
+| ---------- | ----- | ---------------------------------------------------------------- | --------------------------------------------------- |
+| 2026-03-08 | #453  | Deploy-gate blocks next ticket on smoke failure                  | `deploy-gate.yml` workflow                          |
+| 2026-03-20 | #697  | OAuth validation runbook defines Docker + K8s port-forward paths | `docs/ops/oauth-feature-validation-runbook.md` walk |
