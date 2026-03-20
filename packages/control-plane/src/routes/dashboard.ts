@@ -530,15 +530,17 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
               : undefined
         const category =
           sourceErr && typeof sourceErr.category === "string" ? sourceErr.category : undefined
+        const code = sourceErr && typeof sourceErr.code === "string" ? sourceErr.code : undefined
         const provider =
           sourceErr && typeof sourceErr.provider === "string" ? sourceErr.provider : undefined
         const model = sourceErr && typeof sourceErr.model === "string" ? sourceErr.model : undefined
 
         const failureReason =
-          sourceErr && (message || category || provider || model)
+          sourceErr && (message || category || code || provider || model)
             ? {
                 message: message ?? "Unknown error",
                 category,
+                code,
                 provider,
                 model,
               }

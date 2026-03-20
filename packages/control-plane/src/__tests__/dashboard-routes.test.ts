@@ -230,6 +230,7 @@ describe("dashboard routes", () => {
       error: {
         message: "context budget exceeded",
         category: "CONTEXT_BUDGET_EXCEEDED",
+        code: "resource_guard",
         provider: "google-antigravity",
         model: "claude-sonnet-4-6",
       },
@@ -245,6 +246,7 @@ describe("dashboard routes", () => {
       failureReason: {
         message: "context budget exceeded",
         category: "CONTEXT_BUDGET_EXCEEDED",
+        code: "resource_guard",
         provider: "google-antigravity",
         model: "claude-sonnet-4-6",
       },
@@ -262,6 +264,7 @@ describe("dashboard routes", () => {
         error: {
           message: "Provider endpoint/model mismatch",
           category: "PERMANENT",
+          code: "model_unavailable",
           provider: "google-antigravity",
           model: "claude-sonnet-4-6-20250514",
         },
@@ -274,6 +277,7 @@ describe("dashboard routes", () => {
       failureReason: {
         message: "Provider endpoint/model mismatch",
         category: "PERMANENT",
+        code: "model_unavailable",
         provider: "google-antigravity",
         model: "claude-sonnet-4-6-20250514",
       },

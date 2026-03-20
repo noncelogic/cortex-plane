@@ -158,6 +158,26 @@ export function mapJobErrorToUserMessage(
       : "The configured AI model is unavailable for this provider. An operator needs to update the agent's model configuration."
   }
 
+  const resourceCode = code || nestedCode
+  if (resourceCode === "rate_limit") {
+    return "The AI provider is currently rate-limiting requests. Please try again in a few minutes."
+  }
+  if (resourceCode === "quota_exceeded") {
+    return "The AI provider quota has been exceeded. An operator needs to increase quota or switch credentials."
+  }
+  if (resourceCode === "upstream_cancelled") {
+    return "The AI request was cancelled by the upstream provider. Please try again."
+  }
+  if (resourceCode === "resource_guard") {
+    return (
+      "Execution was stopped by a local resource safety guard (budget/rate limits). " +
+      "Please retry with a smaller request or ask an operator to adjust limits."
+    )
+  }
+  if (resourceCode === "timeout") {
+    return "The request timed out. Please try again."
+  }
+
   // Quarantine
   if (category === "QUARANTINED" || allMessages.includes("QUARANTINED")) {
     return (
