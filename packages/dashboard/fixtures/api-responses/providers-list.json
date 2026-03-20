@@ -4,7 +4,8 @@
       "id": "google-antigravity",
       "name": "Google Antigravity",
       "authType": "oauth",
-      "description": "Claude/Gemini via Google Cloud Antigravity"
+      "description": "Claude/Gemini via Google Cloud Antigravity",
+      "oauthConnectMode": "popup"
     },
     {
       "id": "openai",
@@ -17,7 +18,8 @@
       "name": "Google Workspace",
       "authType": "oauth",
       "description": "Google Calendar, Gmail, Drive (acting as the user)",
-      "credentialClass": "user_service"
+      "credentialClass": "user_service",
+      "oauthConnectMode": "redirect"
     },
     {
       "id": "brave",

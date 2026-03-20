@@ -581,7 +581,13 @@ describe("API Client", () => {
     it("listProviders fetches GET /credentials/providers", async () => {
       const body = {
         providers: [
-          { id: "anthropic", name: "Anthropic", authType: "oauth", description: "Claude models" },
+          {
+            id: "anthropic",
+            name: "Anthropic",
+            authType: "oauth",
+            description: "Claude models",
+            oauthConnectMode: "code_paste",
+          },
         ],
       }
       mockFetchResponse(body)
@@ -590,6 +596,7 @@ describe("API Client", () => {
 
       expect(result.providers).toHaveLength(1)
       expect(result.providers[0]!.id).toBe("anthropic")
+      expect(result.providers[0]!.oauthConnectMode).toBe("code_paste")
       expect(vi.mocked(fetch).mock.calls[0]![0]).toBe(`${API_BASE}/credentials/providers`)
     })
 

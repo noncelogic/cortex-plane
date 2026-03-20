@@ -3,12 +3,18 @@ import { describe, expect, it } from "vitest"
 import type { Credential, ProviderInfo } from "@/lib/api-client"
 
 /**
- * Tests for the code-paste provider set used in the settings page.
- * Validates the static mapping is correct without requiring React rendering.
+ * Tests for provider-driven OAuth flow selection used in the settings page.
+ * This mirrors the OpenClaw-style provider registry contract instead of
+ * hardcoding provider IDs in the dashboard.
  */
 
-const CODE_PASTE_PROVIDER_IDS = new Set(["anthropic", "google-antigravity", "openai-codex"])
-const CODE_PASTE_ONLY_PROVIDER_IDS = new Set(["anthropic", "google-antigravity", "openai-codex"])
+function shouldSkipOAuthPopup(provider: ProviderInfo): boolean {
+  return provider.oauthConnectMode === "code_paste"
+}
+
+function usesRedirectOAuth(provider: ProviderInfo): boolean {
+  return provider.authType === "oauth" && provider.oauthConnectMode === "redirect"
+}
 
 /**
  * credentialLabel — mirrors the helper in settings/page.tsx.
@@ -19,51 +25,82 @@ function credentialLabel(cred: Credential, providers: ProviderInfo[]): string {
   return providers.find((p) => p.id === cred.provider)?.name ?? cred.provider
 }
 
-describe("settings page code-paste providers", () => {
-  it("identifies anthropic as a code-paste provider", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.has("anthropic")).toBe(true)
+describe("settings page OAuth connect modes", () => {
+  it("routes Anthropic to direct code-paste without opening a popup", () => {
+    expect(
+      shouldSkipOAuthPopup({
+        id: "anthropic",
+        name: "Anthropic",
+        authType: "oauth",
+        description: "Claude models",
+        oauthConnectMode: "code_paste",
+      }),
+    ).toBe(true)
   })
 
-  it("identifies google-antigravity as a code-paste provider", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.has("google-antigravity")).toBe(true)
+  it("routes Google Antigravity to popup capture flow", () => {
+    expect(
+      shouldSkipOAuthPopup({
+        id: "google-antigravity",
+        name: "Google Antigravity",
+        authType: "oauth",
+        description: "Claude/Gemini via Google Cloud Antigravity",
+        oauthConnectMode: "popup",
+      }),
+    ).toBe(false)
   })
 
-  it("identifies openai-codex as a code-paste provider", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.has("openai-codex")).toBe(true)
+  it("routes Google Workspace to redirect-based OAuth", () => {
+    expect(
+      usesRedirectOAuth({
+        id: "google-workspace",
+        name: "Google Workspace",
+        authType: "oauth",
+        description: "Google services",
+        credentialClass: "user_service",
+        oauthConnectMode: "redirect",
+      }),
+    ).toBe(true)
   })
 
-  it("does not identify non-OAuth providers as code-paste", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.has("openai")).toBe(false)
-    expect(CODE_PASTE_PROVIDER_IDS.has("google-ai-studio")).toBe(false)
-    expect(CODE_PASTE_PROVIDER_IDS.has("github")).toBe(false)
+  it("does not route API key providers through OAuth helpers", () => {
+    expect(
+      usesRedirectOAuth({
+        id: "openai",
+        name: "OpenAI",
+        authType: "api_key",
+        description: "GPT models",
+      }),
+    ).toBe(false)
+    expect(
+      shouldSkipOAuthPopup({
+        id: "openai",
+        name: "OpenAI",
+        authType: "api_key",
+        description: "GPT models",
+      }),
+    ).toBe(false)
   })
 
-  it("contains exactly 3 providers", () => {
-    expect(CODE_PASTE_PROVIDER_IDS.size).toBe(3)
-  })
-})
-
-describe("settings page code-paste-only providers", () => {
-  it("identifies anthropic as code-paste-only (device code flow)", () => {
-    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("anthropic")).toBe(true)
-  })
-
-  it("identifies google-antigravity as code-paste-only", () => {
-    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("google-antigravity")).toBe(true)
-  })
-
-  it("identifies openai-codex as code-paste-only", () => {
-    expect(CODE_PASTE_ONLY_PROVIDER_IDS.has("openai-codex")).toBe(true)
-  })
-
-  it("all code-paste-only providers are also code-paste providers", () => {
-    for (const id of CODE_PASTE_ONLY_PROVIDER_IDS) {
-      expect(CODE_PASTE_PROVIDER_IDS.has(id)).toBe(true)
-    }
-  })
-
-  it("contains exactly 3 providers", () => {
-    expect(CODE_PASTE_ONLY_PROVIDER_IDS.size).toBe(3)
+  it("keeps popup-capable OAuth providers on the popup path", () => {
+    expect(
+      usesRedirectOAuth({
+        id: "github-copilot",
+        name: "GitHub Copilot",
+        authType: "oauth",
+        description: "GPT/Claude models via GitHub Copilot subscription",
+        oauthConnectMode: "popup",
+      }),
+    ).toBe(false)
+    expect(
+      shouldSkipOAuthPopup({
+        id: "github-copilot",
+        name: "GitHub Copilot",
+        authType: "oauth",
+        description: "GPT/Claude models via GitHub Copilot subscription",
+        oauthConnectMode: "popup",
+      }),
+    ).toBe(false)
   })
 })
 
