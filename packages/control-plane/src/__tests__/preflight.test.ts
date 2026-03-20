@@ -328,4 +328,22 @@ describe("mapJobErrorToUserMessage", () => {
     expect(msg).toContain("unavailable for this provider")
     expect(msg).toContain("claude-sonnet-4-5 / openai-codex")
   })
+
+  it("returns typed quota_exceeded message", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "RESOURCE",
+      code: "quota_exceeded",
+      message: "Provider quota exceeded",
+    })
+    expect(msg).toContain("quota has been exceeded")
+  })
+
+  it("returns typed upstream_cancelled message", () => {
+    const msg = mapJobErrorToUserMessage({
+      category: "RESOURCE",
+      code: "upstream_cancelled",
+      message: "Execution cancelled",
+    })
+    expect(msg).toContain("cancelled by the upstream provider")
+  })
 })

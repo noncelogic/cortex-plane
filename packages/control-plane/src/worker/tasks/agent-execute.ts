@@ -1292,6 +1292,41 @@ function executionResultToJson(result: ExecutionResult): Record<string, unknown>
   }
 }
 
+function inferResourceFailureCode(text: string): string | undefined {
+  const lower = text.toLowerCase()
+
+  if (
+    lower.includes("429") ||
+    lower.includes("rate limit") ||
+    lower.includes("too many requests")
+  ) {
+    return "rate_limit"
+  }
+
+  if (lower.includes("quota") || lower.includes("insufficient_quota")) {
+    return "quota_exceeded"
+  }
+
+  if (lower.includes("timeout") || lower.includes("deadline") || lower.includes("timed out")) {
+    return "timeout"
+  }
+
+  if (
+    lower.includes("circuit breaker") ||
+    lower.includes("resource guard") ||
+    lower.includes("token budget") ||
+    lower.includes("tool call rate")
+  ) {
+    return "resource_guard"
+  }
+
+  if (lower.includes("cancel") || lower.includes("abort")) {
+    return "upstream_cancelled"
+  }
+
+  return undefined
+}
+
 function executionErrorToJobError(
   result: ExecutionResult,
   task: ExecutionTask,
@@ -1313,14 +1348,31 @@ function executionErrorToJobError(
               ? "TIMEOUT"
               : "UNKNOWN"
 
+    const inferredCode =
+      category === "RESOURCE" ? inferResourceFailureCode(result.error.message) : undefined
+
     return {
       category,
-      ...(result.error.code ? { code: result.error.code } : {}),
+      ...(result.error.code
+        ? { code: result.error.code }
+        : inferredCode
+          ? { code: inferredCode }
+          : {}),
       message: result.error.message,
       provider,
       model,
     }
   }
+
+  const message =
+    result.status === "cancelled"
+      ? result.summary || result.stderr || "Execution cancelled"
+      : result.summary || result.stderr || "Execution failed"
+
+  const inferredCode =
+    result.status === "cancelled"
+      ? (inferResourceFailureCode(message) ?? "upstream_cancelled")
+      : undefined
 
   return {
     category:
@@ -1329,10 +1381,8 @@ function executionErrorToJobError(
         : result.status === "cancelled"
           ? "RESOURCE"
           : "UNKNOWN",
-    message:
-      result.status === "cancelled"
-        ? "Execution cancelled"
-        : result.summary || result.stderr || "Execution failed",
+    ...(inferredCode ? { code: inferredCode } : {}),
+    message,
     provider,
     model,
   }
