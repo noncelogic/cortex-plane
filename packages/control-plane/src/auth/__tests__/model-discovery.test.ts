@@ -128,11 +128,13 @@ describe("discoverModels — openai", () => {
   })
 
   it("openai-codex tags models with openai-codex provider", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ data: [{ id: "gpt-4o" }] }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ models: [{ slug: "gpt-5" }] }))
 
     const svc = new ModelDiscoveryService()
     const models = await svc.discoverModels("openai-codex", { accessToken: "tok" })
 
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://chatgpt.com/backend-api/codex/models")
+    expect(models[0]!.id).toBe("gpt-5")
     expect(models[0]!.providers).toEqual(["openai-codex"])
   })
 

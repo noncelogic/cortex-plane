@@ -914,6 +914,37 @@ describe("getConfiguredProviders", () => {
 })
 
 describe("CredentialService.testCredential", () => {
+  it("verifies OpenAI Codex OAuth credentials against the ChatGPT Codex models endpoint", async () => {
+    const oauthToken = "codex-oauth-token"
+    const cred = makeCredRow({
+      provider: "openai-codex",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential(oauthToken, USER_KEY),
+      refresh_token_enc: null,
+    })
+    const { db } = buildMockDb({ existingCred: cred, updatedCred: cred })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    const result = await service.testCredential(ADMIN_USER_ID, CRED_ID)
+
+    expect(result.status).toBe("connected")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://chatgpt.com/backend-api/codex/models")
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${oauthToken}`,
+      },
+    })
+  })
+
   it("verifies Anthropic OAuth credentials with x-api-key instead of Bearer", async () => {
     const oauthToken = "anthropic-oauth-token"
     const cred = makeCredRow({

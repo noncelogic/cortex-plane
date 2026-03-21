@@ -28,6 +28,8 @@ interface CacheEntry {
 // ---------------------------------------------------------------------------
 
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+const OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
+const OPENAI_CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
 
 /** Chat-model filter for OpenAI: keep only models whose id matches these. */
 const OPENAI_CHAT_RE = /gpt|o1|o3|o4/i
@@ -88,17 +90,24 @@ async function discoverAnthropic(cred: ProviderCredential): Promise<ModelInfo[]>
 async function discoverOpenAI(
   cred: ProviderCredential,
   providerIds: string[],
+  url = OPENAI_MODELS_URL,
 ): Promise<ModelInfo[]> {
   const token = cred.accessToken ?? cred.apiKey
   if (!token) return []
 
-  const data = (await fetchJson("https://api.openai.com/v1/models", {
+  const data = (await fetchJson(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
-  })) as { data?: { id: string }[] } | null
-  if (!data?.data) return []
+  })) as { data?: { id: string }[]; models?: { id?: string; slug?: string }[] } | null
+  const items =
+    data?.data ??
+    data?.models?.flatMap((model) => {
+      const id = model.id ?? model.slug
+      return id ? [{ id }] : []
+    })
+  if (!items) return []
 
-  return data.data
+  return items
     .filter((m) => OPENAI_CHAT_RE.test(m.id))
     .map((m) => ({
       id: m.id,
@@ -228,7 +237,7 @@ export class ModelDiscoveryService {
         models = await discoverOpenAI(credential, ["openai"])
         break
       case "openai-codex":
-        models = await discoverOpenAI(credential, ["openai-codex"])
+        models = await discoverOpenAI(credential, ["openai-codex"], OPENAI_CODEX_MODELS_URL)
         break
       case "google-ai-studio":
         models = await discoverGoogleAIStudio(credential)
