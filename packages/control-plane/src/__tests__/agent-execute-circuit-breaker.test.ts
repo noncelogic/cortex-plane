@@ -460,6 +460,47 @@ describe("agent-execute circuit breaker wiring", () => {
     )
   })
 
+  it("does not count streamed text chunks as separate llm calls", async () => {
+    const db = makeMockDb({
+      agent: {
+        id: "agent-1",
+        name: "TestAgent",
+        slug: "test-agent",
+        role: "developer",
+        description: null,
+        status: "ACTIVE",
+        model_config: {},
+        skill_config: {},
+        resource_limits: {
+          circuitBreaker: {
+            llmCallRateLimit: { maxCalls: 1, windowSeconds: 300 },
+          },
+        },
+        config: null,
+      },
+      recentJobs: [],
+    })
+
+    const events: OutputEvent[] = [
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 1" },
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 2" },
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 3" },
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 4" },
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 5" },
+    ]
+
+    const handle = createMockHandle(createMockResult(), events)
+    const registry = makeMockRegistry(handle)
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    expect((handle as unknown as { _cancelReason?: string })._cancelReason).toBeUndefined()
+  })
+
   it("accounts llm rate limiting by logical turn, not streamed text chunks", async () => {
     const db = makeMockDb({
       agent: {
