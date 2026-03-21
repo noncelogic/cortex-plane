@@ -18,6 +18,7 @@ import type {
 import { describe, expect, it, vi } from "vitest"
 
 import type { CredentialService } from "../auth/credential-service.js"
+import { ToolRegistry } from "../backends/tool-executor.js"
 import { type AgentExecuteDeps, createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,39 @@ function makeMockRegistry(handle: ExecutionHandle = createMockHandle()) {
       routeTask: vi.fn().mockReturnValue({
         backend: {
           backendId: "mock-backend",
+          executeTask: executeTaskSpy,
+        },
+        providerId: "mock-provider",
+      }),
+      acquirePermit: vi.fn().mockResolvedValue({ release: vi.fn() }),
+      recordOutcome: vi.fn(),
+    } as unknown as BackendRegistry,
+    executeTaskSpy,
+  }
+}
+
+function makeMockRegistryWithAgentRegistry(handle: ExecutionHandle = createMockHandle()) {
+  const executeTaskSpy = vi.fn().mockResolvedValue(handle)
+  const agentRegistry = new ToolRegistry()
+  agentRegistry.register({
+    name: "web_search",
+    description: "search",
+    inputSchema: { type: "object" },
+    execute: vi.fn().mockResolvedValue("ok"),
+  })
+  agentRegistry.register({
+    name: "mcp:filesystem:read_file",
+    description: "read",
+    inputSchema: { type: "object" },
+    execute: vi.fn().mockResolvedValue("ok"),
+  })
+
+  return {
+    registry: {
+      routeTask: vi.fn().mockReturnValue({
+        backend: {
+          backendId: "mock-backend",
+          createAgentRegistry: vi.fn().mockResolvedValue(agentRegistry),
           executeTask: executeTaskSpy,
         },
         providerId: "mock-provider",
@@ -409,7 +443,55 @@ describe("agent-execute credential wiring (#444)", () => {
 
     // Task should be dispatched, just without llmCredential
     expect(executeTaskSpy).toHaveBeenCalled()
-    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
     expect(executedTask.constraints.llmCredential).toBeUndefined()
+  })
+
+  it("injects truthful runtime capability disclosure into the execution system prompt", async () => {
+    const db = makeMockDb()
+    const { registry, executeTaskSpy } = makeMockRegistry()
+
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
+    expect(executedTask.context.systemPrompt).toContain("Runtime capability disclosure:")
+    expect(executedTask.context.systemPrompt).toContain("Workspace root: /workspace.")
+    expect(executedTask.context.systemPrompt).toContain(
+      "Filesystem scope: this run is configured with /workspace as its workspace root.",
+    )
+    expect(executedTask.context.systemPrompt).toContain(
+      "MCP tools exposed by Cortex: unavailable for this run.",
+    )
+    expect(executedTask.context.systemPrompt).toContain(
+      "OS command availability: unknown until verified in this runtime.",
+    )
+  })
+
+  it("uses the actual resolved registry to disclose MCP availability", async () => {
+    const db = makeMockDb()
+    const { registry, executeTaskSpy } = makeMockRegistryWithAgentRegistry()
+
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
+    expect(executedTask.context.systemPrompt).toContain(
+      "MCP tools exposed by Cortex: available (mcp:filesystem:read_file).",
+    )
+    expect(executedTask.context.systemPrompt).toContain(
+      "Browser tools exposed by Cortex: unavailable for this run.",
+    )
+    expect(executedTask.context.systemPrompt).toContain(
+      "Exposed tool names: mcp:filesystem:read_file, web_search.",
+    )
   })
 })

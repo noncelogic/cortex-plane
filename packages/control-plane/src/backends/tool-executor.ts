@@ -37,6 +37,10 @@ export class ToolRegistry {
     return this.tools.get(name)
   }
 
+  list(): ToolDefinition[] {
+    return [...this.tools.values()]
+  }
+
   /**
    * Return tool definitions filtered by the task's allowed/denied lists.
    * Per the TaskConstraints contract, an empty allowedTools array means
