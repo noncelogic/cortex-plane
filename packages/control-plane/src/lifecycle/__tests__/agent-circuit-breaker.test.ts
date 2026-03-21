@@ -213,12 +213,12 @@ describe("AgentCircuitBreaker", () => {
   // LLM call rate limiting
   // -------------------------------------------------------------------------
 
-  describe("recordLlmCall", () => {
+  describe("recordLlmTurn", () => {
     it("allows calls within the rate limit", () => {
       const cb = new AgentCircuitBreaker("agent-1")
       const now = Date.now()
       for (let i = 0; i < DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG.llmCallRateLimit.maxCalls; i++) {
-        expect(cb.recordLlmCall(now + i)).toBe(true)
+        expect(cb.recordLlmTurn(now + i)).toBe(true)
       }
     })
 
@@ -226,9 +226,9 @@ describe("AgentCircuitBreaker", () => {
       const cb = new AgentCircuitBreaker("agent-1")
       const now = Date.now()
       for (let i = 0; i < DEFAULT_AGENT_CIRCUIT_BREAKER_CONFIG.llmCallRateLimit.maxCalls; i++) {
-        cb.recordLlmCall(now)
+        cb.recordLlmTurn(now)
       }
-      expect(cb.recordLlmCall(now)).toBe(false)
+      expect(cb.recordLlmTurn(now)).toBe(false)
     })
 
     it("allows calls after the window expires", () => {
@@ -236,10 +236,10 @@ describe("AgentCircuitBreaker", () => {
         llmCallRateLimit: { maxCalls: 2, windowSeconds: 5 },
       })
       const now = Date.now()
-      cb.recordLlmCall(now)
-      cb.recordLlmCall(now)
-      expect(cb.recordLlmCall(now)).toBe(false)
-      expect(cb.recordLlmCall(now + 6_000)).toBe(true)
+      cb.recordLlmTurn(now)
+      cb.recordLlmTurn(now)
+      expect(cb.recordLlmTurn(now)).toBe(false)
+      expect(cb.recordLlmTurn(now + 6_000)).toBe(true)
     })
   })
 

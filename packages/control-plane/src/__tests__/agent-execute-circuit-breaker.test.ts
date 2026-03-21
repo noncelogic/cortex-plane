@@ -460,6 +460,111 @@ describe("agent-execute circuit breaker wiring", () => {
     )
   })
 
+  it("accounts llm rate limiting by logical turn, not streamed text chunks", async () => {
+    const db = makeMockDb({
+      agent: {
+        id: "agent-1",
+        name: "TestAgent",
+        slug: "test-agent",
+        role: "developer",
+        description: null,
+        status: "ACTIVE",
+        model_config: {},
+        skill_config: {},
+        resource_limits: {
+          circuitBreaker: {
+            llmCallRateLimit: { maxCalls: 2, windowSeconds: 300 },
+          },
+        },
+        config: null,
+      },
+      recentJobs: [],
+    })
+
+    const events: OutputEvent[] = [
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 1" },
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 2" },
+      { type: "tool_use", timestamp: new Date().toISOString(), toolName: "grep", toolInput: {} },
+      {
+        type: "tool_result",
+        timestamp: new Date().toISOString(),
+        toolName: "grep",
+        output: "done",
+        isError: false,
+      },
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 3" },
+      { type: "text", timestamp: new Date().toISOString(), content: "chunk 4" },
+    ]
+
+    const handle = createMockHandle(createMockResult(), events)
+    const registry = makeMockRegistry(handle)
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    expect((handle as unknown as { _cancelReason?: string })._cancelReason).toBeUndefined()
+  })
+
+  it("cancels execution when logical llm turns exceed the rate limit", async () => {
+    const db = makeMockDb({
+      agent: {
+        id: "agent-1",
+        name: "TestAgent",
+        slug: "test-agent",
+        role: "developer",
+        description: null,
+        status: "ACTIVE",
+        model_config: {},
+        skill_config: {},
+        resource_limits: {
+          circuitBreaker: {
+            llmCallRateLimit: { maxCalls: 2, windowSeconds: 300 },
+          },
+        },
+        config: null,
+      },
+      recentJobs: [],
+    })
+
+    const events: OutputEvent[] = [
+      { type: "text", timestamp: new Date().toISOString(), content: "turn 1 chunk 1" },
+      { type: "tool_use", timestamp: new Date().toISOString(), toolName: "grep", toolInput: {} },
+      {
+        type: "tool_result",
+        timestamp: new Date().toISOString(),
+        toolName: "grep",
+        output: "done",
+        isError: false,
+      },
+      { type: "text", timestamp: new Date().toISOString(), content: "turn 2 chunk 1" },
+      { type: "tool_use", timestamp: new Date().toISOString(), toolName: "read", toolInput: {} },
+      {
+        type: "tool_result",
+        timestamp: new Date().toISOString(),
+        toolName: "read",
+        output: "done",
+        isError: false,
+      },
+      { type: "text", timestamp: new Date().toISOString(), content: "turn 3 chunk 1" },
+    ]
+
+    const handle = createMockHandle(createMockResult(), events)
+    const registry = makeMockRegistry(handle)
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    expect((handle as unknown as { _cancelReason: string })._cancelReason).toBe(
+      "llm_call_rate_exceeded",
+    )
+  })
+
   it("records tool errors from tool_result events", async () => {
     const db = makeMockDb({
       agent: {

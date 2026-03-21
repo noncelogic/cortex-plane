@@ -628,8 +628,9 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           // ── Step 9: Stream events ──
           const cancelChecker = startCancelChecker(db, jobId, handle)
 
-          // Track LLM turn count (each text event = 1 turn)
+          // Track LLM turn count for steer acknowledgements and limiter accounting.
           let turnCount = 0
+          let llmTurnOpen = false
 
           // Register steer listener so mid-execution steers are consumed
           const unsubSteer = lifecycleManager
@@ -677,9 +678,14 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 streamManager.broadcast(agent.id, "agent:output", ssePayload)
               }
 
-              // Track LLM turns (text events from the model)
-              if (event.type === "text") {
+              const startsLlmTurn = event.type === "text" || event.type === "tool_use"
+              const openedLlmTurn = startsLlmTurn && !llmTurnOpen
+              if (openedLlmTurn) {
+                llmTurnOpen = true
                 turnCount++
+              }
+              if (event.type === "tool_result" || event.type === "complete") {
+                llmTurnOpen = false
               }
 
               // ── Circuit breaker: mid-execution monitoring ──
@@ -694,10 +700,8 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   void handle.cancel("tool_call_rate_exceeded")
                 }
               }
-              if (event.type === "text") {
-                if (!agentCB.recordLlmCall()) {
-                  void handle.cancel("llm_call_rate_exceeded")
-                }
+              if (openedLlmTurn && !agentCB.recordLlmTurn()) {
+                void handle.cancel("llm_call_rate_exceeded")
               }
               if (event.type === "tool_result" && event.isError) {
                 agentCB.recordToolError()
