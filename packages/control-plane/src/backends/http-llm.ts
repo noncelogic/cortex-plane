@@ -231,10 +231,8 @@ export class HttpLlmBackend implements ExecutionBackend {
 
       const credProvider = mapCredentialProvider(cred.provider)
       if (credProvider === "anthropic") {
-        // Anthropic OAuth: x-api-key header (Anthropic requires it, NOT Bearer)
-        // Other OAuth: Bearer auth
-        const isAnthropicOAuth = cred.provider === "anthropic" && cred.credentialType === "oauth"
-        const useBearer = cred.credentialType === "oauth" && !isAnthropicOAuth
+        // OAuth credentials use bearer auth tokens; API keys use x-api-key.
+        const useBearer = cred.credentialType === "oauth"
 
         const clientBaseUrl = baseUrl
 

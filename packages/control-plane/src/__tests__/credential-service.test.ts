@@ -945,7 +945,7 @@ describe("CredentialService.testCredential", () => {
     })
   })
 
-  it("verifies Anthropic OAuth credentials with x-api-key instead of Bearer", async () => {
+  it("verifies Anthropic OAuth credentials with Bearer auth", async () => {
     const oauthToken = "anthropic-oauth-token"
     const cred = makeCredRow({
       provider: "anthropic",
@@ -972,9 +972,9 @@ describe("CredentialService.testCredential", () => {
     expect(init.method).toBe("GET")
     expect(init.signal).toBeInstanceOf(AbortSignal)
     expect(init.headers).toMatchObject({
-      "x-api-key": oauthToken,
+      Authorization: `Bearer ${oauthToken}`,
       "anthropic-version": "2023-06-01",
     })
-    expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
+    expect((init.headers as Record<string, string>)["x-api-key"]).toBeUndefined()
   })
 })
