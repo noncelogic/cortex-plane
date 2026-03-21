@@ -1105,6 +1105,13 @@ export class CredentialService {
         return { status: "connected", message: "Connection successful" }
       }
       if (res.status === 401 || res.status === 403) {
+        if (provider === "openai-codex" && res.status === 403) {
+          return {
+            status: "auth_failed",
+            message:
+              "OpenAI Codex OAuth token is not authorized for the /v1/models verification endpoint (HTTP 403). Callback succeeded, but credential is not operational for this provider check.",
+          }
+        }
         return { status: "auth_failed", message: `Authentication failed (HTTP ${res.status})` }
       }
       if (res.status === 429) {

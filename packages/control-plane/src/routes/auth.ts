@@ -421,11 +421,28 @@ export function authRoutes(deps: AuthRouteDeps) {
 
           // Detect credential class and scopes from user service provider registry
           const userServiceDef = getUserServiceProvider(provider)
-          await credentialService.storeOAuthCredential(principal.userId, provider, tokens, {
-            accountId,
-            credentialClass: userServiceDef?.credentialClass,
-            scopes: userServiceDef?.defaultScopes,
-          })
+          const credential = await credentialService.storeOAuthCredential(
+            principal.userId,
+            provider,
+            tokens,
+            {
+              accountId,
+              credentialClass: userServiceDef?.credentialClass,
+              scopes: userServiceDef?.defaultScopes,
+            },
+          )
+
+          const verification = await credentialService.testCredential(
+            principal.userId,
+            credential.id,
+          )
+          if (verification.status !== "connected") {
+            const reason = encodeURIComponent(verification.message)
+            reply.redirect(
+              `${authConfig.dashboardUrl}/settings?error=connect_unverified&provider=${provider}&reason=${reason}`,
+            )
+            return
+          }
 
           // Auto-trigger model discovery for the new credential (fire-and-forget)
           if (modelDiscovery) {
@@ -580,10 +597,28 @@ export function authRoutes(deps: AuthRouteDeps) {
             accountId = await discoverAntigravityProject(tokens.access_token)
           }
 
-          await credentialService.storeOAuthCredential(principal.userId, provider, tokens, {
-            accountId,
-            scopes: providerReg.scopes,
-          })
+          const credential = await credentialService.storeOAuthCredential(
+            principal.userId,
+            provider,
+            tokens,
+            {
+              accountId,
+              scopes: providerReg.scopes,
+            },
+          )
+
+          const verification = await credentialService.testCredential(
+            principal.userId,
+            credential.id,
+          )
+          if (verification.status !== "connected") {
+            return {
+              ok: false,
+              provider: providerReg.name,
+              accountId: accountId ?? null,
+              verification,
+            }
+          }
 
           // Auto-trigger model discovery for the new credential (fire-and-forget)
           if (modelDiscovery) {
