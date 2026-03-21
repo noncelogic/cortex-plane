@@ -5,10 +5,9 @@ import { z } from "zod"
 // ---------------------------------------------------------------------------
 
 export const SteerResponseSchema = z.object({
-  steer_message_id: z.string(),
-  status: z.literal("accepted"),
-  agent_id: z.string(),
-  priority: z.enum(["normal", "high"]),
+  steerEventId: z.string(),
+  acknowledged: z.boolean(),
+  incorporatedAtTurn: z.number().int().min(1).optional(),
 })
 
 export const PauseResponseSchema = z.object({

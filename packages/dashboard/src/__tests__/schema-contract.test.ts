@@ -604,8 +604,8 @@ describe("API-Dashboard contract tests", () => {
   describe("POST /agents/:agentId/steer — SteerResponseSchema", () => {
     it("parses the fixture successfully", () => {
       const result = SteerResponseSchema.parse(actionResponsesFixture.steer)
-      expect(result.status).toBe("accepted")
-      expect(result.priority).toBe("high")
+      expect(result.acknowledged).toBe(true)
+      expect(result.incorporatedAtTurn).toBe(7)
     })
 
     it("does not silently drop fields", () => {
