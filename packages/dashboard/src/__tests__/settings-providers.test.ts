@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import type { Credential, ProviderInfo } from "@/lib/api-client"
+import {
+  formatConnectErrorMessage,
+  formatVerificationFailureMessage,
+  isVerificationFailureResult,
+} from "@/lib/oauth-connect-feedback"
 
 /**
  * Tests for provider-driven OAuth flow selection used in the settings page.
@@ -204,5 +209,35 @@ describe("settings page LLM provider filter", () => {
   it("returns correct count", () => {
     const result = filterLlmProviders(ALL_PROVIDERS)
     expect(result).toHaveLength(3)
+  })
+})
+
+describe("OAuth connect feedback", () => {
+  it("formats connect_unverified with provider-specific reason", () => {
+    expect(
+      formatConnectErrorMessage({
+        error: "connect_unverified",
+        provider: "anthropic",
+        reason: "Authentication failed (HTTP 401)",
+        providers: STUB_PROVIDERS,
+      }),
+    ).toBe("Anthropic connection failed verification: Authentication failed (HTTP 401)")
+  })
+
+  it("detects code-paste exchange verification failures", () => {
+    const result = {
+      ok: false as const,
+      provider: "Anthropic",
+      accountId: null,
+      verification: {
+        status: "auth_failed" as const,
+        message: "Authentication failed (HTTP 401)",
+      },
+    }
+
+    expect(isVerificationFailureResult(result)).toBe(true)
+    expect(formatVerificationFailureMessage(result.provider, result.verification)).toBe(
+      "Anthropic connection failed verification: Authentication failed (HTTP 401)",
+    )
   })
 })

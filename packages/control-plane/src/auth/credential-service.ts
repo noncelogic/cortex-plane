@@ -1038,7 +1038,7 @@ export class CredentialService {
     }
 
     // Make a lightweight provider-specific health check
-    const result = await this.pingProvider(cred.provider, token, cred.credential_type)
+    const result = await this.pingProvider(cred.provider, token)
 
     // Update credential status based on test result
     if (result.status === "connected") {
@@ -1091,10 +1091,9 @@ export class CredentialService {
   private async pingProvider(
     provider: string,
     token: string,
-    credentialType: string,
   ): Promise<{ status: "connected" | "auth_failed" | "rate_limited" | "error"; message: string }> {
     try {
-      const { url, init } = this.buildProviderPing(provider, token, credentialType)
+      const { url, init } = this.buildProviderPing(provider, token)
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10_000)
 
@@ -1127,11 +1126,7 @@ export class CredentialService {
     }
   }
 
-  private buildProviderPing(
-    provider: string,
-    token: string,
-    credentialType: string,
-  ): { url: string; init: RequestInit } {
+  private buildProviderPing(provider: string, token: string): { url: string; init: RequestInit } {
     switch (provider) {
       case "openai":
       case "openai-codex":
@@ -1145,9 +1140,10 @@ export class CredentialService {
           init: {
             method: "GET",
             headers: {
-              ...(credentialType === "api_key"
-                ? { "x-api-key": token }
-                : { Authorization: `Bearer ${token}` }),
+              // Anthropic expects the token on x-api-key for /v1/models even
+              // when the credential came from OAuth. Bearer auth here yields a
+              // false-negative 401 during post-connect verification.
+              "x-api-key": token,
               "anthropic-version": "2023-06-01",
             },
           },

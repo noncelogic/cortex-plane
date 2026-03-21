@@ -20,6 +20,11 @@ import {
   testCredential as apiTestCredential,
 } from "@/lib/api-client"
 import { errorSummary, refreshStatus, tokenExpiry } from "@/lib/credential-health"
+import {
+  formatConnectErrorMessage,
+  formatVerificationFailureMessage,
+  isVerificationFailureResult,
+} from "@/lib/oauth-connect-feedback"
 
 /** Find a human-readable label for a credential (provider name or display label). */
 function credentialLabel(cred: Credential, providers: ProviderInfo[]): string {
@@ -152,9 +157,17 @@ function SettingsInner() {
 
   const connected = searchParams.get("connected")
   const paramError = searchParams.get("error")
+  const errorProvider = searchParams.get("provider")
+  const errorReason = searchParams.get("reason")
   const popupProviderInfo = popupProvider
     ? (providers.find((provider) => provider.id === popupProvider) ?? null)
     : null
+  const connectErrorMessage = formatConnectErrorMessage({
+    error: paramError,
+    provider: errorProvider,
+    reason: errorReason,
+    providers,
+  })
 
   // Fetch providers and credentials
   const fetchData = useCallback(async () => {
@@ -206,11 +219,22 @@ function SettingsInner() {
     setCodePasteError(null)
 
     try {
-      await exchangeOAuthConnect(popupProvider, {
+      const result = await exchangeOAuthConnect(popupProvider, {
         pastedUrl: codePastePastedUrl,
         codeVerifier: popup.fallbackContext.codeVerifier,
         state: popup.fallbackContext.state,
       })
+
+      if (isVerificationFailureResult(result)) {
+        const message = formatVerificationFailureMessage(result.provider, result.verification)
+        popup.cancel()
+        setPopupProvider(null)
+        setCodePastePastedUrl("")
+        setCodePasteError(message)
+        addToast(message, "error")
+        void fetchData()
+        return
+      }
 
       popup.cancel()
       setPopupProvider(null)
@@ -384,9 +408,9 @@ function SettingsInner() {
           Successfully connected {connected}. Your credentials are encrypted and stored securely.
         </div>
       )}
-      {paramError && (
+      {connectErrorMessage && (
         <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          Connection error: {paramError}
+          {connectErrorMessage}
         </div>
       )}
       {(codePasteError ?? popup.error) && popup.status === "idle" && (

@@ -69,6 +69,13 @@ Current behavior:
 - Credential status is marked as failing (`status=error` with `last_error`) so the UI
   does not present it as healthy/connected.
 
+### Anthropic OAuth verification note (Issue #722)
+
+Anthropic's `GET /v1/models` verification path expects the OAuth-issued token on
+`x-api-key`, matching the runtime and model-discovery contract. Sending the same
+token as `Authorization: Bearer ...` produces HTTP 401 and can make a callback-
+complete credential look connected until verification failure is surfaced.
+
 ## LLM Providers — API Key
 
 | Provider         | How to Add                    | Storage         |
