@@ -10,8 +10,8 @@ interface SteerInputProps {
 }
 
 export function SteerInput({ agentId, onStop }: SteerInputProps): React.JSX.Element {
-  const [message, setMessage] = useState("")
-  const [priority, setPriority] = useState<"normal" | "high">("normal")
+  const [instruction, setInstruction] = useState("")
+  const [priority, setPriority] = useState<"normal" | "urgent">("normal")
   const [sending, setSending] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -19,16 +19,18 @@ export function SteerInput({ agentId, onStop }: SteerInputProps): React.JSX.Elem
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!message.trim() || sending) return
+      if (!instruction.trim() || sending) return
 
       setSending(true)
       setError(null)
       setConfirmation(null)
 
       try {
-        const res = await steerAgent(agentId, { message: message.trim(), priority })
-        setConfirmation(`Instruction accepted (${res.steer_message_id.slice(0, 8)})`)
-        setMessage("")
+        const res = await steerAgent(agentId, { instruction: instruction.trim(), priority })
+        setConfirmation(
+          `${res.acknowledged ? "Instruction incorporated" : "Instruction queued"} (${res.steerEventId.slice(0, 8)})`,
+        )
+        setInstruction("")
         setTimeout(() => setConfirmation(null), 4000)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send instruction")
@@ -36,7 +38,7 @@ export function SteerInput({ agentId, onStop }: SteerInputProps): React.JSX.Elem
         setSending(false)
       }
     },
-    [agentId, message, priority, sending],
+    [agentId, instruction, priority, sending],
   )
 
   return (
@@ -56,8 +58,8 @@ export function SteerInput({ agentId, onStop }: SteerInputProps): React.JSX.Elem
             Override Instruction
           </label>
           <textarea
-            value={message}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)}
+            value={instruction}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInstruction(e.target.value)}
             placeholder="Enter steering instruction for the agent..."
             rows={4}
             disabled={sending}
@@ -69,20 +71,20 @@ export function SteerInput({ agentId, onStop }: SteerInputProps): React.JSX.Elem
         <label className="flex items-center gap-2 text-xs text-text-muted">
           <input
             type="checkbox"
-            checked={priority === "high"}
+            checked={priority === "urgent"}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setPriority(e.target.checked ? "high" : "normal")
+              setPriority(e.target.checked ? "urgent" : "normal")
             }
             className="rounded border-surface-border"
           />
-          <span className="font-medium">High Priority</span>
+          <span className="font-medium">Urgent Priority</span>
         </label>
 
         {/* Buttons */}
         <div className="flex gap-2">
           <button
             type="submit"
-            disabled={sending || !message.trim()}
+            disabled={sending || !instruction.trim()}
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-[18px]">send</span>

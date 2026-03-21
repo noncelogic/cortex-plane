@@ -149,8 +149,8 @@ export type {
 // ---------------------------------------------------------------------------
 
 export interface SteerRequest {
-  message: string
-  priority?: "normal" | "high"
+  instruction: string
+  priority?: "normal" | "urgent"
 }
 
 /** RFC 7807 Problem Details error body. */

@@ -88,12 +88,12 @@ describe("Agent lifecycle API error propagation", () => {
   describe("steerAgent", () => {
     it("throws on server error", async () => {
       mockFetchResponse({ error: "Agent unavailable" }, 503)
-      await expect(steerAgent("agent-1", { message: "do something" })).rejects.toThrow()
+      await expect(steerAgent("agent-1", { instruction: "do something" })).rejects.toThrow()
     })
 
     it("throws on network failure", async () => {
       mockFetchRejection("fetch failed")
-      await expect(steerAgent("agent-1", { message: "do something" })).rejects.toThrow()
+      await expect(steerAgent("agent-1", { instruction: "do something" })).rejects.toThrow()
     })
   })
 })

@@ -659,7 +659,7 @@ function MobileSteerBar({ agentId }: { agentId: string }): React.JSX.Element {
     setSending(true)
     try {
       const { steerAgent: steer } = await import("@/lib/api-client")
-      await steer(agentId, { message: message.trim() })
+      await steer(agentId, { instruction: message.trim() })
       setMessage("")
     } catch {
       addToast("Failed to send steering instruction", "error")

@@ -33,6 +33,12 @@ interface SteerBody {
   priority?: "normal" | "urgent"
 }
 
+interface SteerResponse {
+  steerEventId: string
+  acknowledged: boolean
+  incorporatedAtTurn?: number
+}
+
 // ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
@@ -138,6 +144,19 @@ export function streamRoutes(deps: StreamRouteDeps) {
               priority: { type: "string", enum: ["normal", "urgent"] },
             },
             required: ["instruction"],
+            additionalProperties: false,
+          },
+          response: {
+            200: {
+              type: "object",
+              properties: {
+                steerEventId: { type: "string" },
+                acknowledged: { type: "boolean" },
+                incorporatedAtTurn: { type: "integer", minimum: 1 },
+              },
+              required: ["steerEventId", "acknowledged"],
+              additionalProperties: false,
+            },
           },
         },
       },
@@ -205,11 +224,12 @@ export function streamRoutes(deps: StreamRouteDeps) {
               })
             }
 
-            return reply.status(200).send({
+            const response: SteerResponse = {
               steerEventId,
               acknowledged: ack.acknowledged,
               incorporatedAtTurn: ack.turnNumber,
-            })
+            }
+            return reply.status(200).send(response)
           } catch (error) {
             return reply.status(409).send({
               error: "conflict",
@@ -220,10 +240,11 @@ export function streamRoutes(deps: StreamRouteDeps) {
         }
 
         // No lifecycle manager — accept without acknowledgment
-        return reply.status(200).send({
+        const response: SteerResponse = {
           steerEventId,
           acknowledged: false,
-        })
+        }
+        return reply.status(200).send(response)
       },
     )
   }

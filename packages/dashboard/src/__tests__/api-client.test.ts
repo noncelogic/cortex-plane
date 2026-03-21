@@ -175,19 +175,18 @@ describe("API Client", () => {
 
     it("steerAgent sends POST with body", async () => {
       mockFetchResponse({
-        steer_message_id: "sm-1",
-        status: "accepted",
-        agent_id: "agent-1",
-        priority: "high",
+        steerEventId: "sm-1",
+        acknowledged: true,
+        incorporatedAtTurn: 3,
       })
 
-      await steerAgent("agent-1", { message: "focus on tests", priority: "high" })
+      await steerAgent("agent-1", { instruction: "focus on tests", priority: "urgent" })
 
       const [, opts] = vi.mocked(fetch).mock.calls[0]!
       expect(opts!.method).toBe("POST")
       expect(JSON.parse(opts!.body as string)).toEqual({
-        message: "focus on tests",
-        priority: "high",
+        instruction: "focus on tests",
+        priority: "urgent",
       })
     })
 
@@ -412,7 +411,7 @@ describe("API Client", () => {
       mockFetchResponse(problem, 409)
 
       try {
-        await steerAgent("a1", { message: "test" })
+        await steerAgent("a1", { instruction: "test" })
         expect.fail("should have thrown")
       } catch (err) {
         const apiErr = err as ApiError

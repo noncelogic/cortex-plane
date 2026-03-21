@@ -370,6 +370,22 @@ describe("POST /agents/:agentId/steer", () => {
     expect(msg.id).toBeDefined()
   })
 
+  it("rejects the legacy dashboard steer payload shape", async () => {
+    const { app } = await buildTestApp({})
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/agent-1/steer",
+      headers: {
+        authorization: "Bearer session-123",
+        "content-type": "application/json",
+      },
+      payload: { message: "focus on tests", priority: "high" },
+    })
+
+    expect(res.statusCode).toBe(400)
+  })
+
   it("returns 409 if lifecycle.steerAsync throws", async () => {
     const steerAsyncFn = vi.fn().mockRejectedValue(new Error("Agent not in EXECUTING state"))
     const lifecycle = mockLifecycleManager({

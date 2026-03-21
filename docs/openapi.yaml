@@ -715,7 +715,7 @@ components:
             type: https://cortex-plane.dev/errors/bad-request
             title: Bad Request
             status: 400
-            detail: "body/message must NOT have fewer than 1 characters"
+            detail: "body/instruction must NOT have fewer than 1 characters"
             instance: /agents/550e8400-e29b-41d4-a716-446655440000/steer
 
     Unauthorized:
