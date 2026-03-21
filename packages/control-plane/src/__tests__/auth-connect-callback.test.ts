@@ -247,7 +247,6 @@ describe("GET /auth/connect/callback/:provider", () => {
   })
 
   it("redirects to unverified error when post-connect verification fails", async () => {
-
     const { app, credentialService } = await buildTestApp()
     ;(
       credentialService.testCredential as { mockResolvedValueOnce: (value: unknown) => unknown }
