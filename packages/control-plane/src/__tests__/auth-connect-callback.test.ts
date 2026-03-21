@@ -95,6 +95,10 @@ function mockCredentialService() {
       credentialType: "oauth",
       status: "active",
     }),
+    testCredential: vi.fn().mockResolvedValue({
+      status: "connected",
+      message: "Connection successful",
+    }),
   }
 }
 
@@ -204,6 +208,9 @@ describe("GET /auth/connect/callback/:provider", () => {
         accountId: "my-gcp-project-123",
       }),
     )
+
+    // Newly stored credential is immediately verified
+    expect(credentialService.testCredential).toHaveBeenCalledWith("user-1", "cred-1")
   })
 
   it("does NOT call discoverAntigravityProject for google-workspace", async () => {
@@ -237,6 +244,29 @@ describe("GET /auth/connect/callback/:provider", () => {
         credentialClass: "user_service",
       }),
     )
+  })
+
+  it("redirects to unverified error when post-connect verification fails", async () => {
+
+    const { app, credentialService } = await buildTestApp()
+    ;(
+      credentialService.testCredential as { mockResolvedValueOnce: (value: unknown) => unknown }
+    ).mockResolvedValueOnce({
+      status: "auth_failed",
+      message: "Authentication failed (HTTP 403)",
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/auth/connect/callback/google-antigravity?code=test-code&state=valid-state",
+      headers: withSession(),
+    })
+
+    expect(res.statusCode).toBe(302)
+    expect(res.headers.location).toContain(
+      "/settings?error=connect_unverified&provider=google-antigravity",
+    )
+    expect(res.headers.location).toContain("reason=Authentication%20failed%20(HTTP%20403)")
   })
 
   it("returns 401 without auth session", async () => {

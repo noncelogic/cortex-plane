@@ -55,6 +55,20 @@ provider-declared behavior instead of hardcoded ID lists:
 - OpenAI Codex: OpenAI OAuth2 refresh flow
 - Anthropic: Anthropic OAuth2 refresh flow (apiKey, not Bearer — see PR #618)
 
+### OpenAI Codex OAuth verification note (Issue #721)
+
+Codex OAuth callback completion does **not** guarantee a usable token for Cortex Plane's
+provider health check endpoint. In practice, tokens may receive HTTP 403 on
+`GET https://api.openai.com/v1/models`.
+
+Current behavior:
+
+- OAuth callback stores the credential, then immediately runs credential verification.
+- If verification fails (including Codex 403), Settings redirect uses
+  `error=connect_unverified` instead of `connected=...`.
+- Credential status is marked as failing (`status=error` with `last_error`) so the UI
+  does not present it as healthy/connected.
+
 ## LLM Providers — API Key
 
 | Provider         | How to Add                    | Storage         |
