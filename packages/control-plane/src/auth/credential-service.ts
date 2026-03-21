@@ -42,6 +42,9 @@ export interface AuditContext {
   toolName?: string
 }
 
+const OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
+const OPENAI_CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
+
 /** Provider metadata for the "Connected Providers" UI. */
 export interface ProviderInfo {
   id: string
@@ -1129,9 +1132,13 @@ export class CredentialService {
   private buildProviderPing(provider: string, token: string): { url: string; init: RequestInit } {
     switch (provider) {
       case "openai":
+        return {
+          url: OPENAI_MODELS_URL,
+          init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+        }
       case "openai-codex":
         return {
-          url: "https://api.openai.com/v1/models",
+          url: OPENAI_CODEX_MODELS_URL,
           init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
         }
       case "anthropic":
