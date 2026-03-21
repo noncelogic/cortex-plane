@@ -232,6 +232,8 @@ describe("DELETE /sessions/:id", () => {
     const body = res.json()
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(body.status).toBe("ended")
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(body.action).toBe("cleared")
 
     // Should have deleted session messages
     // eslint-disable-next-line @typescript-eslint/unbound-method

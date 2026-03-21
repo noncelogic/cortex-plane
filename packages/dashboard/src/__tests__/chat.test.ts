@@ -307,7 +307,7 @@ describe("Chat & Session API Client", () => {
 
   describe("deleteSession", () => {
     it("deletes a session", async () => {
-      mockFetchResponse({ id: "sess-1", status: "ended" })
+      mockFetchResponse({ id: "sess-1", status: "ended", action: "cleared" })
 
       const result = await deleteSession("sess-1")
 
@@ -329,7 +329,7 @@ import {
   type ChatMessageStatus,
   ChatResponseSchema,
   MessageListResponseSchema,
-  SessionDeleteResponseSchema,
+  SessionClearResponseSchema,
   SessionListResponseSchema,
   SessionMessageSchema,
   SessionSchema,
@@ -543,18 +543,19 @@ describe("Chat schemas", () => {
     })
   })
 
-  describe("SessionDeleteResponseSchema", () => {
+  describe("SessionClearResponseSchema", () => {
     it("parses delete response", () => {
-      const result = SessionDeleteResponseSchema.parse({
+      const result = SessionClearResponseSchema.parse({
         id: "sess-1",
         status: "ended",
+        action: "cleared",
       })
       expect(result.status).toBe("ended")
     })
 
     it("rejects wrong status", () => {
       expect(() =>
-        SessionDeleteResponseSchema.parse({
+        SessionClearResponseSchema.parse({
           id: "sess-1",
           status: "active",
         }),

@@ -82,7 +82,11 @@ export const ChatResponseSchema = z.object({
 
 export type ChatResponse = z.infer<typeof ChatResponseSchema>
 
-export const SessionDeleteResponseSchema = z.object({
+export const SessionClearResponseSchema = z.object({
   id: z.string(),
   status: z.literal("ended"),
+  action: z.literal("cleared"),
 })
+
+// Backward-compatible alias (deprecated name)
+export const SessionDeleteResponseSchema = SessionClearResponseSchema

@@ -1124,7 +1124,7 @@ export async function getPendingCounts(): Promise<import("./schemas/users").Pend
 import {
   ChatResponseSchema,
   MessageListResponseSchema,
-  SessionDeleteResponseSchema,
+  SessionClearResponseSchema,
   SessionListResponseSchema,
 } from "./schemas/chat"
 
@@ -1179,12 +1179,17 @@ export async function sendChatMessage(
   })
 }
 
-export async function deleteSession(sessionId: string): Promise<{ id: string; status: "ended" }> {
+export async function clearSession(
+  sessionId: string,
+): Promise<{ id: string; status: "ended"; action: "cleared" }> {
   return apiFetch(`/sessions/${sessionId}`, {
     method: "DELETE",
-    schema: SessionDeleteResponseSchema,
+    schema: SessionClearResponseSchema,
   })
 }
+
+/** @deprecated Use clearSession() — endpoint semantics are clear/reset, not hard delete. */
+export const deleteSession = clearSession
 
 /**
  * Poll the status of a chat job. Used for non-blocking chat flow where the

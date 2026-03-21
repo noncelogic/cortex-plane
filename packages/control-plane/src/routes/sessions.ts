@@ -197,7 +197,7 @@ export function sessionRoutes(deps: SessionRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Session not found" })
         }
 
-        // Delete all messages (cascade) and mark session as ended
+        // Clear all messages and mark session as ended
         await db.deleteFrom("session_message").where("session_id", "=", sessionId).execute()
 
         await db
@@ -206,7 +206,7 @@ export function sessionRoutes(deps: SessionRouteDeps) {
           .where("id", "=", sessionId)
           .execute()
 
-        return reply.status(200).send({ id: sessionId, status: "ended" })
+        return reply.status(200).send({ id: sessionId, status: "ended", action: "cleared" })
       },
     )
   }

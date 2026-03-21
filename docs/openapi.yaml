@@ -2230,7 +2230,7 @@ paths:
 
     delete:
       operationId: clearSession
-      summary: Clear a session (delete messages, mark as ended)
+      summary: Clear a session (remove all messages, mark as ended)
       tags:
         - Sessions
       parameters:
@@ -2243,6 +2243,21 @@ paths:
       responses:
         "200":
           description: Session cleared.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status, action]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [ended]
+                  action:
+                    type: string
+                    enum: [cleared]
         "404":
           description: Session not found.
 

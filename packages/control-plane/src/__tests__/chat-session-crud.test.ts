@@ -424,6 +424,7 @@ describe("Delete session → messages cleared, status ended", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().id).toBe(SESSION_ID)
     expect(res.json().status).toBe("ended")
+    expect(res.json().action).toBe("cleared")
 
     // Verify session_message rows were deleted
     expect(deleteFromFn).toHaveBeenCalledWith("session_message")

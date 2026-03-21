@@ -90,7 +90,7 @@ import {
 import {
   ChatResponseSchema,
   MessageListResponseSchema,
-  SessionDeleteResponseSchema,
+  SessionClearResponseSchema,
   SessionListResponseSchema,
   SessionMessageSchema,
   SessionSchema,
@@ -480,15 +480,15 @@ describe("API-Dashboard contract tests", () => {
     })
   })
 
-  describe("DELETE /sessions/:id — SessionDeleteResponseSchema", () => {
+  describe("DELETE /sessions/:id — SessionClearResponseSchema", () => {
     it("parses the fixture successfully", () => {
-      const result = SessionDeleteResponseSchema.parse(sessionDeleteFixture)
+      const result = SessionClearResponseSchema.parse(sessionDeleteFixture)
       expect(result.id).toBe("sess-001")
       expect(result.status).toBe("ended")
     })
 
     it("does not silently drop fields", () => {
-      assertContractMatch(SessionDeleteResponseSchema, sessionDeleteFixture, "SessionDelete")
+      assertContractMatch(SessionClearResponseSchema, sessionDeleteFixture, "SessionClear")
     })
   })
 
