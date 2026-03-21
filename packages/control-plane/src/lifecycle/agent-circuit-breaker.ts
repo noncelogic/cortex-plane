@@ -112,10 +112,10 @@ export class AgentCircuitBreaker {
   }
 
   /**
-   * Record an LLM call. Returns `false` if the sliding-window rate limit
-   * has been exceeded.
+   * Record a logical LLM turn. Returns `false` if the sliding-window rate
+   * limit has been exceeded.
    */
-  recordLlmCall(now: number = Date.now()): boolean {
+  recordLlmTurn(now: number = Date.now()): boolean {
     this.pruneWindow(this.state.llmCallTimestamps, this.config.llmCallRateLimit.windowSeconds, now)
     if (this.state.llmCallTimestamps.length >= this.config.llmCallRateLimit.maxCalls) {
       return false
