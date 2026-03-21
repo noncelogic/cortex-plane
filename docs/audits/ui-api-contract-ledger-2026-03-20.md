@@ -16,9 +16,18 @@ Audit scope: dashboard action client methods in `packages/dashboard/src/lib/api-
 | `publishContent` | `POST /content/:id/publish`    | Match          | Fixed           | Schema updated to route shape: `id`, `status: "PUBLISHED"`, `publishedAt`.                 |
 | `archiveContent` | `POST /content/:id/archive`    | Match          | Fixed           | Schema updated to route shape: `id`, `status: "ARCHIVED"`, `archivedAt`.                   |
 
+Session contract follow-up (#724):
+
+| Surface                    | Route                  | Status | Notes                                                                 |
+| -------------------------- | ---------------------- | ------ | --------------------------------------------------------------------- |
+| Session delete semantics   | `DELETE /sessions/:id` | Fixed  | Hard-delete contract (`action: "deleted"`, `deleted: true`) aligned |
+| Dashboard session controls | Session list UI        | Fixed  | Labels and toasts use "Delete" semantics                            |
+
 Guard coverage:
 
 - `packages/dashboard/src/__tests__/schema-contract.test.ts` validates action fixtures against the dashboard schemas.
+- `packages/dashboard/src/__tests__/chat.test.ts` validates delete-session response schema (`deleted: true`, `action: "deleted"`).
+- `packages/control-plane/src/__tests__/session-routes.test.ts` and `chat-session-crud.test.ts` validate hard-delete semantics.
 - `packages/dashboard/src/__tests__/api-client.test.ts` covers live control-plane pause/resume response shapes.
 - `packages/dashboard/src/__tests__/memory.test.ts` verifies the `syncMemory` request body shape.
 - `packages/dashboard/src/__tests__/pulse.test.ts` verifies publish/archive action response parsing.
