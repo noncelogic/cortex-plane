@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { getDashboardSummary, listCredentials, listJobs } from "@/lib/api-client"
+import { type Credential, getDashboardSummary, listCredentials, listJobs } from "@/lib/api-client"
+import { tokenExpiry } from "@/lib/credential-health"
 
 export interface NotificationItem {
   id: string
@@ -19,13 +20,64 @@ export interface Notifications {
 }
 
 const POLL_INTERVAL_MS = 30_000
-const CREDENTIAL_EXPIRY_WARN_DAYS = 7
 
-function isExpiringSoon(tokenExpiresAt: string | null | undefined): boolean {
-  if (!tokenExpiresAt) return false
-  const expiresMs = new Date(tokenExpiresAt).getTime()
-  const warnMs = Date.now() + CREDENTIAL_EXPIRY_WARN_DAYS * 86_400_000
-  return expiresMs > 0 && expiresMs < warnMs
+function credentialSourceLabel(credential: Credential): string {
+  if (credential.displayLabel && credential.displayLabel !== credential.provider) {
+    return `${credential.provider} · ${credential.displayLabel}`
+  }
+  return credential.provider
+}
+
+function credentialWarningReason(credential: Credential, now: Date): string | null {
+  if (
+    credential.status === "expired" ||
+    credential.status === "error" ||
+    credential.status === "revoked"
+  ) {
+    return `status: ${credential.status}`
+  }
+
+  const expiry = tokenExpiry(credential, now)
+  if (!expiry) return null
+  if (expiry.severity === "warning" || expiry.severity === "danger") {
+    return expiry.label.toLowerCase()
+  }
+  return null
+}
+
+export function buildCredentialWarningNotification(
+  credentials: Credential[] | null | undefined,
+  now: Date = new Date(),
+): NotificationItem | null {
+  const warned =
+    credentials
+      ?.map((credential) => {
+        const reason = credentialWarningReason(credential, now)
+        if (!reason) return null
+        return {
+          source: credentialSourceLabel(credential),
+          reason,
+        }
+      })
+      .filter((value): value is { source: string; reason: string } => value !== null) ?? []
+
+  if (warned.length === 0) return null
+
+  const [first] = warned
+  if (!first) return null
+
+  const label =
+    warned.length === 1
+      ? `Credential warning: ${first.source} (${first.reason})`
+      : `Credential warnings: ${first.source} (${first.reason}) +${warned.length - 1} more`
+
+  return {
+    id: "expiring-creds",
+    icon: "key_off",
+    label,
+    href: "/settings",
+    severity: "warning",
+  }
 }
 
 export function useNotifications(): Notifications {
@@ -69,16 +121,10 @@ export function useNotifications(): Notifications {
         })
       }
 
-      // Expiring credentials
-      const expiring = creds?.credentials?.filter((c) => isExpiringSoon(c.tokenExpiresAt)) ?? []
-      if (expiring.length > 0) {
-        next.push({
-          id: "expiring-creds",
-          icon: "key_off",
-          label: `${expiring.length} credential${expiring.length > 1 ? "s" : ""} expiring soon`,
-          href: "/settings",
-          severity: "warning",
-        })
+      // Credential health / expiration warnings
+      const credentialWarning = buildCredentialWarningNotification(creds?.credentials)
+      if (credentialWarning) {
+        next.push(credentialWarning)
       }
 
       setItems(next)
