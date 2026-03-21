@@ -5,13 +5,13 @@
     "incorporatedAtTurn": 7
   },
   "pause": {
-    "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "status": "pausing"
   },
   "resume": {
-    "agent_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "status": "resuming",
-    "from_checkpoint": "ckpt-001"
+    "fromCheckpoint": "ckpt-001"
   },
   "createJob": {
     "id": "job-new-001",
@@ -37,13 +37,14 @@
     }
   },
   "publishContent": {
-    "content_id": "cnt-001",
-    "status": "published",
-    "published_at": "2025-11-01T14:00:00.000Z"
+    "id": "cnt-001",
+    "status": "PUBLISHED",
+    "publishedAt": "2025-11-01T14:00:00.000Z"
   },
   "archiveContent": {
-    "content_id": "cnt-002",
-    "status": "archived"
+    "id": "cnt-002",
+    "status": "ARCHIVED",
+    "archivedAt": "2025-11-01T15:00:00.000Z"
   },
   "kill": {
     "agentId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",

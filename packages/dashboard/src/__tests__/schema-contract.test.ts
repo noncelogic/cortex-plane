@@ -628,7 +628,7 @@ describe("API-Dashboard contract tests", () => {
     it("parses the fixture successfully", () => {
       const result = ResumeResponseSchema.parse(actionResponsesFixture.resume)
       expect(result.status).toBe("resuming")
-      expect(result.from_checkpoint).toBe("ckpt-001")
+      expect(result.fromCheckpoint).toBe("ckpt-001")
     })
 
     it("does not silently drop fields", () => {
@@ -699,7 +699,7 @@ describe("API-Dashboard contract tests", () => {
   describe("POST /content/:id/publish — PublishContentResponseSchema", () => {
     it("parses the fixture successfully", () => {
       const result = PublishContentResponseSchema.parse(actionResponsesFixture.publishContent)
-      expect(result.status).toBe("published")
+      expect(result.status).toBe("PUBLISHED")
     })
 
     it("does not silently drop fields", () => {
@@ -714,7 +714,7 @@ describe("API-Dashboard contract tests", () => {
   describe("POST /content/:id/archive — ArchiveContentResponseSchema", () => {
     it("parses the fixture successfully", () => {
       const result = ArchiveContentResponseSchema.parse(actionResponsesFixture.archiveContent)
-      expect(result.status).toBe("archived")
+      expect(result.status).toBe("ARCHIVED")
     })
 
     it("does not silently drop fields", () => {
