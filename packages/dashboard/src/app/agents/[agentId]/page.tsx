@@ -302,7 +302,7 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
         </div>
 
         {/* Center: console / chat */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
           <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
             <button
               onClick={() => setDesktopCenter("console")}
@@ -330,7 +330,9 @@ export default function AgentDetailPage({ params }: Props): React.JSX.Element {
           {desktopCenter === "console" ? (
             <AgentConsole agentId={agentId} />
           ) : (
-            <ChatPanel agentId={agentId} />
+            <div className="min-h-0 flex-1">
+              <ChatPanel agentId={agentId} />
+            </div>
           )}
         </div>
 

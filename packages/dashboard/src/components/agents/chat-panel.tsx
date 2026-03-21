@@ -33,6 +33,7 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
   } = useApiQuery(() => listAgentSessions(agentId, { limit: 50 }), [agentId])
 
   const sessions = sessionsData?.sessions ?? []
+  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
 
   // Auto-select first active session
   useEffect(() => {
@@ -78,17 +79,27 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
     [activeSessionId, refetchSessions, addToast],
   )
 
+  const handleResetCurrent = useCallback(() => {
+    if (!activeSessionId) return
+    void handleClearSession(activeSessionId)
+  }, [activeSessionId, handleClearSession])
+
   return (
-    <div className="flex h-full min-h-[500px] flex-col rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+    <div className="flex h-full min-h-[500px] min-w-0 max-h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="material-symbols-outlined text-primary">chat</span>
           <h3 className="text-sm font-bold text-slate-900 dark:text-white">Chat</h3>
-          {activeSessionId && (
-            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-              {activeSessionId.slice(0, 8)}
-            </span>
+          {activeSession && (
+            <>
+              <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                Current
+              </span>
+              <span className="truncate rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {activeSession.id.slice(0, 12)}
+              </span>
+            </>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -99,12 +110,21 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
             <span className="material-symbols-outlined text-sm">list</span>
             Sessions{sessions.length > 0 ? ` (${sessions.length})` : ""}
           </button>
+          {activeSessionId && (
+            <button
+              onClick={handleResetCurrent}
+              className="flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
+            >
+              <span className="material-symbols-outlined text-sm">restart_alt</span>
+              Reset current
+            </button>
+          )}
           <button
             onClick={handleNewSession}
             className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
           >
             <span className="material-symbols-outlined text-sm">add</span>
-            New
+            New chat
           </button>
         </div>
       </div>
@@ -136,7 +156,7 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
       )}
 
       {/* Chat area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <ChatConversation
           agentId={agentId}
           sessionId={activeSessionId}
@@ -150,6 +170,15 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
 // ---------------------------------------------------------------------------
 // SessionList
 // ---------------------------------------------------------------------------
+
+function formatSessionTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
 
 function SessionList({
   sessions,
@@ -183,59 +212,77 @@ function SessionList({
   }
 
   return (
-    <div className="max-h-48 overflow-y-auto border-b border-slate-200 dark:border-slate-700">
-      {sessions.map((session) => (
-        <div
-          key={session.id}
-          className={`flex items-center justify-between px-4 py-2 transition-colors ${
-            session.id === activeSessionId
-              ? "bg-primary/5 dark:bg-primary/10"
-              : "hover:bg-slate-50 dark:hover:bg-slate-800"
-          }`}
-        >
-          <button onClick={() => onSelect(session.id)} className="flex flex-1 items-center gap-2">
-            <span
-              className={`inline-block size-2 rounded-full ${
-                session.status === "active" ? "bg-emerald-500" : "bg-slate-400"
-              }`}
-            />
-            <span className="font-mono text-xs text-slate-600 dark:text-slate-300">
-              {session.id.slice(0, 8)}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              {new Date(session.updated_at).toLocaleDateString()}
-            </span>
-          </button>
-          {confirmClearId === session.id ? (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  onClear(session.id)
-                  setConfirmClearId(null)
-                }}
-                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-              >
-                Clear
-              </button>
-              <button
-                onClick={() => setConfirmClearId(null)}
-                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
+    <div className="max-h-64 overflow-y-auto border-b border-slate-200 dark:border-slate-700">
+      {sessions.map((session, index) => {
+        const isCurrent = session.id === activeSessionId
+
+        return (
+          <div
+            key={session.id}
+            className={`flex items-start justify-between gap-2 px-4 py-2 transition-colors ${
+              isCurrent
+                ? "bg-primary/5 ring-1 ring-inset ring-primary/30 dark:bg-primary/10"
+                : "hover:bg-slate-50 dark:hover:bg-slate-800"
+            }`}
+          >
             <button
-              onClick={() => setConfirmClearId(session.id)}
-              className="rounded p-1 text-slate-400 transition-colors hover:text-amber-500"
-              title="Clear session history"
-              aria-label="Clear session history"
+              onClick={() => onSelect(session.id)}
+              className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left"
             >
-              <span className="material-symbols-outlined text-sm">restart_alt</span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className={`inline-block size-2 shrink-0 rounded-full ${
+                    session.status === "active" ? "bg-emerald-500" : "bg-slate-400"
+                  }`}
+                />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Session {sessions.length - index}
+                </span>
+                {isCurrent && (
+                  <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                    Current
+                  </span>
+                )}
+              </div>
+              <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                {session.id}
+              </span>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[10px] text-slate-400">
+                <span>Created: {formatSessionTime(session.created_at)}</span>
+                <span>Last active: {formatSessionTime(session.updated_at)}</span>
+              </div>
             </button>
-          )}
-        </div>
-      ))}
+            {confirmClearId === session.id ? (
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  onClick={() => {
+                    onClear(session.id)
+                    setConfirmClearId(null)
+                  }}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setConfirmClearId(null)}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmClearId(session.id)}
+                className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:text-amber-500"
+                title="Clear session history"
+                aria-label="Clear session history"
+              >
+                <span className="material-symbols-outlined text-sm">restart_alt</span>
+              </button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -358,7 +405,7 @@ function ChatConversation({
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
         {loadingHistory && messages.length === 0 && (
