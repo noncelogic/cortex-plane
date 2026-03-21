@@ -1,6 +1,6 @@
 # UI/API Contract Ledger: Dashboard Action Surface
 
-Issue: #704
+Issues: #704, #726 (re-triage)
 
 Audit scope: dashboard action client methods in `packages/dashboard/src/lib/api-client.ts` and their paired response schemas in `packages/dashboard/src/lib/schemas/actions.ts`, mapped to live control-plane routes.
 
@@ -23,6 +23,13 @@ Session contract follow-up (#724):
 | Session delete semantics   | `DELETE /sessions/:id` | Fixed  | Hard-delete contract (`action: "deleted"`, `deleted: true`) aligned |
 | Dashboard session controls | Session list UI        | Fixed  | Labels and toasts use "Delete" semantics                            |
 
+#726 acceptance snapshot:
+
+- ✅ Action matrix produced with per-endpoint status (table above)
+- ✅ In-scope mismatches resolved (see `Fixed` rows)
+- ✅ Dashboard schemas validated against control-plane responses
+- ✅ Contract checks present in CI via schema and cross-boundary tests
+
 Guard coverage:
 
 - `packages/dashboard/src/__tests__/schema-contract.test.ts` validates action fixtures against the dashboard schemas.
@@ -31,3 +38,4 @@ Guard coverage:
 - `packages/dashboard/src/__tests__/api-client.test.ts` covers live control-plane pause/resume response shapes.
 - `packages/dashboard/src/__tests__/memory.test.ts` verifies the `syncMemory` request body shape.
 - `packages/dashboard/src/__tests__/pulse.test.ts` verifies publish/archive action response parsing.
+- `packages/control-plane/src/__tests__/cross-boundary-contract.test.ts` enforces publish/archive response compatibility with dashboard action schemas.
