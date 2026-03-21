@@ -14,6 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { parseAgentStreamEvents } from "@/hooks/use-agent-stream"
 import { ApiError } from "@/lib/api-client"
 import { SSEClient } from "@/lib/sse-client"
 
@@ -187,5 +188,92 @@ describe("ApiError in hook context", () => {
     const err = new TypeError("network failure")
     const message = err instanceof ApiError ? err.message : "An error occurred"
     expect(message).toBe("An error occurred")
+  })
+})
+
+describe("parseAgentStreamEvents", () => {
+  it("accepts canonical camelCase steering events", () => {
+    const events = parseAgentStreamEvents([
+      {
+        id: "evt-1",
+        type: "steer:injected",
+        data: JSON.stringify({
+          agentId: "agent-1",
+          steerEventId: "steer-1",
+          operatorUserId: "user-1",
+          instruction: "Focus on the failing dashboard stream tests.",
+          priority: "urgent",
+          timestamp: "2026-03-21T12:00:00Z",
+        }),
+      },
+      {
+        id: "evt-2",
+        type: "steer:acknowledged",
+        data: JSON.stringify({
+          agentId: "agent-1",
+          steerEventId: "steer-1",
+          incorporatedAtTurn: 7,
+          timestamp: "2026-03-21T12:00:05Z",
+        }),
+      },
+    ])
+
+    expect(events).toHaveLength(2)
+    expect(events[0]).toMatchObject({
+      type: "steer:injected",
+      data: {
+        agentId: "agent-1",
+        steerEventId: "steer-1",
+        operatorUserId: "user-1",
+        priority: "urgent",
+      },
+    })
+    expect(events[1]).toMatchObject({
+      type: "steer:acknowledged",
+      data: {
+        agentId: "agent-1",
+        steerEventId: "steer-1",
+        incorporatedAtTurn: 7,
+      },
+    })
+  })
+
+  it("rejects legacy snake_case steering payloads and steer:ack events", () => {
+    const events = parseAgentStreamEvents([
+      {
+        id: "evt-legacy-1",
+        type: "steer:injected",
+        data: JSON.stringify({
+          agent_id: "agent-1",
+          steer_event_id: "steer-1",
+          operator_user_id: "user-1",
+          instruction: "legacy",
+          priority: "urgent",
+          timestamp: "2026-03-21T12:00:00Z",
+        }),
+      },
+      {
+        id: "evt-legacy-2",
+        type: "steer:ack",
+        data: JSON.stringify({
+          agentId: "agent-1",
+          steerMessageId: "steer-1",
+          timestamp: "2026-03-21T12:00:05Z",
+          status: "accepted",
+        }),
+      },
+      {
+        id: "evt-legacy-3",
+        type: "steer:acknowledged",
+        data: JSON.stringify({
+          agent_id: "agent-1",
+          steer_event_id: "steer-1",
+          incorporated_at_turn: 7,
+          timestamp: "2026-03-21T12:00:05Z",
+        }),
+      },
+    ])
+
+    expect(events).toEqual([])
   })
 })
