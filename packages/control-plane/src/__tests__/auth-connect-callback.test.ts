@@ -328,3 +328,119 @@ describe("GET /auth/connect/callback/:provider", () => {
     expect(res.headers.location).toBe("http://localhost:3100/settings?error=connect_failed")
   })
 })
+
+describe("POST /auth/connect/:provider/exchange — verification failure path", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetCodePasteProvider.mockImplementation((provider: string) => {
+      if (provider === "openai-codex") {
+        return {
+          id: "openai-codex",
+          name: "OpenAI Codex",
+          clientId: "test-codex-id",
+          clientSecret: "test-codex-secret",
+          authUrl: "https://auth.openai.com/oauth/authorize",
+          tokenUrl: "https://auth.openai.com/oauth/token",
+          redirectUri: "http://localhost:1455/auth/callback",
+          scopes: ["openid", "profile", "email", "offline_access"],
+          usePkce: true,
+        }
+      }
+      if (provider === "google-antigravity") {
+        return {
+          id: "google-antigravity",
+          clientId: "test-client-id",
+          clientSecret: "test-client-secret",
+          authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+          tokenUrl: "https://oauth2.googleapis.com/token",
+          redirectUri: "http://localhost:51121/oauth-callback",
+          scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+          usePkce: true,
+        }
+      }
+      return undefined
+    })
+    mockExchangeCode.mockResolvedValue({
+      access_token: "codex-access-token",
+      refresh_token: null,
+      expires_in: 3600,
+      token_type: "Bearer",
+      scope: "openid profile email offline_access",
+    })
+  })
+
+  it("returns ok:false with verification details when openai-codex verify fails (regression #740)", async () => {
+    const { app, credentialService } = await buildTestApp()
+    ;(
+      credentialService.storeOAuthCredential as {
+        mockResolvedValueOnce: (v: unknown) => unknown
+      }
+    ).mockResolvedValueOnce({
+      id: "cred-codex-1",
+      provider: "openai-codex",
+      credentialType: "oauth",
+      status: "active",
+    })
+    ;(
+      credentialService.testCredential as { mockResolvedValueOnce: (v: unknown) => unknown }
+    ).mockResolvedValueOnce({
+      status: "auth_failed",
+      message: "Authentication failed (HTTP 403)",
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/connect/openai-codex/exchange",
+      headers: { ...withSession(), "content-type": "application/json" },
+      payload: JSON.stringify({
+        pastedUrl: "http://localhost:1455/auth/callback?code=test-code&state=test-state",
+        codeVerifier: "test-verifier",
+        state: "test-state",
+      }),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as Record<string, unknown>
+    expect(body.ok).toBe(false)
+    expect(body.provider).toBe("OpenAI Codex")
+    const verification = body.verification as Record<string, unknown>
+    expect(verification.status).toBe("auth_failed")
+    expect(verification.message).toContain("403")
+  })
+
+  it("returns ok:true when openai-codex verification succeeds", async () => {
+    const { app, credentialService } = await buildTestApp()
+    ;(
+      credentialService.storeOAuthCredential as {
+        mockResolvedValueOnce: (v: unknown) => unknown
+      }
+    ).mockResolvedValueOnce({
+      id: "cred-codex-2",
+      provider: "openai-codex",
+      credentialType: "oauth",
+      status: "active",
+    })
+    ;(
+      credentialService.testCredential as { mockResolvedValueOnce: (v: unknown) => unknown }
+    ).mockResolvedValueOnce({
+      status: "connected",
+      message: "Connection successful",
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/connect/openai-codex/exchange",
+      headers: { ...withSession(), "content-type": "application/json" },
+      payload: JSON.stringify({
+        pastedUrl: "http://localhost:1455/auth/callback?code=good-code&state=test-state",
+        codeVerifier: "test-verifier",
+        state: "test-state",
+      }),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as Record<string, unknown>
+    expect(body.ok).toBe(true)
+    expect(body.provider).toBe("OpenAI Codex")
+  })
+})

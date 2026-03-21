@@ -914,7 +914,7 @@ describe("getConfiguredProviders", () => {
 })
 
 describe("CredentialService.testCredential", () => {
-  it("verifies OpenAI Codex OAuth credentials against the ChatGPT Codex models endpoint", async () => {
+  it("verifies OpenAI Codex OAuth credentials against the /v1/me endpoint", async () => {
     const oauthToken = "codex-oauth-token"
     const cred = makeCredRow({
       provider: "openai-codex",
@@ -936,7 +936,7 @@ describe("CredentialService.testCredential", () => {
 
     expect(result.status).toBe("connected")
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://chatgpt.com/backend-api/codex/models")
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/me")
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       method: "GET",
       headers: {
@@ -976,5 +976,87 @@ describe("CredentialService.testCredential", () => {
       "anthropic-version": "2023-06-01",
     })
     expect((init.headers as Record<string, string>)["x-api-key"]).toBeUndefined()
+  })
+
+  it("verifies OpenAI Codex OAuth via /v1/me instead of /v1/models", async () => {
+    const oauthToken = "codex-oauth-token"
+    const cred = makeCredRow({
+      provider: "openai-codex",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential(oauthToken, USER_KEY),
+      refresh_token_enc: null,
+    })
+    const { db } = buildMockDb({ existingCred: cred, updatedCred: cred })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    const result = await service.testCredential(ADMIN_USER_ID, CRED_ID)
+
+    expect(result.status).toBe("connected")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/me")
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer " + oauthToken)
+  })
+
+  it("marks credential as error when openai-codex verification returns 403", async () => {
+    const oauthToken = "codex-oauth-token-bad"
+    const cred = makeCredRow({
+      provider: "openai-codex",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential(oauthToken, USER_KEY),
+      refresh_token_enc: null,
+    })
+    const { db } = buildMockDb({ existingCred: cred, updatedCred: { ...cred, status: "error" } })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    const result = await service.testCredential(ADMIN_USER_ID, CRED_ID)
+
+    expect(result.status).toBe("auth_failed")
+    expect(result.message).toContain("403")
+
+    // Credential status must be updated to "error" in the DB
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.updateTable).toHaveBeenCalled()
+  })
+
+  it("verifies GitHub Copilot OAuth via /user endpoint", async () => {
+    const oauthToken = "copilot-oauth-token"
+    const cred = makeCredRow({
+      provider: "github-copilot",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential(oauthToken, USER_KEY),
+      refresh_token_enc: null,
+    })
+    const { db } = buildMockDb({ existingCred: cred, updatedCred: cred })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    const result = await service.testCredential(ADMIN_USER_ID, CRED_ID)
+
+    expect(result.status).toBe("connected")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.github.com/user")
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer " + oauthToken)
   })
 })

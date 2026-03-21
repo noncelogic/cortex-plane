@@ -43,7 +43,6 @@ export interface AuditContext {
 }
 
 const OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
-const OPENAI_CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
 
 /** Provider metadata for the "Connected Providers" UI. */
 export interface ProviderInfo {
@@ -1056,7 +1055,7 @@ export class CredentialService {
         })
         .where("id", "=", credentialId)
         .execute()
-    } else if (result.status === "auth_failed") {
+    } else if (result.status === "auth_failed" || result.status === "error") {
       await this.db
         .updateTable("provider_credential")
         .set({
@@ -1108,13 +1107,6 @@ export class CredentialService {
         return { status: "connected", message: "Connection successful" }
       }
       if (res.status === 401 || res.status === 403) {
-        if (provider === "openai-codex" && res.status === 403) {
-          return {
-            status: "auth_failed",
-            message:
-              "OpenAI Codex OAuth token is not authorized for the /v1/models verification endpoint (HTTP 403). Callback succeeded, but credential is not operational for this provider check.",
-          }
-        }
         return { status: "auth_failed", message: `Authentication failed (HTTP ${res.status})` }
       }
       if (res.status === 429) {
@@ -1142,8 +1134,11 @@ export class CredentialService {
           init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
         }
       case "openai-codex":
+        // Codex OAuth tokens carry OIDC scopes (openid, profile, email) and
+        // cannot access the /v1/models API endpoint (HTTP 403). Verify via
+        // the OIDC userinfo endpoint that the token is valid instead.
         return {
-          url: OPENAI_CODEX_MODELS_URL,
+          url: "https://api.openai.com/v1/me",
           init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
         }
       case "anthropic": {
@@ -1167,6 +1162,7 @@ export class CredentialService {
           init: { method: "GET" },
         }
       case "google-antigravity":
+      case "google-gemini-cli":
         return {
           url: "https://www.googleapis.com/oauth2/v1/tokeninfo",
           init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
@@ -1177,6 +1173,7 @@ export class CredentialService {
           init: { method: "GET", headers: { Authorization: `Bearer ${token}` } },
         }
       case "github-user":
+      case "github-copilot":
         return {
           url: "https://api.github.com/user",
           init: {
