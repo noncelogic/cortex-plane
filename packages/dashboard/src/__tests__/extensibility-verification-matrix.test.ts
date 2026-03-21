@@ -4,7 +4,10 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 describe("extensibility verification matrix artifact", () => {
-  const matrixPath = resolve(process.cwd(), "../../docs/audits/extensibility-verification-matrix-2026-03-21.md")
+  const matrixPath = resolve(
+    process.cwd(),
+    "../../docs/audits/extensibility-verification-matrix-2026-03-21.md",
+  )
   const matrix = readFileSync(matrixPath, "utf8")
 
   it("links to issue #706 and scope", () => {
