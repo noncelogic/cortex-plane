@@ -47,6 +47,7 @@ import { ContentListResponseSchema } from "./schemas/content"
 import {
   CredentialListResponseSchema,
   CredentialTestResultSchema,
+  OAuthConnectExchangeResultSchema,
   OAuthInitResultSchema,
   ProviderListResponseSchema,
 } from "./schemas/credentials"
@@ -800,6 +801,7 @@ export async function listModels(opts?: { credentialAware?: boolean }): Promise<
 export type {
   Credential,
   CredentialTestResult,
+  OAuthConnectExchangeResult,
   OAuthInitResult,
   ProviderInfo,
 } from "./schemas/credentials"
@@ -825,11 +827,11 @@ export async function initOAuthConnect(
 export async function exchangeOAuthConnect(
   provider: string,
   body: { pastedUrl: string; codeVerifier: string; state: string },
-): Promise<unknown> {
+): Promise<import("./schemas/credentials").OAuthConnectExchangeResult> {
   return apiFetch(`/auth/connect/${provider}/exchange`, {
     method: "POST",
     body,
-    schema: z.unknown(),
+    schema: OAuthConnectExchangeResultSchema,
   })
 }
 

@@ -669,7 +669,7 @@ describe("API Client", () => {
     })
 
     it("exchangeOAuthConnect sends POST with body", async () => {
-      mockFetchResponse({ success: true })
+      mockFetchResponse({ ok: true, provider: "Anthropic", accountId: null })
 
       await exchangeOAuthConnect("anthropic", {
         pastedUrl: "http://localhost:3100/callback?code=abc",

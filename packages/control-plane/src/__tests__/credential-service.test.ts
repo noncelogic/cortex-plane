@@ -7,7 +7,7 @@ vi.hoisted(() => {
 })
 
 import type { Kysely } from "kysely"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   deriveMasterKey,
@@ -68,6 +68,11 @@ function makeCredRow(overrides: Partial<ProviderCredential> = {}): ProviderCrede
 const AUTH_CONFIG = {
   credentialMasterKey: MASTER_PASSPHRASE,
 } as Parameters<typeof CredentialService.prototype.constructor>[1]
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 /**
  * Build a chainable Kysely mock.
@@ -905,5 +910,40 @@ describe("getConfiguredProviders", () => {
 
   it("returns empty array when authConfig is undefined", () => {
     expect(getConfiguredProviders(undefined)).toEqual([])
+  })
+})
+
+describe("CredentialService.testCredential", () => {
+  it("verifies Anthropic OAuth credentials with x-api-key instead of Bearer", async () => {
+    const oauthToken = "anthropic-oauth-token"
+    const cred = makeCredRow({
+      provider: "anthropic",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential(oauthToken, USER_KEY),
+      refresh_token_enc: null,
+    })
+    const { db } = buildMockDb({ existingCred: cred, updatedCred: cred })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const service = new CredentialService(db, AUTH_CONFIG)
+    const result = await service.testCredential(ADMIN_USER_ID, CRED_ID)
+
+    expect(result.status).toBe("connected")
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.anthropic.com/v1/models")
+    expect(init.method).toBe("GET")
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+    expect(init.headers).toMatchObject({
+      "x-api-key": oauthToken,
+      "anthropic-version": "2023-06-01",
+    })
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
   })
 })

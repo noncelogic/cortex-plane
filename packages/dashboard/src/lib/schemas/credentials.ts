@@ -56,7 +56,22 @@ export const CredentialTestResultSchema = z.object({
   lastUsedAt: z.string().nullable().optional(),
 })
 
+export const OAuthConnectExchangeResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    provider: z.string(),
+    accountId: z.string().nullable(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    provider: z.string(),
+    accountId: z.string().nullable(),
+    verification: CredentialTestResultSchema,
+  }),
+])
+
 export type ProviderInfo = z.infer<typeof ProviderInfoSchema>
 export type Credential = z.infer<typeof CredentialSchema>
 export type OAuthInitResult = z.infer<typeof OAuthInitResultSchema>
 export type CredentialTestResult = z.infer<typeof CredentialTestResultSchema>
+export type OAuthConnectExchangeResult = z.infer<typeof OAuthConnectExchangeResultSchema>
