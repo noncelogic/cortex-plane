@@ -41,7 +41,9 @@ test.describe("Dashboard renders without errors", () => {
     await page.goto("/login")
 
     const href = await page
-      .locator('head link[rel="stylesheet"][href*="fonts.googleapis.com/css2?family=Material+Symbols+Outlined"]')
+      .locator(
+        'head link[rel="stylesheet"][href*="fonts.googleapis.com/css2?family=Material+Symbols+Outlined"]',
+      )
       .first()
       .getAttribute("href")
 
