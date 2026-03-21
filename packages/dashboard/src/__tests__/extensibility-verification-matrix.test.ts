@@ -10,8 +10,8 @@ describe("extensibility verification matrix artifact", () => {
   )
   const matrix = readFileSync(matrixPath, "utf8")
 
-  it("links to issue #706 and scope", () => {
-    expect(matrix).toContain("Issue #706")
+  it("links to issue #727 and scope", () => {
+    expect(matrix).toContain("Issue #727")
     expect(matrix).toContain("Browser tooling")
     expect(matrix).toContain("MCP")
   })
@@ -21,5 +21,12 @@ describe("extensibility verification matrix artifact", () => {
     expect(matrix).toContain("#711")
     expect(matrix).toContain("#712")
     expect(matrix).toContain("#713")
+  })
+
+  it("captures acceptance checklist for browser and MCP end-to-end status", () => {
+    expect(matrix).toContain("Browser tooling happy-path verified end-to-end")
+    expect(matrix).toContain("Browser tooling failure paths verified with actionable errors")
+    expect(matrix).toContain("MCP happy-path verified end-to-end")
+    expect(matrix).toContain("MCP failure paths verified with actionable errors")
   })
 })

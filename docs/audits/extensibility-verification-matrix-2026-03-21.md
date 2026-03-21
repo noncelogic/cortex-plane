@@ -1,4 +1,4 @@
-# Extensibility Verification Matrix — Browser Tooling + MCP (Issue #706)
+# Extensibility Verification Matrix — Browser Tooling + MCP (Issue #727)
 
 _Date:_ 2026-03-21  
 _Scope:_ Runtime/extensibility checks so schema/contract parity is not confused with execution readiness.
