@@ -8,7 +8,7 @@ import { useToast } from "@/components/layout/toast"
 import { useApiQuery } from "@/hooks/use-api"
 import type { ChatMessage } from "@/hooks/use-chat-api"
 import { useChatApi } from "@/hooks/use-chat-api"
-import { deleteSession, listAgentSessions, type Session } from "@/lib/api-client"
+import { clearSession, listAgentSessions, type Session } from "@/lib/api-client"
 import type { ChatMessageStatus } from "@/lib/schemas/chat"
 
 // ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
   const { addToast } = useToast()
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [showSessions, setShowSessions] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [clearError, setClearError] = useState<string | null>(null)
 
   // Fetch sessions
   const {
@@ -59,19 +59,19 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
     [refetchSessions],
   )
 
-  const handleDeleteSession = useCallback(
+  const handleClearSession = useCallback(
     async (sessionId: string) => {
-      setDeleteError(null)
+      setClearError(null)
       try {
-        await deleteSession(sessionId)
+        await clearSession(sessionId)
         if (activeSessionId === sessionId) {
           setActiveSessionId(null)
         }
-        addToast("Session deleted", "success")
+        addToast("Session cleared", "success")
         void refetchSessions()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to delete session"
-        setDeleteError(msg)
+        const msg = err instanceof Error ? err.message : "Failed to clear session"
+        setClearError(msg)
         addToast(msg, "error")
       }
     },
@@ -111,12 +111,12 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
 
       {/* Quarantine banner */}
       <QuarantineBanner agentId={agentId} />
-      {/* Delete error banner */}
-      {deleteError && (
+      {/* Clear error banner */}
+      {clearError && (
         <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
-          <span className="text-xs text-red-600 dark:text-red-400">{deleteError}</span>
+          <span className="text-xs text-red-600 dark:text-red-400">{clearError}</span>
           <button
-            onClick={() => setDeleteError(null)}
+            onClick={() => setClearError(null)}
             className="ml-2 text-xs font-medium text-red-500 hover:text-red-700 dark:hover:text-red-300"
           >
             Dismiss
@@ -131,7 +131,7 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
           activeSessionId={activeSessionId}
           loading={sessionsLoading}
           onSelect={handleSelectSession}
-          onDelete={(id) => void handleDeleteSession(id)}
+          onClear={(id) => void handleClearSession(id)}
         />
       )}
 
@@ -156,15 +156,15 @@ function SessionList({
   activeSessionId,
   loading,
   onSelect,
-  onDelete,
+  onClear,
 }: {
   sessions: Session[]
   activeSessionId: string | null
   loading: boolean
   onSelect: (id: string) => void
-  onDelete: (id: string) => void
+  onClear: (id: string) => void
 }): React.JSX.Element {
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [confirmClearId, setConfirmClearId] = useState<string | null>(null)
 
   if (loading) {
     return (
@@ -206,19 +206,19 @@ function SessionList({
               {new Date(session.updated_at).toLocaleDateString()}
             </span>
           </button>
-          {confirmDeleteId === session.id ? (
+          {confirmClearId === session.id ? (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => {
-                  onDelete(session.id)
-                  setConfirmDeleteId(null)
+                  onClear(session.id)
+                  setConfirmClearId(null)
                 }}
-                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
               >
-                Confirm
+                Clear
               </button>
               <button
-                onClick={() => setConfirmDeleteId(null)}
+                onClick={() => setConfirmClearId(null)}
                 className="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 Cancel
@@ -226,10 +226,12 @@ function SessionList({
             </div>
           ) : (
             <button
-              onClick={() => setConfirmDeleteId(session.id)}
-              className="rounded p-1 text-slate-400 transition-colors hover:text-red-500"
+              onClick={() => setConfirmClearId(session.id)}
+              className="rounded p-1 text-slate-400 transition-colors hover:text-amber-500"
+              title="Clear session history"
+              aria-label="Clear session history"
             >
-              <span className="material-symbols-outlined text-sm">delete</span>
+              <span className="material-symbols-outlined text-sm">restart_alt</span>
             </button>
           )}
         </div>
