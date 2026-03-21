@@ -36,4 +36,15 @@ test.describe("Dashboard renders without errors", () => {
     const heading = page.locator("text=Cortex Plane")
     await expect(heading).toBeVisible({ timeout: 10_000 })
   })
+
+  test("material symbols stylesheet uses block display strategy", async ({ page }) => {
+    await page.goto("/login")
+
+    const href = await page
+      .locator('head link[rel="stylesheet"][href*="fonts.googleapis.com/css2?family=Material+Symbols+Outlined"]')
+      .first()
+      .getAttribute("href")
+
+    expect(href).toContain("display=block")
+  })
 })
