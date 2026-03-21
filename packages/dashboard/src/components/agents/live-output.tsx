@@ -16,8 +16,10 @@ function formatEventData(event: AgentEventPayload): string {
       return event.data.message
     case "agent:complete":
       return event.data.summary ?? "Job complete"
-    case "steer:ack":
-      return `Steer ${event.data.status}: ${event.data.steer_message_id}`
+    case "steer:injected":
+      return `Steer injected (${event.data.priority}): ${event.data.instruction}`
+    case "steer:acknowledged":
+      return `Steer acknowledged at turn ${event.data.incorporatedAtTurn}: ${event.data.steerEventId}`
   }
 }
 

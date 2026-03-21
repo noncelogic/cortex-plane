@@ -22,8 +22,10 @@ function classifySeverity(event: AgentEventPayload): Severity {
       return "success"
     case "agent:state":
       return "system"
-    case "steer:ack":
-      return event.data.status === "rejected" ? "warn" : "info"
+    case "steer:injected":
+      return "info"
+    case "steer:acknowledged":
+      return "success"
     case "agent:output": {
       const t = event.data.output.type?.toLowerCase() ?? ""
       if (t.includes("error") || t.includes("err")) return "error"
@@ -85,8 +87,10 @@ function getContent(event: AgentEventPayload): string {
       return event.data.message
     case "agent:complete":
       return event.data.summary ?? "Job complete"
-    case "steer:ack":
-      return `Steer ${event.data.status}: ${event.data.steer_message_id}`
+    case "steer:injected":
+      return `Steer injected (${event.data.priority}): ${event.data.instruction}`
+    case "steer:acknowledged":
+      return `Steer acknowledged at turn ${event.data.incorporatedAtTurn}: ${event.data.steerEventId}`
   }
 }
 

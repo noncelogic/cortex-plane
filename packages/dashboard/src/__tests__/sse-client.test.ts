@@ -114,6 +114,21 @@ describe("SSEClient", () => {
     expect(received[0]!.id).toBe("1")
   })
 
+  it("dispatches canonical steering events to type-specific handlers", () => {
+    const client = new SSEClient("/stream")
+    const received: SSEEvent[] = []
+    client.on("steer:acknowledged", (e) => received.push(e))
+
+    client.connect()
+    const es = MockEventSource.instances[0]!
+    es.simulateOpen()
+    es.simulateMessage('{"steerEventId":"steer-1"}', "7", "steer:acknowledged")
+
+    expect(received).toHaveLength(1)
+    expect(received[0]!.type).toBe("steer:acknowledged")
+    expect(received[0]!.id).toBe("7")
+  })
+
   it("dispatches events to wildcard handlers", () => {
     const client = new SSEClient("/stream")
     const received: SSEEvent[] = []
