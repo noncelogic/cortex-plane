@@ -1104,30 +1104,8 @@ describe("Dashboard feature audit (#501)", () => {
     })
   })
 
-  // ── Summary statistics ─────────────────────────────────────────────────
-  describe("audit summary statistics", () => {
-    it("reports overall coverage", () => {
-      const total = ALL_ROUTES.length
-      const live = ALL_ROUTES.filter((r) => r.status === "live").length
-      const stubCount = ALL_ROUTES.filter((r) => r.status !== "live").length
-
-      const totalPages = PAGE_AUDIT.length
-      const working = PAGE_AUDIT.filter((p) => p.status === "works").length
-      const partial = PAGE_AUDIT.filter((p) => p.status === "partial").length
-      const phantom = PAGE_AUDIT.filter((p) => p.status === "phantom").length
-      const placeholder = PAGE_AUDIT.filter((p) => p.status === "placeholder").length
-
-      // Route coverage
-      expect(total).toBe(84)
-      expect(live).toBe(78)
-      expect(stubCount).toBe(6)
-
-      // Page coverage
-      expect(totalPages).toBe(19)
-      expect(working).toBe(15)
-      expect(partial).toBe(2)
-      expect(phantom).toBe(1)
-      expect(placeholder).toBe(1)
-    })
-  })
+  // NOTE (#717): Removed brittle aggregate-count assertions.
+  // Exact totals are implementation-detail snapshots and produced high churn
+  // with low user-facing signal. The tests above now focus on behavioral risk:
+  // route mapping integrity, explicit stub/phantom disclosure, and provenance notes.
 })
