@@ -18,8 +18,8 @@ Audit scope: dashboard action client methods in `packages/dashboard/src/lib/api-
 
 Session contract follow-up (#724):
 
-| Surface                    | Route                  | Status | Notes                                                                 |
-| -------------------------- | ---------------------- | ------ | --------------------------------------------------------------------- |
+| Surface                    | Route                  | Status | Notes                                                               |
+| -------------------------- | ---------------------- | ------ | ------------------------------------------------------------------- |
 | Session delete semantics   | `DELETE /sessions/:id` | Fixed  | Hard-delete contract (`action: "deleted"`, `deleted: true`) aligned |
 | Dashboard session controls | Session list UI        | Fixed  | Labels and toasts use "Delete" semantics                            |
 
