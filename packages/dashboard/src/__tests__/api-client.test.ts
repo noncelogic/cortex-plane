@@ -13,7 +13,9 @@ import {
   listCredentials,
   listJobs,
   listProviders,
+  pauseAgent,
   type ProblemDetail,
+  resumeAgent,
   saveProviderApiKey,
   searchMemory,
   steerAgent,
@@ -188,6 +190,31 @@ describe("API Client", () => {
         instruction: "focus on tests",
         priority: "urgent",
       })
+    })
+
+    it("pauseAgent parses the live control-plane response shape", async () => {
+      mockFetchResponse({
+        agentId: "agent-1",
+        status: "pausing",
+      })
+
+      const result = await pauseAgent("agent-1", { reason: "manual pause" })
+
+      expect(result.agentId).toBe("agent-1")
+      expect(result.status).toBe("pausing")
+    })
+
+    it("resumeAgent parses the live control-plane response shape", async () => {
+      mockFetchResponse({
+        agentId: "agent-1",
+        status: "resuming",
+        fromCheckpoint: "cp-123",
+      })
+
+      const result = await resumeAgent("agent-1", { checkpointId: "cp-123" })
+
+      expect(result.agentId).toBe("agent-1")
+      expect(result.fromCheckpoint).toBe("cp-123")
     })
 
     it("listJobs passes query parameters", async () => {

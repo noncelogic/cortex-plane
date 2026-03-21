@@ -11,14 +11,14 @@ export const SteerResponseSchema = z.object({
 })
 
 export const PauseResponseSchema = z.object({
-  agent_id: z.string(),
+  agentId: z.string(),
   status: z.literal("pausing"),
 })
 
 export const ResumeResponseSchema = z.object({
-  agent_id: z.string(),
+  agentId: z.string(),
   status: z.literal("resuming"),
-  from_checkpoint: z.string().optional(),
+  fromCheckpoint: z.string().optional(),
 })
 
 export const CreateAgentJobResponseSchema = z.object({
@@ -67,12 +67,13 @@ export const SyncMemoryResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const PublishContentResponseSchema = z.object({
-  content_id: z.string(),
-  status: z.literal("published"),
-  published_at: z.string(),
+  id: z.string(),
+  status: z.literal("PUBLISHED"),
+  publishedAt: z.string().nullable(),
 })
 
 export const ArchiveContentResponseSchema = z.object({
-  content_id: z.string(),
-  status: z.literal("archived"),
+  id: z.string(),
+  status: z.literal("ARCHIVED"),
+  archivedAt: z.string().nullable(),
 })

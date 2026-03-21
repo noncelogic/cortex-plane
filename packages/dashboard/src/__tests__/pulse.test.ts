@@ -367,25 +367,25 @@ describe("Content API endpoints", () => {
 
   it("publishContent sends POST with channel", async () => {
     mockFetchResponse({
-      content_id: "c-1",
-      status: "published",
-      published_at: "2026-02-25T12:00:00Z",
+      id: "c-1",
+      status: "PUBLISHED",
+      publishedAt: "2026-02-25T12:00:00Z",
     })
 
     const result = await publishContent("c-1", "website")
 
-    expect(result.status).toBe("published")
+    expect(result.status).toBe("PUBLISHED")
     const [, opts] = vi.mocked(fetch).mock.calls[0]!
     expect(opts!.method).toBe("POST")
     expect(JSON.parse(opts!.body as string)).toEqual({ channel: "website" })
   })
 
   it("archiveContent sends POST", async () => {
-    mockFetchResponse({ content_id: "c-1", status: "archived" })
+    mockFetchResponse({ id: "c-1", status: "ARCHIVED", archivedAt: "2026-02-25T13:00:00Z" })
 
     const result = await archiveContent("c-1")
 
-    expect(result.status).toBe("archived")
+    expect(result.status).toBe("ARCHIVED")
     const [url, opts] = vi.mocked(fetch).mock.calls[0]!
     expect(url).toContain("/content/c-1/archive")
     expect(opts!.method).toBe("POST")

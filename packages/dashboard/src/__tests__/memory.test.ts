@@ -537,8 +537,8 @@ describe("syncMemory API", () => {
     await syncMemory("agt-1", "file_to_qdrant")
 
     const [, opts] = vi.mocked(fetch).mock.calls[0]!
-    const body = JSON.parse(opts!.body as string) as { agent_id: string; direction: string }
-    expect(body.agent_id).toBe("agt-1")
+    const body = JSON.parse(opts!.body as string) as { agentId: string; direction: string }
+    expect(body.agentId).toBe("agt-1")
     expect(body.direction).toBe("file_to_qdrant")
   })
 

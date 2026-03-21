@@ -670,7 +670,7 @@ export async function syncMemory(
 ) {
   return apiFetch("/memory/sync", {
     method: "POST",
-    body: { agent_id: agentId, direction },
+    body: { agentId, direction },
     schema: SyncMemoryResponseSchema,
   })
 }
