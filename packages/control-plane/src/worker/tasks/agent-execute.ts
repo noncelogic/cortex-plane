@@ -52,6 +52,10 @@ import { classifyError, isConfigErrorCategory } from "../error-classifier.js"
 import { startHeartbeat } from "../heartbeat.js"
 import { createMemoryScheduler } from "../memory-scheduler.js"
 import { calculateRunAt } from "../retry.js"
+import {
+  appendRuntimeCapabilityDisclosure,
+  listToolNamesFromRegistryLike,
+} from "../runtime-capability-disclosure.js"
 
 export interface AgentExecutePayload {
   jobId: string
@@ -522,6 +526,13 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               jobId: job.id,
               userId,
             })
+            task.context.systemPrompt = appendRuntimeCapabilityDisclosure(
+              task.context.systemPrompt,
+              {
+                task,
+                actualToolNames: effectiveTools.map((tool) => tool.toolRef),
+              },
+            )
 
             handle = await (
               backend as {
@@ -559,6 +570,21 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 createAgentRegistry: (c: Record<string, unknown>, m?: unknown) => Promise<unknown>
               }
             ).createAgentRegistry(agent.config ?? {}, mcpDeps)
+            task.context.systemPrompt = appendRuntimeCapabilityDisclosure(
+              task.context.systemPrompt,
+              {
+                task,
+                actualToolNames:
+                  typeof agentRegistry === "object" &&
+                  agentRegistry !== null &&
+                  "list" in agentRegistry &&
+                  typeof agentRegistry.list === "function"
+                    ? listToolNamesFromRegistryLike(
+                        agentRegistry as { list: () => Array<{ name: string }> },
+                      )
+                    : undefined,
+              },
+            )
             handle = await (
               backend as {
                 executeTask: (
@@ -569,6 +595,13 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               }
             ).executeTask(task, agentRegistry, tokenRefresher)
           } else {
+            task.context.systemPrompt = appendRuntimeCapabilityDisclosure(
+              task.context.systemPrompt,
+              {
+                task,
+                actualToolNames: task.constraints.allowedTools,
+              },
+            )
             handle = await backend.executeTask(task)
           }
 

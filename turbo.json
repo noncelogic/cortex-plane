@@ -23,6 +23,7 @@
     }
   },
   "globalEnv": [
+    "CAPABILITY_MODEL_V2",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",
     "DISCORD_BOT_TOKEN",
