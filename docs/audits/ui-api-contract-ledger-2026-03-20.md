@@ -4,17 +4,17 @@ Issue: #704
 
 Audit scope: dashboard action client methods in `packages/dashboard/src/lib/api-client.ts` and their paired response schemas in `packages/dashboard/src/lib/schemas/actions.ts`, mapped to live control-plane routes.
 
-| Dashboard method | Route | Request status | Response status | Notes |
-| --- | --- | --- | --- | --- |
-| `createAgentJob` | `POST /agents/:agentId/jobs` | Match | Match | Route returns job row with extra fields; dashboard schema consumes the stable subset. |
-| `steerAgent` | `POST /agents/:agentId/steer` | Match | Match | Already aligned on camelCase response keys. |
-| `pauseAgent` | `POST /agents/:agentId/pause` | Match | Fixed | Schema updated from `agent_id` to `agentId`. |
-| `resumeAgent` | `POST /agents/:agentId/resume` | Match | Fixed | Schema updated from `agent_id`/`from_checkpoint` to `agentId`/`fromCheckpoint`. |
-| `approveRequest` | `POST /approval/:id/decide` | Compatible | Match | Dashboard sends an extra `decided_by` field; route ignores it and derives actor from auth. |
-| `retryJob` | `POST /jobs/:jobId/retry` | Match | Match | Already aligned on `jobId`/`status`. |
-| `syncMemory` | `POST /memory/sync` | Fixed | Match | Client request body updated from `agent_id` to `agentId`. |
-| `publishContent` | `POST /content/:id/publish` | Match | Fixed | Schema updated to route shape: `id`, `status: "PUBLISHED"`, `publishedAt`. |
-| `archiveContent` | `POST /content/:id/archive` | Match | Fixed | Schema updated to route shape: `id`, `status: "ARCHIVED"`, `archivedAt`. |
+| Dashboard method | Route                          | Request status | Response status | Notes                                                                                      |
+| ---------------- | ------------------------------ | -------------- | --------------- | ------------------------------------------------------------------------------------------ |
+| `createAgentJob` | `POST /agents/:agentId/jobs`   | Match          | Match           | Route returns job row with extra fields; dashboard schema consumes the stable subset.      |
+| `steerAgent`     | `POST /agents/:agentId/steer`  | Match          | Match           | Already aligned on camelCase response keys.                                                |
+| `pauseAgent`     | `POST /agents/:agentId/pause`  | Match          | Fixed           | Schema updated from `agent_id` to `agentId`.                                               |
+| `resumeAgent`    | `POST /agents/:agentId/resume` | Match          | Fixed           | Schema updated from `agent_id`/`from_checkpoint` to `agentId`/`fromCheckpoint`.            |
+| `approveRequest` | `POST /approval/:id/decide`    | Compatible     | Match           | Dashboard sends an extra `decided_by` field; route ignores it and derives actor from auth. |
+| `retryJob`       | `POST /jobs/:jobId/retry`      | Match          | Match           | Already aligned on `jobId`/`status`.                                                       |
+| `syncMemory`     | `POST /memory/sync`            | Fixed          | Match           | Client request body updated from `agent_id` to `agentId`.                                  |
+| `publishContent` | `POST /content/:id/publish`    | Match          | Fixed           | Schema updated to route shape: `id`, `status: "PUBLISHED"`, `publishedAt`.                 |
+| `archiveContent` | `POST /content/:id/archive`    | Match          | Fixed           | Schema updated to route shape: `id`, `status: "ARCHIVED"`, `archivedAt`.                   |
 
 Guard coverage:
 
