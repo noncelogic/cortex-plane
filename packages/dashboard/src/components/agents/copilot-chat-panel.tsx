@@ -10,6 +10,7 @@ import { QuarantineBanner } from "@/components/agents/quarantine-banner"
 import { useToast } from "@/components/layout/toast"
 import { useApiQuery } from "@/hooks/use-api"
 import { clearSession, getSessionMessages, listAgentSessions, type Session } from "@/lib/api-client"
+import { getSessionStorageItem } from "@/lib/browser-storage"
 
 // ---------------------------------------------------------------------------
 // CopilotChatPanel — CopilotKit-powered chat UI for the agent detail page
@@ -92,10 +93,8 @@ export function CopilotChatPanel({ agentId }: CopilotChatPanelProps): React.JSX.
   // Build CopilotKit headers: auth + agent context
   const copilotHeaders = useMemo(() => {
     const h: Record<string, string> = { "x-agent-id": agentId }
-    if (typeof sessionStorage !== "undefined") {
-      const csrf = sessionStorage.getItem("cortex_csrf")
-      if (csrf) h["x-csrf-token"] = csrf
-    }
+    const csrf = getSessionStorageItem("cortex_csrf")
+    if (csrf) h["x-csrf-token"] = csrf
     const apiKey = process.env.NEXT_PUBLIC_CORTEX_API_KEY
     if (apiKey) h["X-API-Key"] = apiKey
     if (activeSessionId) h["x-session-id"] = activeSessionId

@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react"
 
+import { getLocalStorageItem, setLocalStorageItem } from "@/lib/browser-storage"
+
 type Theme = "light" | "dark"
 
 const THEME_KEY = "cortex-theme"
@@ -16,27 +18,13 @@ export function useTheme() {
 }
 
 export function readThemePreference(): Theme {
-  if (typeof window === "undefined") return "dark"
-
-  try {
-    const stored = window.localStorage.getItem(THEME_KEY)
-    if (stored === "light" || stored === "dark") return stored
-    return "dark"
-  } catch {
-    // Mobile browsers (e.g. private mode / embedded webviews) can throw
-    // SecurityError when storage is unavailable. Fall back safely.
-    return "dark"
-  }
+  const stored = getLocalStorageItem(THEME_KEY)
+  if (stored === "light" || stored === "dark") return stored
+  return "dark"
 }
 
 export function writeThemePreference(theme: Theme): void {
-  if (typeof window === "undefined") return
-
-  try {
-    window.localStorage.setItem(THEME_KEY, theme)
-  } catch {
-    // Best effort only; never crash render path due to storage policy.
-  }
+  setLocalStorageItem(THEME_KEY, theme)
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

@@ -158,6 +158,31 @@ describe("API Client", () => {
       expect(result.pagination.hasMore).toBe(false)
     })
 
+    it("continues request flow when sessionStorage access throws", async () => {
+      const nextWindow = {}
+      const fetchMock: typeof fetch = (_input, init) => {
+        const headers = new Headers(init?.headers)
+        expect(headers.get("x-csrf-token")).toBeNull()
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          json: () => Promise.resolve({ agents: [], count: 0 }),
+        } as Response)
+      }
+
+      Object.defineProperty(nextWindow, "sessionStorage", {
+        get() {
+          throw new Error("SecurityError")
+        },
+      })
+
+      vi.stubGlobal("window", nextWindow)
+      vi.stubGlobal("fetch", vi.fn(fetchMock))
+
+      await expect(listAgents()).resolves.toMatchObject({ agents: [] })
+    })
+
     it("getAgent fetches by ID", async () => {
       mockFetchResponse({
         id: "agent-1",

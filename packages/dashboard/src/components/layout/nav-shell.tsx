@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react"
 import { NotificationBell } from "@/components/layout/notification-bell"
 import { UserMenu } from "@/components/layout/user-menu"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
+import { getLocalStorageItem, setLocalStorageItem } from "@/lib/browser-storage"
 
 /* ── Navigation items ────────────────────────────────── */
 const navItems = [
@@ -171,25 +172,11 @@ function BottomTabs() {
 const SIDEBAR_KEY = "cortex-plane:sidebar-collapsed"
 
 export function readSidebarCollapsedPreference(): boolean {
-  if (typeof window === "undefined") return false
-
-  try {
-    return window.localStorage.getItem(SIDEBAR_KEY) === "true"
-  } catch {
-    // Mobile browsers (e.g. private mode / embedded webviews) can throw
-    // SecurityError when storage is unavailable. Fall back safely.
-    return false
-  }
+  return getLocalStorageItem(SIDEBAR_KEY) === "true"
 }
 
 export function writeSidebarCollapsedPreference(collapsed: boolean): void {
-  if (typeof window === "undefined") return
-
-  try {
-    window.localStorage.setItem(SIDEBAR_KEY, String(collapsed))
-  } catch {
-    // Best effort only; never crash render path due to storage policy.
-  }
+  setLocalStorageItem(SIDEBAR_KEY, String(collapsed))
 }
 
 /* ── Shell ────────────────────────────────────────────── */
