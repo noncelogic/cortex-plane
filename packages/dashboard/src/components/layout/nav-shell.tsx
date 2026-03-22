@@ -170,19 +170,38 @@ function BottomTabs() {
 
 const SIDEBAR_KEY = "cortex-plane:sidebar-collapsed"
 
+export function readSidebarCollapsedPreference(): boolean {
+  if (typeof window === "undefined") return false
+
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) === "true"
+  } catch {
+    // Mobile browsers (e.g. private mode / embedded webviews) can throw
+    // SecurityError when storage is unavailable. Fall back safely.
+    return false
+  }
+}
+
+export function writeSidebarCollapsedPreference(collapsed: boolean): void {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(SIDEBAR_KEY, String(collapsed))
+  } catch {
+    // Best effort only; never crash render path due to storage policy.
+  }
+}
+
 /* ── Shell ────────────────────────────────────────────── */
 export function NavShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false
-    return localStorage.getItem(SIDEBAR_KEY) === "true"
-  })
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsedPreference)
   const guardState = useAuthGuard()
 
   const toggleSidebar = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev
-      localStorage.setItem(SIDEBAR_KEY, String(next))
+      writeSidebarCollapsedPreference(next)
       return next
     })
   }, [])
