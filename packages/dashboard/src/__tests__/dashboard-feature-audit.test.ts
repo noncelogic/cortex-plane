@@ -242,16 +242,16 @@ const browserRoutes: AuditEntry[] = [
     method: "GET",
     path: "/agents/:agentId/browser/screenshots",
     backendFile: "dashboard.ts",
-    status: "stub-empty",
-    note: "Always returns { screenshots: [] }",
+    status: "live",
+    note: "Returns persisted screenshot history when runtime artifacts exist",
   },
   {
     dashboardMethod: "getAgentBrowserEvents",
     method: "GET",
     path: "/agents/:agentId/browser/events",
     backendFile: "dashboard.ts",
-    status: "stub-empty",
-    note: "Always returns { events: [] }",
+    status: "live",
+    note: "Returns persisted browser event history when runtime artifacts exist",
   },
   {
     dashboardMethod: "captureScreenshot",
@@ -820,7 +820,7 @@ const PAGE_AUDIT: PageAudit[] = [
       "startTrace",
       "stopTrace",
     ],
-    note: "Page is fully built but screenshot/event list endpoints return empty stubs",
+    note: "Page is fully built with persisted screenshot/event history endpoints",
   },
   {
     path: "/jobs",
@@ -1064,9 +1064,7 @@ describe("Dashboard feature audit (#501)", () => {
       //   2. POST /content/:id/publish               (stub-501)
       //   3. POST /content/:id/archive               (stub-501)
       //   4. POST /memory/sync                       (stub-501)
-      //   5. GET  /agents/:agentId/browser/screenshots (stub-empty)
-      //   6. GET  /agents/:agentId/browser/events      (stub-empty)
-      expect(stubs).toHaveLength(6)
+      expect(stubs).toHaveLength(4)
     })
 
     it("documents all phantom/placeholder pages", () => {
