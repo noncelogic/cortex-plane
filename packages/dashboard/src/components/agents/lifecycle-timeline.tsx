@@ -15,8 +15,11 @@ interface LifecycleTimelineProps {
 const LIFECYCLE_ORDER: AgentLifecycleState[] = [
   "BOOTING",
   "HYDRATING",
+  "SAFE_MODE",
   "READY",
   "EXECUTING",
+  "DEGRADED",
+  "QUARANTINED",
   "DRAINING",
   "TERMINATED",
 ]
@@ -24,8 +27,11 @@ const LIFECYCLE_ORDER: AgentLifecycleState[] = [
 const stepIcons: Record<AgentLifecycleState, string> = {
   BOOTING: "rocket_launch",
   HYDRATING: "database",
+  SAFE_MODE: "safety_check",
   READY: "check_circle",
   EXECUTING: "bolt",
+  DEGRADED: "warning",
+  QUARANTINED: "shield",
   DRAINING: "water_drop",
   TERMINATED: "flag",
 }
