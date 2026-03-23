@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 
+import { getSessionStorageItem, removeSessionStorageItem } from "@/lib/browser-storage"
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -69,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for CSRF token stored by auth/complete page
   useEffect(() => {
-    const stored = sessionStorage.getItem("cortex_csrf")
+    const stored = getSessionStorageItem("cortex_csrf")
     if (stored) {
       setCsrfToken(stored)
     }
@@ -84,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
-      const storedCsrf = sessionStorage.getItem("cortex_csrf")
+      const storedCsrf = getSessionStorageItem("cortex_csrf")
       if (storedCsrf) headers["x-csrf-token"] = storedCsrf
 
       const res = await fetch(`${API_BASE}/auth/session`, {
@@ -135,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     const headers: Record<string, string> = { "Content-Type": "application/json" }
-    const storedCsrf = sessionStorage.getItem("cortex_csrf")
+    const storedCsrf = getSessionStorageItem("cortex_csrf")
     if (storedCsrf) headers["x-csrf-token"] = storedCsrf
 
     try {
@@ -145,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers,
       })
     } finally {
-      sessionStorage.removeItem("cortex_csrf")
+      removeSessionStorageItem("cortex_csrf")
       setUser(null)
       setAuthStatus("unauthenticated")
       setAuthError(null)

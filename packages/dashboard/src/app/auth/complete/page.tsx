@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect } from "react"
 
 import { useAuth } from "@/components/auth-provider"
+import { setSessionStorageItem } from "@/lib/browser-storage"
 
 /**
  * /auth/complete — OAuth callback landing page.
@@ -20,7 +21,7 @@ function AuthCompleteInner() {
     const finalizeLogin = async () => {
       const csrf = searchParams.get("csrf")
       if (csrf) {
-        sessionStorage.setItem("cortex_csrf", csrf)
+        setSessionStorageItem("cortex_csrf", csrf)
       }
 
       // Refresh session first so header/menu render authenticated identity immediately.

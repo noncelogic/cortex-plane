@@ -54,6 +54,45 @@ export const config = [
   {
     ignores: ["dist/**"],
   },
+  {
+    files: ["packages/dashboard/src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "localStorage",
+          message: "Use @/lib/browser-storage helpers instead of raw localStorage access.",
+        },
+        {
+          name: "sessionStorage",
+          message: "Use @/lib/browser-storage helpers instead of raw sessionStorage access.",
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "window",
+          property: "localStorage",
+          message: "Use @/lib/browser-storage helpers instead of window.localStorage.",
+        },
+        {
+          object: "window",
+          property: "sessionStorage",
+          message: "Use @/lib/browser-storage helpers instead of window.sessionStorage.",
+        },
+        {
+          object: "globalThis",
+          property: "localStorage",
+          message: "Use @/lib/browser-storage helpers instead of globalThis.localStorage.",
+        },
+        {
+          object: "globalThis",
+          property: "sessionStorage",
+          message: "Use @/lib/browser-storage helpers instead of globalThis.sessionStorage.",
+        },
+      ],
+    },
+  },
   // Disable type-checked rules for config files (not in tsconfig)
   // Must be last to override the rules above
   {

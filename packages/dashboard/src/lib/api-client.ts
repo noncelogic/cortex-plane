@@ -8,6 +8,7 @@
 
 import { z } from "zod"
 
+import { getSessionStorageItem } from "./browser-storage"
 import {
   ApprovalDecisionResponseSchema,
   ArchiveContentResponseSchema,
@@ -278,7 +279,7 @@ async function apiFetch<T>(
   }
 
   // Session-based CSRF token (stored by auth flow)
-  const csrf = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("cortex_csrf") : null
+  const csrf = getSessionStorageItem("cortex_csrf")
   if (csrf) {
     headers["x-csrf-token"] = csrf
   }
