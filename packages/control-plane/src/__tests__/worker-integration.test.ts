@@ -10,12 +10,14 @@ import {
   type ExecutionTask,
   type OutputEvent,
 } from "@cortex/shared/backends"
+import type { BufferWriter } from "@cortex/shared/buffer"
 import EmbeddedPostgres from "embedded-postgres"
 import { makeWorkerUtils, run, type Runner, type WorkerUtils } from "graphile-worker"
 import { Kysely, PostgresDialect } from "kysely"
 import pg from "pg"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
+import { ToolRegistry } from "../backends/tool-executor.js"
 import type { Database } from "../db/types.js"
 import { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
@@ -263,12 +265,25 @@ async function waitForJobStatus(
 
 // ── Helper: start runner with given registry ──
 
-async function startRunner(registry: BackendRegistry, streamManager?: SSEConnectionManager) {
+async function startRunner(
+  registry: BackendRegistry,
+  streamManager?: SSEConnectionManager,
+  opts?: {
+    mcpToolRouter?: { resolveAll: (...args: unknown[]) => Promise<Array<Record<string, unknown>>> }
+    sessionBufferFactory?: (jobId: string, agentId: string) => BufferWriter
+  },
+) {
   if (runner) await runner.stop()
   runner = await run({
     pgPool: pool,
     taskList: {
-      agent_execute: createAgentExecuteTask({ db, registry, streamManager }),
+      agent_execute: createAgentExecuteTask({
+        db,
+        registry,
+        streamManager,
+        mcpToolRouter: opts?.mcpToolRouter as never,
+        sessionBufferFactory: opts?.sessionBufferFactory,
+      }),
     },
     concurrency: 1,
     noHandleSignals: true,
@@ -564,6 +579,129 @@ describe("Worker integration", () => {
     // Verify completion broadcast
     const completeCalls = broadcastSpy.mock.calls.filter(([, event]) => event === "agent:complete")
     expect(completeCalls.length).toBe(1)
+
+    broadcastSpy.mockRestore()
+  }, 30_000)
+
+  it("mcp execution path: resolves MCP tool, invokes it, and propagates output to stream + session buffer", async () => {
+    const mcpExecute = vi.fn().mockResolvedValue({
+      result: [{ type: "text", text: "README.md" }],
+      meta: { server: "filesystem", callId: "call-712" },
+    })
+
+    const mcpToolRouter = {
+      resolveAll: vi.fn(() =>
+        Promise.resolve([
+          {
+            name: "mcp:filesystem:read_file",
+            description: "Read a file",
+            inputSchema: { type: "object", properties: { path: { type: "string" } } },
+            execute: mcpExecute,
+          },
+        ]),
+      ),
+    }
+
+    const capturedEvents: Array<Record<string, unknown>> = []
+    const sessionBufferFactory = () =>
+      ({
+        append: (event: Omit<Record<string, unknown>, "sequence">) => {
+          capturedEvents.push(event)
+        },
+        close: () => {},
+      }) as BufferWriter
+
+    const backend = {
+      ...createMockBackend(),
+      createAgentRegistry: vi.fn((_agentConfig: unknown, _mcpDeps: unknown) => {
+        const registry = new ToolRegistry()
+        registry.register({
+          name: "mcp:filesystem:read_file",
+          description: "Read a file",
+          inputSchema: { type: "object", properties: { path: { type: "string" } } },
+          execute: async (input: Record<string, unknown>) =>
+            JSON.stringify(await mcpExecute(input)),
+        })
+        return Promise.resolve(registry)
+      }),
+      executeTask: vi.fn(async (_task: ExecutionTask, registryLike: unknown) => {
+        const registry = registryLike as {
+          execute: (
+            name: string,
+            input: Record<string, unknown>,
+          ) => Promise<{
+            output: string
+            isError: boolean
+          }>
+        }
+
+        const toolInput = { path: "/workspace/README.md" }
+        const toolResult = await registry.execute("mcp:filesystem:read_file", toolInput)
+
+        const events: OutputEvent[] = [
+          {
+            type: "tool_use",
+            timestamp: new Date().toISOString(),
+            toolName: "mcp:filesystem:read_file",
+            toolInput,
+          },
+          {
+            type: "tool_result",
+            timestamp: new Date().toISOString(),
+            toolName: "mcp:filesystem:read_file",
+            output: toolResult.output,
+            isError: toolResult.isError,
+          },
+          {
+            type: "text",
+            timestamp: new Date().toISOString(),
+            content: `MCP output: ${toolResult.output}`,
+          },
+        ]
+
+        return createMockHandle(
+          createMockResult({ summary: "MCP tool invocation completed" }),
+          events,
+        )
+      }),
+    } as unknown as ExecutionBackend
+
+    const registry = await createMockRegistry(backend)
+    const streamManager = new SSEConnectionManager()
+    const broadcastSpy = vi.spyOn(streamManager, "broadcast")
+
+    await startRunner(registry, streamManager, { mcpToolRouter, sessionBufferFactory })
+
+    const { jobId } = await setupJob()
+    await workerUtils.addJob("agent_execute", { jobId }, { maxAttempts: 1 })
+    await waitForJobStatus(jobId, ["COMPLETED"])
+
+    expect(mcpToolRouter.resolveAll).toHaveBeenCalled()
+    expect(mcpExecute).toHaveBeenCalledWith({ path: "/workspace/README.md" })
+
+    const outputCalls = broadcastSpy.mock.calls.filter(([, event]) => event === "agent:output")
+    const toolResultPayloads = outputCalls
+      .map(
+        ([, , payload]) =>
+          payload as { output?: { type?: string; toolName?: string; output?: string } },
+      )
+      .filter((payload) => payload.output?.type === "tool_result")
+
+    expect(toolResultPayloads).toHaveLength(1)
+    expect(toolResultPayloads[0]?.output?.toolName).toBe("mcp:filesystem:read_file")
+    expect(toolResultPayloads[0]?.output?.output).toContain('"meta":{"server":"filesystem"')
+
+    const bufferToolResult = capturedEvents.find((evt) => evt.type === "TOOL_RESULT")
+    expect(bufferToolResult).toBeDefined()
+
+    const completedJob = await db
+      .selectFrom("job")
+      .selectAll()
+      .where("id", "=", jobId)
+      .executeTakeFirstOrThrow()
+
+    expect(completedJob.status).toBe("COMPLETED")
+    expect(completedJob.tool_call_count).toBe(1)
 
     broadcastSpy.mockRestore()
   }, 30_000)
