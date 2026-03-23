@@ -24,12 +24,12 @@ pnpm --filter @cortex/control-plane test -- --runInBand \
 
 ### Browser tooling
 
-| Check                                                 | Result     | Evidence                                                                                                        |
-| ----------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
-| Steering/action endpoint contract + runtime execution | ✅ PASS    | `stream-routes.test.ts`, `schema-contract.test.ts` (`SteerResponseSchema`)                                      |
-| Auth handoff behavior                                 | ✅ PASS    | `streaming/types.ts` (`browser:auth:handoff`), `oauth-popup.test.ts`                                            |
-| Trace/event propagation to UI                         | ⚠️ PARTIAL | Trace flow validated; screenshot/event history endpoints remain stub-empty in `dashboard-feature-audit.test.ts` |
-| Failure paths (auth, invalid action, timeout)         | ✅ PASS    | `stream-routes.test.ts`, `api-client.test.ts`, `error-handling-audit.test.ts`                                   |
+| Check                                                 | Result  | Evidence                                                                                                                 |
+| ----------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Steering/action endpoint contract + runtime execution | ✅ PASS | `stream-routes.test.ts`, `schema-contract.test.ts` (`SteerResponseSchema`)                                               |
+| Auth handoff behavior                                 | ✅ PASS | `streaming/types.ts` (`browser:auth:handoff`), `oauth-popup.test.ts`                                                     |
+| Trace/event propagation to UI                         | ✅ PASS | Trace flow validated; screenshot/event history endpoints return persisted runtime artifacts (`dashboard-routes.test.ts`) |
+| Failure paths (auth, invalid action, timeout)         | ✅ PASS | `stream-routes.test.ts`, `api-client.test.ts`, `error-handling-audit.test.ts`                                            |
 
 ### MCP
 
@@ -49,7 +49,7 @@ pnpm --filter @cortex/control-plane test -- --runInBand \
 
 ## Gap Tickets
 
-- #711 — Browser screenshots/events runtime persistence
+- #711 — Browser screenshots/events runtime persistence ✅ resolved
 - #712 — MCP full execution-path e2e integration test
 - #713 — MCP failure-path propagation integration test
 
