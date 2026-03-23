@@ -1,9 +1,15 @@
 import type { AgentLifecycleState } from "@/lib/api-client"
 
-const stateStyles: Record<
-  AgentLifecycleState,
-  { dot: string; bg: string; text: string; border: string }
-> = {
+type StatusStyle = { dot: string; bg: string; text: string; border: string }
+
+const fallbackStyle: StatusStyle = {
+  dot: "bg-slate-400",
+  bg: "bg-slate-500/10",
+  text: "text-slate-500 dark:text-slate-400",
+  border: "border-slate-500/20",
+}
+
+const stateStyles: Partial<Record<AgentLifecycleState, StatusStyle>> = {
   BOOTING: {
     dot: "bg-yellow-400",
     bg: "bg-yellow-500/10",
@@ -40,6 +46,24 @@ const stateStyles: Record<
     text: "text-slate-500",
     border: "border-slate-500/20",
   },
+  DEGRADED: {
+    dot: "bg-amber-400",
+    bg: "bg-amber-500/10",
+    text: "text-amber-500 dark:text-amber-400",
+    border: "border-amber-500/20",
+  },
+  QUARANTINED: {
+    dot: "bg-red-500",
+    bg: "bg-red-500/10",
+    text: "text-red-500 dark:text-red-400",
+    border: "border-red-500/20",
+  },
+  SAFE_MODE: {
+    dot: "bg-purple-400",
+    bg: "bg-purple-500/10",
+    text: "text-purple-500 dark:text-purple-400",
+    border: "border-purple-500/20",
+  },
 }
 
 /** Extra state for ERROR display (not in AgentLifecycleState enum but shown in UI). */
@@ -55,9 +79,15 @@ interface AgentStatusBadgeProps {
   hasError?: boolean
 }
 
+export function getAgentStateStyle(state: string | undefined, hasError = false): StatusStyle {
+  if (hasError) return errorStyle
+  if (!state) return stateStyles.READY ?? fallbackStyle
+  return stateStyles[state as AgentLifecycleState] ?? fallbackStyle
+}
+
 export function AgentStatusBadge({ state, hasError }: AgentStatusBadgeProps): React.JSX.Element {
   const resolvedState = state ?? "READY"
-  const style = hasError ? errorStyle : stateStyles[resolvedState]
+  const style = getAgentStateStyle(resolvedState, hasError)
   const label = hasError ? "ERROR" : resolvedState
 
   return (

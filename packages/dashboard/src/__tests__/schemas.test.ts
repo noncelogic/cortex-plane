@@ -79,6 +79,26 @@ describe("AgentSummarySchema", () => {
     expect(() => AgentSummarySchema.parse({ ...validAgent, lifecycle_state: "RUNNING" })).toThrow()
   })
 
+  it("accepts all valid lifecycle states", () => {
+    const lifecycleStates = [
+      "BOOTING",
+      "HYDRATING",
+      "READY",
+      "EXECUTING",
+      "DRAINING",
+      "TERMINATED",
+      "DEGRADED",
+      "QUARANTINED",
+      "SAFE_MODE",
+    ]
+
+    for (const lifecycle_state of lifecycleStates) {
+      expect(AgentSummarySchema.parse({ ...validAgent, lifecycle_state }).lifecycle_state).toBe(
+        lifecycle_state,
+      )
+    }
+  })
+
   it("accepts all valid statuses including QUARANTINED", () => {
     for (const status of ["ACTIVE", "DISABLED", "ARCHIVED", "QUARANTINED"]) {
       expect(AgentSummarySchema.parse({ ...validAgent, status }).status).toBe(status)

@@ -11,6 +11,9 @@ export const AgentLifecycleStateSchema = z.enum([
   "EXECUTING",
   "DRAINING",
   "TERMINATED",
+  "DEGRADED",
+  "QUARANTINED",
+  "SAFE_MODE",
 ])
 
 export const CheckpointSchema = z.object({
