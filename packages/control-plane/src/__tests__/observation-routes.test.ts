@@ -4,6 +4,7 @@ import type { Runner } from "graphile-worker"
 import type { Kysely } from "kysely"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { SessionData, SessionService } from "../auth/session-service.js"
 import type { Database } from "../db/types.js"
 import type { AgentLifecycleManager } from "../lifecycle/manager.js"
 import type { AgentLifecycleState } from "../lifecycle/state-machine.js"
@@ -120,6 +121,26 @@ const VALID_SESSION = {
   status: "active",
 }
 
+const VALID_DASHBOARD_SESSION: SessionData = {
+  session: {
+    id: "dash-session-1",
+    user_account_id: "dash-user-1",
+    csrf_token: "csrf-tok",
+    expires_at: new Date(Date.now() + 86400_000),
+    created_at: new Date(),
+    updated_at: new Date(),
+    refresh_token_hash: null,
+    refresh_expires_at: null,
+  },
+  user: {
+    userId: "dash-user-1",
+    email: "user@example.com",
+    displayName: "Dashboard User",
+    avatarUrl: null,
+    role: "admin",
+  },
+}
+
 const AUTH_HEADER = { authorization: "Bearer session-123" }
 
 const AUTH_HEADERS = {
@@ -127,10 +148,23 @@ const AUTH_HEADERS = {
   "content-type": "application/json",
 }
 
+function mockSessionService(sessionData: SessionData | null = null): SessionService {
+  return {
+    validateSession: vi.fn().mockResolvedValue(sessionData),
+    createSession: vi.fn(),
+    destroySession: vi.fn(),
+    cleanupExpired: vi.fn(),
+    validateCsrf: vi.fn(),
+    serializeCookie: vi.fn(),
+    serializeClearCookie: vi.fn(),
+  } as unknown as SessionService
+}
+
 async function buildTestApp(options: {
   session?: Record<string, unknown> | null
   lifecycleManager?: AgentLifecycleManager
   observationService?: BrowserObservationService
+  sessionService?: SessionService
 }) {
   const app = Fastify({ logger: false })
   const db = mockDb("session" in options ? options.session : VALID_SESSION)
@@ -148,6 +182,7 @@ async function buildTestApp(options: {
       sseManager,
       lifecycleManager: lifecycle,
       observationService: observation,
+      sessionService: options.sessionService,
     }),
   )
 
@@ -190,6 +225,45 @@ describe("observation route authentication", () => {
       headers: AUTH_HEADERS,
     })
     expect(res.statusCode).toBe(403)
+  })
+})
+
+describe("observation route cookie authentication", () => {
+  it("authenticates observe routes via dashboard session cookie", async () => {
+    const sessionService = mockSessionService(VALID_DASHBOARD_SESSION)
+    const { app } = await buildTestApp({ sessionService })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/agents/agent-1/observe/stream-status",
+      headers: { cookie: "cortex_session=dash-session-1" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(sessionService.validateSession).toHaveBeenCalledWith("dash-session-1")
+  })
+
+  it("authenticates browser routes via dashboard session cookie", async () => {
+    const sessionService = mockSessionService(VALID_DASHBOARD_SESSION)
+    const { app } = await buildTestApp({ sessionService })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents/agent-1/browser/steer",
+      headers: {
+        cookie: "cortex_session=dash-session-1",
+        "content-type": "application/json",
+      },
+      payload: {
+        type: "click",
+        coordinates: { x: 10, y: 20 },
+        selector: "#login",
+      },
+    })
+
+    expect(res.statusCode).toBe(202)
+    expect(res.json<{ agentId: string }>().agentId).toBe("agent-1")
   })
 })
 
