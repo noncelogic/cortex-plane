@@ -25,6 +25,8 @@ Session contract follow-up (#724):
 
 #705 epic acceptance snapshot:
 
+Tracker closure status (2026-03-24): child implementation tickets #701, #702, #703, and #704 are closed.
+
 - ✅ Action matrix produced with per-endpoint status (table above)
 - ✅ In-scope mismatches resolved (see `Fixed` rows)
 - ✅ Dashboard schemas validated against control-plane responses
