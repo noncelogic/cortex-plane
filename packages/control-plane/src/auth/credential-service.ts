@@ -1125,7 +1125,7 @@ export class CredentialService {
   private buildProviderPing(
     provider: string,
     token: string,
-    credentialType?: "oauth" | "api_key",
+    _credentialType?: "oauth" | "api_key",
   ): { url: string; init: RequestInit } {
     switch (provider) {
       case "openai":
@@ -1144,9 +1144,9 @@ export class CredentialService {
       case "anthropic": {
         const headers: Record<string, string> = {
           "anthropic-version": "2023-06-01",
-          ...(credentialType === "oauth"
-            ? { Authorization: `Bearer ${token}` }
-            : { "x-api-key": token }),
+          // Anthropic /v1/models expects x-api-key for both API-key and
+          // OAuth-derived tokens in Cortex Plane flows.
+          "x-api-key": token,
         }
         return {
           url: "https://api.anthropic.com/v1/models",
