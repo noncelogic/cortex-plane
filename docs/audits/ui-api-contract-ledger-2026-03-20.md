@@ -1,6 +1,6 @@
 # UI/API Contract Ledger: Dashboard Action Surface
 
-Issues: #704, #726 (re-triage)
+Issues: #704, #705 (epic tracker closure)
 
 Audit scope: dashboard action client methods in `packages/dashboard/src/lib/api-client.ts` and their paired response schemas in `packages/dashboard/src/lib/schemas/actions.ts`, mapped to live control-plane routes.
 
@@ -23,7 +23,7 @@ Session contract follow-up (#724):
 | Session delete semantics   | `DELETE /sessions/:id` | Fixed  | Hard-delete contract (`action: "deleted"`, `deleted: true`) aligned |
 | Dashboard session controls | Session list UI        | Fixed  | Labels and toasts use "Delete" semantics                            |
 
-#726 acceptance snapshot:
+#705 epic acceptance snapshot:
 
 - ✅ Action matrix produced with per-endpoint status (table above)
 - ✅ In-scope mismatches resolved (see `Fixed` rows)
