@@ -23,8 +23,9 @@
  * POST   /agents/:agentId/browser/trace/stop          — Stop trace + register metadata
  * GET    /agents/:agentId/browser/screenshot/stream    — SSE screenshot stream
  *
- * All endpoints require per-session Bearer token authentication.
- * Auth handoff additionally requires the "approver" role via API key auth.
+ * Observation and browser streaming endpoints support either dashboard session
+ * cookies or per-session Bearer tokens. Auth handoff additionally requires the
+ * "approver" role.
  */
 
 import { randomUUID } from "node:crypto"
@@ -106,10 +107,11 @@ export function observationRoutes(deps: ObservationRouteDeps) {
     traceCaptureService,
     screenshotModeService,
     authConfig,
+    sessionService,
   } = deps
 
   return function register(app: FastifyInstance): void {
-    const authHook = createStreamAuth(app.db)
+    const authHook = createStreamAuth({ db: app.db, sessionService })
 
     // Helper: verify agent exists and is alive (if lifecycle manager is available)
     function getAgentOrFail(agentId: string, reply: FastifyReply): boolean {
