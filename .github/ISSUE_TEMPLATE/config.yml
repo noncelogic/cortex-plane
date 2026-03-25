@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Engineering Operating Contract (issue + PR + deployment expectations)
+    url: https://github.com/noncelogic/cortex-plane/blob/main/docs/ops/engineering-operating-contract.md
+    about: Read this before filing to include reproducible details and correct boundary context.
+  - name: Deployment runbook (k3s)
+    url: https://github.com/noncelogic/cortex-plane/blob/main/docs/deploy/k3s.md
+    about: Use this for deployment topology and operational debugging context.

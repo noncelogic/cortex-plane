@@ -1,5 +1,7 @@
 # Contributing to Cortex Plane
 
+For issue intake, PR acceptance gates, and deployment-debugging expectations, see `docs/ops/engineering-operating-contract.md`.
+
 ## Contract Tests
 
 Any change that crosses a package boundary **must** include or update a
