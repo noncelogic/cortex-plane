@@ -54,8 +54,16 @@ require_file ".github/ISSUE_TEMPLATE/config.yml"
 require_file "docs/ops/engineering-operating-contract.md"
 
 require_contains ".github/pull_request_template.md" "## AQS — Agent Quality System"
+require_contains ".github/pull_request_template.md" "### Ownership + autonomy declaration"
 require_contains "docs/ops/engineering-operating-contract.md" "## 3) PR contract"
 require_contains "docs/ops/engineering-operating-contract.md" "## 4) Deployment topology contract"
+require_contains "docs/ops/engineering-operating-contract.md" "## 6) Ownership + autonomy contract"
+require_contains "docs/ops/engineering-operating-contract.md" "Project Orchestrator owns"
+require_file "docs/ops/ownership-autonomy-matrix.md"
+require_contains "docs/ops/ownership-autonomy-matrix.md" "OpenClaw-transition roadmap and sequence planning"
+require_contains "docs/ops/ownership-autonomy-matrix.md" "Project Orchestrator"
+require_contains "docs/ops/ownership-autonomy-matrix.md" "One alignment decision is the max normal steering budget"
+
 
 echo ""
 echo "---"

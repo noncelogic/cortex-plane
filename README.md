@@ -223,14 +223,15 @@ See `.github/workflows/docker-publish.yml`.
 
 ## Documentation
 
-| Document                                                                                 | Description                                               |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| [docs/VISION.md](docs/VISION.md)                                                         | Design philosophy and architecture                        |
-| [docs/STATUS.md](docs/STATUS.md)                                                         | Implementation status tracker                             |
-| [docs/spec.md](docs/spec.md)                                                             | Full architecture specification (v1.1.0)                  |
-| [docs/ops/engineering-operating-contract.md](docs/ops/engineering-operating-contract.md) | Issue intake, PR gates, and deployment-debug expectations |
-| [docs/spikes/](docs/spikes/)                                                             | Design spikes and decision records                        |
-| [docs/deploy/](docs/deploy/)                                                             | Deployment runbooks (k3s, Railway)                        |
+| Document                                                                                 | Description                                                   |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [docs/VISION.md](docs/VISION.md)                                                         | Design philosophy and architecture                            |
+| [docs/STATUS.md](docs/STATUS.md)                                                         | Implementation status tracker                                 |
+| [docs/spec.md](docs/spec.md)                                                             | Full architecture specification (v1.1.0)                      |
+| [docs/ops/engineering-operating-contract.md](docs/ops/engineering-operating-contract.md) | Issue intake, PR gates, and deployment-debug expectations     |
+| [docs/ops/ownership-autonomy-matrix.md](docs/ops/ownership-autonomy-matrix.md)           | Default ownership and steering budget for autonomous delivery |
+| [docs/spikes/](docs/spikes/)                                                             | Design spikes and decision records                            |
+| [docs/deploy/](docs/deploy/)                                                             | Deployment runbooks (k3s, Railway)                            |
 
 ## License
 

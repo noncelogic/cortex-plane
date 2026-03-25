@@ -43,6 +43,14 @@
 
 <!-- What invariants hold after this PR? Any contracts changed? -->
 
+### Ownership + autonomy declaration
+
+<!-- Declare owner row from docs/ops/ownership-autonomy-matrix.md and steering rounds used (0, 1, >1). -->
+
+- Owner row:
+- Steering rounds used:
+- If >1, linked stabilization issue:
+
 ### Evidence
 
 <!-- Before/after proof: test output, screenshots, curl responses -->

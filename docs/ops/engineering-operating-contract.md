@@ -87,10 +87,24 @@ Every fix should leave a durable trace:
 - docs/runbook update where needed,
 - AQS artifact update when flow/pattern/boundary changed.
 
-## 6) Non-goals (to prevent process bloat)
+## 6) Ownership + autonomy contract
+
+Default ownership and steering budget are defined in:
+
+- `docs/ops/ownership-autonomy-matrix.md`
+
+Required policy:
+
+- **Project Orchestrator owns** OpenClaw-transition/platform-direction work.
+- Single-owner issues should move directly to implementation with no extra approval.
+- Cross-boundary work gets one alignment decision max before execution.
+- If steering exceeds one round, open a `stabilization` issue to fix the contract/process gap.
+
+## 7) Non-goals (to prevent process bloat)
 
 - No agent-only governance forks
 - No duplicate framework docs that restate existing checks
 - No merge based on prose compliance alone; rely on enforceable checks
+- No multi-round steering as a default operating mode
 
 This contract is intentionally concise and human-first. Agents must follow the same controls humans do.
