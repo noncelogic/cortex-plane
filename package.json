@@ -29,7 +29,8 @@
     "e2e": "pnpm --filter @cortex/e2e e2e",
     "e2e:cluster": "./scripts/run-e2e-cluster.sh",
     "preflight": "./scripts/preflight-deploy.sh",
-    "rollback": "./scripts/rollback-cluster.sh"
+    "rollback": "./scripts/rollback-cluster.sh",
+    "validate:governance": "./scripts/validate-governance.sh"
   },
   "devDependencies": {
     "@cortex/config": "workspace:*",

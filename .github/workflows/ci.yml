@@ -26,6 +26,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # ── Governance integrity gate ─────────────────────────────────
+      - name: Governance validation
+        run: pnpm validate:governance
+
       # ── Quality gates (#488) ──────────────────────────────────────
       - name: Formatting
         run: pnpm format:check
