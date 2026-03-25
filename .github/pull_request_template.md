@@ -51,6 +51,15 @@
 
 <!-- Confirm related surfaces still work. List what you checked. -->
 
+### OpenClaw convergence + velocity declaration (flow-touching PRs)
+
+<!-- Required when PR touches runtime/chat/orchestration flow surfaces -->
+
+- Convergence status (`parity` | `gap-reduction` | `intentional-divergence`):
+- Lead-time outcome (`reduced` | `unchanged` | `increased`):
+- Running-path verification artifact:
+- Stabilization issue link (required if steering rounds > 1 or lead-time increased twice):
+
 ### Knowledge artifact updates
 
 <!-- Which AQS docs were updated? (FEATURE_AUDIT.md, FLOW_MATRIX.md, PATTERN_LOG.md) -->

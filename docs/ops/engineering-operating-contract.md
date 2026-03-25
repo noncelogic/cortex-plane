@@ -87,10 +87,20 @@ Every fix should leave a durable trace:
 - docs/runbook update where needed,
 - AQS artifact update when flow/pattern/boundary changed.
 
-## 6) Non-goals (to prevent process bloat)
+## 6) OpenClaw flow convergence + velocity contract
+
+For PRs that touch runtime/chat/orchestration flows:
+
+- Declare convergence status using `docs/ops/openclaw-flow-parity-map.md` (`parity`, `gap-reduction`, or `intentional-divergence`).
+- Declare lead-time outcome using `docs/ops/working-feature-velocity-loop.md` (`reduced`, `unchanged`, or `increased`).
+- Include at least one running-path verification artifact in PR evidence.
+- If steering exceeds one round, link a `stabilization` issue.
+
+## 7) Non-goals (to prevent process bloat)
 
 - No agent-only governance forks
 - No duplicate framework docs that restate existing checks
 - No merge based on prose compliance alone; rely on enforceable checks
+- No multi-round steering as default mode
 
 This contract is intentionally concise and human-first. Agents must follow the same controls humans do.
