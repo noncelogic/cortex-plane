@@ -10,6 +10,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
 import type { SessionService } from "../auth/session-service.js"
+import {
+  closeSessionRecord,
+  getSessionRecord,
+  resumeSessionRecord,
+  SessionResolutionError,
+} from "../chat/session-record.js"
 import type { Database } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
@@ -113,6 +119,32 @@ export function sessionRoutes(deps: SessionRouteDeps) {
     )
 
     // -----------------------------------------------------------------
+    // GET /sessions/:id — Fetch a single session record
+    // -----------------------------------------------------------------
+    app.get<{ Params: SessionParams }>(
+      "/sessions/:id",
+      {
+        preHandler: [requireAuth],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+            },
+            required: ["id"],
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: SessionParams }>, reply: FastifyReply) => {
+        const session = await getSessionRecord(db, request.params.id)
+        if (!session) {
+          return reply.status(404).send({ error: "not_found", message: "Session not found" })
+        }
+        return reply.status(200).send(session)
+      },
+    )
+
+    // -----------------------------------------------------------------
     // GET /sessions/:id/messages — Get conversation history
     // -----------------------------------------------------------------
     app.get<{ Params: SessionParams; Querystring: ListMessagesQuery }>(
@@ -168,7 +200,48 @@ export function sessionRoutes(deps: SessionRouteDeps) {
     )
 
     // -----------------------------------------------------------------
-    // DELETE /sessions/:id — Clear / reset a session
+    // POST /sessions/:id/resume — Resume a reusable session
+    // -----------------------------------------------------------------
+    app.post<{ Params: SessionParams }>(
+      "/sessions/:id/resume",
+      {
+        preHandler: [requireAuth],
+        schema: {
+          params: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+            },
+            required: ["id"],
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: SessionParams }>, reply: FastifyReply) => {
+        try {
+          const session = await resumeSessionRecord(db, {
+            sessionId: request.params.id,
+            source: {
+              surface: "ui",
+              channelType: "rest",
+              channelId: "rest:api",
+              chatId: "rest:api",
+            },
+          })
+          return reply.status(200).send({ session, action: "resumed" })
+        } catch (error) {
+          if (error instanceof SessionResolutionError) {
+            return reply.status(error.code === "closed" ? 409 : 404).send({
+              error: error.code,
+              message: error.message,
+            })
+          }
+          throw error
+        }
+      },
+    )
+
+    // -----------------------------------------------------------------
+    // DELETE /sessions/:id — Close a session
     // -----------------------------------------------------------------
     app.delete<{ Params: SessionParams }>(
       "/sessions/:id",
@@ -185,28 +258,20 @@ export function sessionRoutes(deps: SessionRouteDeps) {
         },
       },
       async (request: FastifyRequest<{ Params: SessionParams }>, reply: FastifyReply) => {
-        const { id: sessionId } = request.params
-
-        const session = await db
-          .selectFrom("session")
-          .select("id")
-          .where("id", "=", sessionId)
-          .executeTakeFirst()
-
+        const session = await closeSessionRecord(db, {
+          sessionId: request.params.id,
+          source: {
+            surface: "ui",
+            channelType: "rest",
+            channelId: "rest:api",
+            chatId: "rest:api",
+          },
+        })
         if (!session) {
           return reply.status(404).send({ error: "not_found", message: "Session not found" })
         }
 
-        // Clear all messages and mark session as ended
-        await db.deleteFrom("session_message").where("session_id", "=", sessionId).execute()
-
-        await db
-          .updateTable("session")
-          .set({ status: "ended" })
-          .where("id", "=", sessionId)
-          .execute()
-
-        return reply.status(200).send({ id: sessionId, status: "ended", action: "cleared" })
+        return reply.status(200).send({ id: session.id, status: "closed", action: "closed" })
       },
     )
   }

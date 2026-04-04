@@ -159,6 +159,11 @@ export interface SessionTable {
   total_tokens_in: ColumnType<number, number | undefined, number>
   total_tokens_out: ColumnType<number, number | undefined, number>
   total_cost_usd: ColumnType<string, string | number | undefined, string | number>
+  last_activity_at: ColumnType<Date, Date | undefined, Date>
+  last_resumed_at: Date | null
+  idle_at: Date | null
+  archived_at: Date | null
+  closed_at: Date | null
   created_at: ColumnType<Date, Date | undefined, never>
   updated_at: ColumnType<Date, Date | undefined, never>
 }

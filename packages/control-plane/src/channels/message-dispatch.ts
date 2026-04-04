@@ -25,6 +25,7 @@ import {
   type ResolvedProviderModelContract,
   type SessionResolutionDiagnostics,
 } from "../chat/runtime-contract.js"
+import { resolveSessionRecord } from "../chat/session-record.js"
 import type { ChannelType, Database, RateLimit, TokenBudget } from "../db/types.js"
 import type { AgentEventEmitter } from "../observability/event-emitter.js"
 import type { AgentChannelService } from "./agent-channel-service.js"
@@ -214,7 +215,6 @@ export function createMessageDispatch(
     const channelId = `${channelType}:${chatId}`
 
     // Find or create a session for (agent_id, user_account_id, channel_id)
-    const session = await findOrCreateSession(db, agentId, routed.userAccountId, channelId)
     const source: SessionResolutionDiagnostics = {
       surface: "channel",
       channelType,
@@ -222,12 +222,18 @@ export function createMessageDispatch(
       chatId,
       messageId: routed.message.messageId,
     }
+    const session = await resolveSessionRecord(db, {
+      agentId,
+      userAccountId: routed.userAccountId,
+      source,
+    })
     const toolRefs = capabilityAssembler
       ? (await capabilityAssembler.resolveEffectiveTools(agentId)).map((tool) => tool.toolRef)
       : undefined
     const chatDiagnostics = buildChatDispatchDiagnostics({
       agentId,
       sessionId: session.id,
+      sessionStatus: session.status,
       source,
       providerModel: extractProviderModelDiagnostics(preflight),
       toolRefs,
@@ -469,41 +475,4 @@ export async function loadConversationHistory(
   }
 
   return chronological as Array<{ role: "user" | "assistant"; content: string }>
-}
-
-async function findOrCreateSession(
-  db: Kysely<Database>,
-  agentId: string,
-  userAccountId: string,
-  channelId?: string,
-): Promise<{ id: string }> {
-  // Try to find existing active session scoped by channel
-  let query = db
-    .selectFrom("session")
-    .select("id")
-    .where("agent_id", "=", agentId)
-    .where("user_account_id", "=", userAccountId)
-    .where("status", "=", "active")
-
-  if (channelId) {
-    query = query.where("channel_id", "=", channelId)
-  }
-
-  const existing = await query.executeTakeFirst()
-
-  if (existing) return existing
-
-  // Create a new session
-  const created = await db
-    .insertInto("session")
-    .values({
-      agent_id: agentId,
-      user_account_id: userAccountId,
-      channel_id: channelId ?? null,
-      status: "active",
-    })
-    .returning("id")
-    .executeTakeFirstOrThrow()
-
-  return created
 }

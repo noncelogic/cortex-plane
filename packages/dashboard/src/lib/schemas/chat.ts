@@ -11,6 +11,11 @@ export const SessionSchema = z.object({
   channel_id: z.string().nullable().optional(),
   status: z.string(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  last_activity_at: z.string(),
+  last_resumed_at: z.string().nullable().optional(),
+  idle_at: z.string().nullable().optional(),
+  archived_at: z.string().nullable().optional(),
+  closed_at: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -87,9 +92,14 @@ export type ChatResponse = z.infer<typeof ChatResponseSchema>
 
 export const SessionClearResponseSchema = z.object({
   id: z.string(),
-  status: z.literal("ended"),
-  action: z.literal("cleared"),
+  status: z.literal("closed"),
+  action: z.literal("closed"),
 })
 
 // Backward-compatible alias (deprecated name)
 export const SessionDeleteResponseSchema = SessionClearResponseSchema
+
+export const SessionResumeResponseSchema = z.object({
+  session: SessionSchema,
+  action: z.literal("resumed"),
+})

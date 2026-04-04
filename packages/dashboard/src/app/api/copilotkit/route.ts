@@ -58,13 +58,17 @@ class CortexChatAdapter implements CopilotServiceAdapter {
 
     // Send message to our control-plane backend
     const sendUrl = `${CONTROL_PLANE_URL}/agents/${this.agentId}/chat?wait=false`
+    const requestedSessionId = request.threadId ?? this.authHeaders["x-session-id"]
     const sendRes = await fetch(sendUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...this.authHeaders,
       },
-      body: JSON.stringify({ text: textContent }),
+      body: JSON.stringify({
+        text: textContent,
+        ...(requestedSessionId ? { session_id: requestedSessionId } : {}),
+      }),
     })
 
     if (!sendRes.ok) {

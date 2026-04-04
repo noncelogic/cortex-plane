@@ -9,7 +9,13 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { QuarantineBanner } from "@/components/agents/quarantine-banner"
 import { useToast } from "@/components/layout/toast"
 import { useApiQuery } from "@/hooks/use-api"
-import { clearSession, getSessionMessages, listAgentSessions, type Session } from "@/lib/api-client"
+import {
+  clearSession,
+  getSessionMessages,
+  listAgentSessions,
+  resumeSession,
+  type Session,
+} from "@/lib/api-client"
 import { getSessionStorageItem } from "@/lib/browser-storage"
 
 // ---------------------------------------------------------------------------
@@ -47,10 +53,18 @@ export function CopilotChatPanel({ agentId }: CopilotChatPanelProps): React.JSX.
     setActiveSessionId(null)
   }, [])
 
-  const handleSelectSession = useCallback((id: string) => {
-    setActiveSessionId(id)
-    setShowSessions(false)
-  }, [])
+  const handleSelectSession = useCallback(
+    (id: string) => {
+      void resumeSession(id)
+        .catch(() => undefined)
+        .finally(() => {
+          setActiveSessionId(id)
+          setShowSessions(false)
+          void refetchSessions()
+        })
+    },
+    [refetchSessions],
+  )
 
   const handleClearSession = useCallback(
     async (sessionId: string) => {
@@ -60,10 +74,10 @@ export function CopilotChatPanel({ agentId }: CopilotChatPanelProps): React.JSX.
         if (activeSessionId === sessionId) {
           setActiveSessionId(null)
         }
-        addToast("Session cleared", "success")
+        addToast("Session closed", "success")
         void refetchSessions()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to clear session"
+        const msg = err instanceof Error ? err.message : "Failed to close session"
         setClearError(msg)
         addToast(msg, "error")
       }

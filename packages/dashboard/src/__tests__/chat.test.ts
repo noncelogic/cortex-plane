@@ -47,6 +47,11 @@ describe("Chat & Session API Client", () => {
             user_account_id: "user-1",
             channel_id: "rest:api",
             status: "active",
+            last_activity_at: "2026-03-01T01:00:00Z",
+            last_resumed_at: "2026-03-01T01:00:00Z",
+            idle_at: null,
+            archived_at: null,
+            closed_at: null,
             created_at: "2026-03-01T00:00:00Z",
             updated_at: "2026-03-01T01:00:00Z",
           },
@@ -307,12 +312,12 @@ describe("Chat & Session API Client", () => {
 
   describe("deleteSession", () => {
     it("deletes a session", async () => {
-      mockFetchResponse({ id: "sess-1", status: "ended", action: "cleared" })
+      mockFetchResponse({ id: "sess-1", status: "closed", action: "closed" })
 
       const result = await deleteSession("sess-1")
 
       expect(result.id).toBe("sess-1")
-      expect(result.status).toBe("ended")
+      expect(result.status).toBe("closed")
 
       const [url, opts] = vi.mocked(fetch).mock.calls[0]!
       expect(url).toBe(`${API_BASE}/sessions/sess-1`)
@@ -344,6 +349,11 @@ describe("Chat schemas", () => {
         user_account_id: "user-1",
         channel_id: "rest:api",
         status: "active",
+        last_activity_at: "2026-03-01T01:00:00Z",
+        last_resumed_at: "2026-03-01T01:00:00Z",
+        idle_at: null,
+        archived_at: null,
+        closed_at: null,
         created_at: "2026-03-01T00:00:00Z",
         updated_at: "2026-03-01T01:00:00Z",
       })
@@ -356,6 +366,7 @@ describe("Chat schemas", () => {
         id: "sess-1",
         agent_id: "agent-1",
         status: "active",
+        last_activity_at: "2026-03-01T01:00:00Z",
         created_at: "2026-03-01T00:00:00Z",
         updated_at: "2026-03-01T01:00:00Z",
       })
@@ -515,6 +526,7 @@ describe("Chat schemas", () => {
             id: "s1",
             agent_id: "a1",
             status: "active",
+            last_activity_at: "2026-03-01T00:00:00Z",
             created_at: "2026-03-01T00:00:00Z",
             updated_at: "2026-03-01T00:00:00Z",
           },
@@ -547,10 +559,10 @@ describe("Chat schemas", () => {
     it("parses delete response", () => {
       const result = SessionClearResponseSchema.parse({
         id: "sess-1",
-        status: "ended",
-        action: "cleared",
+        status: "closed",
+        action: "closed",
       })
-      expect(result.status).toBe("ended")
+      expect(result.status).toBe("closed")
     })
 
     it("rejects wrong status", () => {
