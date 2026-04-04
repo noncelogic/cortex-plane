@@ -78,6 +78,11 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     total_tokens_in: 0,
     total_tokens_out: 0,
     total_cost_usd: 0,
+    last_activity_at: new Date("2026-03-09T00:00:00Z"),
+    last_resumed_at: new Date("2026-03-09T00:00:00Z"),
+    idle_at: null,
+    archived_at: null,
+    closed_at: null,
     created_at: new Date("2026-03-09T00:00:00Z"),
     updated_at: new Date("2026-03-09T00:00:00Z"),
     ...overrides,
@@ -122,6 +127,7 @@ function mockDb(
 
   const sessionMessageInserts: Array<Record<string, unknown>> = []
   const sessionInserts: Array<Record<string, unknown>> = []
+  const jobInserts: Array<Record<string, unknown>> = []
   const deleteFromCalls: string[] = []
 
   const selectFromFn = vi.fn().mockImplementation((table: string) => {
@@ -225,7 +231,10 @@ function mockDb(
     // job insert
     const executeTakeFirstOrThrow = vi.fn().mockResolvedValue(job)
     const returning = vi.fn().mockReturnValue({ executeTakeFirstOrThrow })
-    const values = vi.fn().mockReturnValue({ returning })
+    const values = vi.fn().mockImplementation((val: Record<string, unknown>) => {
+      jobInserts.push(val)
+      return { returning }
+    })
     return { values }
   })
 
@@ -252,7 +261,7 @@ function mockDb(
     deleteFrom: deleteFromFn,
   } as unknown as Kysely<Database>
 
-  return { db, sessionMessageInserts, sessionInserts, deleteFromCalls, deleteFromFn }
+  return { db, sessionMessageInserts, sessionInserts, jobInserts, deleteFromCalls, deleteFromFn }
 }
 
 /** Build a Fastify app with both chat + session routes registered. */
@@ -464,12 +473,12 @@ describe("Send message → stored and returned in history", () => {
 })
 
 // ---------------------------------------------------------------------------
-// 3. Delete session → removed, messages cleared, status ended
+// 3. Delete session → closed lifecycle state
 // ---------------------------------------------------------------------------
 
-describe("Delete session → messages cleared, status ended", () => {
-  it("DELETE /sessions/:id clears messages and sets status to ended", async () => {
-    const { db, deleteFromFn } = mockDb()
+describe("Delete session → closed lifecycle state", () => {
+  it("DELETE /sessions/:id closes the session", async () => {
+    const { db } = mockDb()
     const app = await buildApp(db)
 
     const res = await app.inject({
@@ -479,11 +488,8 @@ describe("Delete session → messages cleared, status ended", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().id).toBe(SESSION_ID)
-    expect(res.json().status).toBe("ended")
-    expect(res.json().action).toBe("cleared")
-
-    // Verify session_message rows were deleted
-    expect(deleteFromFn).toHaveBeenCalledWith("session_message")
+    expect(res.json().status).toBe("closed")
+    expect(res.json().action).toBe("closed")
 
     // Verify session status was updated
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -564,6 +570,7 @@ describe("Delete active session → activeSessionId cleared", () => {
     })
 
     const updateTableFn = vi.fn().mockImplementation(() => {
+      sessionDeleted = true
       const execute = vi.fn().mockResolvedValue(undefined)
       const whereFn: ReturnType<typeof vi.fn> = vi.fn()
       whereFn.mockReturnValue({ where: whereFn, execute })
@@ -595,7 +602,7 @@ describe("Delete active session → activeSessionId cleared", () => {
       url: `/sessions/${SESSION_ID}`,
     })
     expect(deleteRes.statusCode).toBe(200)
-    expect(deleteRes.json().status).toBe("ended")
+    expect(deleteRes.json().status).toBe("closed")
 
     // Post-condition: no active sessions remain
     const listAfter = await app.inject({
@@ -781,6 +788,29 @@ describe("Dashboard reflects session state changes", () => {
     expect(res.json().session_id).toBe(SESSION_ID)
     expect(res.json().status).toBe("SCHEDULED")
     expect(enqueueJob).toHaveBeenCalledWith("job-async-1")
+  })
+
+  it("links multiple chat jobs to the same session", async () => {
+    const { db, jobInserts } = mockDb()
+    const app = await buildApp(db)
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/chat`,
+      payload: { text: "First message" },
+    })
+    expect(first.statusCode).toBe(202)
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/chat`,
+      payload: { text: "Second message", session_id: SESSION_ID },
+    })
+    expect(second.statusCode).toBe(202)
+
+    expect(jobInserts).toHaveLength(2)
+    expect(jobInserts[0]!.session_id).toBe(SESSION_ID)
+    expect(jobInserts[1]!.session_id).toBe(SESSION_ID)
   })
 })
 

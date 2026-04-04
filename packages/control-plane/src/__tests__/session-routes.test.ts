@@ -23,6 +23,11 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     channel_id: "telegram:chat-42",
     status: "active",
     metadata: {},
+    last_activity_at: new Date(),
+    last_resumed_at: new Date(),
+    idle_at: null,
+    archived_at: null,
+    closed_at: null,
     created_at: new Date(),
     updated_at: new Date(),
     ...overrides,
@@ -181,6 +186,21 @@ describe("GET /agents/:id/sessions", () => {
 })
 
 describe("GET /sessions/:id/messages", () => {
+  it("returns the session record", async () => {
+    const db = mockDb()
+    const app = await buildApp(db)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/sessions/aaaaaaaa-1111-2222-3333-444444444444`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body: { id: string; status: string } = res.json()
+    expect(body.id).toBe("aaaaaaaa-1111-2222-3333-444444444444")
+    expect(body.status).toBe("active")
+  })
+
   it("returns messages for a session", async () => {
     const db = mockDb({
       messages: [
@@ -218,7 +238,7 @@ describe("GET /sessions/:id/messages", () => {
 })
 
 describe("DELETE /sessions/:id", () => {
-  it("clears session messages and marks session as ended", async () => {
+  it("closes the session and marks it as closed", async () => {
     const db = mockDb()
     const app = await buildApp(db)
 
@@ -231,13 +251,9 @@ describe("DELETE /sessions/:id", () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(body.status).toBe("ended")
+    expect(body.status).toBe("closed")
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(body.action).toBe("cleared")
-
-    // Should have deleted session messages
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(db.deleteFrom).toHaveBeenCalledWith("session_message")
+    expect(body.action).toBe("closed")
     // Should have updated session status
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(db.updateTable).toHaveBeenCalledWith("session")
@@ -253,5 +269,24 @@ describe("DELETE /sessions/:id", () => {
     })
 
     expect(res.statusCode).toBe(404)
+  })
+})
+
+describe("POST /sessions/:id/resume", () => {
+  it("resumes an idle session", async () => {
+    const db = mockDb({ session: makeSession({ status: "idle", idle_at: new Date() }) })
+    const app = await buildApp(db)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/sessions/aaaaaaaa-1111-2222-3333-444444444444/resume`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body: { action: string; session: { status: string } } = res.json()
+    expect(body.action).toBe("resumed")
+    expect(body.session.status).toBe("active")
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.updateTable).toHaveBeenCalledWith("session")
   })
 })

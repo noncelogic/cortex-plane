@@ -1131,6 +1131,8 @@ import {
   MessageListResponseSchema,
   SessionClearResponseSchema,
   SessionListResponseSchema,
+  SessionResumeResponseSchema,
+  SessionSchema,
 } from "./schemas/chat"
 
 export type { ChatResponse, Session, SessionMessage } from "./schemas/chat"
@@ -1167,6 +1169,21 @@ export async function getSessionMessages(
   })
 }
 
+export async function getSession(sessionId: string): Promise<import("./schemas/chat").Session> {
+  return apiFetch(`/sessions/${sessionId}`, {
+    schema: SessionSchema,
+  })
+}
+
+export async function resumeSession(
+  sessionId: string,
+): Promise<{ session: import("./schemas/chat").Session; action: "resumed" }> {
+  return apiFetch(`/sessions/${sessionId}/resume`, {
+    method: "POST",
+    schema: SessionResumeResponseSchema,
+  })
+}
+
 export async function sendChatMessage(
   agentId: string,
   body: { text: string; session_id?: string },
@@ -1186,7 +1203,7 @@ export async function sendChatMessage(
 
 export async function clearSession(
   sessionId: string,
-): Promise<{ id: string; status: "ended"; action: "cleared" }> {
+): Promise<{ id: string; status: "closed"; action: "closed" }> {
   return apiFetch(`/sessions/${sessionId}`, {
     method: "DELETE",
     schema: SessionClearResponseSchema,

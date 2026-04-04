@@ -107,6 +107,7 @@ export function resolveProviderModelContract(
 export function buildChatDispatchDiagnostics(params: {
   agentId: string
   sessionId: string
+  sessionStatus?: string
   source: SessionResolutionDiagnostics
   providerModel: ResolvedProviderModelContract
   toolRefs?: string[]
@@ -121,6 +122,10 @@ export function buildChatDispatchDiagnostics(params: {
       channelId: params.source.channelId,
       chatId: params.source.chatId,
       ...(params.source.messageId ? { messageId: params.source.messageId } : {}),
+    },
+    session: {
+      id: params.sessionId,
+      status: params.sessionStatus ?? "active",
     },
     providerModel: {
       requestedProvider: params.providerModel.requestedProvider,

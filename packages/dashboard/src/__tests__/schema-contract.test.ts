@@ -484,7 +484,7 @@ describe("API-Dashboard contract tests", () => {
     it("parses the fixture successfully", () => {
       const result = SessionClearResponseSchema.parse(sessionDeleteFixture)
       expect(result.id).toBe("sess-001")
-      expect(result.status).toBe("ended")
+      expect(result.status).toBe("closed")
     })
 
     it("does not silently drop fields", () => {

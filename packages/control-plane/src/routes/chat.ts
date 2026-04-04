@@ -25,6 +25,11 @@ import {
   type ResolvedProviderModelContract,
   type SessionResolutionDiagnostics,
 } from "../chat/runtime-contract.js"
+import {
+  ensureUserAccount,
+  resolveSessionRecord,
+  SessionResolutionError,
+} from "../chat/session-record.js"
 import type { Database, RateLimit, TokenBudget } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
@@ -198,18 +203,29 @@ export function chatRoutes(deps: ChatRouteDeps) {
 
         // Find or create session
         const channelId = "rest:api"
-        const session = await findOrCreateSession(
-          db,
-          agentId,
-          userAccountId,
-          channelId,
-          requestedSessionId,
-        )
         const source: SessionResolutionDiagnostics = {
           surface: "ui",
           channelType: "rest",
           channelId,
           chatId: "rest:api",
+        }
+        let session
+        try {
+          session = await resolveSessionRecord(db, {
+            agentId,
+            userAccountId,
+            source,
+            requestedSessionId,
+          })
+        } catch (error) {
+          if (error instanceof SessionResolutionError) {
+            const statusCode = error.code === "closed" ? 409 : 404
+            return reply.status(statusCode).send({
+              error: error.code,
+              message: error.message,
+            })
+          }
+          throw error
         }
         const toolRefs = capabilityAssembler
           ? (await capabilityAssembler.resolveEffectiveTools(agentId)).map((tool) => tool.toolRef)
@@ -217,6 +233,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
         const chatDiagnostics = buildChatDispatchDiagnostics({
           agentId,
           sessionId: session.id,
+          sessionStatus: session.status,
           source,
           providerModel: extractProviderModelDiagnostics(preflight),
           toolRefs,
@@ -479,74 +496,6 @@ export function chatRoutes(deps: ChatRouteDeps) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-async function ensureUserAccount(
-  db: Kysely<Database>,
-  userAccountId: string,
-  displayName?: string,
-): Promise<void> {
-  const existing = await db
-    .selectFrom("user_account")
-    .select("id")
-    .where("id", "=", userAccountId)
-    .executeTakeFirst()
-
-  if (existing) return
-
-  await db
-    .insertInto("user_account")
-    .values({
-      id: userAccountId,
-      display_name: displayName ?? null,
-      role: "operator",
-    })
-    .execute()
-}
-
-async function findOrCreateSession(
-  db: Kysely<Database>,
-  agentId: string,
-  userAccountId: string,
-  channelId: string,
-  requestedSessionId?: string,
-): Promise<{ id: string }> {
-  // If a specific session is requested, verify and use it
-  if (requestedSessionId) {
-    const existing = await db
-      .selectFrom("session")
-      .select("id")
-      .where("id", "=", requestedSessionId)
-      .where("agent_id", "=", agentId)
-      .where("status", "=", "active")
-      .executeTakeFirst()
-
-    if (existing) return existing
-  }
-
-  // Try to find existing active session
-  const existing = await db
-    .selectFrom("session")
-    .select("id")
-    .where("agent_id", "=", agentId)
-    .where("user_account_id", "=", userAccountId)
-    .where("channel_id", "=", channelId)
-    .where("status", "=", "active")
-    .executeTakeFirst()
-
-  if (existing) return existing
-
-  // Create new session
-  return db
-    .insertInto("session")
-    .values({
-      agent_id: agentId,
-      user_account_id: userAccountId,
-      channel_id: channelId,
-      status: "active",
-    })
-    .returning("id")
-    .executeTakeFirstOrThrow()
-}
 
 interface WaitForJobResult {
   status: string

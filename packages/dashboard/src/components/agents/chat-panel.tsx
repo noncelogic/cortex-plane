@@ -8,7 +8,7 @@ import { useToast } from "@/components/layout/toast"
 import { useApiQuery } from "@/hooks/use-api"
 import type { ChatMessage } from "@/hooks/use-chat-api"
 import { useChatApi } from "@/hooks/use-chat-api"
-import { clearSession, listAgentSessions, type Session } from "@/lib/api-client"
+import { clearSession, listAgentSessions, resumeSession, type Session } from "@/lib/api-client"
 import type { ChatMessageStatus } from "@/lib/schemas/chat"
 
 // ---------------------------------------------------------------------------
@@ -47,10 +47,18 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
     setActiveSessionId(null)
   }, [])
 
-  const handleSelectSession = useCallback((id: string) => {
-    setActiveSessionId(id)
-    setShowSessions(false)
-  }, [])
+  const handleSelectSession = useCallback(
+    (id: string) => {
+      void resumeSession(id)
+        .catch(() => undefined)
+        .finally(() => {
+          setActiveSessionId(id)
+          setShowSessions(false)
+          void refetchSessions()
+        })
+    },
+    [refetchSessions],
+  )
 
   const handleSessionCreated = useCallback(
     (sessionId: string) => {
@@ -68,10 +76,10 @@ export function ChatPanel({ agentId }: ChatPanelProps): React.JSX.Element {
         if (activeSessionId === sessionId) {
           setActiveSessionId(null)
         }
-        addToast("Session cleared", "success")
+        addToast("Session closed", "success")
         void refetchSessions()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to clear session"
+        const msg = err instanceof Error ? err.message : "Failed to close session"
         setClearError(msg)
         addToast(msg, "error")
       }
@@ -180,6 +188,16 @@ function formatSessionTime(iso: string): string {
   })
 }
 
+function describeSessionStatus(session: Session): string {
+  if (session.status === "closed" && session.closed_at) {
+    return `Closed: ${formatSessionTime(session.closed_at)}`
+  }
+  if (session.status === "idle" && session.idle_at) {
+    return `Idle since: ${formatSessionTime(session.idle_at)}`
+  }
+  return `Last active: ${formatSessionTime(session.last_activity_at)}`
+}
+
 function SessionList({
   sessions,
   activeSessionId,
@@ -232,11 +250,18 @@ function SessionList({
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   className={`inline-block size-2 shrink-0 rounded-full ${
-                    session.status === "active" ? "bg-emerald-500" : "bg-slate-400"
+                    session.status === "active"
+                      ? "bg-emerald-500"
+                      : session.status === "idle"
+                        ? "bg-amber-500"
+                        : "bg-slate-400"
                   }`}
                 />
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                   Session {sessions.length - index}
+                </span>
+                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                  {session.status}
                 </span>
                 {isCurrent && (
                   <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -249,7 +274,7 @@ function SessionList({
               </span>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[10px] text-slate-400">
                 <span>Created: {formatSessionTime(session.created_at)}</span>
-                <span>Last active: {formatSessionTime(session.updated_at)}</span>
+                <span>{describeSessionStatus(session)}</span>
               </div>
             </button>
             {confirmClearId === session.id ? (
@@ -274,8 +299,8 @@ function SessionList({
               <button
                 onClick={() => setConfirmClearId(session.id)}
                 className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:text-amber-500"
-                title="Clear session history"
-                aria-label="Clear session history"
+                title="Close session"
+                aria-label="Close session"
               >
                 <span className="material-symbols-outlined text-sm">restart_alt</span>
               </button>
