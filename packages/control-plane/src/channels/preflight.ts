@@ -13,6 +13,7 @@
 
 import type { Kysely } from "kysely"
 
+import { loadActiveLlmBindings, resolveProviderModelContract } from "../chat/runtime-contract.js"
 import type { Database } from "../db/types.js"
 
 // ---------------------------------------------------------------------------
@@ -24,7 +25,8 @@ export interface PreflightResult {
   /** User-facing message explaining *why* the agent cannot run and *what to do*. */
   userMessage?: string
   /** Machine-readable code for programmatic callers (REST API). */
-  code?: "agent_not_active" | "no_llm_credential"
+  code?: "agent_not_active" | "no_llm_credential" | "provider_model_misconfigured"
+  diagnostics?: Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +46,25 @@ const NO_CREDENTIAL_MESSAGE =
   "This agent does not have an LLM API key configured. " +
   "An operator needs to bind an LLM credential in the agent settings."
 
+function providerModelMismatchMessage(details: {
+  provider?: string | null
+  model?: string | null
+  fallback?: string | null
+}): string {
+  const summary = [details.provider, details.model].filter(Boolean).join(" / ")
+  if (summary) {
+    return (
+      `This agent is configured for ${summary}, but that provider/model is not currently ` +
+      "bound and available. An operator needs to fix the agent's provider or model binding."
+    )
+  }
+  return (
+    details.fallback ??
+    "This agent's configured provider/model is not currently bound and available. " +
+      "An operator needs to fix the agent's provider or model binding."
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Core check
 // ---------------------------------------------------------------------------
@@ -61,7 +82,7 @@ export async function runPreflight(
   // ── 1. Agent status ─────────────────────────────────────────────────
   const agent = await db
     .selectFrom("agent")
-    .select(["id", "status"])
+    .select(["id", "status", "model_config"])
     .where("id", "=", agentId)
     .executeTakeFirst()
 
@@ -79,34 +100,68 @@ export async function runPreflight(
   }
 
   // ── 2. LLM credential availability ─────────────────────────────────
-  // Check env var first (cheapest path).
-  if (process.env.LLM_API_KEY) {
-    return { ok: true }
+  const requestedProvider =
+    typeof agent.model_config?.provider === "string"
+      ? agent.model_config.provider
+      : typeof agent.model_config?.providerId === "string"
+        ? agent.model_config.providerId
+        : null
+  const requestedModel =
+    typeof agent.model_config?.model === "string" ? agent.model_config.model : null
+
+  if (process.env.LLM_API_KEY && requestedProvider === null && requestedModel === null) {
+    return {
+      ok: true,
+      diagnostics: {
+        providerModel: {
+          requestedProvider: null,
+          requestedModel: null,
+          resolvedProvider: null,
+          resolvedModel: null,
+          boundProviders: [],
+          bindingRequired: false,
+          mismatchCode: null,
+          mismatchMessage: null,
+        },
+      },
+    }
   }
 
-  // Check for a bound, active LLM credential.
-  const binding = await db
-    .selectFrom("agent_credential_binding")
-    .innerJoin(
-      "provider_credential",
-      "provider_credential.id",
-      "agent_credential_binding.provider_credential_id",
-    )
-    .select(["provider_credential.id"])
-    .where("agent_credential_binding.agent_id", "=", agentId)
-    .where("provider_credential.credential_class", "=", "llm_provider")
-    .where("provider_credential.status", "=", "active")
-    .executeTakeFirst()
+  const bindings = await loadActiveLlmBindings(db, agentId)
+  const providerModel = resolveProviderModelContract(agent.model_config, bindings)
 
-  if (!binding) {
+  if (providerModel.mismatchCode) {
+    return {
+      ok: false,
+      userMessage: providerModelMismatchMessage({
+        provider: providerModel.resolvedProvider ?? providerModel.requestedProvider,
+        model: providerModel.resolvedModel ?? providerModel.requestedModel,
+        fallback: providerModel.mismatchMessage,
+      }),
+      code: "provider_model_misconfigured",
+      diagnostics: {
+        providerModel,
+      },
+    }
+  }
+
+  if (bindings.length === 0) {
     return {
       ok: false,
       userMessage: NO_CREDENTIAL_MESSAGE,
       code: "no_llm_credential",
+      diagnostics: {
+        providerModel,
+      },
     }
   }
 
-  return { ok: true }
+  return {
+    ok: true,
+    diagnostics: {
+      providerModel,
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------

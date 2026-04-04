@@ -256,13 +256,18 @@ function mockDb(
 }
 
 /** Build a Fastify app with both chat + session routes registered. */
-async function buildApp(db: Kysely<Database>, enqueueJob = vi.fn().mockResolvedValue(undefined)) {
+async function buildApp(
+  db: Kysely<Database>,
+  enqueueJob = vi.fn().mockResolvedValue(undefined),
+  capabilityAssembler?: { resolveEffectiveTools: ReturnType<typeof vi.fn> },
+) {
   const app = Fastify({ logger: false })
   await app.register(
     chatRoutes({
       db,
       authConfig: DEV_AUTH_CONFIG,
       enqueueJob,
+      capabilityAssembler: capabilityAssembler as never,
     }),
   )
   await app.register(
@@ -297,10 +302,30 @@ afterEach(() => {
 
 describe("Create session → appears in list", () => {
   it("sending a chat message creates a session that appears in GET /agents/:id/sessions", async () => {
+    mockRunPreflight.mockResolvedValue({
+      ok: true,
+      diagnostics: {
+        providerModel: {
+          requestedProvider: "openai",
+          requestedModel: "gpt-4o",
+          resolvedProvider: "openai",
+          resolvedModel: "gpt-4o",
+          boundProviders: ["openai"],
+          bindingRequired: true,
+          mismatchCode: null,
+          mismatchMessage: null,
+        },
+      },
+    })
     const createdSession = makeSession()
     const { db, sessionMessageInserts } = mockDb({ session: createdSession })
     const enqueueJob = vi.fn().mockResolvedValue(undefined)
-    const app = await buildApp(db, enqueueJob)
+    const capabilityAssembler = {
+      resolveEffectiveTools: vi
+        .fn()
+        .mockResolvedValue([{ toolRef: "web_search" }, { toolRef: "echo" }]),
+    }
+    const app = await buildApp(db, enqueueJob, capabilityAssembler)
 
     // Send a chat message (creates/reuses session)
     const chatRes = await app.inject({
@@ -308,10 +333,37 @@ describe("Create session → appears in list", () => {
       url: `/agents/${AGENT_ID}/chat`,
       payload: { text: "Hello, agent!" },
     })
+    const chatBody = chatRes.json<{
+      session_id: string
+      status: string
+      diagnostics?: {
+        source?: { surface?: string; channelType?: string; channelId?: string }
+        providerModel?: { resolvedProvider?: string; resolvedModel?: string }
+        tools?: { mode?: string; refs?: string[] }
+      }
+    }>()
+    const insertedMessage = sessionMessageInserts[0] as {
+      metadata?: { source?: { surface?: string; channelId?: string } }
+    }
 
     expect(chatRes.statusCode).toBe(202)
-    expect(chatRes.json().session_id).toBe(SESSION_ID)
-    expect(chatRes.json().status).toBe("SCHEDULED")
+    expect(chatBody.session_id).toBe(SESSION_ID)
+    expect(chatBody.status).toBe("SCHEDULED")
+    expect(chatBody.diagnostics).toMatchObject({
+      source: {
+        surface: "ui",
+        channelType: "rest",
+        channelId: "rest:api",
+      },
+      providerModel: {
+        resolvedProvider: "openai",
+        resolvedModel: "gpt-4o",
+      },
+      tools: {
+        mode: "effective",
+        refs: ["web_search", "echo"],
+      },
+    })
 
     // Verify user message was stored
     expect(sessionMessageInserts).toContainEqual(
@@ -321,17 +373,21 @@ describe("Create session → appears in list", () => {
         content: "Hello, agent!",
       }),
     )
+    expect(insertedMessage.metadata?.source).toEqual(
+      expect.objectContaining({ surface: "ui", channelId: "rest:api" }),
+    )
 
     // List sessions — the session should appear
     const listRes = await app.inject({
       method: "GET",
       url: `/agents/${AGENT_ID}/sessions`,
     })
+    const listBody = listRes.json<{ sessions: Array<{ id: string; status: string }> }>()
 
     expect(listRes.statusCode).toBe(200)
-    expect(listRes.json().sessions).toHaveLength(1)
-    expect(listRes.json().sessions[0].id).toBe(SESSION_ID)
-    expect(listRes.json().sessions[0].status).toBe("active")
+    expect(listBody.sessions).toHaveLength(1)
+    expect(listBody.sessions[0]?.id).toBe(SESSION_ID)
+    expect(listBody.sessions[0]?.status).toBe("active")
   })
 })
 

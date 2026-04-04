@@ -19,10 +19,16 @@ import type { Kysely } from "kysely"
 
 import type { AuthDecision, ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { UserRateLimiter } from "../auth/user-rate-limiter.js"
+import type { CapabilityAssembler } from "../capabilities/index.js"
+import {
+  buildChatDispatchDiagnostics,
+  type ResolvedProviderModelContract,
+  type SessionResolutionDiagnostics,
+} from "../chat/runtime-contract.js"
 import type { ChannelType, Database, RateLimit, TokenBudget } from "../db/types.js"
 import type { AgentEventEmitter } from "../observability/event-emitter.js"
 import type { AgentChannelService } from "./agent-channel-service.js"
-import { mapJobErrorToUserMessage, runPreflight } from "./preflight.js"
+import { mapJobErrorToUserMessage, type PreflightResult, runPreflight } from "./preflight.js"
 
 /** Pattern matching pairing codes (6-char uppercase alphanumeric). */
 const PAIRING_CODE_PATTERN = /^[A-Z0-9]{6}$/
@@ -35,6 +41,7 @@ export interface MessageDispatchDeps {
   channelAuthGuard?: ChannelAuthGuard
   userRateLimiter?: UserRateLimiter
   eventEmitter?: AgentEventEmitter
+  capabilityAssembler?: CapabilityAssembler
   logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }
 }
 
@@ -71,6 +78,7 @@ export function createMessageDispatch(
     channelAuthGuard,
     userRateLimiter,
     eventEmitter,
+    capabilityAssembler,
     logger = console,
   } = deps
 
@@ -207,6 +215,24 @@ export function createMessageDispatch(
 
     // Find or create a session for (agent_id, user_account_id, channel_id)
     const session = await findOrCreateSession(db, agentId, routed.userAccountId, channelId)
+    const source: SessionResolutionDiagnostics = {
+      surface: "channel",
+      channelType,
+      channelId,
+      chatId,
+      messageId: routed.message.messageId,
+    }
+    const toolRefs = capabilityAssembler
+      ? (await capabilityAssembler.resolveEffectiveTools(agentId)).map((tool) => tool.toolRef)
+      : undefined
+    const chatDiagnostics = buildChatDispatchDiagnostics({
+      agentId,
+      sessionId: session.id,
+      source,
+      providerModel: extractProviderModelDiagnostics(preflight),
+      toolRefs,
+      toolContractMode: capabilityAssembler ? "effective" : "legacy",
+    })
 
     // Store inbound user message
     await db
@@ -215,6 +241,9 @@ export function createMessageDispatch(
         session_id: session.id,
         role: "user",
         content: routed.message.text,
+        metadata: {
+          source,
+        },
       })
       .execute()
 
@@ -232,6 +261,7 @@ export function createMessageDispatch(
           prompt: routed.message.text,
           goalType: "research",
           conversationHistory,
+          chatDiagnostics,
           ...(authDecision && {
             authorizedUserId: authDecision.userId,
             grantId: authDecision.grantId,
@@ -319,6 +349,25 @@ export function createMessageDispatch(
         },
       },
     )
+  }
+}
+
+function extractProviderModelDiagnostics(
+  preflight: PreflightResult,
+): ResolvedProviderModelContract {
+  const providerModel = preflight.diagnostics?.providerModel
+  if (providerModel && typeof providerModel === "object") {
+    return providerModel as ResolvedProviderModelContract
+  }
+  return {
+    requestedProvider: null,
+    requestedModel: null,
+    resolvedProvider: null,
+    resolvedModel: null,
+    boundProviders: [],
+    bindingRequired: false,
+    mismatchCode: null,
+    mismatchMessage: null,
   }
 }
 

@@ -19,10 +19,11 @@ function selectChain(rows: Record<string, unknown>[]) {
 
 function joinChain(rows: Record<string, unknown>[]) {
   const executeTakeFirst = vi.fn().mockResolvedValue(rows[0] ?? null)
+  const execute = vi.fn().mockResolvedValue(rows)
   const terminal = { executeTakeFirst }
   const whereFn: ReturnType<typeof vi.fn> = vi.fn()
-  whereFn.mockReturnValue({ where: whereFn, ...terminal })
-  const selectFn = vi.fn().mockReturnValue({ where: whereFn, ...terminal })
+  whereFn.mockReturnValue({ where: whereFn, execute, ...terminal })
+  const selectFn = vi.fn().mockReturnValue({ where: whereFn, execute, ...terminal })
   const innerJoinFn = vi.fn().mockReturnValue({ select: selectFn })
   return { innerJoinFn }
 }
@@ -45,23 +46,28 @@ describe("runPreflight", () => {
   it("returns ok when agent is ACTIVE and LLM_API_KEY env var is set", async () => {
     process.env.LLM_API_KEY = "sk-test"
 
-    const agentSelect = selectChain([{ id: "agent-1", status: "ACTIVE" }])
+    const agentSelect = selectChain([{ id: "agent-1", status: "ACTIVE", model_config: {} }])
     const db = {
       selectFrom: vi.fn().mockReturnValue({ select: agentSelect.selectFn }),
     } as unknown as Kysely<Database>
 
     const result = await runPreflight(db, "agent-1")
 
-    expect(result).toEqual({ ok: true })
+    expect(result.ok).toBe(true)
+    expect(result.diagnostics?.providerModel).toEqual(
+      expect.objectContaining({
+        bindingRequired: false,
+      }),
+    )
   })
 
   it("returns ok when agent is ACTIVE and has bound LLM credential", async () => {
     delete process.env.LLM_API_KEY
 
     // Agent lookup
-    const agentSelect = selectChain([{ id: "agent-1", status: "ACTIVE" }])
+    const agentSelect = selectChain([{ id: "agent-1", status: "ACTIVE", model_config: {} }])
     // Credential binding lookup
-    const credJoin = joinChain([{ id: "cred-1" }])
+    const credJoin = joinChain([{ id: "cred-1", provider: "openai", status: "active" }])
 
     let callCount = 0
     const db = {
@@ -78,7 +84,12 @@ describe("runPreflight", () => {
 
     const result = await runPreflight(db, "agent-1")
 
-    expect(result).toEqual({ ok: true })
+    expect(result.ok).toBe(true)
+    expect(result.diagnostics?.providerModel).toEqual(
+      expect.objectContaining({
+        boundProviders: ["openai"],
+      }),
+    )
   })
 
   it("returns not_active for QUARANTINED agent", async () => {
@@ -138,7 +149,13 @@ describe("runPreflight", () => {
     delete process.env.LLM_API_KEY
 
     // Agent lookup returns ACTIVE
-    const agentSelect = selectChain([{ id: "agent-1", status: "ACTIVE" }])
+    const agentSelect = selectChain([
+      {
+        id: "agent-1",
+        status: "ACTIVE",
+        model_config: { provider: "google-antigravity", model: "claude-sonnet-4-5" },
+      },
+    ])
     // Credential binding returns nothing
     const credJoin = joinChain([])
 
@@ -159,6 +176,37 @@ describe("runPreflight", () => {
     expect(result.code).toBe("no_llm_credential")
     expect(result.userMessage).toContain("LLM API key")
     expect(result.userMessage).toContain("operator")
+  })
+
+  it("blocks explicit provider/model contracts that do not match bound providers", async () => {
+    delete process.env.LLM_API_KEY
+
+    const agentSelect = selectChain([
+      {
+        id: "agent-1",
+        status: "ACTIVE",
+        model_config: { provider: "google-antigravity", model: "claude-sonnet-4-5" },
+      },
+    ])
+    const credJoin = joinChain([
+      { id: "cred-1", provider: "openai", status: "active", credential_class: "llm_provider" },
+    ])
+
+    let callCount = 0
+    const db = {
+      selectFrom: vi.fn().mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return { select: agentSelect.selectFn }
+        return { innerJoin: credJoin.innerJoinFn }
+      }),
+    } as unknown as Kysely<Database>
+
+    const result = await runPreflight(db, "agent-1")
+
+    expect(result.ok).toBe(false)
+    expect(result.code).toBe("provider_model_misconfigured")
+    expect(result.userMessage).toContain("google-antigravity")
+    expect(result.userMessage).toContain("claude-sonnet-4-5")
   })
 })
 

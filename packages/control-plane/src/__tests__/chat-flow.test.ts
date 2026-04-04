@@ -20,9 +20,11 @@ import {
 } from "../channels/message-dispatch.js"
 import type { Database } from "../db/types.js"
 
+const mockRunPreflight = vi.hoisted(() => vi.fn())
+
 // Mock preflight to always pass (unit tests for preflight are in preflight.test.ts)
 vi.mock("../channels/preflight.js", () => ({
-  runPreflight: vi.fn().mockResolvedValue({ ok: true }),
+  runPreflight: mockRunPreflight,
   mapJobErrorToUserMessage: vi
     .fn()
     .mockReturnValue("Something went wrong processing your message. Please try again."),
@@ -80,6 +82,7 @@ function buildFlowDb(opts: {
   } = opts
 
   const sessionMessageInserts: Array<Record<string, unknown>> = []
+  const jobInserts: Array<Record<string, unknown>> = []
 
   const selectFromFn = vi.fn().mockImplementation((table: string) => {
     if (table === "session") {
@@ -143,7 +146,10 @@ function buildFlowDb(opts: {
     // job insert
     const executeTakeFirstOrThrow = vi.fn().mockResolvedValue(jobRow)
     const returning = vi.fn().mockReturnValue({ executeTakeFirstOrThrow })
-    const values = vi.fn().mockReturnValue({ returning })
+    const values = vi.fn().mockImplementation((val: Record<string, unknown>) => {
+      jobInserts.push(val)
+      return { returning }
+    })
     return { values }
   })
 
@@ -162,6 +168,7 @@ function buildFlowDb(opts: {
       updateTable: updateTableFn,
     } as unknown as Kysely<Database>,
     sessionMessageInserts,
+    jobInserts,
   }
 }
 
@@ -170,7 +177,110 @@ function buildFlowDb(opts: {
 // ---------------------------------------------------------------------------
 
 describe("end-to-end chat flow", () => {
+  it("persists channel-path diagnostics and effective tool contract in the created chat job", async () => {
+    mockRunPreflight.mockResolvedValue({
+      ok: true,
+      diagnostics: {
+        providerModel: {
+          requestedProvider: "google-antigravity",
+          requestedModel: "claude-sonnet-4-5",
+          resolvedProvider: "google-antigravity",
+          resolvedModel: "claude-sonnet-4-5",
+          boundProviders: ["google-antigravity"],
+          bindingRequired: true,
+          mismatchCode: null,
+          mismatchMessage: null,
+        },
+      },
+    })
+    const { db, sessionMessageInserts, jobInserts } = buildFlowDb({
+      existingSession: { id: "session-e2e" },
+    })
+    const agentChannelService = mockAgentChannelService("agent-e2e")
+    const router = mockRouter()
+    const enqueueJob = vi.fn().mockResolvedValue(undefined)
+    const capabilityAssembler = {
+      resolveEffectiveTools: vi
+        .fn()
+        .mockResolvedValue([{ toolRef: "web_search" }, { toolRef: "mcp:filesystem:read_file" }]),
+    }
+    const logger = { info: vi.fn(), warn: vi.fn() }
+
+    const dispatch = createMessageDispatch({
+      db,
+      agentChannelService,
+      router: router as never,
+      enqueueJob,
+      capabilityAssembler: capabilityAssembler as never,
+      logger,
+    })
+
+    await dispatch(makeRoutedMessage("Explain the deployment."))
+
+    const insertedMessage = sessionMessageInserts[0] as {
+      metadata?: {
+        source?: {
+          surface?: string
+          channelType?: string
+          channelId?: string
+          chatId?: string
+          messageId?: string
+        }
+      }
+    }
+    const insertedJob = jobInserts[0] as {
+      payload?: {
+        chatDiagnostics?: {
+          source?: { surface?: string; channelId?: string }
+          providerModel?: { resolvedProvider?: string; resolvedModel?: string }
+          tools?: { mode?: string; refs?: string[] }
+        }
+      }
+    }
+
+    expect(sessionMessageInserts).toContainEqual(
+      expect.objectContaining({
+        metadata: {
+          source: {
+            surface: "channel",
+            channelType: "telegram",
+            channelId: "telegram:chat-42",
+            chatId: "chat-42",
+            messageId: "msg-1",
+          },
+        },
+      }),
+    )
+
+    expect(insertedMessage.metadata?.source).toEqual(
+      expect.objectContaining({
+        surface: "channel",
+        channelType: "telegram",
+        channelId: "telegram:chat-42",
+        chatId: "chat-42",
+        messageId: "msg-1",
+      }),
+    )
+
+    expect(insertedJob.payload?.chatDiagnostics?.source).toEqual(
+      expect.objectContaining({ surface: "channel", channelId: "telegram:chat-42" }),
+    )
+    expect(insertedJob.payload?.chatDiagnostics?.providerModel).toEqual(
+      expect.objectContaining({
+        resolvedProvider: "google-antigravity",
+        resolvedModel: "claude-sonnet-4-5",
+      }),
+    )
+    expect(insertedJob.payload?.chatDiagnostics?.tools).toEqual(
+      expect.objectContaining({
+        mode: "effective",
+        refs: ["web_search", "mcp:filesystem:read_file"],
+      }),
+    )
+  })
+
   it("dispatches a message, creates a job, and relays the full response", async () => {
+    mockRunPreflight.mockResolvedValue({ ok: true })
     const { db, sessionMessageInserts } = buildFlowDb({
       existingSession: { id: "session-e2e" },
       historyRows: [{ role: "assistant", content: "Previous answer" }],

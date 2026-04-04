@@ -19,7 +19,6 @@ import type {
   OutputEvent,
 } from "@cortex/shared/backends"
 import type { BufferWriter } from "@cortex/shared/buffer"
-import { normalizeModelConfigSelection } from "@cortex/shared/llm"
 import type { ResolvedSkills } from "@cortex/shared/skills"
 import { CortexAttributes, injectTraceContext, withSpan } from "@cortex/shared/tracing"
 import type { JobHelpers, Task } from "graphile-worker"
@@ -35,6 +34,7 @@ import {
   type RuntimeToolManifestRecord,
 } from "../../capabilities/contracts.js"
 import type { CapabilityAssembler } from "../../capabilities/index.js"
+import { loadActiveLlmBindings, resolveProviderModelContract } from "../../chat/runtime-contract.js"
 import type { Database, Job } from "../../db/types.js"
 import { AgentCircuitBreaker, isQuarantineDisabled } from "../../lifecycle/agent-circuit-breaker.js"
 import {
@@ -378,106 +378,140 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         // ── Step 4b: Resolve LLM credential from agent_credential_binding ──
         let credentialResolver: CredentialResolver | undefined
         let tokenRefresher: TokenRefresher | undefined
-        if (credentialService) {
-          try {
-            const bindings = await db
-              .selectFrom("agent_credential_binding")
-              .innerJoin(
-                "provider_credential",
-                "provider_credential.id",
-                "agent_credential_binding.provider_credential_id",
-              )
-              .select([
-                "provider_credential.id",
-                "provider_credential.user_account_id",
-                "provider_credential.provider",
-                "provider_credential.credential_type",
-                "provider_credential.credential_class",
-                "provider_credential.account_id",
-                "provider_credential.status",
-              ])
-              .where("agent_credential_binding.agent_id", "=", agent.id)
-              .where("provider_credential.credential_class", "=", "llm_provider")
-              .execute()
+        const llmBindings = await loadActiveLlmBindings(db, agent.id)
+        const providerModelContract = resolveProviderModelContract(agent.model_config, llmBindings)
 
-            const normalizedSelection = normalizeModelConfigSelection(
-              agent.model_config,
-              bindings.map((binding) => binding.provider),
+        if (providerModelContract.mismatchCode) {
+          await db
+            .updateTable("job")
+            .set({
+              status: "FAILED",
+              error: {
+                category: "PERMANENT",
+                code: providerModelContract.mismatchCode,
+                message:
+                  providerModelContract.mismatchMessage ??
+                  "Configured provider/model is not available for this agent",
+                provider:
+                  providerModelContract.resolvedProvider ?? providerModelContract.requestedProvider,
+                model: providerModelContract.resolvedModel ?? providerModelContract.requestedModel,
+              },
+              completed_at: new Date(),
+            })
+            .where("id", "=", jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
+          return
+        }
+
+        if (providerModelContract.resolvedModel) {
+          task.constraints.model = providerModelContract.resolvedModel
+        }
+
+        const selectedBinding = providerModelContract.resolvedProvider
+          ? llmBindings.find(
+              (binding) => binding.provider === providerModelContract.resolvedProvider,
             )
-            if (!normalizedSelection.ok) {
-              throw new Error(normalizedSelection.error.message)
-            }
+          : llmBindings[0]
 
-            if (normalizedSelection.selection) {
-              task.constraints.model = normalizedSelection.selection.model
-            }
+        if (providerModelContract.bindingRequired && !selectedBinding) {
+          await db
+            .updateTable("job")
+            .set({
+              status: "FAILED",
+              error: {
+                category: "PERMANENT",
+                code: "provider_unbound",
+                message: "Configured provider is not bound to an active LLM credential",
+                provider: providerModelContract.resolvedProvider,
+                model: providerModelContract.resolvedModel,
+              },
+              completed_at: new Date(),
+            })
+            .where("id", "=", jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
+          return
+        }
 
-            const binding = normalizedSelection.selection
-              ? bindings.find(
-                  (candidate) => candidate.provider === normalizedSelection.selection?.provider,
-                )
-              : bindings[0]
+        if (selectedBinding && !credentialService) {
+          await db
+            .updateTable("job")
+            .set({
+              status: "FAILED",
+              error: {
+                category: "PERMANENT",
+                code: "credential_resolution_unavailable",
+                message:
+                  "Bound LLM credential could not be resolved because credentialService is unavailable",
+                provider: selectedBinding.provider,
+                model: task.constraints.model,
+              },
+              completed_at: new Date(),
+            })
+            .where("id", "=", jobId)
+            .where("status", "=", "RUNNING")
+            .execute()
+          return
+        }
 
-            if (binding) {
-              const resolution = await credentialService.resolveCredentialAccessToken(binding.id, {
+        if (credentialService) {
+          if (selectedBinding) {
+            const resolution = await credentialService.resolveCredentialAccessToken(
+              selectedBinding.id,
+              {
                 agentId: agent.id,
                 jobId: job.id,
-              })
-              if (resolution.ok) {
-                task.constraints.llmCredential = {
-                  provider: binding.provider,
-                  token: resolution.token,
-                  credentialId: resolution.credentialId,
-                  accountId: binding.account_id,
-                  credentialType: binding.credential_type as "oauth" | "api_key",
-                }
-
-                // Build a token refresher for transparent 401 retry.
-                // On auth failure from the LLM provider, the backend will
-                // call this to obtain a fresh token and retry once.
-                const cs = credentialService
-                const auditCtx = { agentId: agent.id, jobId: job.id }
-                tokenRefresher = buildTokenRefresher(cs, auditCtx)
-              } else {
-                if (binding.credential_type === "oauth") {
-                  rootSpan.addEvent("credential_unusable", {
-                    "cortex.credential.id": binding.id,
-                    "cortex.credential.provider": binding.provider,
-                    "cortex.credential.reason": resolution.message,
-                    "cortex.credential.code": resolution.code,
-                  })
-
-                  await db
-                    .updateTable("job")
-                    .set({
-                      status: "FAILED",
-                      error: {
-                        category: "PERMANENT",
-                        code: resolution.code,
-                        message: `${binding.provider} credential unavailable: ${resolution.message}`,
-                        provider: binding.provider,
-                        model: task.constraints.model,
-                      },
-                      completed_at: new Date(),
-                    })
-                    .where("id", "=", jobId)
-                    .where("status", "=", "RUNNING")
-                    .execute()
-                  return
-                }
-
-                rootSpan.addEvent("credential_unusable", {
-                  "cortex.credential.provider": binding.provider,
-                  "cortex.credential.reason": resolution.message,
-                })
+              },
+            )
+            if (resolution.ok) {
+              task.constraints.llmCredential = {
+                provider: selectedBinding.provider,
+                token: resolution.token,
+                credentialId: resolution.credentialId,
+                accountId: selectedBinding.account_id,
+                credentialType: selectedBinding.credential_type as "oauth" | "api_key",
               }
+
+              const cs = credentialService
+              const auditCtx = { agentId: agent.id, jobId: job.id }
+              tokenRefresher = buildTokenRefresher(cs, auditCtx)
+            } else if (
+              providerModelContract.bindingRequired ||
+              selectedBinding.credential_type === "oauth"
+            ) {
+              rootSpan.addEvent("credential_unusable", {
+                "cortex.credential.id": selectedBinding.id,
+                "cortex.credential.provider": selectedBinding.provider,
+                "cortex.credential.reason": resolution.message,
+                "cortex.credential.code": resolution.code,
+              })
+
+              await db
+                .updateTable("job")
+                .set({
+                  status: "FAILED",
+                  error: {
+                    category: "PERMANENT",
+                    code: resolution.code,
+                    message: `${selectedBinding.provider} credential unavailable: ${resolution.message}`,
+                    provider: selectedBinding.provider,
+                    model: task.constraints.model,
+                  },
+                  completed_at: new Date(),
+                })
+                .where("id", "=", jobId)
+                .where("status", "=", "RUNNING")
+                .execute()
+              return
+            } else {
+              rootSpan.addEvent("credential_unusable", {
+                "cortex.credential.provider": selectedBinding.provider,
+                "cortex.credential.reason": resolution.message,
+              })
             }
-            // If no binding exists, fall back to env var LLM_API_KEY (backward compat)
-          } catch {
-            // Credential resolution is non-fatal — fall back to env var
           }
 
-          // Build a credential resolver for tool credential injection
           credentialResolver = buildCredentialResolver(credentialService, db, agent.id, job.id)
         }
 
@@ -541,10 +575,12 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
           // Feature flag: CAPABILITY_MODEL_V2=true uses CapabilityAssembler
           // to resolve effective tools from agent_tool_binding rows instead
           // of the legacy MCP tool router + allowedTools/deniedTools path.
-          const useCapabilityV2 = capabilityAssembler && process.env.CAPABILITY_MODEL_V2 === "true"
+          const useEffectiveToolContract =
+            capabilityAssembler &&
+            (job.payload.type === "CHAT_RESPONSE" || process.env.CAPABILITY_MODEL_V2 === "true")
 
           if (
-            useCapabilityV2 &&
+            useEffectiveToolContract &&
             "createAgentRegistry" in backend &&
             typeof backend.createAgentRegistry === "function"
           ) {
@@ -962,7 +998,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
             .set({
               status: jobStatus,
               completed_at: new Date(),
-              result: executionResultToJson(result),
+              result: executionResultToJson(result, task),
               error: jobError,
               tool_call_count: toolCallCount,
             })
@@ -1389,7 +1425,10 @@ function mapExecutionStatus(status: ExecutionStatus): JobFinalStatus {
 
 // ── Helper: convert ExecutionResult to JSON-safe record ──
 
-function executionResultToJson(result: ExecutionResult): Record<string, unknown> {
+function executionResultToJson(
+  result: ExecutionResult,
+  task: ExecutionTask,
+): Record<string, unknown> {
   return {
     taskId: result.taskId,
     status: result.status,
@@ -1401,6 +1440,11 @@ function executionResultToJson(result: ExecutionResult): Record<string, unknown>
     artifacts: result.artifacts,
     durationMs: result.durationMs,
     error: result.error ?? null,
+    runtime: {
+      provider: task.constraints.llmCredential?.provider ?? null,
+      model: task.constraints.model,
+      toolManifest: task.context.runtimeToolManifest ?? null,
+    },
   }
 }
 

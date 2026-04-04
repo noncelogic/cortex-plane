@@ -9,6 +9,7 @@ import { AccessRequestService } from "./auth/access-request-service.js"
 import { ChannelAuthGuard } from "./auth/channel-auth-guard.js"
 import { PairingService } from "./auth/pairing-service.js"
 import { UserRateLimiter } from "./auth/user-rate-limiter.js"
+import { CapabilityAssembler } from "./capabilities/assembler.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
 import { ChannelAllowlistService } from "./channels/channel-allowlist-service.js"
 import { ChannelConfigService } from "./channels/channel-config-service.js"
@@ -147,6 +148,7 @@ const channelAuthGuard = new ChannelAuthGuard({
   channelAllowlistService,
 })
 const userRateLimiter = new UserRateLimiter(db)
+const capabilityAssembler = new CapabilityAssembler({ db })
 
 const dispatch = createMessageDispatch({
   db,
@@ -155,6 +157,7 @@ const dispatch = createMessageDispatch({
   enqueueJob: enqueueJobDeferred,
   channelAuthGuard,
   userRateLimiter,
+  capabilityAssembler,
 })
 messageRouter.onMessage(dispatch)
 messageRouter.bind()
