@@ -53,12 +53,18 @@ export const BulkBindResponseSchema = z.object({
 
 export const EffectiveToolSchema = z.object({
   toolRef: z.string(),
+  runtimeName: z.string(),
+  description: z.string(),
+  inputSchema: z.record(z.string(), z.unknown()),
   bindingId: z.string(),
   approvalPolicy: ToolApprovalPolicySchema,
   approvalCondition: z.record(z.string(), z.unknown()).nullable(),
   rateLimit: z.record(z.string(), z.unknown()).nullable(),
   costBudget: z.record(z.string(), z.unknown()).nullable(),
   dataScope: z.record(z.string(), z.unknown()).nullable(),
+  source: z.object({
+    kind: z.enum(["builtin", "mcp", "webhook", "unknown"]),
+  }),
 })
 
 export const EffectiveToolsResponseSchema = z.object({

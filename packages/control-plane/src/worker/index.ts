@@ -16,6 +16,7 @@ import type { Kysely } from "kysely"
 import type { Pool } from "pg"
 
 import type { CredentialService } from "../auth/credential-service.js"
+import type { CapabilityAssembler } from "../capabilities/index.js"
 import type { AuthOAuthConfig } from "../config.js"
 import type { Database } from "../db/types.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
@@ -51,6 +52,8 @@ export interface WorkerOptions {
   credentialService?: CredentialService
   /** Optional browser observation/runtime service for browser tools. */
   observationService?: BrowserObservationService
+  /** Optional capability assembler for effective tool/runtime-manifest flows. */
+  capabilityAssembler?: CapabilityAssembler
 }
 
 /**
@@ -72,6 +75,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     executionRegistry,
     credentialService,
     observationService,
+    capabilityAssembler,
   } = options
 
   const workerConcurrency =
@@ -89,6 +93,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
       eventEmitter,
       executionRegistry,
       observationService,
+      capabilityAssembler,
     }),
     memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),

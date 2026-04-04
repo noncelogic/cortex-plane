@@ -12,6 +12,7 @@ function makeEffectiveTool(overrides: Partial<EffectiveTool> = {}): EffectiveToo
     toolRef: "tool_a",
     bindingId: "binding-a",
     approvalPolicy: "auto",
+    source: { kind: "builtin" },
     toolDefinition: echoTool,
     ...overrides,
   }

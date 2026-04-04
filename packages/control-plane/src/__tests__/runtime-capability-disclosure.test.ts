@@ -1,6 +1,7 @@
 import type { ExecutionTask } from "@cortex/shared/backends"
 import { describe, expect, it } from "vitest"
 
+import { buildRuntimeToolManifestFromToolDefinitions } from "../capabilities/index.js"
 import { buildRuntimeCapabilityDisclosure } from "../worker/runtime-capability-disclosure.js"
 
 function makeTask(overrides?: Partial<ExecutionTask>): ExecutionTask {
@@ -34,6 +35,28 @@ function makeTask(overrides?: Partial<ExecutionTask>): ExecutionTask {
 }
 
 describe("runtime capability disclosure", () => {
+  it("builds a runtime tool manifest for actual executable tools", () => {
+    const manifest = buildRuntimeToolManifestFromToolDefinitions([
+      {
+        name: "echo",
+        description: "Echo text",
+        inputSchema: { type: "object", properties: { text: { type: "string" } } },
+        execute: () => Promise.resolve("ok"),
+      },
+    ])
+
+    expect(manifest.version).toBe("v1")
+    expect(manifest.tools).toEqual([
+      {
+        toolRef: "echo",
+        runtimeName: "echo",
+        description: "Echo text",
+        inputSchema: { type: "object", properties: { text: { type: "string" } } },
+        source: { kind: "builtin" },
+      },
+    ])
+  })
+
   it("reports actual MCP and browser tools when runtime tool names are known", () => {
     const disclosure = buildRuntimeCapabilityDisclosure({
       task: makeTask(),
@@ -86,5 +109,24 @@ describe("runtime capability disclosure", () => {
     expect(disclosure).toContain(
       "Do not claim curl, package installation, or arbitrary command access.",
     )
+  })
+
+  it("reads capability disclosure from the runtime tool manifest", () => {
+    const disclosure = buildRuntimeCapabilityDisclosure({
+      task: makeTask(),
+      runtimeToolManifest: buildRuntimeToolManifestFromToolDefinitions([
+        {
+          name: "mcp:filesystem:read_file",
+          description: "Read a file",
+          inputSchema: { type: "object", properties: {} },
+          execute: () => Promise.resolve("ok"),
+        },
+      ]),
+    })
+
+    expect(disclosure).toContain(
+      "MCP tools exposed by Cortex: available (mcp:filesystem:read_file).",
+    )
+    expect(disclosure).toContain("Exposed tool names: mcp:filesystem:read_file.")
   })
 })

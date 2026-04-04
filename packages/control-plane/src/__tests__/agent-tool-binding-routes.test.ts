@@ -243,10 +243,36 @@ function mockDb(
 async function buildTestApp(dbOpts: Parameters<typeof mockDb>[0] = {}) {
   const app = Fastify({ logger: false })
   const { db, auditInsertValues, deleteExecute } = mockDb(dbOpts)
+  const capabilityAssembler = {
+    resolveEffectiveTools: vi.fn().mockResolvedValue([
+      {
+        toolRef: "mcp:slack:chat_postMessage",
+        bindingId: BINDING_ID,
+        approvalPolicy: "auto",
+        approvalCondition: null,
+        rateLimit: { maxCalls: 5, windowSeconds: 60 },
+        costBudget: null,
+        dataScope: null,
+        source: { kind: "mcp" },
+        toolDefinition: {
+          name: "slack.chat_postMessage",
+          description: "Post a Slack message",
+          inputSchema: { type: "object", properties: { channel: { type: "string" } } },
+          execute: vi.fn().mockResolvedValue("ok"),
+        },
+      },
+    ]),
+  }
 
-  await app.register(agentToolBindingRoutes({ db, authConfig: DEV_AUTH_CONFIG }))
+  await app.register(
+    agentToolBindingRoutes({
+      db,
+      authConfig: DEV_AUTH_CONFIG,
+      capabilityAssembler: capabilityAssembler as never,
+    }),
+  )
 
-  return { app, db, auditInsertValues, deleteExecute }
+  return { app, db, auditInsertValues, deleteExecute, capabilityAssembler }
 }
 
 // ---------------------------------------------------------------------------
@@ -549,8 +575,8 @@ describe("POST /agents/:agentId/tool-bindings/bulk", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /agents/:agentId/effective-tools", () => {
-  it("returns effective tools for an agent", async () => {
-    const { app } = await buildTestApp()
+  it("returns computed effective tools for an agent", async () => {
+    const { app, capabilityAssembler } = await buildTestApp()
 
     const res = await app.inject({
       method: "GET",
@@ -561,7 +587,24 @@ describe("GET /agents/:agentId/effective-tools", () => {
     const body = res.json()
     expect(body.tools).toBeDefined()
     expect(Array.isArray(body.tools)).toBe(true)
+    expect(body.tools).toEqual([
+      {
+        toolRef: "mcp:slack:chat_postMessage",
+        runtimeName: "slack.chat_postMessage",
+        description: "Post a Slack message",
+        inputSchema: { type: "object", properties: { channel: { type: "string" } } },
+        bindingId: BINDING_ID,
+        approvalPolicy: "auto",
+        approvalCondition: null,
+        rateLimit: { maxCalls: 5, windowSeconds: 60 },
+        costBudget: null,
+        dataScope: null,
+        source: { kind: "mcp" },
+      },
+    ])
     expect(body.assembledAt).toBeDefined()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(capabilityAssembler.resolveEffectiveTools).toHaveBeenCalledWith(AGENT_ID)
   })
 
   it("returns 404 when agent does not exist", async () => {

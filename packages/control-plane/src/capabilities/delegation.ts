@@ -86,6 +86,7 @@ export async function validateDelegation(
       rateLimit: parentTool.rateLimit,
       costBudget: parentTool.costBudget,
       dataScope: parentTool.dataScope,
+      source: parentTool.source,
       toolDefinition: parentTool.toolDefinition,
     }
 
