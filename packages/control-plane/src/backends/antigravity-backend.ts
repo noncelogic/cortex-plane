@@ -99,6 +99,16 @@ function is401Error(err: unknown): boolean {
   return err instanceof Error && "status" in err && (err as { status: number }).status === 401
 }
 
+class RefreshRetryError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message)
+    this.name = "RefreshRetryError"
+  }
+}
+
 /**
  * Strip HTML tags and collapse whitespace from an error message.
  */
@@ -453,12 +463,13 @@ export class AntigravityHandle implements ExecutionHandle {
             this.credentialId
           ) {
             lastRetryTurn = turn
-            const newToken = await this.tokenRefresher(this.credentialId)
-            if (newToken) {
-              apiKey = buildApiKey(newToken, cred.accountId)
+            const refreshed = await this.tokenRefresher(this.credentialId)
+            if (refreshed.ok) {
+              apiKey = buildApiKey(refreshed.token, cred.accountId)
               turn-- // retry this turn
               continue
             }
+            throw new RefreshRetryError(refreshed.message, refreshed.code)
           }
 
           // Endpoint fallback: on connection failure, try next endpoint
@@ -521,7 +532,11 @@ export class AntigravityHandle implements ExecutionHandle {
         durationMs: Date.now() - this.startTime,
         error: {
           message: errorMsg,
-          classification: "transient",
+          classification:
+            err instanceof RefreshRetryError && err.code === "reauth_required"
+              ? "permanent"
+              : "transient",
+          ...(err instanceof RefreshRetryError ? { code: err.code } : {}),
           partialExecution: fullText.length > 0,
         },
       }

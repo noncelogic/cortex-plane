@@ -148,6 +148,9 @@ function makeMockDb(opts: MockDbOptions = {}) {
       if (isSelect && tableName === "job") {
         return Promise.resolve(recentJobs)
       }
+      if (isSelect && tableName === "agent_credential_binding") {
+        return Promise.resolve(credentialBinding ? [credentialBinding] : [])
+      }
       return Promise.resolve([])
     })
 
@@ -223,13 +226,35 @@ function makeMockHelpers() {
 }
 
 function makeMockCredentialService(
-  getAccessTokenResult: { token: string; credentialId: string } | null = {
+  resolveCredentialAccessTokenResult:
+    | {
+        ok: true
+        token: string
+        credentialId: string
+        provider: string
+        credentialType: "oauth" | "api_key"
+        status: "active"
+      }
+    | {
+        ok: false
+        credentialId: string | null
+        provider: string | null
+        credentialType: "oauth" | "api_key" | null
+        status: "active" | "error" | "expired" | "revoked"
+        code: string
+        message: string
+        requiresReauth: boolean
+      } = {
+    ok: true,
     token: "resolved-oauth-token",
     credentialId: "cred-abc",
+    provider: "anthropic",
+    credentialType: "oauth",
+    status: "active",
   },
 ) {
   return {
-    getAccessToken: vi.fn().mockResolvedValue(getAccessTokenResult),
+    resolveCredentialAccessToken: vi.fn().mockResolvedValue(resolveCredentialAccessTokenResult),
     getToolSecret: vi.fn().mockResolvedValue(null),
   } as unknown as CredentialService
 }
@@ -242,6 +267,7 @@ describe("agent-execute credential wiring (#444)", () => {
   it("resolves llmCredential from agent_credential_binding when credentialService is provided", async () => {
     const db = makeMockDb({
       credentialBinding: {
+        id: "binding-cred-1",
         user_account_id: "user-owner-1",
         provider: "google-antigravity",
         credential_type: "oauth",
@@ -260,12 +286,12 @@ describe("agent-execute credential wiring (#444)", () => {
 
     await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
-    // Verify getAccessToken was called with the binding's user + provider
+    // Verify resolution was tied to the bound credential ID
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(credentialService.getAccessToken).toHaveBeenCalledWith(
-      "user-owner-1",
-      "google-antigravity",
-    )
+    expect(credentialService.resolveCredentialAccessToken).toHaveBeenCalledWith("binding-cred-1", {
+      agentId: "agent-1",
+      jobId: "job-1",
+    })
 
     // Verify the task passed to executeTask has llmCredential set
     expect(executeTaskSpy).toHaveBeenCalled()
@@ -294,9 +320,9 @@ describe("agent-execute credential wiring (#444)", () => {
 
     await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
-    // getAccessToken should NOT be called when there's no binding
+    // Bound credential resolution should NOT be called when there's no binding
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(credentialService.getAccessToken).not.toHaveBeenCalled()
+    expect(credentialService.resolveCredentialAccessToken).not.toHaveBeenCalled()
 
     // Task should not have llmCredential set
     expect(executeTaskSpy).toHaveBeenCalled()
@@ -304,9 +330,10 @@ describe("agent-execute credential wiring (#444)", () => {
     expect(executedTask.constraints.llmCredential).toBeUndefined()
   })
 
-  it("falls back gracefully when getAccessToken returns null", async () => {
+  it("fails clearly when a bound OAuth credential requires re-authentication", async () => {
     const db = makeMockDb({
       credentialBinding: {
+        id: "binding-cred-2",
         user_account_id: "user-owner-1",
         provider: "google-antigravity",
         credential_type: "oauth",
@@ -314,7 +341,16 @@ describe("agent-execute credential wiring (#444)", () => {
       },
     })
     const { registry, executeTaskSpy } = makeMockRegistry()
-    const credentialService = makeMockCredentialService(null) // Token resolution fails
+    const credentialService = makeMockCredentialService({
+      ok: false,
+      credentialId: "binding-cred-2",
+      provider: "google-antigravity",
+      credentialType: "oauth",
+      status: "revoked",
+      code: "reauth_required",
+      message: "Refresh token is invalid or revoked. Re-authenticate this provider.",
+      requiresReauth: true,
+    })
 
     const task = createAgentExecuteTask({
       db: db as unknown as AgentExecuteDeps["db"],
@@ -324,18 +360,15 @@ describe("agent-execute credential wiring (#444)", () => {
 
     await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
-    // getAccessToken was called but returned null
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(credentialService.getAccessToken).toHaveBeenCalled()
-
-    // Task should not have llmCredential (falls back to env var)
-    expect(executeTaskSpy).toHaveBeenCalled()
-    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
-    expect(executedTask.constraints.llmCredential).toBeUndefined()
+    expect(credentialService.resolveCredentialAccessToken).toHaveBeenCalledWith("binding-cred-2", {
+      agentId: "agent-1",
+      jobId: "job-1",
+    })
+    expect(executeTaskSpy).not.toHaveBeenCalled()
   })
 
-  it("filters credential bindings by compatible provider when model is set", async () => {
-    // Agent has a claude model — credential query should filter for anthropic/google-antigravity
+  it("selects the bound provider/model pair and passes it into execution", async () => {
     const db = makeMockDb({
       agent: {
         id: "agent-1",
@@ -344,15 +377,16 @@ describe("agent-execute credential wiring (#444)", () => {
         role: "developer",
         description: null,
         status: "ACTIVE",
-        model_config: { model: "claude-sonnet-4-6" },
+        model_config: { provider: "google-antigravity", model: "claude-sonnet-4-5" },
         skill_config: {},
         resource_limits: {},
         config: null,
         health_reset_at: null,
       },
       credentialBinding: {
+        id: "binding-cred-3",
         user_account_id: "user-owner-1",
-        provider: "anthropic",
+        provider: "google-antigravity",
         credential_type: "oauth",
         credential_class: "llm_provider",
         account_id: null,
@@ -369,31 +403,30 @@ describe("agent-execute credential wiring (#444)", () => {
 
     await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
-    // Verify the credential binding query included a provider filter
-
-    const selectCalls = (db.selectFrom as ReturnType<typeof vi.fn>).mock.calls
-    const credBindingCall = selectCalls.find((c: string[]) => c[0] === "agent_credential_binding")
-    expect(credBindingCall).toBeDefined()
-
-    // Verify getAccessToken was called with the bound provider
+    // Verify the execution path resolved the specific bound credential
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(credentialService.getAccessToken).toHaveBeenCalledWith("user-owner-1", "anthropic")
+    expect(credentialService.resolveCredentialAccessToken).toHaveBeenCalledWith("binding-cred-3", {
+      agentId: "agent-1",
+      jobId: "job-1",
+    })
 
     // Verify the task has llmCredential set
     expect(executeTaskSpy).toHaveBeenCalled()
     const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
     expect(executedTask.constraints.llmCredential).toEqual({
-      provider: "anthropic",
+      provider: "google-antigravity",
       token: "resolved-oauth-token",
       credentialId: "cred-abc",
       accountId: null,
       credentialType: "oauth",
     })
+    expect(executedTask.constraints.model).toBe("claude-sonnet-4-5")
   })
 
   it("resolves api_key credential with credentialType 'api_key' for direct-key providers", async () => {
     const db = makeMockDb({
       credentialBinding: {
+        id: "binding-cred-4",
         user_account_id: "user-owner-1",
         provider: "openai",
         credential_type: "api_key",
@@ -403,8 +436,12 @@ describe("agent-execute credential wiring (#444)", () => {
     })
     const { registry, executeTaskSpy } = makeMockRegistry()
     const credentialService = makeMockCredentialService({
+      ok: true,
       token: "sk-openai-key-12345678",
       credentialId: "cred-apikey-1",
+      provider: "openai",
+      credentialType: "api_key",
+      status: "active",
     })
 
     const task = createAgentExecuteTask({
@@ -416,7 +453,10 @@ describe("agent-execute credential wiring (#444)", () => {
     await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(credentialService.getAccessToken).toHaveBeenCalledWith("user-owner-1", "openai")
+    expect(credentialService.resolveCredentialAccessToken).toHaveBeenCalledWith("binding-cred-4", {
+      agentId: "agent-1",
+      jobId: "job-1",
+    })
 
     expect(executeTaskSpy).toHaveBeenCalled()
     const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask

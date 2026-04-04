@@ -19,6 +19,7 @@ import type {
   OutputEvent,
 } from "@cortex/shared/backends"
 import type { BufferWriter } from "@cortex/shared/buffer"
+import { normalizeModelConfigSelection } from "@cortex/shared/llm"
 import type { ResolvedSkills } from "@cortex/shared/skills"
 import { CortexAttributes, injectTraceContext, withSpan } from "@cortex/shared/tracing"
 import type { JobHelpers, Task } from "graphile-worker"
@@ -45,7 +46,6 @@ import type { McpToolRouter } from "../../mcp/tool-router.js"
 import { CostTracker } from "../../observability/cost-tracker.js"
 import type { AgentEventEmitter } from "../../observability/event-emitter.js"
 import type { ExecutionRegistry } from "../../observability/execution-registry.js"
-import { providersForModel } from "../../observability/model-providers.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
 import { classifyError, isConfigErrorCategory } from "../error-classifier.js"
@@ -374,11 +374,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
         let tokenRefresher: TokenRefresher | undefined
         if (credentialService) {
           try {
-            // Determine which providers can serve the agent's selected model
-            const modelId = typeof agentConfig.model === "string" ? agentConfig.model : undefined
-            const compatibleProviders = modelId ? providersForModel(modelId) : undefined
-
-            let baseQuery = db
+            const bindings = await db
               .selectFrom("agent_credential_binding")
               .innerJoin(
                 "provider_credential",
@@ -386,33 +382,46 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 "agent_credential_binding.provider_credential_id",
               )
               .select([
+                "provider_credential.id",
                 "provider_credential.user_account_id",
                 "provider_credential.provider",
                 "provider_credential.credential_type",
                 "provider_credential.credential_class",
                 "provider_credential.account_id",
+                "provider_credential.status",
               ])
               .where("agent_credential_binding.agent_id", "=", agent.id)
               .where("provider_credential.credential_class", "=", "llm_provider")
-              .where("provider_credential.status", "=", "active")
+              .execute()
 
-            // If we know which providers serve this model, prefer them
-            if (compatibleProviders && compatibleProviders.length > 0) {
-              baseQuery = baseQuery.where("provider_credential.provider", "in", compatibleProviders)
+            const normalizedSelection = normalizeModelConfigSelection(
+              agent.model_config,
+              bindings.map((binding) => binding.provider),
+            )
+            if (!normalizedSelection.ok) {
+              throw new Error(normalizedSelection.error.message)
             }
 
-            const binding = await baseQuery.executeTakeFirst()
+            if (normalizedSelection.selection) {
+              task.constraints.model = normalizedSelection.selection.model
+            }
+
+            const binding = normalizedSelection.selection
+              ? bindings.find(
+                  (candidate) => candidate.provider === normalizedSelection.selection?.provider,
+                )
+              : bindings[0]
 
             if (binding) {
-              const result = await credentialService.getAccessToken(
-                binding.user_account_id,
-                binding.provider,
-              )
-              if (result) {
+              const resolution = await credentialService.resolveCredentialAccessToken(binding.id, {
+                agentId: agent.id,
+                jobId: job.id,
+              })
+              if (resolution.ok) {
                 task.constraints.llmCredential = {
                   provider: binding.provider,
-                  token: result.token,
-                  credentialId: result.credentialId,
+                  token: resolution.token,
+                  credentialId: resolution.credentialId,
                   accountId: binding.account_id,
                   credentialType: binding.credential_type as "oauth" | "api_key",
                 }
@@ -422,13 +431,38 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 // call this to obtain a fresh token and retry once.
                 const cs = credentialService
                 const auditCtx = { agentId: agent.id, jobId: job.id }
-                tokenRefresher = buildTokenRefresher(cs, db, auditCtx)
+                tokenRefresher = buildTokenRefresher(cs, auditCtx)
               } else {
+                if (binding.credential_type === "oauth") {
+                  rootSpan.addEvent("credential_unusable", {
+                    "cortex.credential.id": binding.id,
+                    "cortex.credential.provider": binding.provider,
+                    "cortex.credential.reason": resolution.message,
+                    "cortex.credential.code": resolution.code,
+                  })
+
+                  await db
+                    .updateTable("job")
+                    .set({
+                      status: "FAILED",
+                      error: {
+                        category: "PERMANENT",
+                        code: resolution.code,
+                        message: `${binding.provider} credential unavailable: ${resolution.message}`,
+                        provider: binding.provider,
+                        model: task.constraints.model,
+                      },
+                      completed_at: new Date(),
+                    })
+                    .where("id", "=", jobId)
+                    .where("status", "=", "RUNNING")
+                    .execute()
+                  return
+                }
+
                 rootSpan.addEvent("credential_unusable", {
                   "cortex.credential.provider": binding.provider,
-                  "cortex.credential.reason":
-                    "Bound LLM credential exists but getAccessToken returned null " +
-                    "(token may be expired, revoked, or missing)",
+                  "cortex.credential.reason": resolution.message,
                 })
               }
             }
@@ -1466,30 +1500,27 @@ function writeEventToBuffer(
 
 function buildTokenRefresher(
   credentialService: CredentialService,
-  db: Kysely<Database>,
   auditCtx: { agentId: string; jobId: string },
 ): TokenRefresher {
   return async (credentialId: string) => {
     try {
-      const cred = await db
-        .selectFrom("provider_credential")
-        .select(["user_account_id", "provider"])
-        .where("id", "=", credentialId)
-        .where("status", "=", "active")
-        .executeTakeFirst()
+      const result = await credentialService.resolveCredentialAccessToken(credentialId, auditCtx, {
+        forceRefresh: true,
+      })
 
-      if (!cred) return null
-
-      const result = await credentialService.getAccessToken(
-        cred.user_account_id,
-        cred.provider,
-        auditCtx,
-        { forceRefresh: true },
-      )
-
-      return result ? result.token : null
+      return result.ok
+        ? { ok: true, token: result.token }
+        : {
+            ok: false,
+            code: result.code,
+            message: result.message,
+          }
     } catch {
-      return null
+      return {
+        ok: false,
+        code: "credential_unavailable",
+        message: "Token refresh failed before retry",
+      }
     }
   }
 }

@@ -1,10 +1,8 @@
-/**
- * Model-to-provider mapping.
- *
- * Previously a static catalogue; now delegates to ModelDiscoveryService
- * for dynamically discovered models. The lookup helpers remain for
- * backward compatibility with the credential resolver and pricing table.
- */
+import {
+  listCanonicalModels,
+  listCompatibleProvidersForModel,
+  listModelsForProvider as listContractModelsForProvider,
+} from "@cortex/shared/llm"
 
 import { ModelDiscoveryService } from "../auth/model-discovery.js"
 
@@ -25,24 +23,23 @@ export interface ModelInfo {
 
 export const modelDiscoveryService = new ModelDiscoveryService()
 
-// ---------------------------------------------------------------------------
-// Lookup helpers (read from discovery cache)
-// ---------------------------------------------------------------------------
-
-/**
- * Return the provider credential IDs compatible with the given model.
- * Returns `undefined` for unknown models (caller should fall back to
- * any llm_provider credential).
- */
 export function providersForModel(modelId: string): string[] | undefined {
-  const all = modelDiscoveryService.getAllCachedModels()
-  const found = all.find((m) => m.id === modelId)
-  return found?.providers
+  const providers = listCompatibleProvidersForModel(modelId)
+  return providers.length > 0 ? providers : undefined
 }
 
-/**
- * Return the models available through a given provider credential ID.
- */
 export function modelsForProvider(providerId: string): ModelInfo[] {
-  return modelDiscoveryService.getCachedModels(providerId)
+  return listContractModelsForProvider(providerId).map((model) => ({
+    id: model.modelId,
+    label: model.label,
+    providers: [model.providerId],
+  }))
+}
+
+export function listAllModels(): ModelInfo[] {
+  return listCanonicalModels().map((model) => ({
+    id: model.id,
+    label: model.label,
+    providers: [...model.providers],
+  }))
 }

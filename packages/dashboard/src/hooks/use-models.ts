@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react"
 
-import { listModels, type ModelInfo } from "@/lib/api-client"
+import {
+  listModels,
+  type ModelInfo,
+  type ProviderModelInfo,
+  type SupportedProvider,
+} from "@/lib/api-client"
 
 /**
  * Fetch the model catalogue from the API.
@@ -13,9 +18,13 @@ import { listModels, type ModelInfo } from "@/lib/api-client"
  */
 export function useModels(opts?: { credentialAware?: boolean }): {
   models: ModelInfo[]
+  providerModels: ProviderModelInfo[]
+  providers: SupportedProvider[]
   isLoading: boolean
 } {
   const [models, setModels] = useState<ModelInfo[]>([])
+  const [providerModels, setProviderModels] = useState<ProviderModelInfo[]>([])
+  const [providers, setProviders] = useState<SupportedProvider[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const credentialAware = opts?.credentialAware ?? false
 
@@ -25,6 +34,8 @@ export function useModels(opts?: { credentialAware?: boolean }): {
       .then((res) => {
         if (!cancelled) {
           setModels(res.models)
+          setProviderModels(res.providerModels)
+          setProviders(res.providers)
         }
       })
       .catch(() => {
@@ -38,5 +49,5 @@ export function useModels(opts?: { credentialAware?: boolean }): {
     }
   }, [credentialAware])
 
-  return { models, isLoading }
+  return { models, providerModels, providers, isLoading }
 }

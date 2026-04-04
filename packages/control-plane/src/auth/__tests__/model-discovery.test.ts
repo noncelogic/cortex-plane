@@ -138,13 +138,14 @@ describe("discoverModels — openai", () => {
     expect(models[0]!.providers).toEqual(["openai-codex"])
   })
 
-  it("returns empty on failure", async () => {
+  it("falls back to static catalogue on failure", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({}, 500))
 
     const svc = new ModelDiscoveryService()
     const models = await svc.discoverModels("openai", { apiKey: "sk-bad" })
 
-    expect(models).toEqual([])
+    expect(models.length).toBeGreaterThan(0)
+    expect(models.some((m) => m.id === "gpt-4o")).toBe(true)
   })
 })
 
@@ -173,10 +174,11 @@ describe("discoverModels — google-ai-studio", () => {
     expect(url).toContain("key=AIza-test")
   })
 
-  it("returns empty without apiKey", async () => {
+  it("falls back to canonical catalogue without apiKey", async () => {
     const svc = new ModelDiscoveryService()
     const models = await svc.discoverModels("google-ai-studio", { accessToken: "tok" })
-    expect(models).toEqual([])
+    expect(models.length).toBeGreaterThan(0)
+    expect(models.some((m) => m.id === "gemini-2.5-pro")).toBe(true)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
@@ -342,12 +344,11 @@ describe("cache", () => {
     expect(svc.getAllCachedModels()).toEqual([])
   })
 
-  it("does not cache empty results for providers without static catalogue", async () => {
-    // google-ai-studio has no static fallback and needs apiKey (not accessToken)
+  it("caches canonical fallback results for providers with static catalogue", async () => {
     const svc = new ModelDiscoveryService()
     await svc.discoverModels("google-ai-studio", { accessToken: "tok" })
 
-    expect(svc.getCachedModels("google-ai-studio")).toEqual([])
+    expect(svc.getCachedModels("google-ai-studio").length).toBeGreaterThan(0)
   })
 })
 
@@ -432,7 +433,7 @@ describe("discoverModels — static catalogue fallback", () => {
     const models = await svc.discoverModels("openai-codex", { apiKey: "bad" })
 
     expect(models.length).toBeGreaterThan(0)
-    expect(models.some((m) => m.id === "gpt-5")).toBe(true)
+    expect(models.some((m) => m.id === "gpt-5.1")).toBe(true)
 
     warnSpy.mockRestore()
   })

@@ -786,10 +786,12 @@ export async function stopTrace(
 // Model catalogue
 // ---------------------------------------------------------------------------
 
-export type { ModelInfo } from "./schemas/models"
+export type { ModelInfo, ProviderModelInfo, SupportedProvider } from "./schemas/models"
 
 export async function listModels(opts?: { credentialAware?: boolean }): Promise<{
   models: import("./schemas/models").ModelInfo[]
+  providerModels: import("./schemas/models").ProviderModelInfo[]
+  providers: import("./schemas/models").SupportedProvider[]
 }> {
   const qs = opts?.credentialAware ? "?credentialAware=true" : ""
   return apiFetch(`/models${qs}`, { schema: ModelListResponseSchema })

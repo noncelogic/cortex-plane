@@ -15,23 +15,30 @@ function readSrc(relative: string): string {
 
 describe("model_config construction", () => {
   function buildModelConfig(
-    model: string,
+    selection: string,
     systemPrompt: string,
   ): Record<string, unknown> | undefined {
     const cfg: Record<string, unknown> = {}
-    if (model.trim()) cfg.model = model.trim()
+    const [providerPart, modelPart] = selection.split("::")
+    const provider = providerPart?.trim()
+    const model = modelPart?.trim()
+    if (provider && model) {
+      cfg.provider = provider
+      cfg.model = model
+    }
     if (systemPrompt.trim()) cfg.systemPrompt = systemPrompt.trim()
     return Object.keys(cfg).length > 0 ? cfg : undefined
   }
 
   it("includes model when selected", () => {
-    const cfg = buildModelConfig("claude-sonnet-4-6", "")
-    expect(cfg).toEqual({ model: "claude-sonnet-4-6" })
+    const cfg = buildModelConfig("anthropic::claude-sonnet-4-5", "")
+    expect(cfg).toEqual({ provider: "anthropic", model: "claude-sonnet-4-5" })
   })
 
   it("includes both model and systemPrompt", () => {
-    const cfg = buildModelConfig("gpt-4o", "You are a helpful assistant")
+    const cfg = buildModelConfig("openai::gpt-4o", "You are a helpful assistant")
     expect(cfg).toEqual({
+      provider: "openai",
       model: "gpt-4o",
       systemPrompt: "You are a helpful assistant",
     })
@@ -42,8 +49,8 @@ describe("model_config construction", () => {
   })
 
   it("trims whitespace from model and systemPrompt", () => {
-    const cfg = buildModelConfig("  claude-opus-4-6  ", "  Hello  ")
-    expect(cfg).toEqual({ model: "claude-opus-4-6", systemPrompt: "Hello" })
+    const cfg = buildModelConfig("openai::gpt-4o", "  Hello  ")
+    expect(cfg).toEqual({ provider: "openai", model: "gpt-4o", systemPrompt: "Hello" })
   })
 })
 
@@ -60,7 +67,7 @@ describe("Deploy modal structure", () => {
 
   it("has model state", () => {
     expect(content).toContain('useState("")')
-    expect(content).toContain("setModel")
+    expect(content).toContain("setSelection")
   })
 
   it("uses a select element for model selection", () => {
@@ -69,7 +76,7 @@ describe("Deploy modal structure", () => {
 
   it("uses useModels hook for dynamic model fetching", () => {
     expect(content).toContain("useModels")
-    expect(content).toContain("models")
+    expect(content).toContain("providerModels")
   })
 
   it("shows empty state when no models available", () => {
@@ -78,7 +85,8 @@ describe("Deploy modal structure", () => {
   })
 
   it("includes model in model_config when building request body", () => {
-    expect(content).toContain("modelConfig.model = model.trim()")
+    expect(content).toContain("modelConfig.provider = provider")
+    expect(content).toContain("modelConfig.model = model")
   })
 
   it("includes systemPrompt in model_config when building request body", () => {
@@ -86,11 +94,11 @@ describe("Deploy modal structure", () => {
   })
 
   it("resets model on form reset", () => {
-    expect(content).toContain('setModel("")')
+    expect(content).toContain('setSelection("")')
   })
 
   it("requires model for form submission", () => {
-    expect(content).toContain("!model.trim()")
+    expect(content).toContain("!selection.trim()")
   })
 
   it("has system prompt textarea", () => {
@@ -98,7 +106,8 @@ describe("Deploy modal structure", () => {
     expect(content).toContain("setSystemPrompt")
   })
 
-  it("shows credential warning when model is selected", () => {
-    expect(content).toContain("credential")
+  it("filters models by selected credential provider", () => {
+    expect(content).toContain("selectedCredential")
+    expect(content).toContain("providerModel.providerId === selectedCredential.provider")
   })
 })

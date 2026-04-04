@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { useToast } from "@/components/layout/toast"
 import { useModels } from "@/hooks/use-models"
@@ -23,11 +23,11 @@ export function DeployAgentModal({
   onClose,
   onSuccess,
 }: DeployAgentModalProps): React.JSX.Element | null {
-  const { models } = useModels({ credentialAware: true })
+  const { providerModels } = useModels({ credentialAware: true })
   const [name, setName] = useState("")
   const [role, setRole] = useState("")
   const [description, setDescription] = useState("")
-  const [model, setModel] = useState("")
+  const [selection, setSelection] = useState("")
   const [systemPrompt, setSystemPrompt] = useState("")
   const [credentialId, setCredentialId] = useState("")
   const [credentials, setCredentials] = useState<Credential[]>([])
@@ -48,7 +48,7 @@ export function DeployAgentModal({
     setName("")
     setRole("")
     setDescription("")
-    setModel("")
+    setSelection("")
     setSystemPrompt("")
     setCredentialId("")
     setError(null)
@@ -60,17 +60,29 @@ export function DeployAgentModal({
     onClose()
   }, [submitting, resetForm, onClose])
 
+  const selectedCredential = credentials.find((credential) => credential.id === credentialId)
+  const availableProviderModels = useMemo(() => {
+    if (!selectedCredential) return providerModels
+    return providerModels.filter(
+      (providerModel) => providerModel.providerId === selectedCredential.provider,
+    )
+  }, [providerModels, selectedCredential])
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!name.trim() || !role.trim() || !model.trim() || submitting) return
+      if (!name.trim() || !role.trim() || !selection.trim() || submitting) return
+
+      const [provider, model] = selection.split("::")
+      if (!provider || !model) return
 
       setSubmitting(true)
       setError(null)
 
       try {
         const modelConfig: Record<string, unknown> = {}
-        if (model.trim()) modelConfig.model = model.trim()
+        modelConfig.provider = provider
+        modelConfig.model = model
         if (systemPrompt.trim()) modelConfig.systemPrompt = systemPrompt.trim()
 
         const body: CreateAgentRequest = {
@@ -104,7 +116,7 @@ export function DeployAgentModal({
       name,
       role,
       description,
-      model,
+      selection,
       systemPrompt,
       credentialId,
       submitting,
@@ -193,7 +205,7 @@ export function DeployAgentModal({
             <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
               Model <span className="text-red-500">*</span>
             </label>
-            {models.length === 0 ? (
+            {availableProviderModels.length === 0 ? (
               <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
                 <span className="material-symbols-outlined text-[16px]">info</span>
                 <span>
@@ -209,16 +221,19 @@ export function DeployAgentModal({
               </div>
             ) : (
               <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
+                value={selection}
+                onChange={(e) => setSelection(e.target.value)}
                 disabled={submitting}
                 data-testid="deploy-model-select"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
               >
-                <option value="">Select a model...</option>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
+                <option value="">Select a provider/model...</option>
+                {availableProviderModels.map((providerModel) => (
+                  <option
+                    key={`${providerModel.providerId}::${providerModel.modelId}`}
+                    value={`${providerModel.providerId}::${providerModel.modelId}`}
+                  >
+                    {providerModel.label} ({providerModel.providerId})
                   </option>
                 ))}
               </select>
@@ -299,7 +314,7 @@ export function DeployAgentModal({
             </button>
             <button
               type="submit"
-              disabled={submitting || !name.trim() || !role.trim() || !model.trim()}
+              disabled={submitting || !name.trim() || !role.trim() || !selection.trim()}
               className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-lg">rocket_launch</span>

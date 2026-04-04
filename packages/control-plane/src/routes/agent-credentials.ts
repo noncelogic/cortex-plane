@@ -7,6 +7,7 @@
  *   DELETE /agents/:agentId/credentials/:credentialId — unbind a credential from an agent
  */
 
+import { normalizeModelConfigSelection } from "@cortex/shared/llm"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
@@ -69,7 +70,7 @@ export function agentCredentialRoutes(deps: AgentCredentialRouteDeps) {
         // Verify agent exists
         const agent = await db
           .selectFrom("agent")
-          .select("id")
+          .select(["id", "model_config"])
           .where("id", "=", agentId)
           .executeTakeFirst()
 
@@ -136,6 +137,18 @@ export function agentCredentialRoutes(deps: AgentCredentialRouteDeps) {
           reply.status(409).send({
             error: "conflict",
             message: "Credential is already bound to this agent",
+          })
+          return
+        }
+
+        const normalizedSelection = normalizeModelConfigSelection(agent.model_config, [
+          credential.provider,
+        ])
+        if (!normalizedSelection.ok) {
+          reply.status(400).send({
+            error: "bad_request",
+            code: normalizedSelection.error.code,
+            message: normalizedSelection.error.message,
           })
           return
         }

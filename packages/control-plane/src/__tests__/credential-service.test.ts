@@ -616,6 +616,110 @@ describe("API key credential flow end-to-end", () => {
   })
 })
 
+describe("CredentialService.resolveCredentialAccessToken", () => {
+  it("refreshes an expired OAuth credential and returns the refreshed token", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          access_token: "refreshed-access-token",
+          refresh_token: "refreshed-refresh-token",
+          expires_in: 3600,
+        }),
+      }),
+    )
+
+    const oauthCred = makeCredRow({
+      provider: "anthropic",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential("expired-access-token", USER_KEY),
+      refresh_token_enc: encryptCredential("refresh-token-123", USER_KEY),
+      token_expires_at: new Date(Date.now() - 60_000),
+    })
+
+    const { db } = buildMockDb({ existingCred: oauthCred })
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    const result = await service.resolveCredentialAccessToken(CRED_ID, {
+      agentId: "agent-1",
+      jobId: "job-1",
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      token: "refreshed-access-token",
+      credentialId: CRED_ID,
+      provider: "anthropic",
+      credentialType: "oauth",
+      status: "active",
+    })
+  })
+
+  it("returns reauth_required when refresh is rejected by the provider", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        text: vi.fn().mockResolvedValue('{"error":"invalid_grant"}'),
+      }),
+    )
+
+    const oauthCred = makeCredRow({
+      provider: "anthropic",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential("expired-access-token", USER_KEY),
+      refresh_token_enc: encryptCredential("refresh-token-123", USER_KEY),
+      token_expires_at: new Date(Date.now() - 60_000),
+    })
+
+    const { db } = buildMockDb({ existingCred: oauthCred })
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    const result = await service.resolveCredentialAccessToken(CRED_ID)
+
+    expect(result).toEqual({
+      ok: false,
+      credentialId: CRED_ID,
+      provider: "anthropic",
+      credentialType: "oauth",
+      status: "revoked",
+      code: "reauth_required",
+      message: "Refresh token is invalid or revoked. Re-authenticate this provider.",
+      requiresReauth: true,
+    })
+  })
+
+  it("returns reauth_required when the credential is expired and has no refresh token", async () => {
+    const oauthCred = makeCredRow({
+      provider: "anthropic",
+      credential_type: "oauth",
+      api_key_enc: null,
+      access_token_enc: encryptCredential("expired-access-token", USER_KEY),
+      refresh_token_enc: null,
+      token_expires_at: new Date(Date.now() - 60_000),
+    })
+
+    const { db } = buildMockDb({ existingCred: oauthCred })
+    const service = new CredentialService(db, AUTH_CONFIG)
+
+    const result = await service.resolveCredentialAccessToken(CRED_ID)
+
+    expect(result).toEqual({
+      ok: false,
+      credentialId: CRED_ID,
+      provider: "anthropic",
+      credentialType: "oauth",
+      status: "expired",
+      code: "reauth_required",
+      message: "Access token expired and cannot be refreshed. Re-authenticate this provider.",
+      requiresReauth: true,
+    })
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Tests: SUPPORTED_PROVIDERS extensions
 // ---------------------------------------------------------------------------
@@ -654,10 +758,10 @@ describe("SUPPORTED_PROVIDERS", () => {
     expect(brave!.credentialClass).toBe("tool_specific")
   })
 
-  it("existing providers have no credentialClass (default llm_provider)", () => {
+  it("existing providers advertise llm_provider credentialClass", () => {
     const openai = SUPPORTED_PROVIDERS.find((p) => p.id === "openai")
     expect(openai).toBeDefined()
-    expect(openai!.credentialClass).toBeUndefined()
+    expect(openai!.credentialClass).toBe("llm_provider")
   })
 })
 

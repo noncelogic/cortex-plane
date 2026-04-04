@@ -64,6 +64,7 @@ function makeJoinedBinding(overrides: Record<string, unknown> = {}) {
 function mockDb(
   opts: {
     agentExists?: boolean
+    agent?: Record<string, unknown> | null
     credential?: Record<string, unknown> | null
     existingBinding?: Record<string, unknown> | null
     insertedBinding?: Record<string, unknown>
@@ -72,6 +73,7 @@ function mockDb(
 ) {
   const {
     agentExists = true,
+    agent = agentExists ? { id: AGENT_ID, model_config: {} } : null,
     credential = makeCredential(),
     existingBinding = null,
     insertedBinding = makeBinding(),
@@ -92,7 +94,7 @@ function mockDb(
   let selectCallCount = 0
 
   function agentSelectChain() {
-    const row = agentExists ? { id: AGENT_ID } : null
+    const row = agent
     const executeTakeFirst = vi.fn().mockResolvedValue(row)
     const where = vi.fn().mockReturnValue({ executeTakeFirst })
     const select = vi.fn().mockReturnValue({ where })
@@ -306,6 +308,23 @@ describe("POST /agents/:agentId/credentials", () => {
     expect(res.statusCode).toBe(409)
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(res.json().message).toContain("already bound")
+  })
+
+  it("rejects credential binding when agent provider/model is incompatible", async () => {
+    const { app } = await buildTestApp({
+      agent: { id: AGENT_ID, model_config: { provider: "openai", model: "gpt-4o" } },
+      credential: makeCredential({ provider: "anthropic" }),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/agents/${AGENT_ID}/credentials`,
+      payload: { credentialId: CRED_ID },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body: { code: string } = res.json()
+    expect(body.code).toBe("provider_unbound")
   })
 
   it("validates required credentialId field", async () => {
