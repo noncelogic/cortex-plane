@@ -827,9 +827,12 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
     app.get<{ Params: AgentParams }>("/agents/:agentId/browser", async (request, reply) => {
       const { agentId } = request.params
 
+      const runtimeSession = observationService.getSession(agentId)
       const [streamStatus, tabsResult] = await Promise.all([
         observationService.getStreamStatus(agentId).catch(() => null),
-        observationService.listTabs(agentId).catch(() => null),
+        runtimeSession.status === "connected" || runtimeSession.status === "connecting"
+          ? observationService.listTabs(agentId).catch(() => null)
+          : Promise.resolve(null),
       ])
 
       const tabs = (tabsResult?.tabs ?? []).map((tab, index) => ({
@@ -843,10 +846,11 @@ export function dashboardRoutes(deps: DashboardRouteDeps) {
         id: `browser-${agentId}`,
         agentId,
         vncUrl: streamStatus?.vncEndpoint?.websocketUrl ?? null,
-        status: streamStatus?.vncEndpoint ? "connected" : "disconnected",
+        status: runtimeSession.status,
         tabs,
-        latencyMs: streamStatus?.vncEndpoint ? 35 : 0,
-        lastHeartbeat: new Date().toISOString(),
+        latencyMs: runtimeSession.status === "connected" ? 35 : 0,
+        lastHeartbeat: runtimeSession.lastHeartbeat ?? undefined,
+        errorMessage: runtimeSession.errorMessage ?? undefined,
       })
     })
 

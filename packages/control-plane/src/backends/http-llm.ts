@@ -44,6 +44,10 @@ export interface McpDeps {
   allowedTools?: string[]
   deniedTools?: string[]
   credentialResolver?: CredentialResolver
+  browser?: {
+    db: import("kysely").Kysely<import("../db/types.js").Database>
+    observationService: import("../observation/service.js").BrowserObservationService
+  }
 }
 
 /**
@@ -306,6 +310,7 @@ export class HttpLlmBackend implements ExecutionBackend {
             allowedTools: mcpDeps.allowedTools,
             deniedTools: mcpDeps.deniedTools,
             credentialResolver: mcpDeps.credentialResolver,
+            browser: mcpDeps.browser,
           }
         : undefined,
     )

@@ -5,7 +5,12 @@
  * Tools are registered with a name, description, JSON Schema, and handler.
  */
 
+import type { Kysely } from "kysely"
+
+import type { Database } from "../db/types.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
+import type { BrowserObservationService } from "../observation/service.js"
+import { createPlaywrightNavigateTool } from "./tools/browser.js"
 import { createHttpRequestTool } from "./tools/http-request.js"
 import { createMemoryQueryTool } from "./tools/memory-query.js"
 import { createMemoryStoreTool } from "./tools/memory-store.js"
@@ -21,6 +26,12 @@ export interface ToolDefinition {
   inputSchema: Record<string, unknown>
   /** Execute the tool and return output text. */
   execute: (input: Record<string, unknown>) => Promise<string>
+}
+
+export interface BrowserToolRegistryDeps {
+  agentId: string
+  db: Kysely<Database>
+  observationService: BrowserObservationService
 }
 
 /**
@@ -94,13 +105,18 @@ export const echoTool: ToolDefinition = {
 }
 
 /** Create a default registry with built-in tools. */
-export function createDefaultToolRegistry(): ToolRegistry {
+export function createDefaultToolRegistry(opts?: {
+  browser?: BrowserToolRegistryDeps
+}): ToolRegistry {
   const registry = new ToolRegistry()
   registry.register(echoTool)
   registry.register(createWebSearchTool())
   registry.register(createMemoryQueryTool())
   registry.register(createMemoryStoreTool())
   registry.register(createHttpRequestTool())
+  if (opts?.browser) {
+    registry.register(createPlaywrightNavigateTool(opts.browser))
+  }
   return registry
 }
 
@@ -122,9 +138,20 @@ export async function createAgentToolRegistry(
     deniedTools?: string[]
     /** Credential resolver for webhook tools with credential refs. */
     credentialResolver?: CredentialResolver
+    browser?: Omit<BrowserToolRegistryDeps, "agentId"> & { agentId?: string }
   },
 ): Promise<ToolRegistry> {
-  const registry = createDefaultToolRegistry()
+  const registry = createDefaultToolRegistry(
+    opts?.browser && (opts.browser.agentId ?? opts.agentId)
+      ? {
+          browser: {
+            agentId: opts.browser.agentId ?? opts.agentId!,
+            db: opts.browser.db,
+            observationService: opts.browser.observationService,
+          },
+        }
+      : undefined,
+  )
 
   const webhookSpecs = parseWebhookTools(agentConfig)
   for (const spec of webhookSpecs) {

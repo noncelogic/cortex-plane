@@ -5,6 +5,7 @@ import type { BrowserSessionStatus } from "@/lib/api-client"
 interface ConnectionStatusProps {
   status: BrowserSessionStatus
   latencyMs?: number
+  errorMessage?: string
   onReconnect?: () => void
 }
 
@@ -48,6 +49,7 @@ function qualityLabel(latencyMs: number): { label: string; colorClass: string } 
 export function ConnectionStatus({
   status,
   latencyMs,
+  errorMessage,
   onReconnect,
 }: ConnectionStatusProps): React.JSX.Element {
   const config = statusConfig[status]
@@ -81,6 +83,12 @@ export function ConnectionStatus({
           <span className="material-symbols-outlined text-sm">refresh</span>
           Reconnect
         </button>
+      )}
+
+      {status === "error" && errorMessage && (
+        <span className="max-w-[24rem] truncate text-xs text-red-300" title={errorMessage}>
+          {errorMessage}
+        </span>
       )}
     </div>
   )

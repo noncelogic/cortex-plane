@@ -21,6 +21,7 @@ import type { Database } from "../db/types.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 import type { AgentEventEmitter } from "../observability/event-emitter.js"
 import type { ExecutionRegistry } from "../observability/execution-registry.js"
+import type { BrowserObservationService } from "../observation/service.js"
 import type { SSEConnectionManager } from "../streaming/manager.js"
 import { createAgentExecuteTask } from "./tasks/agent-execute.js"
 import { createApprovalExpireTask } from "./tasks/approval-expire.js"
@@ -48,6 +49,8 @@ export interface WorkerOptions {
   executionRegistry?: ExecutionRegistry
   /** Optional credential service for resolving per-job LLM credentials from agent bindings. */
   credentialService?: CredentialService
+  /** Optional browser observation/runtime service for browser tools. */
+  observationService?: BrowserObservationService
 }
 
 /**
@@ -68,6 +71,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
     eventEmitter,
     executionRegistry,
     credentialService,
+    observationService,
   } = options
 
   const workerConcurrency =
@@ -84,6 +88,7 @@ export async function createWorker(options: WorkerOptions): Promise<Runner> {
       credentialService,
       eventEmitter,
       executionRegistry,
+      observationService,
     }),
     memory_extract: createMemoryExtractTask(undefined, db),
     approval_expire: createApprovalExpireTask(db),

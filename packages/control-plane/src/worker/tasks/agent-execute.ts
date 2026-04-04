@@ -46,6 +46,7 @@ import type { McpToolRouter } from "../../mcp/tool-router.js"
 import { CostTracker } from "../../observability/cost-tracker.js"
 import type { AgentEventEmitter } from "../../observability/event-emitter.js"
 import type { ExecutionRegistry } from "../../observability/execution-registry.js"
+import type { BrowserObservationService } from "../../observation/service.js"
 import type { SSEConnectionManager } from "../../streaming/manager.js"
 import type { AgentOutputPayload } from "../../streaming/types.js"
 import { classifyError, isConfigErrorCategory } from "../error-classifier.js"
@@ -85,6 +86,8 @@ export interface AgentExecuteDeps {
   userRateLimiter?: UserRateLimiter
   /** Optional capability assembler for V2 capability model (CAPABILITY_MODEL_V2=true). */
   capabilityAssembler?: CapabilityAssembler
+  /** Optional browser observation/runtime service for browser tools. */
+  observationService?: BrowserObservationService
 }
 
 /** Polling interval (ms) for checking cancellation. */
@@ -113,6 +116,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
     executionRegistry,
     userRateLimiter,
     capabilityAssembler,
+    observationService,
   } = deps
   const memoryScheduler = createMemoryScheduler({ db, threshold: memoryExtractThreshold })
 
@@ -589,6 +593,7 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                   allowedTools: task.constraints.allowedTools,
                   deniedTools: task.constraints.deniedTools,
                   credentialResolver,
+                  ...(observationService ? { browser: { db, observationService } } : {}),
                 }
               : credentialResolver
                 ? {
@@ -597,7 +602,14 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                     deniedTools: task.constraints.deniedTools,
                     credentialResolver,
                   }
-                : undefined
+                : observationService
+                  ? {
+                      agentId: agent.id,
+                      allowedTools: task.constraints.allowedTools,
+                      deniedTools: task.constraints.deniedTools,
+                      browser: { db, observationService },
+                    }
+                  : undefined
 
             const agentRegistry = await (
               backend as {
