@@ -16,6 +16,7 @@ function makeCred(overrides: Partial<Credential> = {}): Credential {
     maskedKey: "****1234",
     status: "active",
     lastUsedAt: null,
+    requiresReauth: false,
     createdAt: "2026-03-01T00:00:00.000Z",
     ...overrides,
   }
@@ -173,15 +174,15 @@ describe("errorSummary", () => {
   })
 
   it("returns status label when error/expired with no details", () => {
-    const cred = makeCred({ status: "expired", errorCount: 0 })
+    const cred = makeCred({ status: "expired", errorCount: 0, requiresReauth: true })
     const result = errorSummary(cred)!
-    expect(result.label).toBe("Status: expired")
+    expect(result.label).toBe("Reconnect required")
   })
 
   it("returns status label for revoked credentials", () => {
-    const cred = makeCred({ status: "revoked" })
+    const cred = makeCred({ status: "revoked", requiresReauth: true })
     const result = errorSummary(cred)!
-    expect(result.label).toBe("Status: revoked")
+    expect(result.label).toBe("Reconnect required")
   })
 
   it("shows error info for active credential with nonzero errorCount", () => {

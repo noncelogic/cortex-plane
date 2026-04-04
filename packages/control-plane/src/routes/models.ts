@@ -6,6 +6,11 @@
  *   POST /models/refresh — force re-discovery from provider APIs
  */
 
+import {
+  listProviderModelCapabilities,
+  listSupportedLlmProviders,
+  type ProviderModelCapability,
+} from "@cortex/shared/llm"
 import type { FastifyInstance, FastifyRequest } from "fastify"
 
 import type { CredentialService } from "../auth/credential-service.js"
@@ -13,7 +18,7 @@ import type { ModelDiscoveryService } from "../auth/model-discovery.js"
 import type { SessionService } from "../auth/session-service.js"
 import { createRequireAuth, type PreHandler } from "../middleware/auth.js"
 import type { AuthenticatedRequest } from "../middleware/types.js"
-import { modelDiscoveryService } from "../observability/model-providers.js"
+import { listAllModels, modelDiscoveryService } from "../observability/model-providers.js"
 
 interface ModelRouteDeps {
   credentialService?: CredentialService
@@ -35,7 +40,9 @@ export function modelRoutes(deps?: ModelRouteDeps) {
     app.get(
       "/models",
       async (request: FastifyRequest<{ Querystring: { credentialAware?: string } }>) => {
-        const allModels = discovery.getAllCachedModels()
+        const allModels = listAllModels()
+        const allProviderModels = listProviderModelCapabilities()
+        const allProviders = listSupportedLlmProviders()
         const wantFiltering = request.query.credentialAware === "true"
 
         if (wantFiltering && deps?.credentialService && deps?.sessionService) {
@@ -69,14 +76,28 @@ export function modelRoutes(deps?: ModelRouteDeps) {
               const filtered = allModels.filter((m) =>
                 m.providers.some((p) => userProviders.has(p)),
               )
-              return { models: filtered }
+              const filteredProviderModels = allProviderModels.filter((m) =>
+                userProviders.has(m.providerId),
+              )
+              const filteredProviders = allProviders.filter((provider) =>
+                userProviders.has(provider.id),
+              )
+              return {
+                models: filtered,
+                providerModels: filteredProviderModels.map(toProviderModelPayload),
+                providers: filteredProviders,
+              }
             }
           } catch {
             // Auth failed — fall through to full catalogue
           }
         }
 
-        return { models: allModels }
+        return {
+          models: allModels,
+          providerModels: allProviderModels.map(toProviderModelPayload),
+          providers: allProviders,
+        }
       },
     )
 
@@ -144,5 +165,19 @@ export function modelRoutes(deps?: ModelRouteDeps) {
 
       return { ok: true, modelsDiscovered: discovered }
     })
+  }
+}
+
+function toProviderModelPayload(model: ProviderModelCapability) {
+  return {
+    providerId: model.providerId,
+    modelId: model.modelId,
+    label: model.label,
+    api: model.api,
+    reasoning: model.reasoning,
+    input: [...model.input],
+    contextWindow: model.contextWindow,
+    maxTokens: model.maxTokens,
+    baseUrl: model.baseUrl,
   }
 }

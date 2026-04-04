@@ -31,6 +31,7 @@ export const CredentialSchema = z.object({
   lastRefreshAt: z.string().nullable().optional(),
   errorCount: z.number().optional(),
   lastError: z.string().nullable().optional(),
+  requiresReauth: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string().optional(),
 })

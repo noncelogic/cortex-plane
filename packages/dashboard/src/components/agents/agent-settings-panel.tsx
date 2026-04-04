@@ -1,23 +1,26 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { useToast } from "@/components/layout/toast"
 import { useModels } from "@/hooks/use-models"
-import { type AgentDetail, updateAgent } from "@/lib/api-client"
-
-const CUSTOM_MODEL_VALUE = "__custom__"
+import { type AgentDetail, listAgentCredentials, updateAgent } from "@/lib/api-client"
 
 export interface AgentSettingsPanelProps {
   agent: AgentDetail
   onSave: () => void
 }
 
+function makeProviderModelValue(providerId: string, modelId: string): string {
+  return `${providerId}::${modelId}`
+}
+
 export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): React.JSX.Element {
-  const { models: availableModels } = useModels()
+  const { providerModels } = useModels()
   const { addToast } = useToast()
 
   const modelConfig: Record<string, unknown> = agent.model_config ?? {}
+  const currentProvider = typeof modelConfig.provider === "string" ? modelConfig.provider : ""
   const currentModel = typeof modelConfig.model === "string" ? modelConfig.model : ""
   const currentPrompt = typeof modelConfig.systemPrompt === "string" ? modelConfig.systemPrompt : ""
 
@@ -25,51 +28,79 @@ export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): 
   const [name, setName] = useState(agent.name)
   const [role, setRole] = useState(agent.role)
   const [description, setDescription] = useState(agent.description ?? "")
-  const [model, setModel] = useState(currentModel)
-  const [customModel, setCustomModel] = useState("")
+  const [selection, setSelection] = useState(
+    currentProvider && currentModel ? makeProviderModelValue(currentProvider, currentModel) : "",
+  )
   const [systemPrompt, setSystemPrompt] = useState(currentPrompt)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundProviders, setBoundProviders] = useState<string[]>([])
 
-  const isKnownModel = availableModels.some((m) => m.id === currentModel)
+  useEffect(() => {
+    let cancelled = false
+    listAgentCredentials(agent.id)
+      .then((res) => {
+        if (!cancelled) {
+          setBoundProviders([...new Set(res.bindings.map((binding) => binding.provider))])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setBoundProviders([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [agent.id])
+
+  const availableProviderModels = useMemo(() => {
+    if (boundProviders.length === 0) return []
+    return providerModels.filter((providerModel) =>
+      boundProviders.includes(providerModel.providerId),
+    )
+  }, [boundProviders, providerModels])
+
+  const currentProviderModel = providerModels.find(
+    (providerModel) =>
+      providerModel.providerId === currentProvider && providerModel.modelId === currentModel,
+  )
 
   const handleEdit = useCallback(() => {
     setName(agent.name)
     setRole(agent.role)
     setDescription(agent.description ?? "")
-    if (isKnownModel || !currentModel) {
-      setModel(currentModel)
-      setCustomModel("")
-    } else {
-      setModel(CUSTOM_MODEL_VALUE)
-      setCustomModel(currentModel)
-    }
+    setSelection(
+      currentProvider && currentModel ? makeProviderModelValue(currentProvider, currentModel) : "",
+    )
     setSystemPrompt(currentPrompt)
     setError(null)
     setEditing(true)
-  }, [agent, currentModel, currentPrompt, isKnownModel])
+  }, [agent, currentModel, currentPrompt, currentProvider])
 
   const handleCancel = useCallback(() => {
     setEditing(false)
     setError(null)
   }, [])
 
-  const resolvedModel = model === CUSTOM_MODEL_VALUE ? customModel.trim() : model.trim()
-
   const handleSave = useCallback(async () => {
     if (!name.trim() || !role.trim()) {
       setError("Name and role are required")
       return
     }
+
+    const [provider, model] = selection.split("::")
     setSaving(true)
     setError(null)
+
     try {
       const newConfig: Record<string, unknown> = { ...modelConfig }
-      if (resolvedModel) {
-        newConfig.model = resolvedModel
+      if (provider && model) {
+        newConfig.provider = provider
+        newConfig.model = model
       } else {
+        delete newConfig.provider
         delete newConfig.model
       }
+
       if (systemPrompt.trim()) {
         newConfig.systemPrompt = systemPrompt.trim()
       } else {
@@ -90,26 +121,7 @@ export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): 
     } finally {
       setSaving(false)
     }
-  }, [
-    agent.id,
-    name,
-    role,
-    description,
-    resolvedModel,
-    systemPrompt,
-    modelConfig,
-    onSave,
-    addToast,
-  ])
-
-  const handleModelSelect = useCallback((value: string) => {
-    setModel(value)
-    if (value !== CUSTOM_MODEL_VALUE) {
-      setCustomModel("")
-    }
-  }, [])
-
-  const modelLabel = availableModels.find((m) => m.id === currentModel)?.label
+  }, [addToast, agent.id, description, modelConfig, name, onSave, role, selection, systemPrompt])
 
   return (
     <div
@@ -137,7 +149,6 @@ export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): 
 
       {editing ? (
         <div className="space-y-3">
-          {/* Name */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">
               Name <span className="text-red-500">*</span>
@@ -152,7 +163,6 @@ export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): 
             />
           </div>
 
-          {/* Role */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">
               Role <span className="text-red-500">*</span>
@@ -167,7 +177,6 @@ export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): 
             />
           </div>
 
-          {/* Description */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Description</label>
             <input
@@ -181,42 +190,27 @@ export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): 
             />
           </div>
 
-          {/* Model */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Model</label>
             <select
-              value={model}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                handleModelSelect(e.target.value)
-              }
+              value={selection}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelection(e.target.value)}
               disabled={saving}
               data-testid="agent-settings-model-select"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             >
-              <option value="">Select a model...</option>
-              {availableModels.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
+              <option value="">Select a provider/model...</option>
+              {availableProviderModels.map((providerModel) => (
+                <option
+                  key={makeProviderModelValue(providerModel.providerId, providerModel.modelId)}
+                  value={makeProviderModelValue(providerModel.providerId, providerModel.modelId)}
+                >
+                  {providerModel.label} ({providerModel.providerId})
                 </option>
               ))}
-              <option value={CUSTOM_MODEL_VALUE}>Custom...</option>
             </select>
-            {model === CUSTOM_MODEL_VALUE && (
-              <input
-                type="text"
-                value={customModel}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setCustomModel(e.target.value)
-                }
-                placeholder="e.g. claude-opus-4-6-thinking"
-                disabled={saving}
-                data-testid="agent-settings-model-input"
-                className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-              />
-            )}
           </div>
 
-          {/* System Prompt */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">System Prompt</label>
             <textarea
@@ -292,11 +286,11 @@ export function AgentSettingsPanel({ agent, onSave }: AgentSettingsPanelProps): 
               data-testid="agent-settings-model-value"
               className="text-right font-mono text-xs text-slate-700 dark:text-slate-300"
             >
-              {currentModel
-                ? modelLabel
-                  ? `${modelLabel} (${currentModel})`
-                  : currentModel
-                : "Not set"}
+              {currentProviderModel
+                ? `${currentProviderModel.label} (${currentProviderModel.providerId} / ${currentProviderModel.modelId})`
+                : currentModel
+                  ? `${currentProvider || "unknown"} / ${currentModel}`
+                  : "Not set"}
             </span>
           </div>
           <div className="flex items-start justify-between gap-2">

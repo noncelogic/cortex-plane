@@ -65,6 +65,8 @@ describe("GET /models", () => {
     const body = res.json()
     expect(body.models).toBeDefined()
     expect(body.models.length).toBeGreaterThan(0)
+    expect(body.providerModels.length).toBeGreaterThan(0)
+    expect(body.providers.length).toBeGreaterThan(0)
   })
 
   it("includes at least one Anthropic and one OpenAI model", async () => {
@@ -121,7 +123,7 @@ describe("GET /models", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("returns empty array when cache is empty", async () => {
+  it("returns canonical catalogue when cache is empty", async () => {
     const emptyDiscovery = new ModelDiscoveryService()
     const app = Fastify({ logger: false })
     await app.register(modelRoutes({ discoveryService: emptyDiscovery }))
@@ -130,10 +132,10 @@ describe("GET /models", () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.models).toEqual([])
+    expect(body.models.length).toBeGreaterThan(0)
   })
 
-  it("returns empty when credentialAware=true but no deps provided", async () => {
+  it("returns canonical catalogue when credentialAware=true but no deps provided", async () => {
     const emptyDiscovery = new ModelDiscoveryService()
     const app = Fastify({ logger: false })
     await app.register(modelRoutes({ discoveryService: emptyDiscovery }))
@@ -145,7 +147,7 @@ describe("GET /models", () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.models).toEqual([])
+    expect(body.models.length).toBeGreaterThan(0)
   })
 
   it("filters models when credentialAware=true and user has credentials", async () => {
@@ -190,6 +192,9 @@ describe("GET /models", () => {
     const ids = body.models.map((m: { id: string }) => m.id)
     expect(ids).not.toContain("gpt-4o")
     expect(ids).not.toContain("gpt-4o-mini")
+    expect(
+      body.providerModels.every((m: { providerId: string }) => m.providerId === "anthropic"),
+    ).toBe(true)
   })
 
   it("returns full catalogue when credentialAware=true but auth fails", async () => {

@@ -79,6 +79,9 @@ export function errorSummary(cred: Credential): ErrorInfo | null {
 
   if (count === 0 && !message) {
     // Status is error/expired/revoked but no details available
+    if (cred.requiresReauth || cred.status === "revoked" || cred.status === "expired") {
+      return { label: "Reconnect required", message: null }
+    }
     return { label: `Status: ${cred.status}`, message: null }
   }
 

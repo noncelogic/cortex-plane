@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto"
 
 import type { AgentStatus, JobStatus } from "@cortex/shared"
+import { normalizeModelConfigSelection } from "@cortex/shared/llm"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
@@ -429,6 +430,14 @@ export function agentRoutes(deps: AgentRouteDeps) {
       },
       async (request: FastifyRequest<{ Body: CreateAgentBody }>, reply: FastifyReply) => {
         const body = request.body
+        const normalizedModelConfig = normalizeModelConfigSelection(body.model_config)
+        if (!normalizedModelConfig.ok) {
+          return reply.status(400).send({
+            error: "bad_request",
+            code: normalizedModelConfig.error.code,
+            message: normalizedModelConfig.error.message,
+          })
+        }
         const slug =
           body.slug ??
           body.name
@@ -443,7 +452,7 @@ export function agentRoutes(deps: AgentRouteDeps) {
             slug,
             role: body.role,
             description: body.description ?? null,
-            model_config: body.model_config ?? {},
+            model_config: normalizedModelConfig.modelConfig,
             skill_config: body.skill_config ?? {},
             resource_limits: body.resource_limits ?? {},
             channel_permissions: body.channel_permissions ?? {},
@@ -695,7 +704,17 @@ export function agentRoutes(deps: AgentRouteDeps) {
         if (body.name !== undefined) updateValues.name = body.name
         if (body.role !== undefined) updateValues.role = body.role
         if (body.description !== undefined) updateValues.description = body.description
-        if (body.model_config !== undefined) updateValues.model_config = body.model_config
+        if (body.model_config !== undefined) {
+          const normalizedModelConfig = normalizeModelConfigSelection(body.model_config)
+          if (!normalizedModelConfig.ok) {
+            return reply.status(400).send({
+              error: "bad_request",
+              code: normalizedModelConfig.error.code,
+              message: normalizedModelConfig.error.message,
+            })
+          }
+          updateValues.model_config = normalizedModelConfig.modelConfig
+        }
         if (body.skill_config !== undefined) updateValues.skill_config = body.skill_config
         if (body.resource_limits !== undefined) updateValues.resource_limits = body.resource_limits
         if (body.channel_permissions !== undefined)

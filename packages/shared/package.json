@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "src/index.ts",
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./src/index.ts"
     },
     "./backends": {
       "import": "./dist/backends/index.js",
@@ -38,6 +38,10 @@
       "import": "./dist/skills/index.js",
       "types": "./dist/skills/index.d.ts"
     },
+    "./llm": {
+      "import": "./dist/llm/index.js",
+      "types": "./src/llm/index.ts"
+    },
     "./correction-strengthener": {
       "import": "./dist/correction-strengthener/index.js",
       "types": "./dist/correction-strengthener/index.d.ts"
@@ -57,6 +61,7 @@
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "^0.55.4",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
     "@opentelemetry/resources": "^1.30.0",

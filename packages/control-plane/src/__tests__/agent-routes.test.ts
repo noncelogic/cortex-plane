@@ -504,7 +504,7 @@ describe("POST /agents", () => {
   })
 
   it("accepts model_config with model selection", async () => {
-    const created = makeAgent({ model_config: { model: "claude-sonnet-4-6" } })
+    const created = makeAgent({ model_config: { provider: "openai", model: "gpt-4o" } })
     const { app, db } = await buildTestApp({ insertedAgent: created })
 
     const res = await app.inject({
@@ -513,7 +513,7 @@ describe("POST /agents", () => {
       payload: {
         name: "Agent With Model",
         role: "assistant",
-        model_config: { model: "claude-sonnet-4-6" },
+        model_config: { provider: "openai", model: "gpt-4o" },
       },
     })
 
@@ -521,7 +521,7 @@ describe("POST /agents", () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(body.model_config).toEqual({ model: "claude-sonnet-4-6" })
+    expect(body.model_config).toEqual({ provider: "openai", model: "gpt-4o" })
 
     // Verify db.insertInto was called with model_config
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -530,7 +530,7 @@ describe("POST /agents", () => {
 
   it("accepts model_config with model and systemPrompt", async () => {
     const created = makeAgent({
-      model_config: { model: "gpt-4o", systemPrompt: "Be helpful" },
+      model_config: { provider: "openai", model: "gpt-4o", systemPrompt: "Be helpful" },
     })
     const { app } = await buildTestApp({ insertedAgent: created })
 
@@ -540,7 +540,7 @@ describe("POST /agents", () => {
       payload: {
         name: "GPT Agent",
         role: "analyst",
-        model_config: { model: "gpt-4o", systemPrompt: "Be helpful" },
+        model_config: { provider: "openai", model: "gpt-4o", systemPrompt: "Be helpful" },
       },
     })
 
@@ -548,7 +548,29 @@ describe("POST /agents", () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const body = res.json()
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(body.model_config).toEqual({ model: "gpt-4o", systemPrompt: "Be helpful" })
+    expect(body.model_config).toEqual({
+      provider: "openai",
+      model: "gpt-4o",
+      systemPrompt: "Be helpful",
+    })
+  })
+
+  it("rejects invalid provider/model combinations", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/agents",
+      payload: {
+        name: "Bad Agent",
+        role: "assistant",
+        model_config: { provider: "anthropic", model: "gpt-4o" },
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body: { code: string } = res.json()
+    expect(body.code).toBe("provider_model_invalid")
   })
 
   it("validates required fields", async () => {
@@ -639,6 +661,20 @@ describe("PUT /agents/:id", () => {
     })
 
     expect(res.statusCode).toBe(404)
+  })
+
+  it("rejects ambiguous model-only updates", async () => {
+    const { app } = await buildTestApp()
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/agents/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`,
+      payload: { model_config: { model: "gpt-4o" } },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body: { code: string } = res.json()
+    expect(body.code).toBe("model_provider_ambiguous")
   })
 })
 

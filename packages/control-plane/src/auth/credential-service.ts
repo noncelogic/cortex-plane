@@ -12,6 +12,7 @@
  *   - Credential status tracking + audit logging
  */
 
+import { listSupportedLlmProviders } from "@cortex/shared/llm"
 import { type Kysely, sql } from "kysely"
 
 import type { AuthOAuthConfig, OAuthProviderConfig } from "../config.js"
@@ -54,54 +55,17 @@ export interface ProviderInfo {
   oauthConnectMode?: "redirect" | "popup" | "code_paste"
 }
 
+const LLM_PROVIDER_INFOS: ProviderInfo[] = listSupportedLlmProviders().map((provider) => ({
+  id: provider.id,
+  name: provider.name,
+  authType: provider.authType,
+  description: provider.description,
+  credentialClass: provider.credentialClass,
+  oauthConnectMode: provider.oauthConnectMode,
+}))
+
 export const SUPPORTED_PROVIDERS: ProviderInfo[] = [
-  {
-    id: "google-antigravity",
-    name: "Google Antigravity",
-    authType: "oauth",
-    description: "Claude/Gemini via Google Cloud Antigravity",
-    oauthConnectMode: "popup",
-  },
-  {
-    id: "google-gemini-cli",
-    name: "Google Gemini CLI",
-    authType: "oauth",
-    description: "Gemini models via Google Gemini CLI OAuth",
-    oauthConnectMode: "popup",
-  },
-  {
-    id: "openai-codex",
-    name: "OpenAI Codex",
-    authType: "oauth",
-    description: "GPT models via ChatGPT subscription",
-    oauthConnectMode: "popup",
-  },
-  {
-    id: "github-copilot",
-    name: "GitHub Copilot",
-    authType: "oauth",
-    description: "GPT/Claude models via GitHub Copilot subscription",
-    oauthConnectMode: "popup",
-  },
-  {
-    id: "anthropic",
-    name: "Anthropic",
-    authType: "oauth",
-    description: "Claude models via OAuth",
-    oauthConnectMode: "code_paste",
-  },
-  {
-    id: "openai",
-    name: "OpenAI",
-    authType: "api_key",
-    description: "GPT models via direct API key",
-  },
-  {
-    id: "google-ai-studio",
-    name: "Google AI Studio",
-    authType: "api_key",
-    description: "Gemini models via API key",
-  },
+  ...LLM_PROVIDER_INFOS,
   {
     id: "google-workspace",
     name: "Google Workspace",
@@ -186,6 +150,7 @@ export interface CredentialSummary {
   maskedKey: string | null
   errorCount: number
   lastError: string | null
+  requiresReauth: boolean
   createdAt: string
   updatedAt: string
 }
@@ -207,10 +172,36 @@ function toSummary(cred: ProviderCredential, maskedKey: string | null): Credenti
     maskedKey,
     errorCount: cred.error_count,
     lastError: cred.last_error,
+    requiresReauth: cred.status === "revoked" || cred.status === "expired",
     createdAt: cred.created_at.toISOString(),
     updatedAt: cred.updated_at.toISOString(),
   }
 }
+
+export type AccessTokenFailureCode =
+  | "credential_not_found"
+  | "credential_unavailable"
+  | "reauth_required"
+
+export type AccessTokenResolution =
+  | {
+      ok: true
+      token: string
+      credentialId: string
+      provider: string
+      credentialType: "oauth" | "api_key"
+      status: CredentialStatus
+    }
+  | {
+      ok: false
+      credentialId: string | null
+      provider: string | null
+      credentialType: "oauth" | "api_key" | null
+      status: CredentialStatus
+      code: AccessTokenFailureCode
+      message: string
+      requiresReauth: boolean
+    }
 
 export class CredentialService {
   private readonly masterKey: Buffer
@@ -701,11 +692,11 @@ export class CredentialService {
 
       if (shouldRefresh && cred.refresh_token_enc) {
         const refreshed = await this.refreshToken(cred, userKey)
-        if (refreshed) {
+        if (refreshed.ok) {
           await this.auditAccess(cred, context)
-          return { token: refreshed, credentialId: cred.id }
+          return { token: refreshed.token, credentialId: cred.id }
         }
-        // Refresh failed — fall through to return current token
+        return null
       }
 
       const token = decryptCredential(cred.access_token_enc, userKey)
@@ -717,14 +708,162 @@ export class CredentialService {
     return null
   }
 
+  async resolveCredentialAccessToken(
+    credentialId: string,
+    context?: AuditContext,
+    opts?: { forceRefresh?: boolean },
+  ): Promise<AccessTokenResolution> {
+    const cred = await this.db
+      .selectFrom("provider_credential")
+      .selectAll()
+      .where("id", "=", credentialId)
+      .executeTakeFirst()
+
+    if (!cred) {
+      return {
+        ok: false,
+        credentialId: null,
+        provider: null,
+        credentialType: null,
+        status: "error",
+        code: "credential_not_found",
+        message: "Bound credential was not found",
+        requiresReauth: false,
+      }
+    }
+
+    const userKey = await this.ensureUserKey(cred.user_account_id)
+
+    if (cred.credential_type === "api_key") {
+      if (cred.status !== "active" || !cred.api_key_enc) {
+        return {
+          ok: false,
+          credentialId: cred.id,
+          provider: cred.provider,
+          credentialType: "api_key",
+          status: cred.status,
+          code: "credential_unavailable",
+          message: "Bound API key credential is unavailable",
+          requiresReauth: false,
+        }
+      }
+
+      const token = decryptCredential(cred.api_key_enc, userKey)
+      await this.auditAccess(cred, context)
+      await this.markUsed(cred.id)
+      return {
+        ok: true,
+        token,
+        credentialId: cred.id,
+        provider: cred.provider,
+        credentialType: "api_key",
+        status: cred.status,
+      }
+    }
+
+    if (!cred.access_token_enc) {
+      return {
+        ok: false,
+        credentialId: cred.id,
+        provider: cred.provider,
+        credentialType: "oauth",
+        status: cred.status,
+        code: "credential_unavailable",
+        message: "Bound OAuth credential has no access token",
+        requiresReauth: cred.status === "revoked" || cred.status === "expired",
+      }
+    }
+
+    const shouldRefresh =
+      opts?.forceRefresh ||
+      cred.status !== "active" ||
+      (cred.token_expires_at &&
+        new Date(cred.token_expires_at) < new Date(Date.now() + 5 * 60 * 1000))
+
+    if (shouldRefresh) {
+      const refreshed = await this.refreshToken(cred, userKey)
+      if (!refreshed.ok) return refreshed
+      await this.auditAccess(cred, context)
+      return refreshed
+    }
+
+    if (cred.status === "revoked" || cred.status === "expired") {
+      return {
+        ok: false,
+        credentialId: cred.id,
+        provider: cred.provider,
+        credentialType: "oauth",
+        status: cred.status,
+        code: "reauth_required",
+        message: "Credential requires re-authentication",
+        requiresReauth: true,
+      }
+    }
+
+    const token = decryptCredential(cred.access_token_enc, userKey)
+    await this.auditAccess(cred, context)
+    await this.markUsed(cred.id)
+    return {
+      ok: true,
+      token,
+      credentialId: cred.id,
+      provider: cred.provider,
+      credentialType: "oauth",
+      status: cred.status,
+    }
+  }
+
   /**
    * Refresh an OAuth token and update the stored credential.
    */
-  private async refreshToken(cred: ProviderCredential, userKey: Buffer): Promise<string | null> {
-    if (!cred.refresh_token_enc) return null
+  private async refreshToken(
+    cred: ProviderCredential,
+    userKey: Buffer,
+  ): Promise<AccessTokenResolution> {
+    if (!cred.refresh_token_enc) {
+      const message = "Access token expired and cannot be refreshed. Re-authenticate this provider."
+      const status: CredentialStatus = "expired"
+      await this.db
+        .updateTable("provider_credential")
+        .set({
+          status,
+          error_count: cred.error_count + 1,
+          last_error: message,
+          updated_at: new Date(),
+        })
+        .where("id", "=", cred.id)
+        .execute()
+
+      await this.auditLog(cred.user_account_id, cred.id, "token_expired", cred.provider, {
+        error: message,
+        code: "reauth_required",
+      })
+
+      return {
+        ok: false,
+        credentialId: cred.id,
+        provider: cred.provider,
+        credentialType: "oauth",
+        status,
+        code: "reauth_required",
+        message,
+        requiresReauth: true,
+      }
+    }
 
     const providerConfig = this.getProviderConfig(cred.provider)
-    if (!providerConfig) return null
+    if (!providerConfig) {
+      return {
+        ok: false,
+        credentialId: cred.id,
+        provider: cred.provider,
+        credentialType: "oauth",
+        status: "error",
+        code: "credential_unavailable",
+        message: `OAuth provider '${cred.provider}' is not configured for refresh`,
+        requiresReauth: false,
+      }
+    }
 
     const refreshToken = decryptCredential(cred.refresh_token_enc, userKey)
 
@@ -760,24 +899,43 @@ export class CredentialService {
 
       await this.auditLog(cred.user_account_id, cred.id, "token_refreshed", cred.provider)
 
-      return tokens.access_token
+      return {
+        ok: true,
+        token: tokens.access_token,
+        credentialId: cred.id,
+        provider: cred.provider,
+        credentialType: "oauth",
+        status: "active",
+      }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Unknown refresh error"
+      const errorMsg = classifyRefreshFailure(err)
+      const nextStatus = errorMsg.requiresReauth ? "revoked" : "error"
       await this.db
         .updateTable("provider_credential")
         .set({
           error_count: cred.error_count + 1,
-          last_error: errorMsg,
-          status: "error",
+          last_error: errorMsg.message,
+          status: nextStatus,
           updated_at: new Date(),
         })
         .where("id", "=", cred.id)
         .execute()
 
       await this.auditLog(cred.user_account_id, cred.id, "token_expired", cred.provider, {
-        error: errorMsg,
+        error: errorMsg.message,
+        code: errorMsg.requiresReauth ? "reauth_required" : "refresh_failed",
       })
-      return null
+
+      return {
+        ok: false,
+        credentialId: cred.id,
+        provider: cred.provider,
+        credentialType: "oauth",
+        status: nextStatus,
+        code: errorMsg.requiresReauth ? "reauth_required" : "credential_unavailable",
+        message: errorMsg.message,
+        requiresReauth: errorMsg.requiresReauth,
+      }
     }
   }
 
@@ -1013,15 +1171,15 @@ export class CredentialService {
       // Attempt refresh if possible
       if (cred.refresh_token_enc) {
         const refreshed = await this.refreshToken(cred, userKey)
-        if (refreshed) {
-          token = refreshed
+        if (refreshed.ok) {
+          token = refreshed.token
         } else {
           await this.auditLog(userId, credentialId, "connection_test", cred.provider, {
             result: "token_expired",
           })
           return {
-            status: "token_expired",
-            message: "Token has expired and refresh failed",
+            status: refreshed.requiresReauth ? "auth_failed" : "token_expired",
+            message: refreshed.message,
             tokenExpiresAt: cred.token_expires_at?.toISOString() ?? null,
             lastUsedAt: cred.last_used_at?.toISOString() ?? null,
           }
@@ -1229,5 +1387,35 @@ export class CredentialService {
     }
 
     await this.db.insertInto("credential_audit_log").values(entry).execute()
+  }
+}
+
+function classifyRefreshFailure(err: unknown): { message: string; requiresReauth: boolean } {
+  const raw = err instanceof Error ? err.message : "Unknown refresh error"
+  const lower = raw.toLowerCase()
+
+  if (
+    lower.includes("invalid_grant") ||
+    lower.includes("revoked") ||
+    lower.includes("invalid refresh token") ||
+    lower.includes("refresh token is invalid") ||
+    lower.includes("token has been revoked")
+  ) {
+    return {
+      message: "Refresh token is invalid or revoked. Re-authenticate this provider.",
+      requiresReauth: true,
+    }
+  }
+
+  if (lower.includes("401") || lower.includes("403")) {
+    return {
+      message: "Provider rejected the refresh attempt. Re-authenticate this provider.",
+      requiresReauth: true,
+    }
+  }
+
+  return {
+    message: "Token refresh failed. Try again, or reconnect this provider if the error persists.",
+    requiresReauth: false,
   }
 }

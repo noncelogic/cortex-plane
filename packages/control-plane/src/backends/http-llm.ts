@@ -25,9 +25,9 @@ import type {
   OutputUsageEvent,
   TokenUsage,
 } from "@cortex/shared/backends"
+import { getProviderModelCapability, listModelsForProvider } from "@cortex/shared/llm"
 import OpenAI from "openai"
 
-import { getStaticModels } from "../auth/model-catalogue.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
 import { createAntigravityHandle } from "./antigravity-backend.js"
 import {
@@ -48,9 +48,12 @@ export interface McpDeps {
 
 /**
  * Callback for refreshing an expired OAuth token.
- * Takes the credentialId and returns a fresh access token, or null on failure.
+ * Takes the credentialId and returns either a fresh access token or a
+ * structured failure for clear retry/auth semantics.
  */
-export type TokenRefresher = (credentialId: string) => Promise<string | null>
+export type TokenRefresher = (
+  credentialId: string,
+) => Promise<{ ok: true; token: string } | { ok: false; code: string; message: string }>
 
 type LlmProvider = "anthropic" | "openai"
 
@@ -349,6 +352,16 @@ function is401Error(err: unknown): boolean {
   return err instanceof Error && "status" in err && (err as { status: number }).status === 401
 }
 
+class RefreshRetryError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message)
+    this.name = "RefreshRetryError"
+  }
+}
+
 function accumulateAnthropicUsage(usage: TokenUsage, raw: Anthropic.Usage): void {
   usage.inputTokens += raw.input_tokens
   usage.outputTokens += raw.output_tokens
@@ -427,17 +440,13 @@ function buildModelUnavailableResult(
   provider: string,
   model: string,
 ): ExecutionResult | null {
-  // Keep this strict validation focused to providers with stable static model IDs
-  // in tests/runtime to avoid breaking legacy/default alias behavior elsewhere.
-  if (provider !== "openai-codex") return null
+  const capability = getProviderModelCapability(provider, model)
+  if (capability) return null
 
-  const staticModels = getStaticModels(provider)
-  if (!staticModels || staticModels.length === 0) return null
+  const knownModels = listModelsForProvider(provider)
+  if (knownModels.length === 0) return null
 
-  const available = staticModels.some((m) => m.id === model)
-  if (available) return null
-
-  const availableIds = staticModels.map((m) => m.id)
+  const availableIds = knownModels.map((m) => m.modelId)
   return {
     taskId: task.id,
     status: "failed",
@@ -635,17 +644,18 @@ class AnthropicHandle implements ExecutionHandle {
             this.credentialId
           ) {
             lastRetryTurn = turn
-            const newToken = await this.tokenRefresher(this.credentialId)
-            if (newToken) {
+            const refreshed = await this.tokenRefresher(this.credentialId)
+            if (refreshed.ok) {
               this.client = new Anthropic({
                 ...(this.useAuthToken
-                  ? { authToken: newToken, apiKey: null }
-                  : { apiKey: newToken }),
+                  ? { authToken: refreshed.token, apiKey: null }
+                  : { apiKey: refreshed.token }),
                 ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
               })
               turn-- // retry this turn
               continue
             }
+            throw new RefreshRetryError(refreshed.message, refreshed.code)
           }
 
           throw err
@@ -697,7 +707,11 @@ class AnthropicHandle implements ExecutionHandle {
         durationMs: Date.now() - this.startTime,
         error: {
           message: errorMsg,
-          classification: "transient",
+          classification:
+            err instanceof RefreshRetryError && err.code === "reauth_required"
+              ? "permanent"
+              : "transient",
+          ...(err instanceof RefreshRetryError ? { code: err.code } : {}),
           partialExecution: fullText.length > 0,
         },
       }
@@ -941,15 +955,16 @@ class OpenAIHandle implements ExecutionHandle {
             this.credentialId
           ) {
             lastRetryTurn = turn
-            const newToken = await this.tokenRefresher(this.credentialId)
-            if (newToken) {
+            const refreshed = await this.tokenRefresher(this.credentialId)
+            if (refreshed.ok) {
               this.client = new OpenAI({
-                apiKey: newToken,
+                apiKey: refreshed.token,
                 ...(this.baseUrl ? { baseURL: this.baseUrl } : {}),
               })
               turn-- // retry this turn
               continue
             }
+            throw new RefreshRetryError(refreshed.message, refreshed.code)
           }
           throw err
         }
@@ -1000,7 +1015,11 @@ class OpenAIHandle implements ExecutionHandle {
         durationMs: Date.now() - this.startTime,
         error: {
           message: errorMsg,
-          classification: "transient",
+          classification:
+            err instanceof RefreshRetryError && err.code === "reauth_required"
+              ? "permanent"
+              : "transient",
+          ...(err instanceof RefreshRetryError ? { code: err.code } : {}),
           partialExecution: fullText.length > 0,
         },
       }

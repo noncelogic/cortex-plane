@@ -60,18 +60,18 @@ describe("AgentSettingsPanel component", () => {
   })
 
   it("uses useModels hook for model list in dropdown", () => {
-    expect(content).toContain("availableModels.map")
+    expect(content).toContain("availableProviderModels.map")
     expect(content).toContain("useModels")
   })
 
-  it("offers a Custom option in the model dropdown", () => {
-    expect(content).toContain("Custom...")
-    expect(content).toContain("CUSTOM_MODEL_VALUE")
+  it("loads bound credentials for provider/model filtering", () => {
+    expect(content).toContain("listAgentCredentials")
+    expect(content).toContain("boundProviders")
   })
 
-  it("shows custom text input when Custom is selected", () => {
-    expect(content).toContain('data-testid="agent-settings-model-input"')
-    expect(content).toContain("model === CUSTOM_MODEL_VALUE")
+  it("stores model selection as provider::model", () => {
+    expect(content).toContain("::")
+    expect(content).toContain("makeProviderModelValue")
   })
 
   it("has system prompt textarea when editing", () => {
@@ -100,20 +100,14 @@ describe("AgentSettingsPanel component", () => {
     expect(content).toContain("updateAgent(agent.id, {")
   })
 
-  it("resolves custom model value before saving", () => {
-    expect(content).toContain("resolvedModel")
-    // Ensures __custom__ sentinel is never sent to the API
-    expect(content).toContain("model === CUSTOM_MODEL_VALUE ? customModel.trim() : model.trim()")
+  it("writes canonical provider and model ids on save", () => {
+    expect(content).toContain("newConfig.provider = provider")
+    expect(content).toContain("newConfig.model = model")
   })
 
-  it("displays model label for known models in view mode", () => {
-    expect(content).toContain("modelLabel")
-    expect(content).toContain("availableModels.find")
-  })
-
-  it("pre-selects Custom when current model is not in availableModels", () => {
-    expect(content).toContain("isKnownModel")
-    expect(content).toContain("availableModels.some")
+  it("displays provider-aware model details in view mode", () => {
+    expect(content).toContain("currentProviderModel")
+    expect(content).toContain("providerId")
   })
 })
 
@@ -130,7 +124,7 @@ describe("Deploy modal model selector", () => {
 
   it("has model state", () => {
     expect(content).toContain('useState("")')
-    expect(content).toContain("setModel")
+    expect(content).toContain("setSelection")
   })
 
   it("uses a select element for model selection", () => {
@@ -139,7 +133,7 @@ describe("Deploy modal model selector", () => {
 
   it("uses useModels hook for dynamic model list", () => {
     expect(content).toContain("useModels")
-    expect(content).toContain("models")
+    expect(content).toContain("providerModels")
   })
 
   it("shows empty state when no models available", () => {
@@ -148,7 +142,8 @@ describe("Deploy modal model selector", () => {
   })
 
   it("includes model in model_config when building request body", () => {
-    expect(content).toContain("modelConfig.model = model.trim()")
+    expect(content).toContain("modelConfig.provider = provider")
+    expect(content).toContain("modelConfig.model = model")
   })
 
   it("includes systemPrompt in model_config when building request body", () => {
@@ -156,11 +151,11 @@ describe("Deploy modal model selector", () => {
   })
 
   it("resets model on form reset", () => {
-    expect(content).toContain('setModel("")')
+    expect(content).toContain('setSelection("")')
   })
 
   it("requires model for form submission", () => {
-    expect(content).toContain("!model.trim()")
+    expect(content).toContain("!selection.trim()")
   })
 })
 
@@ -170,23 +165,30 @@ describe("Deploy modal model selector", () => {
 
 describe("model_config construction", () => {
   function buildModelConfig(
-    model: string,
+    selection: string,
     systemPrompt: string,
   ): Record<string, unknown> | undefined {
     const cfg: Record<string, unknown> = {}
-    if (model.trim()) cfg.model = model.trim()
+    const [providerPart, modelPart] = selection.split("::")
+    const provider = providerPart?.trim()
+    const model = modelPart?.trim()
+    if (provider && model) {
+      cfg.provider = provider
+      cfg.model = model
+    }
     if (systemPrompt.trim()) cfg.systemPrompt = systemPrompt.trim()
     return Object.keys(cfg).length > 0 ? cfg : undefined
   }
 
   it("includes model when selected", () => {
-    const cfg = buildModelConfig("claude-sonnet-4-6", "")
-    expect(cfg).toEqual({ model: "claude-sonnet-4-6" })
+    const cfg = buildModelConfig("anthropic::claude-sonnet-4-5", "")
+    expect(cfg).toEqual({ provider: "anthropic", model: "claude-sonnet-4-5" })
   })
 
   it("includes both model and systemPrompt", () => {
-    const cfg = buildModelConfig("gpt-4o", "You are a helpful assistant")
+    const cfg = buildModelConfig("openai::gpt-4o", "You are a helpful assistant")
     expect(cfg).toEqual({
+      provider: "openai",
       model: "gpt-4o",
       systemPrompt: "You are a helpful assistant",
     })
@@ -197,8 +199,8 @@ describe("model_config construction", () => {
   })
 
   it("trims whitespace from model and systemPrompt", () => {
-    const cfg = buildModelConfig("  claude-opus-4-6  ", "  Hello  ")
-    expect(cfg).toEqual({ model: "claude-opus-4-6", systemPrompt: "Hello" })
+    const cfg = buildModelConfig(" openai::gpt-4o ", "  Hello  ")
+    expect(cfg).toEqual({ provider: "openai", model: "gpt-4o", systemPrompt: "Hello" })
   })
 })
 
@@ -209,13 +211,18 @@ describe("model_config construction", () => {
 describe("model_config edit save logic", () => {
   function buildSaveConfig(
     existing: Record<string, unknown>,
-    resolvedModel: string,
+    selection: string,
     systemPrompt: string,
   ): Record<string, unknown> {
     const newConfig: Record<string, unknown> = { ...existing }
-    if (resolvedModel) {
-      newConfig.model = resolvedModel
+    const [providerPart, modelPart] = selection.split("::")
+    const provider = providerPart?.trim()
+    const model = modelPart?.trim()
+    if (provider && model) {
+      newConfig.provider = provider
+      newConfig.model = model
     } else {
+      delete newConfig.provider
       delete newConfig.model
     }
     if (systemPrompt.trim()) {
@@ -228,8 +235,8 @@ describe("model_config edit save logic", () => {
 
   it("updates model while preserving other fields", () => {
     const existing = { model: "old-model", max_tokens: 4096, provider: "anthropic" }
-    const result = buildSaveConfig(existing, "claude-opus-4-6", "")
-    expect(result).toEqual({ model: "claude-opus-4-6", max_tokens: 4096, provider: "anthropic" })
+    const result = buildSaveConfig(existing, "openai::gpt-4o", "")
+    expect(result).toEqual({ model: "gpt-4o", max_tokens: 4096, provider: "openai" })
   })
 
   it("removes model when empty", () => {
@@ -239,21 +246,29 @@ describe("model_config edit save logic", () => {
   })
 
   it("sets systemPrompt while preserving model", () => {
-    const existing = { model: "claude-sonnet-4-6" }
-    const result = buildSaveConfig(existing, "claude-sonnet-4-6", "Be helpful")
-    expect(result).toEqual({ model: "claude-sonnet-4-6", systemPrompt: "Be helpful" })
+    const existing = { provider: "anthropic", model: "claude-sonnet-4-5" }
+    const result = buildSaveConfig(existing, "anthropic::claude-sonnet-4-5", "Be helpful")
+    expect(result).toEqual({
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+      systemPrompt: "Be helpful",
+    })
   })
 
   it("removes systemPrompt when empty", () => {
-    const existing = { model: "gpt-4o", systemPrompt: "old prompt" }
-    const result = buildSaveConfig(existing, "gpt-4o", "")
-    expect(result).toEqual({ model: "gpt-4o" })
+    const existing = { provider: "openai", model: "gpt-4o", systemPrompt: "old prompt" }
+    const result = buildSaveConfig(existing, "openai::gpt-4o", "")
+    expect(result).toEqual({ provider: "openai", model: "gpt-4o" })
   })
 
-  it("handles custom model id correctly", () => {
+  it("replaces provider/model pair correctly", () => {
     const existing = {}
-    const result = buildSaveConfig(existing, "custom-model-v2", "Custom prompt")
-    expect(result).toEqual({ model: "custom-model-v2", systemPrompt: "Custom prompt" })
+    const result = buildSaveConfig(existing, "google-ai-studio::gemini-2.5-pro", "Custom prompt")
+    expect(result).toEqual({
+      provider: "google-ai-studio",
+      model: "gemini-2.5-pro",
+      systemPrompt: "Custom prompt",
+    })
   })
 })
 
@@ -301,7 +316,34 @@ describe("listModels", () => {
       { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", providers: ["anthropic"] },
       { id: "gpt-4o", label: "GPT-4o", providers: ["openai"] },
     ]
-    mockFetchResponse({ models: catalogue })
+    mockFetchResponse({
+      models: catalogue,
+      providerModels: [
+        {
+          providerId: "anthropic",
+          modelId: "claude-sonnet-4-6",
+          label: "Claude Sonnet 4.6",
+          api: "messages",
+          reasoning: true,
+          input: ["text"],
+          contextWindow: 200000,
+          maxTokens: 8192,
+          baseUrl: "https://api.anthropic.com",
+        },
+      ],
+      providers: [
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          description: "Claude models via OAuth",
+          authType: "oauth",
+          oauthConnectMode: "code_paste",
+          credentialClass: "llm_provider",
+          isOAuthBacked: true,
+          isStaticApiKey: false,
+        },
+      ],
+    })
 
     const { listModels } = await import("@/lib/api-client")
     const result = await listModels()

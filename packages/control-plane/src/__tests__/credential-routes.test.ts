@@ -61,6 +61,7 @@ function makeSummary(overrides: Partial<CredentialSummary> = {}): CredentialSumm
     maskedKey: "****5678",
     errorCount: 0,
     lastError: null,
+    requiresReauth: false,
     createdAt: "2026-03-01T00:00:00.000Z",
     updatedAt: "2026-03-01T00:00:00.000Z",
     ...overrides,
@@ -585,6 +586,7 @@ describe("GET /credentials — credential health fields", () => {
     expect(cred.status).toBe("active")
     expect(cred.errorCount).toBe(0)
     expect(cred.lastError).toBeNull()
+    expect(cred.requiresReauth).toBe(false)
     expect(cred.lastUsedAt).toBe("2026-03-09T10:00:00.000Z")
   })
 
@@ -620,8 +622,39 @@ describe("GET /credentials — credential health fields", () => {
     expect(cred.status).toBe("error")
     expect(cred.errorCount).toBe(3)
     expect(cred.lastError).toBe("token refresh failed: invalid_grant")
+    expect(cred.requiresReauth).toBe(false)
     expect(cred.tokenExpiresAt).toBe("2026-03-08T12:00:00.000Z")
     expect(cred.lastRefreshAt).toBe("2026-03-08T11:30:00.000Z")
+  })
+
+  it("returns health fields for a revoked OAuth credential", async () => {
+    const revokedCred = makeSummary({
+      provider: "anthropic",
+      credentialType: "oauth",
+      credentialClass: "llm_provider",
+      status: "revoked",
+      errorCount: 1,
+      lastError: "Refresh token is invalid or revoked. Re-authenticate this provider.",
+      requiresReauth: true,
+    })
+
+    const { app } = await buildTestApp({
+      credentialServiceOverrides: {
+        listCredentials: vi.fn().mockResolvedValue([revokedCred]),
+      },
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/credentials",
+      headers: withSession(),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const cred = res.json().credentials[0]
+    expect(cred.status).toBe("revoked")
+    expect(cred.requiresReauth).toBe(true)
+    expect(cred.lastError).toContain("Re-authenticate")
   })
 
   it("returns health fields for an OAuth credential with upcoming expiry", async () => {
