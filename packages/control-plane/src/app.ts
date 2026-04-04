@@ -122,6 +122,12 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // resolve per-job LLM credentials from agent_credential_binding (#444).
   const credentialService = config.auth ? new CredentialService(db, config.auth) : undefined
 
+  // Browser observation service + orchestration services
+  const observationService = new BrowserObservationService()
+  const authHandoffService = new AuthHandoffService()
+  const traceCaptureService = new TraceCaptureService()
+  const screenshotModeService = new ScreenshotModeService(observationService)
+
   // Start Graphile Worker alongside Fastify — shared pg.Pool
   const runner = await createWorker({
     pgPool: pool,
@@ -135,6 +141,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     credentialService,
     eventEmitter,
     executionRegistry,
+    observationService,
   })
 
   // Worker utils for job enqueueing from routes
@@ -143,12 +150,6 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     db,
     threshold: config.memoryExtractThreshold,
   })
-
-  // Browser observation service + orchestration services
-  const observationService = new BrowserObservationService()
-  const authHandoffService = new AuthHandoffService()
-  const traceCaptureService = new TraceCaptureService()
-  const screenshotModeService = new ScreenshotModeService(observationService)
 
   // WebSocket support (used by VNC proxy and future WS endpoints)
   await app.register(fastifyWebSocket)

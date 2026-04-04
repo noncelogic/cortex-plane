@@ -130,6 +130,7 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
             vncUrl={session.vncUrl}
             status={session.status}
             latencyMs={session.latencyMs}
+            errorMessage={session.errorMessage}
             latestScreenshot={latestScreenshot}
             onReconnect={handleReconnect}
           />
@@ -200,6 +201,7 @@ export default function BrowserPage({ params }: BrowserPageProps): React.JSX.Ele
                 vncUrl={session.vncUrl}
                 status={session.status}
                 latencyMs={session.latencyMs}
+                errorMessage={session.errorMessage}
                 latestScreenshot={latestScreenshot}
                 onReconnect={handleReconnect}
               />

@@ -230,6 +230,16 @@ async function buildTestApp(
       db,
       enqueueJob: vi.fn().mockResolvedValue(undefined),
       observationService: {
+        getSession: vi.fn().mockReturnValue({
+          agentId: "agent-1",
+          status: "connected",
+          sessionId: "session-agent-1",
+          targetId: "target-agent-1",
+          currentUrl: "https://example.com",
+          currentTitle: "Example",
+          errorMessage: null,
+          lastHeartbeat: new Date().toISOString(),
+        }),
         getStreamStatus: vi.fn().mockResolvedValue({
           agentId: "agent-1",
           quality: "live",
@@ -267,6 +277,16 @@ async function buildTestAppWithSync(memorySyncService: { sync: ReturnType<typeof
       db,
       enqueueJob: vi.fn().mockResolvedValue(undefined),
       observationService: {
+        getSession: vi.fn().mockReturnValue({
+          agentId: "agent-1",
+          status: "disconnected",
+          sessionId: null,
+          targetId: null,
+          currentUrl: null,
+          currentTitle: null,
+          errorMessage: null,
+          lastHeartbeat: null,
+        }),
         getStreamStatus: vi.fn().mockResolvedValue(null),
         listTabs: vi.fn().mockResolvedValue(null),
       } as never,

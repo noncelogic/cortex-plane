@@ -10,6 +10,7 @@ interface BrowserViewportProps {
   vncUrl: string | null
   status: BrowserSessionStatus
   latencyMs?: number
+  errorMessage?: string
   latestScreenshot?: Screenshot | null
   onReconnect?: () => void
 }
@@ -18,6 +19,7 @@ export function BrowserViewport({
   vncUrl,
   status,
   latencyMs,
+  errorMessage,
   latestScreenshot,
   onReconnect,
 }: BrowserViewportProps): React.JSX.Element {
@@ -42,7 +44,12 @@ export function BrowserViewport({
     >
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-chrome-border bg-chrome-bg px-3 py-2">
-        <ConnectionStatus status={status} latencyMs={latencyMs} onReconnect={onReconnect} />
+        <ConnectionStatus
+          status={status}
+          latencyMs={latencyMs}
+          errorMessage={errorMessage}
+          onReconnect={onReconnect}
+        />
 
         <div className="flex items-center gap-1">
           <button
@@ -90,7 +97,11 @@ export function BrowserViewport({
         ) : latestScreenshot ? (
           <ScreenshotFallback screenshot={latestScreenshot} />
         ) : (
-          <ViewportPlaceholder status={status} onReconnect={onReconnect} />
+          <ViewportPlaceholder
+            status={status}
+            errorMessage={errorMessage}
+            onReconnect={onReconnect}
+          />
         )}
       </div>
 
@@ -140,9 +151,11 @@ function ScreenshotFallback({ screenshot }: { screenshot: Screenshot }): React.J
 
 function ViewportPlaceholder({
   status,
+  errorMessage,
   onReconnect,
 }: {
   status: BrowserSessionStatus
+  errorMessage?: string
   onReconnect?: () => void
 }): React.JSX.Element {
   return (
@@ -158,7 +171,7 @@ function ViewportPlaceholder({
         </p>
         <p className="mt-1 text-xs text-slate-500">
           {status === "error"
-            ? "Failed to connect to the browser session"
+            ? (errorMessage ?? "Failed to connect to the browser session")
             : "Waiting for agent to start a browser session"}
         </p>
       </div>

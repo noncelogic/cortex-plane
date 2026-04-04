@@ -34,6 +34,7 @@ export const BrowserSessionSchema = z.object({
   tabs: z.array(BrowserTabSchema),
   latencyMs: z.number(),
   lastHeartbeat: z.string().optional(),
+  errorMessage: z.string().optional(),
 })
 
 export const BrowserEventSchema = z.object({

@@ -151,6 +151,16 @@ async function buildTestApp(
       db,
       enqueueJob: vi.fn().mockResolvedValue(undefined),
       observationService: {
+        getSession: vi.fn().mockReturnValue({
+          agentId: "agent-1",
+          status: "connected",
+          sessionId: "session-agent-1",
+          targetId: "target-agent-1",
+          currentUrl: "https://example.com",
+          currentTitle: "Example",
+          errorMessage: null,
+          lastHeartbeat: new Date().toISOString(),
+        }),
         getStreamStatus: vi.fn().mockResolvedValue({
           agentId: "agent-1",
           quality: "live",
@@ -188,6 +198,16 @@ async function buildTestAppWithSync(memorySyncService: { sync: ReturnType<typeof
       db,
       enqueueJob: vi.fn().mockResolvedValue(undefined),
       observationService: {
+        getSession: vi.fn().mockReturnValue({
+          agentId: "agent-1",
+          status: "disconnected",
+          sessionId: null,
+          targetId: null,
+          currentUrl: null,
+          currentTitle: null,
+          errorMessage: null,
+          lastHeartbeat: null,
+        }),
         getStreamStatus: vi.fn().mockResolvedValue(null),
         listTabs: vi.fn().mockResolvedValue(null),
       } as never,
@@ -533,6 +553,46 @@ describe("dashboard routes", () => {
       thumbnailUrl: "/thumbs/shot1.jpg",
       fullUrl: "/shots/shot1.png",
       dimensions: { width: 1920, height: 1080 },
+    })
+  })
+
+  it("returns browser runtime error state from observation service", async () => {
+    const app = Fastify({ logger: false })
+    const db = mockDb()
+
+    await app.register(
+      dashboardRoutes({
+        db,
+        enqueueJob: vi.fn().mockResolvedValue(undefined),
+        observationService: {
+          getSession: vi.fn().mockReturnValue({
+            agentId: "agent-1",
+            status: "error",
+            sessionId: null,
+            targetId: null,
+            currentUrl: null,
+            currentTitle: null,
+            errorMessage: "[BROWSER_CONNECTION_FAILED] WebSocket connection timeout",
+            lastHeartbeat: "2026-03-10T12:01:00.000Z",
+          }),
+          getStreamStatus: vi.fn().mockResolvedValue(null),
+          listTabs: vi.fn().mockResolvedValue(null),
+        } as never,
+        contentService: {
+          list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+          publish: vi.fn().mockResolvedValue(undefined),
+          archive: vi.fn().mockResolvedValue(undefined),
+        } as never,
+      }),
+    )
+
+    const res = await app.inject({ method: "GET", url: "/agents/agent-1/browser" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({
+      agentId: "agent-1",
+      status: "error",
+      errorMessage: "[BROWSER_CONNECTION_FAILED] WebSocket connection timeout",
+      tabs: [],
     })
   })
 

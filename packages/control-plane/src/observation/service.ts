@@ -50,8 +50,50 @@ interface AgentObservationState {
   traceOptions: TraceRecordingOptions | null
   /** WebSocket connection to CDP for this agent. */
   cdpWs: WebSocket | null
+  sessionStatus: BrowserRuntimeStatus
+  sessionId: string | null
+  targetId: string | null
+  currentUrl: string | null
+  currentTitle: string | null
+  lastError: string | null
+  lastHeartbeat: string | null
   /** Pending annotation callbacks. */
   annotationListeners: Map<string, (event: AnnotationEvent) => void>
+}
+
+export type BrowserRuntimeStatus = "connecting" | "connected" | "disconnected" | "error"
+
+export interface BrowserRuntimeSession {
+  agentId: string
+  status: BrowserRuntimeStatus
+  sessionId: string | null
+  targetId: string | null
+  currentUrl: string | null
+  currentTitle: string | null
+  errorMessage: string | null
+  lastHeartbeat: string | null
+}
+
+export interface BrowserNavigateResult {
+  agentId: string
+  url: string
+  title: string
+  timestamp: string
+  session: BrowserRuntimeSession
+  tabs: TabInfo[]
+}
+
+export class BrowserActionError extends Error {
+  constructor(
+    readonly code:
+      | "BROWSER_PROVISION_FAILED"
+      | "BROWSER_CONNECTION_FAILED"
+      | "BROWSER_ACTION_FAILED",
+    message: string,
+  ) {
+    super(`[${code}] ${message}`)
+    this.name = "BrowserActionError"
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +118,20 @@ export class BrowserObservationService {
     this.vncPort = config.vncPort ?? DEFAULT_VNC_PORT
     this.traceDir = config.traceDir ?? DEFAULT_TRACE_DIR
     this.assetDir = config.assetDir ?? DEFAULT_ASSET_DIR
+  }
+
+  getSession(agentId: string): BrowserRuntimeSession {
+    const state = this.getAgentState(agentId)
+    return {
+      agentId,
+      status: state.sessionStatus,
+      sessionId: state.sessionId,
+      targetId: state.targetId,
+      currentUrl: state.currentUrl,
+      currentTitle: state.currentTitle,
+      errorMessage: state.lastError,
+      lastHeartbeat: state.lastHeartbeat,
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -206,6 +262,13 @@ export class BrowserObservationService {
         fromSurface: true,
       })
 
+      this.markConnected(agentId, {
+        sessionId,
+        targetId: pageTarget.targetId,
+        url: pageTarget.url,
+        title: pageTarget.title,
+      })
+
       return {
         agentId,
         data: result.data,
@@ -216,6 +279,78 @@ export class BrowserObservationService {
         url: pageTarget.url,
         title: pageTarget.title,
       }
+    } finally {
+      ws.close()
+    }
+  }
+
+  async navigate(agentId: string, url: string): Promise<BrowserNavigateResult> {
+    const state = this.getAgentState(agentId)
+    state.sessionStatus = "connecting"
+    state.lastError = null
+    state.lastHeartbeat = new Date().toISOString()
+
+    let wsEndpoint: string
+    try {
+      wsEndpoint = await this.discoverCdpWsEndpoint()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Browser sidecar not provisioned"
+      this.markError(agentId, message)
+      throw new BrowserActionError("BROWSER_PROVISION_FAILED", message)
+    }
+
+    const ws = new WebSocket(wsEndpoint)
+
+    try {
+      await this.waitForWsOpen(ws)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Browser connection failed"
+      this.markError(agentId, message)
+      throw new BrowserActionError("BROWSER_CONNECTION_FAILED", message)
+    }
+
+    try {
+      const page = await this.attachToPage(ws)
+      await this.cdpSendSession(ws, page.sessionId, "Page.enable", {})
+
+      const navigateResult = await this.cdpSendSession<{ errorText?: string }>(
+        ws,
+        page.sessionId,
+        "Page.navigate",
+        { url },
+      )
+      if (navigateResult.errorText) {
+        throw new BrowserActionError("BROWSER_ACTION_FAILED", navigateResult.errorText)
+      }
+
+      await this.waitForSessionEvent(ws, page.sessionId, "Page.loadEventFired", 10_000)
+
+      const pageInfo = await this.getTargetInfo(ws, page.targetId)
+      const tabs = await this.listTabs(agentId)
+
+      this.markConnected(agentId, {
+        sessionId: page.sessionId,
+        targetId: page.targetId,
+        url: pageInfo?.url ?? url,
+        title: pageInfo?.title ?? pageInfo?.url ?? url,
+      })
+
+      return {
+        agentId,
+        url: pageInfo?.url ?? url,
+        title: pageInfo?.title ?? pageInfo?.url ?? url,
+        timestamp: new Date().toISOString(),
+        session: this.getSession(agentId),
+        tabs: tabs.tabs,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Browser action failed"
+      this.markError(agentId, message)
+
+      if (error instanceof BrowserActionError) {
+        throw error
+      }
+      throw new BrowserActionError("BROWSER_ACTION_FAILED", message)
     } finally {
       ws.close()
     }
@@ -253,6 +388,14 @@ export class BrowserObservationService {
         title: page.title,
         active: index === 0, // First page is typically active
       }))
+
+      if (pages[0]) {
+        this.markConnected(agentId, {
+          targetId: pages[0].targetId,
+          url: pages[0].url,
+          title: pages[0].title,
+        })
+      }
 
       return {
         agentId,
@@ -487,6 +630,13 @@ export class BrowserObservationService {
     if (state.cdpWs) {
       state.cdpWs.close()
     }
+    state.sessionStatus = "disconnected"
+    state.sessionId = null
+    state.targetId = null
+    state.currentUrl = null
+    state.currentTitle = null
+    state.lastError = null
+    state.lastHeartbeat = new Date().toISOString()
     state.annotationListeners.clear()
     this.agents.delete(agentId)
     return Promise.resolve()
@@ -506,7 +656,9 @@ export class BrowserObservationService {
   // -------------------------------------------------------------------------
 
   private async discoverCdpWsEndpoint(): Promise<string> {
-    const res = await fetch(`http://${this.cdpHost}:${this.cdpPort}/json/version`)
+    const res = await fetch(`http://${this.cdpHost}:${this.cdpPort}/json/version`, {
+      signal: AbortSignal.timeout(5_000),
+    })
     if (!res.ok) {
       throw new Error(`CDP version endpoint returned ${res.status}`)
     }
@@ -541,6 +693,33 @@ export class BrowserObservationService {
         clearTimeout(timeout)
         reject(err)
       })
+    })
+  }
+
+  private waitForSessionEvent(
+    ws: WebSocket,
+    sessionId: string,
+    method: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error(`Timed out waiting for ${method}`)),
+        timeoutMs,
+      )
+
+      const handler = (rawMsg: Buffer | string) => {
+        const msg = JSON.parse(rawMsg.toString()) as {
+          method?: string
+          sessionId?: string
+        }
+        if (msg.method !== method || msg.sessionId !== sessionId) return
+        clearTimeout(timeout)
+        ws.off("message", handler)
+        resolve()
+      }
+
+      ws.on("message", handler)
     })
   }
 
@@ -605,6 +784,80 @@ export class BrowserObservationService {
     })
   }
 
+  private async attachToPage(
+    ws: WebSocket,
+  ): Promise<{ sessionId: string; targetId: string; url: string; title: string }> {
+    const targets = await this.cdpSend<{
+      targetInfos: Array<{ type: string; targetId: string; url: string; title: string }>
+    }>(ws, "Target.getTargets", {})
+    let pageTarget = targets.targetInfos.find((t) => t.type === "page")
+
+    if (!pageTarget) {
+      const created = await this.cdpSend<{ targetId: string }>(ws, "Target.createTarget", {
+        url: "about:blank",
+      })
+      pageTarget = {
+        type: "page",
+        targetId: created.targetId,
+        url: "about:blank",
+        title: "about:blank",
+      }
+    }
+
+    const { sessionId } = await this.cdpSend<{ sessionId: string }>(ws, "Target.attachToTarget", {
+      targetId: pageTarget.targetId,
+      flatten: true,
+    })
+
+    return {
+      sessionId,
+      targetId: pageTarget.targetId,
+      url: pageTarget.url,
+      title: pageTarget.title,
+    }
+  }
+
+  private async getTargetInfo(
+    ws: WebSocket,
+    targetId: string,
+  ): Promise<{ url: string; title: string } | null> {
+    const targets = await this.cdpSend<{
+      targetInfos: Array<{ type: string; targetId: string; url: string; title: string }>
+    }>(ws, "Target.getTargets", {})
+    const pageTarget = targets.targetInfos.find((target) => target.targetId === targetId)
+    if (!pageTarget) return null
+    return {
+      url: pageTarget.url,
+      title: pageTarget.title,
+    }
+  }
+
+  private markConnected(
+    agentId: string,
+    update: {
+      sessionId?: string
+      targetId?: string
+      url?: string
+      title?: string
+    },
+  ): void {
+    const state = this.getAgentState(agentId)
+    state.sessionStatus = "connected"
+    if (update.sessionId !== undefined) state.sessionId = update.sessionId
+    if (update.targetId !== undefined) state.targetId = update.targetId
+    if (update.url !== undefined) state.currentUrl = update.url
+    if (update.title !== undefined) state.currentTitle = update.title
+    state.lastError = null
+    state.lastHeartbeat = new Date().toISOString()
+  }
+
+  private markError(agentId: string, message: string): void {
+    const state = this.getAgentState(agentId)
+    state.sessionStatus = "error"
+    state.lastError = message
+    state.lastHeartbeat = new Date().toISOString()
+  }
+
   // -------------------------------------------------------------------------
   // Private: Per-agent state
   // -------------------------------------------------------------------------
@@ -617,6 +870,13 @@ export class BrowserObservationService {
         traceStartedAt: null,
         traceOptions: null,
         cdpWs: null,
+        sessionStatus: "disconnected",
+        sessionId: null,
+        targetId: null,
+        currentUrl: null,
+        currentTitle: null,
+        lastError: null,
+        lastHeartbeat: null,
         annotationListeners: new Map(),
       }
       this.agents.set(agentId, state)
