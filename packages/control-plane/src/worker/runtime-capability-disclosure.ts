@@ -1,5 +1,7 @@
 import type { ExecutionTask } from "@cortex/shared/backends"
 
+import type { RuntimeToolManifestRecord } from "../capabilities/contracts.js"
+
 type CapabilityState = "available" | "unavailable" | "unknown"
 
 const BROWSER_TOOL_PATTERN = /(browser|playwright|chrome|chromium|cdp)/i
@@ -7,6 +9,7 @@ const BROWSER_TOOL_PATTERN = /(browser|playwright|chrome|chromium|cdp)/i
 export interface RuntimeCapabilityDisclosureInput {
   task: ExecutionTask
   actualToolNames?: string[]
+  runtimeToolManifest?: RuntimeToolManifestRecord
 }
 
 function uniqueSorted(values: string[]): string[] {
@@ -47,6 +50,13 @@ function buildMcpLine(actualToolNames: string[] | undefined): string {
   return "- MCP tools exposed by Cortex: unknown."
 }
 
+function manifestToToolNames(
+  runtimeToolManifest?: RuntimeToolManifestRecord,
+): string[] | undefined {
+  if (!runtimeToolManifest) return undefined
+  return runtimeToolManifest.tools.map((tool) => tool.runtimeName)
+}
+
 function buildBrowserLine(actualToolNames: string[] | undefined): string {
   const browser = classifyToolState(actualToolNames, (toolName) =>
     BROWSER_TOOL_PATTERN.test(toolName),
@@ -81,7 +91,10 @@ export function listToolNamesFromRegistryLike(registry: {
 }
 
 export function buildRuntimeCapabilityDisclosure(input: RuntimeCapabilityDisclosureInput): string {
-  const actualToolNames = input.actualToolNames ? uniqueSorted(input.actualToolNames) : undefined
+  const manifestNames = manifestToToolNames(input.runtimeToolManifest)
+  const actualToolNames = uniqueSorted(input.actualToolNames ?? manifestNames ?? [])
+  const knownToolNames =
+    input.actualToolNames || input.runtimeToolManifest ? actualToolNames : undefined
   const { task } = input
 
   const lines = [
@@ -90,13 +103,13 @@ export function buildRuntimeCapabilityDisclosure(input: RuntimeCapabilityDisclos
     `- Filesystem scope: this run is configured with ${task.context.workspacePath} as its workspace root. Access outside that workspace is unknown unless verified during execution.`,
     `- Network access: ${task.constraints.networkAccess ? "available" : "unavailable"}.`,
     `- Shell execution: ${task.constraints.shellAccess ? "available" : "unavailable"}.`,
-    buildMcpLine(actualToolNames),
-    buildBrowserLine(actualToolNames),
+    buildMcpLine(knownToolNames),
+    buildBrowserLine(knownToolNames),
     buildCommandAvailabilityLine(task.constraints.shellAccess),
   ]
 
-  if (actualToolNames) {
-    lines.push(`- Exposed tool names: ${summarizeToolNames(actualToolNames)}.`)
+  if (knownToolNames) {
+    lines.push(`- Exposed tool names: ${summarizeToolNames(knownToolNames)}.`)
   } else {
     lines.push("- Exposed tool names: unknown.")
   }

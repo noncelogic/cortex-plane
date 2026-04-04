@@ -76,6 +76,22 @@ describe("CapabilityAssembler", () => {
       expect(tools).toEqual([])
     })
 
+    it("fails closed for configured tools without an executable definition", async () => {
+      const registry = new ToolRegistry()
+      registry.register({
+        name: "broken_tool",
+        description: "broken",
+        inputSchema: { type: "object" },
+        execute: undefined as never,
+      })
+
+      const db = mockDb([makeBinding({ tool_ref: "broken_tool" })])
+      const assembler = new CapabilityAssembler({ db, defaultRegistry: registry })
+
+      const tools = await assembler.resolveEffectiveTools("agent-1")
+      expect(tools).toEqual([])
+    })
+
     it("resolves MCP tools via McpToolRouter", async () => {
       const mcpToolDef = {
         name: "mcp:slack:chat_post",
@@ -161,6 +177,7 @@ describe("CapabilityAssembler", () => {
           toolRef: "echo",
           bindingId: "b1",
           approvalPolicy: "auto",
+          source: { kind: "builtin" },
           toolDefinition: echoTool,
         },
       ]
@@ -198,6 +215,7 @@ describe("CapabilityAssembler", () => {
           toolRef: "echo",
           bindingId: "b1",
           approvalPolicy: "auto",
+          source: { kind: "builtin" },
           toolDefinition: echoTool,
         },
       ]
@@ -222,6 +240,7 @@ describe("CapabilityGuard", () => {
       toolRef: "echo",
       bindingId: "b1",
       approvalPolicy: "auto",
+      source: { kind: "builtin" },
       toolDefinition: echoTool,
     }
 
@@ -240,6 +259,7 @@ describe("CapabilityGuard", () => {
       bindingId: "b1",
       approvalPolicy: "auto",
       dataScope: { calendars: ["primary"] },
+      source: { kind: "builtin" },
       toolDefinition: {
         name: "test",
         description: "test",
@@ -264,6 +284,7 @@ describe("CapabilityGuard", () => {
       toolRef: "echo",
       bindingId: "b1",
       approvalPolicy: "always_approve",
+      source: { kind: "builtin" },
       toolDefinition: echoTool,
     }
 

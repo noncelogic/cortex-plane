@@ -15,6 +15,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import type { Kysely } from "kysely"
 
 import type { SessionService } from "../auth/session-service.js"
+import type { CapabilityAssembler } from "../capabilities/index.js"
+import { toEffectiveToolContract } from "../capabilities/index.js"
 import type { Database, ToolApprovalPolicy } from "../db/types.js"
 import { createRequireAuth, createRequireRole, type PreHandler } from "../middleware/auth.js"
 import type { AuthConfig, AuthenticatedRequest } from "../middleware/types.js"
@@ -78,10 +80,11 @@ export interface AgentToolBindingRouteDeps {
   db: Kysely<Database>
   authConfig: AuthConfig
   sessionService?: SessionService
+  capabilityAssembler?: CapabilityAssembler
 }
 
 export function agentToolBindingRoutes(deps: AgentToolBindingRouteDeps) {
-  const { db, authConfig, sessionService } = deps
+  const { db, authConfig, sessionService, capabilityAssembler } = deps
 
   const requireAuth: PreHandler = createRequireAuth({
     config: authConfig,
@@ -635,27 +638,12 @@ export function agentToolBindingRoutes(deps: AgentToolBindingRouteDeps) {
           return reply.status(404).send({ error: "not_found", message: "Agent not found" })
         }
 
-        // Return enabled bindings as effective tools.
-        // When CapabilityAssembler (#302) is integrated, this will call
-        // assembler.resolveEffectiveTools(agentId) instead.
-        const bindings = await db
-          .selectFrom("agent_tool_binding")
-          .selectAll()
-          .where("agent_id", "=", agentId)
-          .where("enabled", "=", true)
-          .orderBy("created_at", "asc")
-          .execute()
+        const effectiveTools = capabilityAssembler
+          ? await capabilityAssembler.resolveEffectiveTools(agentId)
+          : []
 
         return reply.status(200).send({
-          tools: bindings.map((b) => ({
-            toolRef: b.tool_ref,
-            bindingId: b.id,
-            approvalPolicy: b.approval_policy,
-            approvalCondition: b.approval_condition,
-            rateLimit: b.rate_limit,
-            costBudget: b.cost_budget,
-            dataScope: b.data_scope,
-          })),
+          tools: effectiveTools.map(toEffectiveToolContract),
           assembledAt: new Date().toISOString(),
         })
       },

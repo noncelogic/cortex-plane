@@ -18,7 +18,7 @@ import type {
 import { describe, expect, it, vi } from "vitest"
 
 import type { CredentialService } from "../auth/credential-service.js"
-import { ToolRegistry } from "../backends/tool-executor.js"
+import { echoTool, ToolRegistry } from "../backends/tool-executor.js"
 import { type AgentExecuteDeps, createAgentExecuteTask } from "../worker/tasks/agent-execute.js"
 
 // ---------------------------------------------------------------------------
@@ -513,7 +513,21 @@ describe("agent-execute credential wiring (#444)", () => {
   })
 
   it("uses the actual resolved registry to disclose MCP availability", async () => {
-    const db = makeMockDb()
+    const db = makeMockDb({
+      agent: {
+        id: "agent-1",
+        name: "TestAgent",
+        slug: "test-agent",
+        role: "developer",
+        description: null,
+        status: "ACTIVE",
+        model_config: {},
+        skill_config: { allowedTools: ["web_search", "mcp:filesystem:read_file"] },
+        resource_limits: {},
+        config: null,
+        health_reset_at: null,
+      },
+    })
     const { registry, executeTaskSpy } = makeMockRegistryWithAgentRegistry()
 
     const task = createAgentExecuteTask({
@@ -533,5 +547,74 @@ describe("agent-execute credential wiring (#444)", () => {
     expect(executedTask.context.systemPrompt).toContain(
       "Exposed tool names: mcp:filesystem:read_file, web_search.",
     )
+  })
+
+  it("injects a runtime tool manifest and guarded executable tools for a simple V2-enabled run", async () => {
+    vi.stubEnv("CAPABILITY_MODEL_V2", "true")
+
+    const db = makeMockDb()
+    const executeTaskSpy = vi.fn().mockResolvedValue(createMockHandle())
+    const registry = {
+      routeTask: vi.fn().mockReturnValue({
+        backend: {
+          backendId: "mock-backend",
+          createAgentRegistry: vi.fn(),
+          executeTask: executeTaskSpy,
+        },
+        providerId: "mock-provider",
+      }),
+      acquirePermit: vi.fn().mockResolvedValue({ release: vi.fn() }),
+      recordOutcome: vi.fn(),
+    } as unknown as BackendRegistry
+
+    const capabilityAssembler = {
+      resolveEffectiveTools: vi.fn().mockResolvedValue([
+        {
+          toolRef: "echo",
+          bindingId: "binding-echo",
+          approvalPolicy: "auto",
+          approvalCondition: null,
+          rateLimit: null,
+          costBudget: null,
+          dataScope: null,
+          source: { kind: "builtin" },
+          toolDefinition: echoTool,
+        },
+      ]),
+      buildGuardedRegistry: vi.fn().mockImplementation(() => {
+        const toolRegistry = new ToolRegistry()
+        toolRegistry.register(echoTool)
+        return toolRegistry
+      }),
+    }
+
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+      capabilityAssembler: capabilityAssembler as never,
+    })
+
+    try {
+      await task({ jobId: "job-1" }, makeMockHelpers() as never)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
+    const guardedRegistry = executeTaskSpy.mock.calls[0]![1] as ToolRegistry
+
+    expect(executedTask.context.runtimeToolManifest?.version).toBe("v1")
+    expect(typeof executedTask.context.runtimeToolManifest?.assembledAt).toBe("string")
+    expect(executedTask.context.runtimeToolManifest?.tools).toEqual([
+      {
+        toolRef: "echo",
+        runtimeName: "echo",
+        description: echoTool.description,
+        inputSchema: echoTool.inputSchema,
+        source: { kind: "builtin" },
+      },
+    ])
+    expect(executedTask.context.systemPrompt).toContain("Exposed tool names: echo.")
+    expect(guardedRegistry.get("echo")).toBeDefined()
   })
 })

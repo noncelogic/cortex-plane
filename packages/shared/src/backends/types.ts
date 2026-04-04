@@ -80,6 +80,36 @@ export interface TaskContext {
    * for selected skills. Empty string when no skills are loaded.
    */
   skillInstructions?: string
+
+  /**
+   * Resolved runtime tool manifest for this execution.
+   * Contains only tools actually exposed to the runtime for this run.
+   */
+  runtimeToolManifest?: RuntimeToolManifest
+}
+
+export interface RuntimeToolManifest {
+  /** Contract version for forward-compatible readers. */
+  version: "v1"
+  /** Timestamp when the manifest was assembled. */
+  assembledAt: string
+  /** Tools actually exposed to the runtime for this execution. */
+  tools: RuntimeToolManifestTool[]
+}
+
+export interface RuntimeToolManifestTool {
+  /** Stable configured reference when known, otherwise the runtime name. */
+  toolRef: string
+  /** Executable name exposed to the model/runtime. */
+  runtimeName: string
+  /** Human-readable description exposed to the model/runtime. */
+  description: string
+  /** Input schema exposed to the model/runtime. */
+  inputSchema: Record<string, unknown>
+  /** Source family for display and auditing. */
+  source: {
+    kind: "builtin" | "mcp" | "webhook" | "unknown"
+  }
 }
 
 /**

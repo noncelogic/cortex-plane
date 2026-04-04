@@ -29,6 +29,11 @@ import type { CredentialService } from "../../auth/credential-service.js"
 import type { UserRateLimiter } from "../../auth/user-rate-limiter.js"
 import type { TokenRefresher } from "../../backends/http-llm.js"
 import type { CredentialResolver } from "../../backends/tools/webhook.js"
+import {
+  buildRuntimeToolManifestFromEffectiveTools,
+  buildRuntimeToolManifestFromToolDefinitions,
+  type RuntimeToolManifestRecord,
+} from "../../capabilities/contracts.js"
 import type { CapabilityAssembler } from "../../capabilities/index.js"
 import type { Database, Job } from "../../db/types.js"
 import { AgentCircuitBreaker, isQuarantineDisabled } from "../../lifecycle/agent-circuit-breaker.js"
@@ -53,10 +58,7 @@ import { classifyError, isConfigErrorCategory } from "../error-classifier.js"
 import { startHeartbeat } from "../heartbeat.js"
 import { createMemoryScheduler } from "../memory-scheduler.js"
 import { calculateRunAt } from "../retry.js"
-import {
-  appendRuntimeCapabilityDisclosure,
-  listToolNamesFromRegistryLike,
-} from "../runtime-capability-disclosure.js"
+import { appendRuntimeCapabilityDisclosure } from "../runtime-capability-disclosure.js"
 
 export interface AgentExecutePayload {
   jobId: string
@@ -564,11 +566,14 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               jobId: job.id,
               userId,
             })
+            const runtimeToolManifest: RuntimeToolManifestRecord =
+              buildRuntimeToolManifestFromEffectiveTools(effectiveTools)
+            task.context.runtimeToolManifest = runtimeToolManifest
             task.context.systemPrompt = appendRuntimeCapabilityDisclosure(
               task.context.systemPrompt,
               {
                 task,
-                actualToolNames: effectiveTools.map((tool) => tool.toolRef),
+                runtimeToolManifest,
               },
             )
 
@@ -616,19 +621,20 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
                 createAgentRegistry: (c: Record<string, unknown>, m?: unknown) => Promise<unknown>
               }
             ).createAgentRegistry(agent.config ?? {}, mcpDeps)
+            const runtimeToolManifest: RuntimeToolManifestRecord =
+              buildRuntimeToolManifestFromToolDefinitions(
+                resolveActualToolDefinitions(
+                  agentRegistry,
+                  task.constraints.allowedTools,
+                  task.constraints.deniedTools,
+                ),
+              )
+            task.context.runtimeToolManifest = runtimeToolManifest
             task.context.systemPrompt = appendRuntimeCapabilityDisclosure(
               task.context.systemPrompt,
               {
                 task,
-                actualToolNames:
-                  typeof agentRegistry === "object" &&
-                  agentRegistry !== null &&
-                  "list" in agentRegistry &&
-                  typeof agentRegistry.list === "function"
-                    ? listToolNamesFromRegistryLike(
-                        agentRegistry as { list: () => Array<{ name: string }> },
-                      )
-                    : undefined,
+                runtimeToolManifest,
               },
             )
             handle = await (
@@ -641,11 +647,14 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
               }
             ).executeTask(task, agentRegistry, tokenRefresher)
           } else {
+            const runtimeToolManifest: RuntimeToolManifestRecord =
+              buildRuntimeToolManifestFromToolDefinitions([])
+            task.context.runtimeToolManifest = runtimeToolManifest
             task.context.systemPrompt = appendRuntimeCapabilityDisclosure(
               task.context.systemPrompt,
               {
                 task,
-                actualToolNames: task.constraints.allowedTools,
+                runtimeToolManifest,
               },
             )
             handle = await backend.executeTask(task)
@@ -1145,6 +1154,26 @@ export function createAgentExecuteTask(deps: AgentExecuteDeps): Task {
       }
     }) // end withSpan
   }
+}
+
+function resolveActualToolDefinitions(
+  registry: unknown,
+  allowedTools: string[],
+  deniedTools: string[],
+): import("../../backends/tool-executor.js").ToolDefinition[] {
+  if (!registry || typeof registry !== "object" || !("resolve" in registry)) return []
+
+  const resolve = (
+    registry as {
+      resolve?: (
+        allowed: string[],
+        denied: string[],
+      ) => import("../../backends/tool-executor.js").ToolDefinition[]
+    }
+  ).resolve
+  if (typeof resolve !== "function") return []
+
+  return resolve.call(registry, allowedTools, deniedTools)
 }
 
 // ── Helper: build ExecutionTask from job + agent ──

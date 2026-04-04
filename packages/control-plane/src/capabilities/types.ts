@@ -8,6 +8,8 @@
 
 import type { ToolDefinition } from "../backends/tool-executor.js"
 
+export type EffectiveToolSourceKind = "builtin" | "mcp" | "webhook" | "unknown"
+
 export interface EffectiveTool {
   /** Qualified tool reference (e.g. 'mcp:slack:chat_postMessage' or 'web_search'). */
   toolRef: string
@@ -23,6 +25,22 @@ export interface EffectiveTool {
   costBudget?: { maxUsd: number; windowSeconds: number }
   /** Tool-specific data scope constraints. */
   dataScope?: Record<string, unknown>
+  /** Resolved tool source family. */
+  source: { kind: EffectiveToolSourceKind }
   /** The resolved executable tool definition. */
   toolDefinition: ToolDefinition
+}
+
+export interface EffectiveToolContract {
+  toolRef: string
+  runtimeName: string
+  description: string
+  inputSchema: Record<string, unknown>
+  bindingId: string
+  approvalPolicy: "auto" | "always_approve" | "conditional"
+  approvalCondition: Record<string, unknown> | null
+  rateLimit: { maxCalls: number; windowSeconds: number } | null
+  costBudget: { maxUsd: number; windowSeconds: number } | null
+  dataScope: Record<string, unknown> | null
+  source: { kind: EffectiveToolSourceKind }
 }

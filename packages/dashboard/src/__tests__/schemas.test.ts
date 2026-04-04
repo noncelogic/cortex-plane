@@ -572,12 +572,16 @@ describe("EffectiveToolSchema", () => {
   it("accepts a valid effective tool", () => {
     const tool = {
       toolRef: "s::search",
+      runtimeName: "search",
+      description: "Search docs",
+      inputSchema: { type: "object", properties: {} },
       bindingId: "tb-001",
       approvalPolicy: "auto" as const,
       approvalCondition: null,
       rateLimit: null,
       costBudget: null,
       dataScope: null,
+      source: { kind: "builtin" as const },
     }
     expect(EffectiveToolSchema.parse(tool).toolRef).toBe("s::search")
   })
@@ -589,12 +593,16 @@ describe("EffectiveToolsResponseSchema", () => {
       tools: [
         {
           toolRef: "s::t",
+          runtimeName: "t",
+          description: "Tool t",
+          inputSchema: { type: "object", properties: {} },
           bindingId: "b",
           approvalPolicy: "auto" as const,
           approvalCondition: null,
           rateLimit: null,
           costBudget: null,
           dataScope: null,
+          source: { kind: "builtin" as const },
         },
       ],
       assembledAt: "2026-03-01T00:00:00Z",

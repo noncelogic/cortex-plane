@@ -11,6 +11,7 @@ import type { ToolDefinition } from "../backends/tool-executor.js"
 import { createDefaultToolRegistry, ToolRegistry } from "../backends/tool-executor.js"
 import type { Database } from "../db/types.js"
 import type { McpToolRouter } from "../mcp/tool-router.js"
+import { isExecutableToolDefinition } from "./contracts.js"
 import { CapabilityGuard } from "./guard.js"
 import type { EffectiveTool } from "./types.js"
 
@@ -50,14 +51,14 @@ export class CapabilityAssembler {
     for (const binding of bindings) {
       const toolDef = this.defaultRegistry.get(binding.tool_ref)
 
-      if (toolDef) {
+      if (toolDef && isExecutableToolDefinition(toolDef)) {
         // Built-in tool
         effectiveTools.push(this.bindingToEffectiveTool(binding, toolDef))
       } else if (binding.tool_ref.startsWith("mcp:") && this.mcpToolRouter) {
         // MCP tool — resolve via router
         try {
           const mcpTool = await this.mcpToolRouter.resolve(binding.tool_ref, agentId)
-          if (mcpTool) {
+          if (mcpTool && isExecutableToolDefinition(mcpTool)) {
             effectiveTools.push(this.bindingToEffectiveTool(binding, mcpTool))
           }
         } catch {
@@ -109,6 +110,7 @@ export class CapabilityAssembler {
       rateLimit: binding.rate_limit as EffectiveTool["rateLimit"],
       costBudget: binding.cost_budget as EffectiveTool["costBudget"],
       dataScope: binding.data_scope ?? undefined,
+      source: { kind: binding.tool_ref.startsWith("mcp:") ? "mcp" : "builtin" },
       toolDefinition: toolDef,
     }
   }

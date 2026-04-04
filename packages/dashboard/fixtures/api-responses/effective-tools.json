@@ -2,12 +2,16 @@
   "tools": [
     {
       "toolRef": "mcp-server-1/web_search",
+      "runtimeName": "web_search",
+      "description": "Search the web",
+      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } } },
       "bindingId": "tb-001",
       "approvalPolicy": "auto",
       "approvalCondition": null,
       "rateLimit": { "maxCalls": 10, "windowSeconds": 60 },
       "costBudget": null,
-      "dataScope": null
+      "dataScope": null,
+      "source": { "kind": "mcp" }
     }
   ],
   "assembledAt": "2025-11-01T10:00:00.000Z"

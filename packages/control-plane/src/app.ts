@@ -19,6 +19,7 @@ import { HttpLlmBackend } from "./backends/http-llm.js"
 import { AuthHandoffService } from "./browser/auth-handoff.js"
 import { ScreenshotModeService } from "./browser/screenshot-mode.js"
 import { TraceCaptureService } from "./browser/trace-capture.js"
+import { CapabilityAssembler } from "./capabilities/index.js"
 import { AgentChannelService } from "./channels/agent-channel-service.js"
 import { ChannelAllowlistService } from "./channels/channel-allowlist-service.js"
 import { ChannelConfigService } from "./channels/channel-config-service.js"
@@ -113,6 +114,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
   // MCP client pool + tool router — resolves MCP tools for agent registries
   const mcpClientPool = new McpClientPool()
   const mcpToolRouter = new McpToolRouter({ db, clientPool: mcpClientPool })
+  const capabilityAssembler = new CapabilityAssembler({ db, mcpToolRouter })
 
   // Observability: event emitter + execution registry
   const eventEmitter = new AgentEventEmitter(db, sseManager)
@@ -142,6 +144,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
     eventEmitter,
     executionRegistry,
     observationService,
+    capabilityAssembler,
   })
 
   // Worker utils for job enqueueing from routes
@@ -305,6 +308,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       db,
       authConfig,
       sessionService,
+      capabilityAssembler,
     }),
   )
 

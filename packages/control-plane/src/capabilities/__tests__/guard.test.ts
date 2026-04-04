@@ -28,6 +28,7 @@ function makeEffectiveTool(overrides: Partial<EffectiveTool> = {}): EffectiveToo
     toolRef: "mcp:server:test-tool",
     bindingId: "binding-1",
     approvalPolicy: "auto",
+    source: { kind: "mcp" },
     toolDefinition: makeToolDef(),
     ...overrides,
   }

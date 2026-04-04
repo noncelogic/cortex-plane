@@ -18,7 +18,6 @@ import {
   getMcpServer,
   listMcpServers,
   listToolBindings,
-  updateToolBinding,
 } from "@/lib/api-client"
 
 // ---------------------------------------------------------------------------
@@ -170,14 +169,6 @@ export default function AgentCapabilitiesPage({
     [agentId, refreshAll],
   )
 
-  const handleToggleEnabled = useCallback(
-    async (binding: ToolBinding) => {
-      await updateToolBinding(agentId, binding.id, { enabled: !binding.enabled })
-      refreshAll()
-    },
-    [agentId, refreshAll],
-  )
-
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     await deleteToolBinding(agentId, deleteTarget.id)
@@ -198,15 +189,15 @@ export default function AgentCapabilitiesPage({
   const effectiveTools = effectiveData?.tools ?? []
   const servers = (serversData?.servers ?? []).map((s) => ({ id: s.id, name: s.name }))
 
-  const filteredBindings = categoryFilter
-    ? bindings.filter((b) => b.toolRef.includes(categoryFilter))
-    : bindings
+  const filteredEffectiveTools = categoryFilter
+    ? effectiveTools.filter((tool) => tool.toolRef.includes(categoryFilter))
+    : effectiveTools
 
   // Extract unique category-like prefixes from tool refs (server slug before ::)
   const categories = [
     ...new Set(
-      bindings
-        .map((b) => b.toolRef.split("::")[0])
+      effectiveTools
+        .map((tool) => tool.toolRef.split("::")[0] ?? tool.source.kind)
         .filter((c): c is string => typeof c === "string" && c.length > 0),
     ),
   ]
@@ -288,14 +279,14 @@ export default function AgentCapabilitiesPage({
           </span>
         </h2>
 
-        {filteredBindings.length === 0 ? (
+        {filteredEffectiveTools.length === 0 ? (
           <div className="rounded-xl border border-dashed border-surface-border p-8 text-center">
             <span className="material-symbols-outlined mb-2 text-3xl text-text-muted">
               extension
             </span>
-            <p className="text-sm text-text-muted">No tool bindings yet</p>
+            <p className="text-sm text-text-muted">No executable effective tools</p>
             <p className="mt-1 text-xs text-text-muted">
-              Use the form below to bind tools to this agent
+              Bind supported tools below. Disabled or unresolvable bindings are excluded here.
             </p>
           </div>
         ) : (
@@ -307,13 +298,16 @@ export default function AgentCapabilitiesPage({
                     Tool
                   </th>
                   <th className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-muted">
+                    Runtime
+                  </th>
+                  <th className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-muted">
                     Policy
                   </th>
                   <th className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-muted">
                     Rate Limit
                   </th>
                   <th className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-muted">
-                    Enabled
+                    Source
                   </th>
                   <th className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-muted">
                     Actions
@@ -321,41 +315,39 @@ export default function AgentCapabilitiesPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredBindings.map((b) => (
+                {filteredEffectiveTools.map((tool) => (
                   <tr
-                    key={b.id}
+                    key={tool.bindingId}
                     className="border-b border-surface-border last:border-b-0 hover:bg-secondary/20"
                   >
-                    <td className="px-3 py-2 font-mono text-xs text-text-main">{b.toolRef}</td>
                     <td className="px-3 py-2">
-                      <Badge variant={policyVariant(b.approvalPolicy)}>
-                        {policyLabel(b.approvalPolicy)}
+                      <div className="font-mono text-xs text-text-main">{tool.toolRef}</div>
+                      <div className="mt-1 text-xs text-text-muted">{tool.description}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="font-mono text-xs text-text-main">{tool.runtimeName}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge variant={policyVariant(tool.approvalPolicy)}>
+                        {policyLabel(tool.approvalPolicy)}
                       </Badge>
                     </td>
                     <td className="px-3 py-2 text-xs text-text-muted">
-                      {rateLimitDisplay(b.rateLimit)}
+                      {rateLimitDisplay(tool.rateLimit)}
                     </td>
                     <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleEnabled(b)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          b.enabled ? "bg-primary" : "bg-slate-600"
-                        }`}
-                        title={b.enabled ? "Disable" : "Enable"}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                            b.enabled ? "translate-x-4" : "translate-x-1"
-                          }`}
-                        />
-                      </button>
+                      <Badge variant="info">{tool.source.kind}</Badge>
                     </td>
                     <td className="px-3 py-2">
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setDeleteTarget(b)}
+                        onClick={() => {
+                          const binding = bindings.find(
+                            (candidate) => candidate.id === tool.bindingId,
+                          )
+                          if (binding) setDeleteTarget(binding)
+                        }}
                         title="Remove binding"
                       >
                         <span className="material-symbols-outlined text-sm text-danger">
