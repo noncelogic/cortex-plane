@@ -10,6 +10,7 @@ export const SessionSchema = z.object({
   user_account_id: z.string().nullable().optional(),
   channel_id: z.string().nullable().optional(),
   status: z.string(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -31,6 +32,7 @@ export const SessionMessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
   created_at: z.string(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 })
 
 export type SessionMessage = z.infer<typeof SessionMessageSchema>
@@ -71,6 +73,7 @@ export const ChatResponseSchema = z.object({
   status: z.string(),
   response: z.string().nullable().optional(),
   message: z.string().optional(),
+  diagnostics: z.record(z.string(), z.unknown()).optional(),
   error: z
     .object({
       message: z.string(),

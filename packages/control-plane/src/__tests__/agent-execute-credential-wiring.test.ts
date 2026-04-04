@@ -114,6 +114,7 @@ function makeMockDb(opts: MockDbOptions = {}) {
   const agent = opts.agent !== undefined ? opts.agent : defaultAgent
   const recentJobs = opts.recentJobs ?? []
   const credentialBinding = opts.credentialBinding ?? null
+  const updateSets: Array<{ table: string; values: Record<string, unknown> }> = []
 
   function createChain(tableName: string, isSelect: boolean) {
     const chain: Record<string, unknown> = {}
@@ -159,10 +160,17 @@ function makeMockDb(opts: MockDbOptions = {}) {
 
   const db = {
     selectFrom: vi.fn((table: string) => createChain(table, true)),
-    updateTable: vi.fn((table: string) => createChain(table, false)),
+    updateTable: vi.fn((table: string) => {
+      const chain = createChain(table, false)
+      chain.set = vi.fn().mockImplementation((values: Record<string, unknown>) => {
+        updateSets.push({ table, values })
+        return chain
+      })
+      return chain
+    }),
   }
 
-  return db
+  return { db, updateSets }
 }
 
 function makeMockRegistry(handle: ExecutionHandle = createMockHandle()) {
@@ -265,7 +273,7 @@ function makeMockCredentialService(
 
 describe("agent-execute credential wiring (#444)", () => {
   it("resolves llmCredential from agent_credential_binding when credentialService is provided", async () => {
-    const db = makeMockDb({
+    const { db } = makeMockDb({
       credentialBinding: {
         id: "binding-cred-1",
         user_account_id: "user-owner-1",
@@ -295,7 +303,7 @@ describe("agent-execute credential wiring (#444)", () => {
 
     // Verify the task passed to executeTask has llmCredential set
     expect(executeTaskSpy).toHaveBeenCalled()
-    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
     expect(executedTask.constraints.llmCredential).toEqual({
       provider: "google-antigravity",
       token: "resolved-oauth-token",
@@ -306,7 +314,7 @@ describe("agent-execute credential wiring (#444)", () => {
   })
 
   it("falls back to env var when no credential binding exists", async () => {
-    const db = makeMockDb({
+    const { db } = makeMockDb({
       credentialBinding: null, // No binding
     })
     const { registry, executeTaskSpy } = makeMockRegistry()
@@ -326,12 +334,12 @@ describe("agent-execute credential wiring (#444)", () => {
 
     // Task should not have llmCredential set
     expect(executeTaskSpy).toHaveBeenCalled()
-    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
     expect(executedTask.constraints.llmCredential).toBeUndefined()
   })
 
   it("fails clearly when a bound OAuth credential requires re-authentication", async () => {
-    const db = makeMockDb({
+    const { db } = makeMockDb({
       credentialBinding: {
         id: "binding-cred-2",
         user_account_id: "user-owner-1",
@@ -369,7 +377,7 @@ describe("agent-execute credential wiring (#444)", () => {
   })
 
   it("selects the bound provider/model pair and passes it into execution", async () => {
-    const db = makeMockDb({
+    const { db } = makeMockDb({
       agent: {
         id: "agent-1",
         name: "TestAgent",
@@ -412,7 +420,7 @@ describe("agent-execute credential wiring (#444)", () => {
 
     // Verify the task has llmCredential set
     expect(executeTaskSpy).toHaveBeenCalled()
-    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
     expect(executedTask.constraints.llmCredential).toEqual({
       provider: "google-antigravity",
       token: "resolved-oauth-token",
@@ -423,8 +431,61 @@ describe("agent-execute credential wiring (#444)", () => {
     expect(executedTask.constraints.model).toBe("claude-sonnet-4-5")
   })
 
+  it("fails instead of silently falling back when the configured provider is not bound", async () => {
+    const { db, updateSets } = makeMockDb({
+      agent: {
+        id: "agent-1",
+        name: "TestAgent",
+        slug: "test-agent",
+        role: "developer",
+        description: null,
+        status: "ACTIVE",
+        model_config: { provider: "google-antigravity", model: "claude-sonnet-4-5" },
+        skill_config: {},
+        resource_limits: {},
+        config: null,
+        health_reset_at: null,
+      },
+      credentialBinding: {
+        id: "binding-cred-openai",
+        user_account_id: "user-owner-1",
+        provider: "openai",
+        credential_type: "api_key",
+        credential_class: "llm_provider",
+        account_id: null,
+      },
+    })
+    const { registry, executeTaskSpy } = makeMockRegistry()
+    const credentialService = makeMockCredentialService()
+
+    const task = createAgentExecuteTask({
+      db: db as unknown as AgentExecuteDeps["db"],
+      registry,
+      credentialService,
+    })
+
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
+
+    expect(executeTaskSpy).not.toHaveBeenCalled()
+    const failedUpdate = updateSets.find(
+      (entry) =>
+        entry.table === "job" &&
+        entry.values.status === "FAILED" &&
+        typeof entry.values.error === "object" &&
+        entry.values.error !== null,
+    )
+    expect(failedUpdate).toBeDefined()
+    expect(failedUpdate?.values.error).toEqual(
+      expect.objectContaining({
+        code: "provider_unbound",
+        provider: "google-antigravity",
+        model: "claude-sonnet-4-5",
+      }),
+    )
+  })
+
   it("resolves api_key credential with credentialType 'api_key' for direct-key providers", async () => {
-    const db = makeMockDb({
+    const { db } = makeMockDb({
       credentialBinding: {
         id: "binding-cred-4",
         user_account_id: "user-owner-1",
@@ -459,7 +520,7 @@ describe("agent-execute credential wiring (#444)", () => {
     })
 
     expect(executeTaskSpy).toHaveBeenCalled()
-    const executedTask = executeTaskSpy.mock.calls[0][0] as ExecutionTask
+    const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
     expect(executedTask.constraints.llmCredential).toEqual({
       provider: "openai",
       token: "sk-openai-key-12345678",
@@ -470,7 +531,7 @@ describe("agent-execute credential wiring (#444)", () => {
   })
 
   it("proceeds without credential resolution when credentialService is not injected", async () => {
-    const db = makeMockDb()
+    const { db } = makeMockDb()
     const { registry, executeTaskSpy } = makeMockRegistry()
 
     // No credentialService provided — simulates the pre-fix behavior
@@ -488,7 +549,7 @@ describe("agent-execute credential wiring (#444)", () => {
   })
 
   it("injects truthful runtime capability disclosure into the execution system prompt", async () => {
-    const db = makeMockDb()
+    const { db } = makeMockDb()
     const { registry, executeTaskSpy } = makeMockRegistry()
 
     const task = createAgentExecuteTask({
@@ -513,7 +574,7 @@ describe("agent-execute credential wiring (#444)", () => {
   })
 
   it("uses the actual resolved registry to disclose MCP availability", async () => {
-    const db = makeMockDb({
+    const { db } = makeMockDb({
       agent: {
         id: "agent-1",
         name: "TestAgent",
@@ -549,10 +610,25 @@ describe("agent-execute credential wiring (#444)", () => {
     )
   })
 
-  it("injects a runtime tool manifest and guarded executable tools for a simple V2-enabled run", async () => {
-    vi.stubEnv("CAPABILITY_MODEL_V2", "true")
-
-    const db = makeMockDb()
+  it("injects a runtime tool manifest and guarded executable tools for chat runs without relying on the feature flag", async () => {
+    const { db } = makeMockDb({
+      job: {
+        id: "job-1",
+        agent_id: "agent-1",
+        status: "SCHEDULED",
+        attempt: 0,
+        max_attempts: 3,
+        timeout_seconds: 300,
+        session_id: null,
+        payload: { type: "CHAT_RESPONSE", prompt: "hello", goalType: "research" },
+        error: null,
+        result: null,
+        started_at: null,
+        completed_at: null,
+        heartbeat_at: null,
+        approval_expires_at: null,
+      },
+    })
     const executeTaskSpy = vi.fn().mockResolvedValue(createMockHandle())
     const registry = {
       routeTask: vi.fn().mockReturnValue({
@@ -594,11 +670,7 @@ describe("agent-execute credential wiring (#444)", () => {
       capabilityAssembler: capabilityAssembler as never,
     })
 
-    try {
-      await task({ jobId: "job-1" }, makeMockHelpers() as never)
-    } finally {
-      vi.unstubAllEnvs()
-    }
+    await task({ jobId: "job-1" }, makeMockHelpers() as never)
 
     const executedTask = executeTaskSpy.mock.calls[0]![0] as ExecutionTask
     const guardedRegistry = executeTaskSpy.mock.calls[0]![1] as ToolRegistry

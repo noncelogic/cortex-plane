@@ -385,6 +385,7 @@ export async function buildApp(options: AppOptions): Promise<AppContext> {
       sessionService,
       channelAuthGuard: chatAuthGuard,
       userRateLimiter: chatRateLimiter,
+      capabilityAssembler,
     }),
   )
 

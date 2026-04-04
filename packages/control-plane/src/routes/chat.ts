@@ -13,8 +13,18 @@ import type { Kysely } from "kysely"
 import type { ChannelAuthGuard } from "../auth/channel-auth-guard.js"
 import type { SessionService } from "../auth/session-service.js"
 import type { UserRateLimiter } from "../auth/user-rate-limiter.js"
+import type { CapabilityAssembler } from "../capabilities/index.js"
 import { loadConversationHistory, watchJobCompletion } from "../channels/message-dispatch.js"
-import { mapJobErrorToUserMessage, runPreflight } from "../channels/preflight.js"
+import {
+  mapJobErrorToUserMessage,
+  type PreflightResult,
+  runPreflight,
+} from "../channels/preflight.js"
+import {
+  buildChatDispatchDiagnostics,
+  type ResolvedProviderModelContract,
+  type SessionResolutionDiagnostics,
+} from "../chat/runtime-contract.js"
 import type { Database, RateLimit, TokenBudget } from "../db/types.js"
 import {
   type AuthMiddlewareOptions,
@@ -54,10 +64,19 @@ export interface ChatRouteDeps {
   sessionService?: SessionService
   channelAuthGuard?: ChannelAuthGuard
   userRateLimiter?: UserRateLimiter
+  capabilityAssembler?: CapabilityAssembler
 }
 
 export function chatRoutes(deps: ChatRouteDeps) {
-  const { db, authConfig, enqueueJob, sessionService, channelAuthGuard, userRateLimiter } = deps
+  const {
+    db,
+    authConfig,
+    enqueueJob,
+    sessionService,
+    channelAuthGuard,
+    userRateLimiter,
+    capabilityAssembler,
+  } = deps
 
   const authOpts: AuthMiddlewareOptions = { config: authConfig, sessionService }
   const requireAuth: PreHandler = createRequireAuth(authOpts)
@@ -186,6 +205,23 @@ export function chatRoutes(deps: ChatRouteDeps) {
           channelId,
           requestedSessionId,
         )
+        const source: SessionResolutionDiagnostics = {
+          surface: "ui",
+          channelType: "rest",
+          channelId,
+          chatId: "rest:api",
+        }
+        const toolRefs = capabilityAssembler
+          ? (await capabilityAssembler.resolveEffectiveTools(agentId)).map((tool) => tool.toolRef)
+          : undefined
+        const chatDiagnostics = buildChatDispatchDiagnostics({
+          agentId,
+          sessionId: session.id,
+          source,
+          providerModel: extractProviderModelDiagnostics(preflight),
+          toolRefs,
+          toolContractMode: capabilityAssembler ? "effective" : "legacy",
+        })
 
         // Store user message
         await db
@@ -194,6 +230,9 @@ export function chatRoutes(deps: ChatRouteDeps) {
             session_id: session.id,
             role: "user",
             content: text,
+            metadata: {
+              source,
+            },
           })
           .execute()
 
@@ -211,6 +250,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
               prompt: text,
               goalType: "research",
               conversationHistory,
+              chatDiagnostics,
             },
             priority: 0,
             max_attempts: 3,
@@ -238,6 +278,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
             job_id: job.id,
             session_id: session.id,
             status: "SCHEDULED",
+            diagnostics: chatDiagnostics,
           })
         }
 
@@ -250,6 +291,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
             session_id: session.id,
             status: "RUNNING",
             message: "Job is still running. Poll GET /agents/:id/jobs for status.",
+            diagnostics: chatDiagnostics,
           })
         }
 
@@ -280,6 +322,11 @@ export function chatRoutes(deps: ChatRouteDeps) {
             status: "WAITING_FOR_APPROVAL",
             response: null,
             approval_needed: true,
+            diagnostics: extractChatDiagnostics({
+              payload: { chatDiagnostics },
+              result: result.result,
+              error: result.error,
+            }),
           })
         }
 
@@ -299,6 +346,11 @@ export function chatRoutes(deps: ChatRouteDeps) {
               message: errorMessage,
               code: result.status === "TIMED_OUT" ? "job_timed_out" : "job_failed",
             },
+            diagnostics: extractChatDiagnostics({
+              payload: { chatDiagnostics },
+              result: result.result,
+              error: result.error,
+            }),
           })
         }
 
@@ -307,6 +359,11 @@ export function chatRoutes(deps: ChatRouteDeps) {
           session_id: session.id,
           status: result.status,
           response: responseText,
+          diagnostics: extractChatDiagnostics({
+            payload: { chatDiagnostics },
+            result: result.result,
+            error: result.error,
+          }),
         })
       },
     )
@@ -334,7 +391,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
 
         const row = await db
           .selectFrom("job")
-          .select(["status", "result", "error", "session_id"])
+          .select(["status", "result", "error", "session_id", "payload"])
           .where("id", "=", jobId)
           .where("agent_id", "=", agentId)
           .executeTakeFirst()
@@ -383,6 +440,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
             status: "WAITING_FOR_APPROVAL",
             response: null,
             approval_needed: true,
+            diagnostics: extractChatDiagnostics(row),
           })
         }
 
@@ -402,6 +460,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
               message: errorMessage,
               code: row.status === "TIMED_OUT" ? "job_timed_out" : "job_failed",
             },
+            diagnostics: extractChatDiagnostics(row),
           })
         }
 
@@ -410,6 +469,7 @@ export function chatRoutes(deps: ChatRouteDeps) {
           session_id: row.session_id,
           status: row.status,
           response: responseText,
+          diagnostics: extractChatDiagnostics(row),
         })
       },
     )
@@ -492,6 +552,60 @@ interface WaitForJobResult {
   status: string
   result: Record<string, unknown>
   error: Record<string, unknown> | null
+}
+
+function extractProviderModelDiagnostics(
+  preflight: PreflightResult,
+): ResolvedProviderModelContract {
+  const providerModel = preflight.diagnostics?.providerModel
+  if (providerModel && typeof providerModel === "object") {
+    return providerModel as ResolvedProviderModelContract
+  }
+  return {
+    requestedProvider: null,
+    requestedModel: null,
+    resolvedProvider: null,
+    resolvedModel: null,
+    boundProviders: [],
+    bindingRequired: false,
+    mismatchCode: null,
+    mismatchMessage: null,
+  }
+}
+
+function extractChatDiagnostics(row: {
+  payload?: Record<string, unknown> | null
+  result?: Record<string, unknown> | null
+  error?: Record<string, unknown> | null
+}): Record<string, unknown> | undefined {
+  const payloadDiagnostics =
+    row.payload?.chatDiagnostics &&
+    typeof row.payload.chatDiagnostics === "object" &&
+    row.payload.chatDiagnostics !== null
+      ? (row.payload.chatDiagnostics as Record<string, unknown>)
+      : undefined
+
+  const resultDiagnostics =
+    row.result?.runtime && typeof row.result.runtime === "object" && row.result.runtime !== null
+      ? (row.result.runtime as Record<string, unknown>)
+      : undefined
+
+  const errorDiagnostics =
+    row.error && typeof row.error === "object"
+      ? {
+          error: row.error,
+        }
+      : undefined
+
+  if (!payloadDiagnostics && !resultDiagnostics && !errorDiagnostics) {
+    return undefined
+  }
+
+  return {
+    ...(payloadDiagnostics ? { requested: payloadDiagnostics } : {}),
+    ...(resultDiagnostics ? { runtime: resultDiagnostics } : {}),
+    ...(errorDiagnostics ?? {}),
+  }
 }
 
 function waitForJob(
